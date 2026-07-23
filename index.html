@@ -31,8 +31,8 @@
         }
 
         .player-container {
-            width: 100%;
-            max-width: 35vw;
+            width: 80vw;
+            max-width: 420px;
             background-color: var(--surface-color);
             border-radius: 20px;
             box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
@@ -354,6 +354,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     let isShuffle = false;
     let repeatMode = 0; // 0: Off, 1: Repeat All, 2: Repeat One
+    let isSeeking = false;
+    let lastUpdateTime = -1;
 
     // Initialize OS Media Session Handlers strictly once to prevent memory leaks
     if ('mediaSession' in navigator) {
@@ -467,6 +469,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.currentTime = 0;
             seekBar.value = 0;
             currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
             updateMediaSessionPosition();
             return;
@@ -482,6 +485,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.currentTime = 0;
             seekBar.value = 0;
             currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
             updateMediaSessionPosition();
         }
@@ -512,6 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
         seekBar.value = 0;
         currentTimeDisplay.textContent = "0:00";
         totalTimeDisplay.textContent = "0:00";
+        lastUpdateTime = -1;
 
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
@@ -617,12 +622,25 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPosition();
     });
 
+    audioPlayer.addEventListener("timeupdate", () => {
+        if (isSeeking || !audioPlayer.duration) return;
+        
+        const currentSecond = Math.floor(audioPlayer.currentTime);
+        if (currentSecond !== lastUpdateTime) {
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
     seekBar.addEventListener("input", () => {
+        isSeeking = true;
         currentTimeDisplay.textContent = formatTime(seekBar.value);
     });
 
     seekBar.addEventListener("change", (e) => {
         audioPlayer.currentTime = Number(e.target.value);
+        isSeeking = false;
         updateMediaSessionPosition();
     });
 
@@ -631,6 +649,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.currentTime = 0;
             seekBar.value = 0;
             currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
             updateMediaSessionPosition();
         } else {
