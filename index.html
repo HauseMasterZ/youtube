@@ -118,7 +118,6 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 20px;
-            contain: layout paint style;
         }
 
         .time-display {
@@ -135,7 +134,6 @@
             height: 14px;
             display: flex;
             align-items: center;
-            contain: layout paint style;
         }
 
         #progress-track {
@@ -157,7 +155,6 @@
             transform-origin: left;
             transform: scaleX(0) translateZ(0);
             pointer-events: none;
-            will-change: transform;
         }
 
         #progress-thumb {
@@ -170,8 +167,18 @@
             box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
             transform: translateX(0) translateZ(0);
             pointer-events: none;
-            will-change: transform;
             margin-left: -7px;
+        }
+
+        /* Pure CSS hardware interpolation during playback */
+        .playing-animation #progress-fill {
+            transform: scaleX(1) translateZ(0);
+            transition: transform var(--track-duration, 0s) linear;
+        }
+
+        .playing-animation #progress-thumb {
+            transform: translateX(var(--track-max-width, 0px)) translateZ(0);
+            transition: transform var(--track-duration, 0s) linear;
         }
 
         input[type="range"] {
@@ -333,7 +340,7 @@
 
         <div class="progress-container">
             <span id="current-time" class="time-display">0:00</span>
-            <div class="slider-wrapper">
+            <div id="slider-wrapper" class="slider-wrapper">
                 <div id="progress-track"></div>
                 <div id="progress-fill"></div>
                 <div id="progress-thumb"></div>
@@ -395,6 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const iconRepeatOne = document.getElementById("icon-repeat-one");
 
     const seekBar = document.getElementById("seek-bar");
+    const sliderWrapper = document.getElementById("slider-wrapper");
     const progressFill = document.getElementById("progress-fill");
     const progressThumb = document.getElementById("progress-thumb");
     const currentTimeDisplay = document.getElementById("current-time");
@@ -409,20 +417,39 @@ document.addEventListener("DOMContentLoaded", () => {
     
     let isShuffle = false;
     let repeatMode = 0; 
-    let isSeeking = false;
-    
-    let lastUpdateTime = -1;
     let currentSliderWidth = 0;
 
     new ResizeObserver(entries => {
         if (entries[0]) currentSliderWidth = entries[0].contentRect.width;
-    }).observe(document.querySelector('.slider-wrapper'));
+    }).observe(sliderWrapper);
 
-    function updateVisuals(timeValue) {
-        if (!audioPlayer.duration) return;
-        const ratio = timeValue / audioPlayer.duration;
+    function setVisualProgress(ratio) {
         progressFill.style.transform = `scaleX(${ratio}) translateZ(0)`;
         progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px) translateZ(0)`;
+    }
+
+    function startCSSAnimation() {
+        if (!audioPlayer.duration) return;
+        const remainingTime = audioPlayer.duration - audioPlayer.currentTime;
+        if (remainingTime <= 0) return;
+
+        const currentRatio = audioPlayer.currentTime / audioPlayer.duration;
+        setVisualProgress(currentRatio);
+
+        sliderWrapper.style.setProperty('--track-duration', `${remainingTime}s`);
+        sliderWrapper.style.setProperty('--track-max-width', `${currentSliderWidth}px`);
+        sliderWrapper.classList.add('playing-animation');
+    }
+
+    function pauseCSSAnimation() {
+        if (!audioPlayer.duration) return;
+        const computedStyle = window.getComputedStyle(progressThumb);
+        const matrix = new DOMMatrix(computedStyle.transform);
+        const currentX = matrix.m41;
+        const currentRatio = currentSliderWidth ? currentX / currentSliderWidth : 0;
+
+        sliderWrapper.classList.remove('playing-animation');
+        setVisualProgress(currentRatio);
     }
 
     if ('mediaSession' in navigator) {
@@ -432,18 +459,24 @@ document.addEventListener("DOMContentLoaded", () => {
         navigator.mediaSession.setActionHandler('play', () => {
             audioPlayer.play();
             setPlayUI(true);
+            startCSSAnimation();
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
             audioPlayer.pause();
             setPlayUI(false);
+            pauseCSSAnimation();
         });
 
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             const targetTime = details.fastSeek && 'fastSeek' in audioPlayer ? details.seekTime : details.seekTime;
             audioPlayer.currentTime = targetTime;
             seekBar.value = Math.floor(targetTime);
-            updateVisuals(targetTime);
+            
+            sliderWrapper.classList.remove('playing-animation');
+            setVisualProgress(targetTime / audioPlayer.duration);
+            if (!audioPlayer.paused) startCSSAnimation();
+
             currentTimeDisplay.textContent = formatTime(targetTime);
             updateMediaSessionPosition();
         });
@@ -526,6 +559,7 @@ document.addEventListener("DOMContentLoaded", () => {
             executePlayback();
         } else {
             setPlayUI(false);
+            sliderWrapper.classList.remove('playing-animation');
         }
     }
 
@@ -535,6 +569,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.currentTime > 3) {
             resetTimeAndVisuals();
             audioPlayer.play();
+            startCSSAnimation();
             updateMediaSessionPosition();
             return;
         }
@@ -548,6 +583,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             resetTimeAndVisuals();
             audioPlayer.play();
+            startCSSAnimation();
             updateMediaSessionPosition();
         }
     }
@@ -555,9 +591,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function resetTimeAndVisuals() {
         audioPlayer.currentTime = 0;
         seekBar.value = 0;
-        updateVisuals(0);
+        sliderWrapper.classList.remove('playing-animation');
+        setVisualProgress(0);
         currentTimeDisplay.textContent = "0:00";
-        lastUpdateTime = -1;
     }
 
     function executePlayback() {
@@ -591,6 +627,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         audioPlayer.play().then(() => {
             setPlayUI(true);
+            startCSSAnimation();
         }).catch(e => {});
 
         let absoluteThumbUrl = "";
@@ -651,9 +688,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.paused) {
             audioPlayer.play();
             setPlayUI(true);
+            startCSSAnimation();
         } else {
             audioPlayer.pause();
             setPlayUI(false);
+            pauseCSSAnimation();
         }
     });
 
@@ -686,43 +725,23 @@ document.addEventListener("DOMContentLoaded", () => {
         const duration = Math.floor(audioPlayer.duration);
         seekBar.max = duration;
         totalTimeDisplay.textContent = formatTime(duration);
-        updateVisuals(0);
         updateMediaSessionPosition();
     });
 
-    audioPlayer.addEventListener("timeupdate", () => {
-        if (isSeeking || !audioPlayer.duration || document.hidden) return;
-        
-        const currentSecond = Math.floor(audioPlayer.currentTime);
-        if (currentSecond !== lastUpdateTime) {
-            updateVisuals(currentSecond);
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
-        }
-    });
-
-    document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && !isSeeking && audioPlayer.duration) {
-            const currentSecond = Math.floor(audioPlayer.currentTime);
-            updateVisuals(currentSecond);
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
-        }
-    });
-
     seekBar.addEventListener("input", (e) => {
-        isSeeking = true;
+        sliderWrapper.classList.remove('playing-animation');
         const targetValue = Number(e.target.value);
         currentTimeDisplay.textContent = formatTime(targetValue);
-        updateVisuals(targetValue);
+        setVisualProgress(targetValue / audioPlayer.duration);
     });
 
     seekBar.addEventListener("change", (e) => {
         const targetValue = Number(e.target.value);
         audioPlayer.currentTime = targetValue;
-        isSeeking = false;
+        
+        if (!audioPlayer.paused) {
+            startCSSAnimation();
+        }
         currentTimeDisplay.textContent = formatTime(targetValue);
         updateMediaSessionPosition();
     });
@@ -731,6 +750,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (repeatMode === 2) { 
             resetTimeAndVisuals();
             audioPlayer.play();
+            startCSSAnimation();
             updateMediaSessionPosition();
         } else {
             playNext();
@@ -740,6 +760,7 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("error", () => {
         currentTitle.textContent = "Error loading audio file";
         setPlayUI(false);
+        sliderWrapper.classList.remove('playing-animation');
     });
 
     albumArt.addEventListener("error", () => {
