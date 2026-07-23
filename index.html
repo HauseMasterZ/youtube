@@ -382,9 +382,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = `<li style="text-align: center; color: var(--text-secondary);">Loading...</li>`;
-        
+        const targetUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
         try {
-            const response = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
+            const response = await fetch(targetUrl);
             if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
             
             currentPlaylistData = await response.json();
