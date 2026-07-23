@@ -103,10 +103,48 @@
             display: none;
         }
 
+        .progress-container {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .time-display {
+            font-size: 12px;
+            color: var(--text-secondary);
+            min-width: 40px;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            background: var(--hover-color);
+            border-radius: 4px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
         .custom-controls {
             display: flex;
             gap: 16px;
-            margin-top: 10px;
             margin-bottom: 10px;
         }
 
@@ -209,6 +247,12 @@
         <p id="current-channel">--</p>
         
         <audio id="audio-player"></audio>
+
+        <div class="progress-container">
+            <span id="current-time" class="time-display">0:00</span>
+            <input type="range" id="seek-bar" min="0" value="0" step="1">
+            <span id="total-time" class="time-display">0:00</span>
+        </div>
         
         <div class="custom-controls">
             <button id="btn-prev">⏮</button>
@@ -237,15 +281,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnPrev = document.getElementById("btn-prev");
     const btnNext = document.getElementById("btn-next");
 
+    const seekBar = document.getElementById("seek-bar");
+    const currentTimeDisplay = document.getElementById("current-time");
+    const totalTimeDisplay = document.getElementById("total-time");
+
     let currentPlaylistData = [];
     let currentIndex = -1;
+    let isSeeking = false;
+    let lastUpdateTime = -1;
 
-    // Define the absolute base URL pointing to the headless media repository
     const baseUrl = "https://hausemasterz.github.io/youtube_playlist_tracker_downloader";
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = "<li>Loading...</li>";
-        
         const targetUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
 
         try {
@@ -297,6 +345,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
+        seekBar.value = 0;
+        currentTimeDisplay.textContent = "0:00";
+        totalTimeDisplay.textContent = "0:00";
+        lastUpdateTime = -1;
+
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
         audioPlayer.src = `${baseUrl}/${safeAudioPath}`;
@@ -328,8 +381,65 @@ document.addEventListener("DOMContentLoaded", () => {
                 album: playlistSelect.value,
                 artwork: artworkArray
             });
+
+            // Register handlers to enable OS media buttons and bind them to the playlist queue
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
+                if (currentIndex > 0) {
+                    playTrack(currentIndex - 1);
+                }
+            });
+
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
+                if (currentIndex + 1 < currentPlaylistData.length) {
+                    playTrack(currentIndex + 1);
+                }
+            });
+
+            navigator.mediaSession.setActionHandler('play', () => {
+                audioPlayer.play();
+                btnPlayPause.textContent = "⏸";
+            });
+
+            navigator.mediaSession.setActionHandler('pause', () => {
+                audioPlayer.pause();
+                btnPlayPause.textContent = "▶";
+            });
         }
     }
+
+    function formatTime(seconds) {
+        if (isNaN(seconds)) return "0:00";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    audioPlayer.addEventListener("loadedmetadata", () => {
+        const duration = Math.floor(audioPlayer.duration);
+        seekBar.max = duration;
+        totalTimeDisplay.textContent = formatTime(duration);
+    });
+
+    audioPlayer.addEventListener("timeupdate", () => {
+        if (isSeeking || !audioPlayer.duration) return;
+        
+        const currentSecond = Math.floor(audioPlayer.currentTime);
+        if (currentSecond !== lastUpdateTime) {
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
+    seekBar.addEventListener("input", () => {
+        isSeeking = true;
+        currentTimeDisplay.textContent = formatTime(seekBar.value);
+    });
+
+    seekBar.addEventListener("change", () => {
+        audioPlayer.currentTime = seekBar.value;
+        isSeeking = false;
+    });
 
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) return; 
