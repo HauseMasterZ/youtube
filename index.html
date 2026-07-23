@@ -299,9 +299,7 @@
             </button>
             
             <button id="btn-play-pause" class="control-btn main-btn" aria-label="Play/Pause">
-                <!-- Default Play Icon -->
                 <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <!-- Default Pause Icon (Hidden) -->
                 <svg id="icon-pause" viewBox="0 0 24 24" style="display: none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
             </button>
             
@@ -310,9 +308,7 @@
             </button>
             
             <button id="btn-repeat" class="control-btn" aria-label="Repeat">
-                <!-- Repeat Off/All Icon -->
                 <svg id="icon-repeat" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-                <!-- Repeat One Icon (Hidden) -->
                 <svg id="icon-repeat-one" viewBox="0 0 24 24" style="display: none;"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/></svg>
             </button>
         </div>
@@ -351,15 +347,37 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const baseUrl = "https://hausemasterz.github.io/youtube_playlist_tracker_downloader";
 
-    // Playback State
     let currentPlaylistData = [];
-    let playQueue = [];     // Stores original track indices mapped to execution order
-    let queueIndex = -1;    // Current position within the playQueue
+    let playQueue = [];     
+    let queueIndex = -1;    
     let activeListItem = null; 
     
-    // Feature States
     let isShuffle = false;
     let repeatMode = 0; // 0: Off, 1: Repeat All, 2: Repeat One
+
+    // Initialize OS Media Session Handlers strictly once to prevent memory leaks
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+        navigator.mediaSession.setActionHandler('nexttrack', playNext);
+        
+        navigator.mediaSession.setActionHandler('play', () => {
+            audioPlayer.play();
+            setPlayUI(true);
+        });
+
+        navigator.mediaSession.setActionHandler('pause', () => {
+            audioPlayer.pause();
+            setPlayUI(false);
+        });
+
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            const targetTime = details.fastSeek && 'fastSeek' in audioPlayer ? details.seekTime : details.seekTime;
+            audioPlayer.currentTime = targetTime;
+            seekBar.value = Math.floor(targetTime);
+            currentTimeDisplay.textContent = formatTime(targetTime);
+            updateMediaSessionPosition();
+        });
+    }
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = `<li style="text-align: center; color: var(--text-secondary);">Loading...</li>`;
@@ -381,12 +399,10 @@ document.addEventListener("DOMContentLoaded", () => {
         let indices = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         
         if (isShuffle) {
-            // Fisher-Yates Shuffle
             for (let i = indices.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [indices[i], indices[j]] = [indices[j], indices[i]];
             }
-            // If already playing a song when shuffled, move it to the front of the queue
             if (!resetPlayback && queueIndex !== -1) {
                 const currentOriginalIndex = playQueue[queueIndex];
                 indices = indices.filter(i => i !== currentOriginalIndex);
@@ -394,7 +410,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 queueIndex = 0;
             }
         } else if (!resetPlayback && queueIndex !== -1) {
-            // If un-shuffling, find where the currently playing track belongs in the linear queue
             const currentOriginalIndex = playQueue[queueIndex];
             queueIndex = currentOriginalIndex;
         }
@@ -411,7 +426,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         currentPlaylistData.forEach((track, originalIndex) => {
             const li = document.createElement("li");
-            // Embed original index in dataset for O(1) event delegation mapping
             li.dataset.index = originalIndex;
             li.innerHTML = `
                 <span class="track-title">${originalIndex + 1}. ${escapeHtml(track.title)}</span>
@@ -423,13 +437,11 @@ document.addEventListener("DOMContentLoaded", () => {
         trackList.appendChild(fragment);
     }
 
-    // CPU Optimized Event Delegation: Only one listener for the entire list
     trackList.addEventListener("click", (e) => {
         const li = e.target.closest("li");
         if (!li || !li.dataset.index) return;
         
         const targetOriginalIndex = parseInt(li.dataset.index);
-        // Find where the user's clicked track lives in the current queue routing
         queueIndex = playQueue.indexOf(targetOriginalIndex);
         executePlayback();
     });
@@ -440,11 +452,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
             executePlayback();
-        } else if (repeatMode === 1) { // Repeat All
+        } else if (repeatMode === 1) { 
             queueIndex = 0;
             executePlayback();
         } else {
-            // End of playlist and repeat is Off
             setPlayUI(false);
         }
     }
@@ -452,23 +463,27 @@ document.addEventListener("DOMContentLoaded", () => {
     function playPrev() {
         if (playQueue.length === 0) return;
 
-        // Standard OS behavior: restart track if past 3 seconds, else load previous
         if (audioPlayer.currentTime > 3) {
             audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
             audioPlayer.play();
+            updateMediaSessionPosition();
             return;
         }
 
         if (queueIndex > 0) {
             queueIndex--;
             executePlayback();
-        } else if (repeatMode === 1) { // Repeat All wrapper
+        } else if (repeatMode === 1) {
             queueIndex = playQueue.length - 1;
             executePlayback();
         } else {
-            // Stuck at beginning, restart current
             audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
             audioPlayer.play();
+            updateMediaSessionPosition();
         }
     }
 
@@ -481,7 +496,6 @@ document.addEventListener("DOMContentLoaded", () => {
         currentTitle.textContent = track.title;
         currentChannel.textContent = track.channel;
 
-        // Targeted O(1) UI class swapping
         if (activeListItem) {
             activeListItem.classList.remove("active");
             activeListItem.querySelector('.track-title').classList.remove("active-text");
@@ -528,27 +542,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 album: playlistSelect.value,
                 artwork: artworkArray
             });
-
-            navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-            navigator.mediaSession.setActionHandler('nexttrack', playNext);
-
-            navigator.mediaSession.setActionHandler('play', () => {
-                audioPlayer.play();
-                setPlayUI(true);
-            });
-
-            navigator.mediaSession.setActionHandler('pause', () => {
-                audioPlayer.pause();
-                setPlayUI(false);
-            });
-
-            navigator.mediaSession.setActionHandler('seekto', (details) => {
-                const targetTime = details.fastSeek && 'fastSeek' in audioPlayer ? details.seekTime : details.seekTime;
-                audioPlayer.currentTime = targetTime;
-                seekBar.value = Math.floor(targetTime);
-                currentTimeDisplay.textContent = formatTime(targetTime);
-                updateMediaSessionPosition();
-            });
         }
     }
 
@@ -581,8 +574,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    // --- Event Listeners ---
-
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
@@ -610,9 +601,9 @@ document.addEventListener("DOMContentLoaded", () => {
         iconRepeat.style.display = "block";
         iconRepeatOne.style.display = "none";
 
-        if (repeatMode === 1) { // Repeat All
+        if (repeatMode === 1) { 
             btnRepeat.classList.add("active-state");
-        } else if (repeatMode === 2) { // Repeat One
+        } else if (repeatMode === 2) { 
             btnRepeat.classList.add("active-state");
             iconRepeat.style.display = "none";
             iconRepeatOne.style.display = "block";
@@ -630,15 +621,18 @@ document.addEventListener("DOMContentLoaded", () => {
         currentTimeDisplay.textContent = formatTime(seekBar.value);
     });
 
-    seekBar.addEventListener("change", () => {
-        audioPlayer.currentTime = seekBar.value;
+    seekBar.addEventListener("change", (e) => {
+        audioPlayer.currentTime = Number(e.target.value);
         updateMediaSessionPosition();
     });
 
     audioPlayer.addEventListener("ended", () => {
-        if (repeatMode === 2) { // Repeat One strict routing
+        if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
             audioPlayer.play();
+            updateMediaSessionPosition();
         } else {
             playNext();
         }
