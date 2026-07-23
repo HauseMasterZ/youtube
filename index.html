@@ -170,7 +170,6 @@
             margin-left: -7px;
         }
 
-        /* Pure CSS hardware interpolation during playback */
         .playing-animation #progress-fill {
             transform: scaleX(1) translateZ(0);
             transition: transform var(--track-duration, 0s) linear;
@@ -419,13 +418,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let repeatMode = 0; 
     let currentSliderWidth = 0;
 
+    function getSliderWidth() {
+        return sliderWrapper.getBoundingClientRect().width || currentSliderWidth;
+    }
+
     new ResizeObserver(entries => {
         if (entries[0]) currentSliderWidth = entries[0].contentRect.width;
     }).observe(sliderWrapper);
 
     function setVisualProgress(ratio) {
+        const width = getSliderWidth();
         progressFill.style.transform = `scaleX(${ratio}) translateZ(0)`;
-        progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px) translateZ(0)`;
+        progressThumb.style.transform = `translateX(${ratio * width}px) translateZ(0)`;
     }
 
     function startCSSAnimation() {
@@ -433,20 +437,24 @@ document.addEventListener("DOMContentLoaded", () => {
         const remainingTime = audioPlayer.duration - audioPlayer.currentTime;
         if (remainingTime <= 0) return;
 
+        const width = getSliderWidth();
         const currentRatio = audioPlayer.currentTime / audioPlayer.duration;
         setVisualProgress(currentRatio);
 
         sliderWrapper.style.setProperty('--track-duration', `${remainingTime}s`);
-        sliderWrapper.style.setProperty('--track-max-width', `${currentSliderWidth}px`);
+        sliderWrapper.style.setProperty('--track-max-width', `${width}px`);
+        sliderWrapper.classList.remove('playing-animation');
+        void sliderWrapper.offsetWidth;
         sliderWrapper.classList.add('playing-animation');
     }
 
     function pauseCSSAnimation() {
         if (!audioPlayer.duration) return;
+        const width = getSliderWidth();
         const computedStyle = window.getComputedStyle(progressThumb);
         const matrix = new DOMMatrix(computedStyle.transform);
         const currentX = matrix.m41;
-        const currentRatio = currentSliderWidth ? currentX / currentSliderWidth : 0;
+        const currentRatio = width ? currentX / width : 0;
 
         sliderWrapper.classList.remove('playing-animation');
         setVisualProgress(currentRatio);
