@@ -38,7 +38,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            max-height: 95vh;
+            max-height: 97vh;
             border: 1px solid rgba(255,255,255,0.05);
         }
 
@@ -155,7 +155,7 @@
             background: var(--primary-color);
             border-radius: 4px;
             transform-origin: left;
-            transform: scaleX(0);
+            transform: scaleX(0) translateZ(0);
             pointer-events: none;
             will-change: transform;
         }
@@ -168,7 +168,7 @@
             border-radius: 50%;
             background: var(--primary-color);
             box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
-            transform: translateX(0);
+            transform: translateX(0) translateZ(0);
             pointer-events: none;
             will-change: transform;
             margin-left: -7px;
@@ -411,20 +411,18 @@ document.addEventListener("DOMContentLoaded", () => {
     let repeatMode = 0; 
     let isSeeking = false;
     
-    let visualSyncId = null;
+    let lastUpdateTime = -1;
     let currentSliderWidth = 0;
 
     new ResizeObserver(entries => {
         if (entries[0]) currentSliderWidth = entries[0].contentRect.width;
     }).observe(document.querySelector('.slider-wrapper'));
 
-    function renderVisualProgress() {
-        if (!isSeeking && audioPlayer.duration) {
-            const ratio = audioPlayer.currentTime / audioPlayer.duration;
-            progressFill.style.transform = `scaleX(${ratio})`;
-            progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px)`;
-        }
-        visualSyncId = requestAnimationFrame(renderVisualProgress);
+    function updateVisuals(timeValue) {
+        if (!audioPlayer.duration) return;
+        const ratio = timeValue / audioPlayer.duration;
+        progressFill.style.transform = `scaleX(${ratio}) translateZ(0)`;
+        progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px) translateZ(0)`;
     }
 
     if ('mediaSession' in navigator) {
@@ -445,12 +443,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const targetTime = details.fastSeek && 'fastSeek' in audioPlayer ? details.seekTime : details.seekTime;
             audioPlayer.currentTime = targetTime;
             seekBar.value = Math.floor(targetTime);
-            
-            const ratio = targetTime / audioPlayer.duration;
-            progressFill.style.transform = `scaleX(${ratio})`;
-            progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px)`;
+            updateVisuals(targetTime);
             currentTimeDisplay.textContent = formatTime(targetTime);
-            
             updateMediaSessionPosition();
         });
     }
@@ -539,11 +533,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (playQueue.length === 0) return;
 
         if (audioPlayer.currentTime > 3) {
-            audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            progressFill.style.transform = `scaleX(0)`;
-            progressThumb.style.transform = `translateX(0px)`;
-            currentTimeDisplay.textContent = "0:00";
+            resetTimeAndVisuals();
             audioPlayer.play();
             updateMediaSessionPosition();
             return;
@@ -556,14 +546,18 @@ document.addEventListener("DOMContentLoaded", () => {
             queueIndex = playQueue.length - 1;
             executePlayback();
         } else {
-            audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            progressFill.style.transform = `scaleX(0)`;
-            progressThumb.style.transform = `translateX(0px)`;
-            currentTimeDisplay.textContent = "0:00";
+            resetTimeAndVisuals();
             audioPlayer.play();
             updateMediaSessionPosition();
         }
+    }
+
+    function resetTimeAndVisuals() {
+        audioPlayer.currentTime = 0;
+        seekBar.value = 0;
+        updateVisuals(0);
+        currentTimeDisplay.textContent = "0:00";
+        lastUpdateTime = -1;
     }
 
     function executePlayback() {
@@ -588,10 +582,7 @@ document.addEventListener("DOMContentLoaded", () => {
             activeListItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
 
-        seekBar.value = 0;
-        progressFill.style.transform = `scaleX(0)`;
-        progressThumb.style.transform = `translateX(0px)`;
-        currentTimeDisplay.textContent = "0:00";
+        resetTimeAndVisuals();
         totalTimeDisplay.textContent = "0:00";
 
         const audioPathParts = track.file_path.split('/');
@@ -655,15 +646,6 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
-    audioPlayer.addEventListener("play", () => {
-        if (!visualSyncId) renderVisualProgress();
-    });
-
-    audioPlayer.addEventListener("pause", () => {
-        cancelAnimationFrame(visualSyncId);
-        visualSyncId = null;
-    });
-
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
@@ -704,36 +686,50 @@ document.addEventListener("DOMContentLoaded", () => {
         const duration = Math.floor(audioPlayer.duration);
         seekBar.max = duration;
         totalTimeDisplay.textContent = formatTime(duration);
-        
-        progressFill.style.transform = `scaleX(0)`;
-        progressThumb.style.transform = `translateX(0px)`;
-        
+        updateVisuals(0);
         updateMediaSessionPosition();
     });
 
-    seekBar.addEventListener("input", () => {
-        isSeeking = true;
-        currentTimeDisplay.textContent = formatTime(seekBar.value);
+    audioPlayer.addEventListener("timeupdate", () => {
+        if (isSeeking || !audioPlayer.duration || document.hidden) return;
         
-        const ratio = seekBar.value / audioPlayer.duration;
-        progressFill.style.transform = `scaleX(${ratio})`;
-        progressThumb.style.transform = `translateX(${ratio * currentSliderWidth}px)`;
+        const currentSecond = Math.floor(audioPlayer.currentTime);
+        if (currentSecond !== lastUpdateTime) {
+            updateVisuals(currentSecond);
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && !isSeeking && audioPlayer.duration) {
+            const currentSecond = Math.floor(audioPlayer.currentTime);
+            updateVisuals(currentSecond);
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
+    seekBar.addEventListener("input", (e) => {
+        isSeeking = true;
+        const targetValue = Number(e.target.value);
+        currentTimeDisplay.textContent = formatTime(targetValue);
+        updateVisuals(targetValue);
     });
 
     seekBar.addEventListener("change", (e) => {
-        audioPlayer.currentTime = Number(e.target.value);
+        const targetValue = Number(e.target.value);
+        audioPlayer.currentTime = targetValue;
         isSeeking = false;
-        currentTimeDisplay.textContent = formatTime(e.target.value);
+        currentTimeDisplay.textContent = formatTime(targetValue);
         updateMediaSessionPosition();
     });
 
     audioPlayer.addEventListener("ended", () => {
         if (repeatMode === 2) { 
-            audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            progressFill.style.transform = `scaleX(0)`;
-            progressThumb.style.transform = `translateX(0px)`;
-            currentTimeDisplay.textContent = "0:00";
+            resetTimeAndVisuals();
             audioPlayer.play();
             updateMediaSessionPosition();
         } else {
