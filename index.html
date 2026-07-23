@@ -287,8 +287,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let currentPlaylistData = [];
     let currentIndex = -1;
-    let isSeeking = false;
-    let lastUpdateTime = -1;
 
     const baseUrl = "https://hausemasterz.github.io/youtube_playlist_tracker_downloader";
 
@@ -323,6 +321,20 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function updateMediaSessionPosition() {
+        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
+            try {
+                navigator.mediaSession.setPositionState({
+                    duration: audioPlayer.duration,
+                    playbackRate: audioPlayer.playbackRate,
+                    position: audioPlayer.currentTime
+                });
+            } catch (error) {
+                console.error("[DEBUG] Failed to set media session position:", error);
+            }
+        }
+    }
+
     function playTrack(index) {
         if (index < 0 || index >= currentPlaylistData.length) return;
         
@@ -345,10 +357,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
+        // Reset the static HTML slider
         seekBar.value = 0;
         currentTimeDisplay.textContent = "0:00";
         totalTimeDisplay.textContent = "0:00";
-        lastUpdateTime = -1;
 
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
@@ -382,17 +394,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 artwork: artworkArray
             });
 
-            // Register handlers to enable OS media buttons and bind them to the playlist queue
             navigator.mediaSession.setActionHandler('previoustrack', () => {
-                if (currentIndex > 0) {
-                    playTrack(currentIndex - 1);
-                }
+                if (currentIndex > 0) playTrack(currentIndex - 1);
             });
 
             navigator.mediaSession.setActionHandler('nexttrack', () => {
-                if (currentIndex + 1 < currentPlaylistData.length) {
-                    playTrack(currentIndex + 1);
-                }
+                if (currentIndex + 1 < currentPlaylistData.length) playTrack(currentIndex + 1);
             });
 
             navigator.mediaSession.setActionHandler('play', () => {
@@ -404,6 +411,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 audioPlayer.pause();
                 btnPlayPause.textContent = "▶";
             });
+
+            // Bind the OS overlay scrubbing directly to the audio player
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+                const targetTime = details.fastSeek && 'fastSeek' in audioPlayer 
+                    ? details.seekTime 
+                    : details.seekTime;
+                
+                audioPlayer.currentTime = targetTime;
+                
+                // Update HTML UI manually upon jump
+                seekBar.value = Math.floor(targetTime);
+                currentTimeDisplay.textContent = formatTime(targetTime);
+                
+                updateMediaSessionPosition();
+            });
         }
     }
 
@@ -414,31 +436,22 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
+    // Set duration constraints once track metadata loads
     audioPlayer.addEventListener("loadedmetadata", () => {
         const duration = Math.floor(audioPlayer.duration);
         seekBar.max = duration;
         totalTimeDisplay.textContent = formatTime(duration);
+        updateMediaSessionPosition();
     });
 
-    audioPlayer.addEventListener("timeupdate", () => {
-        if (isSeeking || !audioPlayer.duration) return;
-        
-        const currentSecond = Math.floor(audioPlayer.currentTime);
-        if (currentSecond !== lastUpdateTime) {
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
-        }
-    });
-
+    // Manual slider interaction logic (does not tick automatically)
     seekBar.addEventListener("input", () => {
-        isSeeking = true;
         currentTimeDisplay.textContent = formatTime(seekBar.value);
     });
 
     seekBar.addEventListener("change", () => {
         audioPlayer.currentTime = seekBar.value;
-        isSeeking = false;
+        updateMediaSessionPosition();
     });
 
     btnPlayPause.addEventListener("click", () => {
@@ -454,15 +467,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     btnPrev.addEventListener("click", () => {
-        if (currentIndex > 0) {
-            playTrack(currentIndex - 1);
-        }
+        if (currentIndex > 0) playTrack(currentIndex - 1);
     });
 
     btnNext.addEventListener("click", () => {
-        if (currentIndex + 1 < currentPlaylistData.length) {
-            playTrack(currentIndex + 1);
-        }
+        if (currentIndex + 1 < currentPlaylistData.length) playTrack(currentIndex + 1);
     });
 
     albumArt.addEventListener("error", () => {
