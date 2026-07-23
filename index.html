@@ -621,17 +621,6 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPosition();
     });
 
-    audioPlayer.addEventListener("timeupdate", () => {
-        if (isSeeking || !audioPlayer.duration) return;
-        
-        const currentSecond = Math.floor(audioPlayer.currentTime);
-        if (currentSecond !== lastUpdateTime) {
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
-        }
-    });
-
     seekBar.addEventListener("input", () => {
         isSeeking = true;
         currentTimeDisplay.textContent = formatTime(seekBar.value);
