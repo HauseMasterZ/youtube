@@ -118,6 +118,8 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 20px;
+            contain: layout paint style;
+            transform: translateZ(0);
         }
 
         .time-display {
@@ -136,7 +138,7 @@
             border-radius: 4px;
             outline: none;
             cursor: pointer;
-            will-change: transform;
+            transform: translateZ(0);
         }
 
         input[type="range"]::-webkit-slider-thumb {
