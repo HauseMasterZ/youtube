@@ -74,7 +74,7 @@
         }
 
         #album-art-image {
-            width: min(100%, 260px);
+            width: min(100%, 300px);
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
@@ -233,7 +233,7 @@
             cursor: pointer;
             display: flex;
             align-items: center;
-            border-bottom: 1px solid var(--border-color);
+            border: none;
             font-size: 14px;
             color: var(--text-primary);
             white-space: nowrap;
@@ -367,6 +367,8 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Set total height for virtual scroller
             trackList.style.height = `${currentPlaylistData.length * ITEM_HEIGHT}px`;
+            
+            globalActiveOriginalIndex = -1;
             
             generateQueue(true); 
             
