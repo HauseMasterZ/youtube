@@ -36,7 +36,7 @@
         .player-container {
             width: 100%;
             max-width: 550px;
-            height: 100dvh; /* use dynamic viewport height for mobile */
+            height: 100dvh;
             max-height: 97vh;
             background-color: var(--surface-color);
             border-radius: 12px;
@@ -44,6 +44,7 @@
             display: flex;
             flex-direction: column;
             border: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         
         @media (max-width: 600px) {
@@ -54,7 +55,7 @@
         }
 
         .header {
-            padding: 16px 20px;
+            padding: clamp(12px, 3vw, 16px) clamp(16px, 4vw, 24px);
             background-color: var(--surface-color);
             border-bottom: 1px solid var(--border-color);
             flex-shrink: 0;
@@ -62,47 +63,45 @@
 
         select {
             width: 100%;
-            padding: 12px;
+            padding: clamp(10px, 2.5vw, 12px);
             background-color: var(--hover-color);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 15px;
+            font-size: clamp(14px, 3.5vw, 15px);
             font-weight: 500;
             outline: none;
             cursor: pointer;
             appearance: auto;
         }
 
-        select:focus {
-            border-color: var(--primary-color);
-        }
+        select:focus { border-color: var(--primary-color); }
         
         #search-input {
             width: 100%;
-            margin-top: 12px;
-            padding: 12px;
+            margin-top: clamp(8px, 2vw, 12px);
+            padding: clamp(10px, 2.5vw, 12px);
             background-color: var(--hover-color);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 14px;
+            font-size: clamp(13px, 3vw, 14px);
             font-family: inherit;
             outline: none;
             box-sizing: border-box;
         }
 
-        #search-input:focus {
-            border-color: var(--primary-color);
-        }
+        #search-input:focus { border-color: var(--primary-color); }
 
         .now-playing {
-            padding: 24px 20px 16px 20px;
+            padding: clamp(16px, 5vw, 28px) clamp(16px, 4vw, 24px) clamp(12px, 3vw, 20px) clamp(16px, 4vw, 24px);
             text-align: center;
             display: flex;
             flex-direction: column;
             align-items: center;
             flex-shrink: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
 
         #album-art-image {
@@ -110,14 +109,14 @@
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
-            margin-bottom: 24px;
+            margin-bottom: clamp(16px, 4vw, 24px);
             display: none;
             background-color: var(--hover-color);
             border: 1px solid var(--border-color);
         }
 
         #current-title {
-            font-size: 18px;
+            font-size: clamp(16px, 4.5vw, 20px);
             font-weight: 600;
             margin: 0 0 6px 0;
             white-space: nowrap;
@@ -129,9 +128,9 @@
         }
 
         #current-channel {
-            font-size: 14px;
+            font-size: clamp(13px, 3vw, 15px);
             color: var(--primary-color);
-            margin: 0 0 20px 0;
+            margin: 0 0 clamp(16px, 4vw, 24px) 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -146,11 +145,11 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 20px;
+            margin-bottom: clamp(12px, 3.5vw, 20px);
         }
 
         .time-display {
-            font-size: 12px;
+            font-size: clamp(11px, 2.5vw, 13px);
             color: var(--text-secondary);
             min-width: 40px;
             font-weight: 600;
@@ -183,7 +182,8 @@
             justify-content: space-between;
             width: 100%;
             padding: 0 10px;
-            margin-bottom: 10px;
+            margin-bottom: clamp(4px, 1.5vw, 10px);
+            box-sizing: border-box;
         }
 
         .control-btn {
@@ -191,7 +191,7 @@
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            padding: 8px;
+            padding: clamp(6px, 1.5vw, 8px);
             border-radius: 50%;
             display: flex;
             justify-content: center;
@@ -199,8 +199,8 @@
         }
 
         .control-btn svg {
-            width: 24px;
-            height: 24px;
+            width: clamp(20px, 5vw, 24px);
+            height: clamp(20px, 5vw, 24px);
             fill: currentColor;
         }
 
@@ -227,20 +227,18 @@
             opacity: 0;
         }
 
-        .control-btn.active-state {
-            color: var(--primary-color);
-        }
+        .control-btn.active-state { color: var(--primary-color); }
 
         .main-btn {
             background-color: var(--primary-color);
             color: #000000;
-            width: 52px;
-            height: 52px;
+            width: clamp(48px, 12vw, 56px);
+            height: clamp(48px, 12vw, 56px);
         }
         
         .main-btn svg {
-            width: 32px;
-            height: 32px;
+            width: clamp(26px, 7vw, 32px);
+            height: clamp(26px, 7vw, 32px);
         }
 
         .main-btn:hover {
@@ -255,6 +253,47 @@
             position: relative;
             background-color: var(--bg-color);
             border-top: 1px solid var(--border-color);
+            height: 100%;
+        }
+
+        /* Desktop side-by-side grid layout */
+        @media (min-width: 768px) {
+            .player-container {
+                max-width: 900px;
+                display: grid;
+                grid-template-columns: minmax(320px, 1fr) 1.2fr;
+                grid-template-rows: auto 1fr;
+            }
+            .header {
+                grid-column: 2;
+                grid-row: 1;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .now-playing {
+                grid-column: 1;
+                grid-row: 1 / 3;
+                border-right: 1px solid var(--border-color);
+                justify-content: center;
+            }
+            .playlist-container {
+                grid-column: 2;
+                grid-row: 2;
+                border-top: none;
+            }
+            #album-art-image {
+                width: 90%;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .player-container {
+                max-width: 1100px;
+                grid-template-columns: minmax(400px, 1fr) 1.5fr;
+            }
+            #current-title { font-size: 24px; }
+            #current-channel { font-size: 16px; }
+            .main-btn { width: 64px; height: 64px; }
+            .main-btn svg { width: 36px; height: 36px; }
         }
 
         .playlist-container::-webkit-scrollbar { width: 6px; }
@@ -444,15 +483,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndIndex = -1;
     let isRendering = false;
 
-    async function preloadAllPlaylists() {
-        for (const pl of ALL_PLAYLISTS) {
-            try {
-                const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`);
-                if (res.ok) {
-                    allDatabases[pl] = await res.json();
-                }
-            } catch (e) {}
-        }
+    // --- Network Bootstrapping Optimization ---
+    function preloadAllPlaylists(excludePl) {
+        ALL_PLAYLISTS.forEach(pl => {
+            if (pl !== excludePl && !allDatabases[pl]) {
+                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        // Pre-compute search string for instantaneous filtering
+                        data.forEach(t => t._searchString = (t.title + " " + t.channel).toLowerCase());
+                        allDatabases[pl] = data;
+                    }).catch(e => {});
+            }
+        });
     }
 
     async function loadPlaylist(folderName) {
@@ -463,7 +506,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!allDatabases[folderName]) {
                 const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`);
                 if (!res.ok) throw new Error();
-                allDatabases[folderName] = await res.json();
+                const data = await res.json();
+                
+                // Pre-compute search string for instantaneous filtering
+                data.forEach(t => t._searchString = (t.title + " " + t.channel).toLowerCase());
+                allDatabases[folderName] = data;
             }
             
             currentPlaylistData = allDatabases[folderName];
@@ -499,7 +546,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (currentPlaylistData) {
                 for (let i = 0; i < currentPlaylistData.length; i++) {
                     const track = currentPlaylistData[i];
-                    if (track.title.toLowerCase().includes(query) || track.channel.toLowerCase().includes(query)) {
+                    if (track._searchString.includes(query)) {
                         filteredIndices.push({ playlist: currentPl, index: i });
                         addedIds.add(track.id);
                     }
@@ -512,7 +559,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const data = allDatabases[pl];
                     for (let i = 0; i < data.length; i++) {
                         const track = data[i];
-                        if (track.title.toLowerCase().includes(query) || track.channel.toLowerCase().includes(query)) {
+                        if (track._searchString.includes(query)) {
                             if (!addedIds.has(track.id)) {
                                 filteredIndices.push({ playlist: pl, index: i });
                                 addedIds.add(track.id);
@@ -561,6 +608,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const currentPl = playlistSelect.value;
         const requiredNodes = (endIndex - startIndex + 1);
+        
+        // Active Fetch Controllers to abort unused TCP sockets mid-flight
+        if (!window.activeFetches) window.activeFetches = new Map();
         
         // Ensure we don't accidentally recycle the "Loading..." or "No results" messages!
         if (trackList.children.length > 0 && !trackList.children[0].querySelector('a.yt-link-icon')) {
@@ -645,6 +695,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 const newSrc = `${baseUrl}/${safeThumbPath}`;
                 
                 if (thumbImg.dataset.src !== safeThumbPath) {
+                    if (thumbImg.dataset.pendingSrc) {
+                        const oldController = window.activeFetches.get(thumbImg.dataset.pendingSrc);
+                        if (oldController) {
+                            oldController.abort();
+                            window.activeFetches.delete(thumbImg.dataset.pendingSrc);
+                        }
+                    }
+                    
                     thumbImg.style.transition = 'none';
                     thumbImg.style.opacity = '0';
                     
@@ -659,6 +717,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
+                
+                if (thumbImg.dataset.pendingSrc) {
+                    const oldController = window.activeFetches.get(thumbImg.dataset.pendingSrc);
+                    if (oldController) {
+                        oldController.abort();
+                        window.activeFetches.delete(thumbImg.dataset.pendingSrc);
+                    }
+                }
+                
                 thumbImg.dataset.src = "";
                 delete thumbImg.dataset.pendingSrc;
             }
@@ -677,11 +744,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     const src = tCanvas.dataset.pendingSrc;
                     delete tCanvas.dataset.pendingSrc;
                     
+                    const controller = new AbortController();
+                    window.activeFetches.set(src, controller);
+                    
                     // Client-Side Downscaling: Decodes HD image to 64x64 OFF the main thread to save RAM
-                    fetch(src)
+                    fetch(src, { signal: controller.signal })
                         .then(res => res.blob())
                         .then(blob => createImageBitmap(blob, { resizeWidth: 64, resizeHeight: 64 }))
                         .then(bitmap => {
+                            window.activeFetches.delete(src);
                             // Check if user scrolled away while decoding
                             if (tCanvas.dataset.src === src.split(`${baseUrl}/`)[1]) {
                                 const ctx = tCanvas.getContext('2d');
@@ -693,7 +764,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             }
                             bitmap.close(); // Instantly destroy uncompressed bitmap from RAM
                         })
-                        .catch(err => {}); // Ignore 404s or network aborts
+                        .catch(err => {
+                            window.activeFetches.delete(src);
+                        }); // Ignore 404s or network aborts
                 }
             }
         }, 75);
@@ -842,9 +915,7 @@ document.addEventListener("DOMContentLoaded", () => {
         audioPlayer.src = `${baseUrl}/${safeAudioPath}`;
         
         if (!preventAutoplay) {
-            audioPlayer.play().then(() => {
-                setPlayUI(true);
-            }).catch(e => {});
+            audioPlayer.play().catch(e => {});
         }
 
         if (track.thumbnail_path) {
@@ -858,16 +929,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         if ('mediaSession' in navigator) {
-            const artworkSrc = track.thumbnail_path ? [{ src: `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` }] : [];
+            const artworkSrc = track.thumbnail_path ? [{ 
+                src: `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}`,
+                sizes: '1280x720',
+                type: 'image/jpeg'
+            }] : [];
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
                 artwork: artworkSrc
             });
-            navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
-            navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
-            navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-            navigator.mediaSession.setActionHandler('nexttrack', playNext);
         }
     }
 
@@ -899,10 +970,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
             audioPlayer.play();
-            setPlayUI(true);
         } else {
             audioPlayer.pause();
-            setPlayUI(false);
         }
     });
 
@@ -936,6 +1005,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const duration = Math.floor(audioPlayer.duration);
         seekBar.max = duration;
         totalTimeDisplay.textContent = formatTime(duration);
+        
+        if ('mediaSession' in navigator && !isNaN(audioPlayer.duration)) {
+            navigator.mediaSession.setPositionState({
+                duration: audioPlayer.duration,
+                playbackRate: audioPlayer.playbackRate,
+                position: audioPlayer.currentTime
+            });
+        }
     });
 
     // --- Deep Sleep JS Engine Integration ---
@@ -958,8 +1035,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    audioPlayer.addEventListener("play", startSync);
-    audioPlayer.addEventListener("pause", stopSync);
+    audioPlayer.addEventListener("play", () => {
+        setPlayUI(true);
+        startSync();
+    });
+    
+    audioPlayer.addEventListener("pause", () => {
+        setPlayUI(false);
+        stopSync();
+    });
 
     document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
@@ -982,6 +1066,14 @@ document.addEventListener("DOMContentLoaded", () => {
         audioPlayer.currentTime = Number(e.target.value);
         isSeeking = false;
         updateTimeUI(Number(e.target.value));
+        
+        if ('mediaSession' in navigator && !isNaN(audioPlayer.duration)) {
+            navigator.mediaSession.setPositionState({
+                duration: audioPlayer.duration,
+                playbackRate: audioPlayer.playbackRate,
+                position: audioPlayer.currentTime
+            });
+        }
     });
 
     audioPlayer.addEventListener("ended", () => {
@@ -1013,33 +1105,50 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
-    // Initialize
-    preloadAllPlaylists().then(() => {
-        const lastPlaylist = localStorage.getItem("lastPlaylist");
-        if (lastPlaylist && ALL_PLAYLISTS.includes(lastPlaylist)) {
-            playlistSelect.value = lastPlaylist;
-        }
+    // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
+    if ('mediaSession' in navigator) {
+        navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
+        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
+        navigator.mediaSession.setActionHandler('previoustrack', playPrev);
+        navigator.mediaSession.setActionHandler('nexttrack', playNext);
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+            if (details.fastSeek && 'fastSeek' in audioPlayer) {
+                audioPlayer.fastSeek(details.seekTime);
+            } else {
+                audioPlayer.currentTime = details.seekTime;
+            }
+            updateTimeUI(details.seekTime);
+        });
+    }
+
+    // Initialize Fast-Boot
+    const lastPlaylist = localStorage.getItem("lastPlaylist") || playlistSelect.value;
+    if (ALL_PLAYLISTS.includes(lastPlaylist)) {
+        playlistSelect.value = lastPlaylist;
+    }
+    
+    // Load the active playlist instantaneously, defer others to the background
+    loadPlaylist(playlistSelect.value).then(() => {
+        preloadAllPlaylists(playlistSelect.value); // Non-blocking background preload
         
-        loadPlaylist(playlistSelect.value).then(() => {
-            const lastTrackId = localStorage.getItem("lastTrackId");
-            if (lastTrackId) {
-                const targetOriginalIndex = currentPlaylistData.findIndex(t => t.id === lastTrackId);
-                if (targetOriginalIndex !== -1) {
-                    queueIndex = playQueue.indexOf(targetOriginalIndex);
-                    executePlayback(true); // true = preventAutoplay
-                    
-                    const savedTime = localStorage.getItem("lastTime");
-                    if (savedTime) {
-                        const restoreTime = () => {
-                            audioPlayer.currentTime = parseFloat(savedTime);
-                            updateTimeUI(parseFloat(savedTime));
-                            audioPlayer.removeEventListener("loadedmetadata", restoreTime);
-                        };
-                        audioPlayer.addEventListener("loadedmetadata", restoreTime);
-                    }
+        const lastTrackId = localStorage.getItem("lastTrackId");
+        if (lastTrackId) {
+            const targetOriginalIndex = currentPlaylistData.findIndex(t => t.id === lastTrackId);
+            if (targetOriginalIndex !== -1) {
+                queueIndex = playQueue.indexOf(targetOriginalIndex);
+                executePlayback(true); // true = preventAutoplay
+                
+                const savedTime = localStorage.getItem("lastTime");
+                if (savedTime) {
+                    const restoreTime = () => {
+                        audioPlayer.currentTime = parseFloat(savedTime);
+                        updateTimeUI(parseFloat(savedTime));
+                        audioPlayer.removeEventListener("loadedmetadata", restoreTime);
+                    };
+                    audioPlayer.addEventListener("loadedmetadata", restoreTime);
                 }
             }
-        });
+        }
     });
 });
 </script>
