@@ -32,7 +32,7 @@
 
         .player-container {
             width: min(80vw, 450px);
-            height: 97vh;
+            height: 800px;
             background-color: var(--surface-color);
             border-radius: 12px;
             overflow: hidden;
@@ -247,7 +247,7 @@
             left: 0;
             width: 100%;
             height: 48px; /* Fixed height for virtual scrolling */
-            padding: 0 16px;
+            padding: 0 48px 0 16px; /* 48px right padding for the icon */
             box-sizing: border-box;
             cursor: pointer;
             display: block;
@@ -258,6 +258,39 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+        }
+
+        .yt-link-icon {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            text-decoration: none;
+            opacity: 0;
+            transition: opacity 0.2s, color 0.2s, background-color 0.2s;
+            z-index: 2;
+        }
+
+        #track-list li:hover .yt-link-icon, #track-list li.active .yt-link-icon {
+            opacity: 1;
+        }
+
+        .yt-link-icon:hover {
+            color: var(--primary-color);
+            background-color: var(--hover-color);
+        }
+
+        .yt-link-icon svg {
+            width: 18px;
+            height: 18px;
+            fill: currentColor;
         }
 
         #track-list li:hover { background-color: var(--hover-color); }
@@ -527,6 +560,21 @@ document.addEventListener("DOMContentLoaded", () => {
             
             li.textContent = text;
             li.title = text; // Tooltip for full visibility of long names
+            
+            // Add YouTube link icon
+            const linkA = document.createElement("a");
+            linkA.href = track.url || `https://www.youtube.com/watch?v=${track.id}`;
+            linkA.target = "_blank";
+            linkA.className = "yt-link-icon";
+            linkA.title = "Open on YouTube";
+            // SVG Link Icon
+            linkA.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>';
+            
+            // Prevent playing track when clicking the link
+            linkA.addEventListener("click", (e) => e.stopPropagation());
+            
+            li.appendChild(linkA);
+            
             fragment.appendChild(li);
         }
         
