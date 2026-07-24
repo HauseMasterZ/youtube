@@ -32,6 +32,7 @@
 
         .player-container {
             width: min(80vw, 450px);
+            height: 800px;
             background-color: var(--surface-color);
             border-radius: 12px;
             overflow: hidden;
@@ -279,7 +280,7 @@
             <option value="Driving">Driving</option>
             <option value="Songs">Songs</option>
         </select>
-        <input type="text" id="search-input" placeholder="Search tracks..." autocomplete="off">
+        <input type="text" id="search-input" placeholder="Search tracks..." autocomplete="off" autofocus>
     </div>
 
     <div class="now-playing">
@@ -601,6 +602,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 executePlayback();
             });
         } else {
+            // If we are playing from a search, clear the search instantly
+            if (searchInput.value.trim() !== "") {
+                searchInput.value = "";
+                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlistSelect.value, index: i }));
+                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+            }
             queueIndex = playQueue.indexOf(targetOriginalIndex);
             executePlayback();
         }
