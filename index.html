@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube</title>
     <link rel="icon" type="image/x-icon" href="https://www.youtube.com/favicon.ico">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
     <style>
         /* Sleek, flat premium design - Zero GPU overhead */
         :root {
@@ -21,7 +24,7 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             display: flex;
@@ -211,6 +214,8 @@
             vertical-align: middle;
             flex-shrink: 0;
             background-color: #2a2a2a;
+            transition: opacity 0.2s ease-in-out;
+            opacity: 0;
         }
 
         .control-btn.active-state {
@@ -561,7 +566,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const thumbImg = document.createElement("img");
             thumbImg.className = "track-thumb";
-            thumbImg.loading = "lazy";
+            thumbImg.onload = function() { this.style.opacity = '1'; };
             
             const textSpan = document.createElement("span");
             textSpan.style.flex = "1";
@@ -626,10 +631,18 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (track.thumbnail_path) {
                 const safeThumbPath = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
-                thumbImg.src = `${baseUrl}/${safeThumbPath}`;
+                if (thumbImg.dataset.src !== safeThumbPath) {
+                    thumbImg.style.opacity = '0'; // Instantly hide the old image
+                    thumbImg.dataset.src = safeThumbPath;
+                    thumbImg.src = `${baseUrl}/${safeThumbPath}`;
+                } else if (thumbImg.complete) {
+                    // If it's already the correct image and loaded, just ensure it's visible
+                    thumbImg.style.opacity = '1';
+                }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
+                thumbImg.dataset.src = "";
             }
             
             textSpan.textContent = text;
