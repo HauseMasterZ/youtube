@@ -6,21 +6,22 @@
     <title>YT Audio Vault</title>
     <link rel="icon" type="image/x-icon" href="https://www.youtube.com/favicon.ico">
     <style>
+        /* Sleek, flat premium design - Zero GPU overhead */
         :root {
-            --bg-color: #0d0d0f;
-            --surface-color: #1a1a1d;
-            --primary-color: #bb86fc;
-            --primary-variant: #9965d8;
-            --text-primary: #f0f0f0;
-            --text-secondary: #a0a0a0;
-            --hover-color: #2c2c31;
-            --active-color: #38383e;
+            --bg-color: #0c0c0e;
+            --surface-color: #151518;
+            --primary-color: #8c73ff;
+            --text-primary: #e6e6e6;
+            --text-secondary: #888899;
+            --hover-color: #1e1e24;
+            --active-color: #24242d;
+            --border-color: #26262e;
         }
 
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             display: flex;
@@ -30,20 +31,20 @@
         }
 
         .player-container {
-            width: min(80vw, 500px);
+            width: min(80vw, 450px);
             background-color: var(--surface-color);
-            border-radius: 20px;
+            border-radius: 12px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             max-height: 97vh;
-            border: 1px solid rgba(255,255,255,0.05);
+            border: 1px solid var(--border-color);
         }
 
         .header {
             padding: 16px 20px;
-            background-color: rgba(255,255,255,0.02);
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+            background-color: var(--surface-color);
+            border-bottom: 1px solid var(--border-color);
         }
 
         select {
@@ -51,13 +52,13 @@
             padding: 12px;
             background-color: var(--hover-color);
             color: var(--text-primary);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
             font-size: 15px;
             font-weight: 500;
             outline: none;
             cursor: pointer;
-            appearance: auto; /* Replaced heavy background SVG with standard appearance to save render cost */
+            appearance: auto;
         }
 
         select:focus {
@@ -65,7 +66,7 @@
         }
 
         .now-playing {
-            padding: 24px 24px 16px 24px;
+            padding: 24px 20px 16px 20px;
             text-align: center;
             display: flex;
             flex-direction: column;
@@ -73,29 +74,31 @@
         }
 
         #album-art-image {
-            width: min(100%, 280px);
+            width: min(100%, 260px);
             aspect-ratio: 1 / 1;
-            border-radius: 16px;
+            border-radius: 8px;
             object-fit: cover;
             margin-bottom: 24px;
             display: none;
             background-color: var(--hover-color);
+            border: 1px solid var(--border-color);
         }
 
         #current-title {
-            font-size: 20px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 600;
             margin: 0 0 6px 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
             width: 100%;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.2px;
+            color: #ffffff;
         }
 
         #current-channel {
             font-size: 14px;
-            color: var(--text-secondary);
+            color: var(--primary-color);
             margin: 0 0 20px 0;
             white-space: nowrap;
             overflow: hidden;
@@ -125,9 +128,9 @@
         input[type="range"] {
             -webkit-appearance: none;
             width: 100%;
-            height: 6px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
+            height: 4px;
+            background: var(--border-color);
+            border-radius: 2px;
             outline: none;
             cursor: pointer;
         }
@@ -135,8 +138,8 @@
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 14px;
-            height: 14px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
             background: var(--primary-color);
             cursor: pointer;
@@ -171,7 +174,7 @@
 
         .control-btn:hover {
             color: var(--text-primary);
-            background-color: rgba(255,255,255,0.05);
+            background-color: var(--hover-color);
         }
 
         .control-btn.active-state {
@@ -179,10 +182,10 @@
         }
 
         .main-btn {
-            background-color: var(--text-primary);
-            color: var(--bg-color);
-            width: 56px;
-            height: 56px;
+            background-color: var(--primary-color);
+            color: #000000;
+            width: 52px;
+            height: 52px;
         }
         
         .main-btn svg {
@@ -191,39 +194,46 @@
         }
 
         .main-btn:hover {
-            background-color: var(--primary-color);
-            color: var(--bg-color);
+            background-color: #a491ff;
+            color: #000000;
         }
 
+        /* Virtual Scroller Container Styles */
         .playlist-container {
             flex-grow: 1;
             overflow-y: auto;
-            border-top: 1px solid rgba(255,255,255,0.05);
-            background-color: rgba(0,0,0,0.2);
+            position: relative;
+            background-color: var(--bg-color);
+            border-top: 1px solid var(--border-color);
         }
 
-        .playlist-container::-webkit-scrollbar { width: 8px; }
+        .playlist-container::-webkit-scrollbar { width: 6px; }
         .playlist-container::-webkit-scrollbar-thumb {
-            background-color: rgba(255,255,255,0.1);
-            border-radius: 4px;
+            background-color: var(--border-color);
+            border-radius: 3px;
         }
         .playlist-container::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(255,255,255,0.2);
+            background-color: #383842;
         }
 
         #track-list {
             list-style: none;
             padding: 0;
             margin: 0;
+            position: relative;
         }
 
         #track-list li {
-            padding: 14px 20px;
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 48px; /* Fixed height for virtual scrolling */
+            padding: 0 16px;
+            box-sizing: border-box;
             cursor: pointer;
             display: flex;
-            flex-direction: column;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
-            
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
             font-size: 14px;
             color: var(--text-primary);
             white-space: nowrap;
@@ -235,8 +245,8 @@
 
         #track-list li.active {
             background-color: var(--active-color);
-            border-left: 4px solid var(--primary-color);
-            padding-left: 16px;
+            border-left: 3px solid var(--primary-color);
+            padding-left: 13px; /* 16px - 3px border */
             color: var(--primary-color);
             font-weight: 600;
         }
@@ -291,9 +301,9 @@
         </div>
     </div>
 
-    <div class="playlist-container">
+    <div class="playlist-container" id="playlist-container">
         <ul id="track-list">
-            <li>Loading...</li>
+            <li style="position: static; text-align: center; justify-content: center; border: none;">Loading...</li>
         </ul>
     </div>
 </div>
@@ -301,6 +311,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const playlistSelect = document.getElementById("playlist-select");
+    const playlistContainer = document.getElementById("playlist-container");
     const trackList = document.getElementById("track-list");
     const audioPlayer = document.getElementById("audio-player");
     const currentTitle = document.getElementById("current-title");
@@ -327,23 +338,25 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentPlaylistData = [];
     let playQueue = [];     
     let queueIndex = -1;    
-    let activeListItem = null; 
+    let globalActiveOriginalIndex = -1; 
     
     let isShuffle = false;
     let repeatMode = 0; 
     let isSeeking = false;
     
-    // Throttling timers
+    // UI Throttling
     let lastRenderTime = -1;
-    let timeUpdateInterval = null;
+    let syncInterval = null;
+
+    // Virtual Scroller state
+    const ITEM_HEIGHT = 48;
+    let lastStartIndex = -1;
+    let lastEndIndex = -1;
+    let isRendering = false;
 
     async function loadPlaylist(folderName) {
-        trackList.innerHTML = '';
-        const loadingLi = document.createElement('li');
-        loadingLi.style.textAlign = 'center';
-        loadingLi.style.color = 'var(--text-secondary)';
-        loadingLi.textContent = 'Loading...';
-        trackList.appendChild(loadingLi);
+        trackList.innerHTML = '<li style="position: static; text-align: center; justify-content: center; border: none; color: var(--text-secondary);">Loading...</li>';
+        trackList.style.height = 'auto';
         
         const targetUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
         try {
@@ -351,17 +364,80 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
             
             currentPlaylistData = await response.json();
+            
+            // Set total height for virtual scroller
+            trackList.style.height = `${currentPlaylistData.length * ITEM_HEIGHT}px`;
+            
             generateQueue(true); 
-            renderTracks();
+            
+            // Force first render
+            lastStartIndex = -1;
+            renderVirtualTracks();
         } catch (error) {
-            trackList.innerHTML = '';
-            const errorLi = document.createElement('li');
-            errorLi.style.color = '#ff5555';
-            errorLi.style.padding = '20px';
-            errorLi.textContent = 'Failed to load playlist database. Ensure JSON exists in the folder.';
-            trackList.appendChild(errorLi);
+            trackList.style.height = 'auto';
+            trackList.innerHTML = '<li style="position: static; text-align: center; justify-content: center; border: none; color: #ff5555;">Failed to load playlist database.</li>';
         }
     }
+
+    // --- Virtual Scroller Core ---
+    function renderVirtualTracks() {
+        if (currentPlaylistData.length === 0) return;
+
+        const scrollTop = playlistContainer.scrollTop;
+        const containerHeight = playlistContainer.clientHeight || 400;
+
+        // Render buffer (3 items above and below viewport to prevent flashing)
+        const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 3);
+        const endIndex = Math.min(currentPlaylistData.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 3);
+
+        // Only redraw DOM if the index window actually shifted
+        if (lastStartIndex === startIndex && lastEndIndex === endIndex) {
+            return; 
+        }
+
+        lastStartIndex = startIndex;
+        lastEndIndex = endIndex;
+        isRendering = true;
+
+        trackList.innerHTML = ""; 
+        const fragment = document.createDocumentFragment();
+
+        for (let i = startIndex; i <= endIndex; i++) {
+            const li = document.createElement("li");
+            li.dataset.index = i;
+            li.style.top = `${i * ITEM_HEIGHT}px`;
+            
+            if (i === globalActiveOriginalIndex) {
+                li.classList.add("active");
+            }
+            li.textContent = `${i + 1}. ${currentPlaylistData[i].title} - ${currentPlaylistData[i].channel}`;
+            fragment.appendChild(li);
+        }
+        
+        trackList.appendChild(fragment);
+        isRendering = false;
+    }
+
+    playlistContainer.addEventListener("scroll", () => {
+        if (!isRendering) {
+            // requestAnimationFrame provides ultra-smooth 60fps scrolling without CPU blocking
+            window.requestAnimationFrame(renderVirtualTracks);
+        }
+    });
+
+    function scrollToTrack(index) {
+        const scrollPos = index * ITEM_HEIGHT;
+        const containerHeight = playlistContainer.clientHeight || 400;
+        playlistContainer.scrollTo({ 
+            top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
+            behavior: "smooth" 
+        });
+        
+        // Force highlight update immediately even during scroll
+        lastStartIndex = -1;
+        renderVirtualTracks();
+    }
+    // -----------------------------
 
     function generateQueue(resetPlayback = false) {
         let indices = Array.from({length: currentPlaylistData.length}, (_, i) => i);
@@ -384,23 +460,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         playQueue = indices;
         if (resetPlayback) queueIndex = -1;
-    }
-
-    function renderTracks() {
-        trackList.innerHTML = "";
-        activeListItem = null;
-        
-        const fragment = document.createDocumentFragment();
-        
-        for (let i = 0; i < currentPlaylistData.length; i++) {
-            const li = document.createElement("li");
-            li.dataset.index = i;
-            // Flatten DOM node to save RAM
-            li.textContent = `${i + 1}. ${currentPlaylistData[i].title} - ${currentPlaylistData[i].channel}`;
-            fragment.appendChild(li);
-        }
-        
-        trackList.appendChild(fragment);
     }
 
     trackList.addEventListener("click", (e) => {
@@ -453,21 +512,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (queueIndex < 0 || queueIndex >= playQueue.length) return;
         
         const originalIndex = playQueue[queueIndex];
+        globalActiveOriginalIndex = originalIndex;
+        
         const track = currentPlaylistData[originalIndex];
 
         currentTitle.textContent = track.title;
         currentChannel.textContent = track.channel;
 
-        if (activeListItem) {
-            activeListItem.classList.remove("active");
-        }
-        
-        const items = trackList.children;
-        if (items[originalIndex]) {
-            activeListItem = items[originalIndex];
-            activeListItem.classList.add("active");
-            activeListItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
+        scrollToTrack(originalIndex);
 
         updateTimeUI(0);
         totalTimeDisplay.textContent = "0:00";
@@ -558,27 +610,38 @@ document.addEventListener("DOMContentLoaded", () => {
         totalTimeDisplay.textContent = formatTime(duration);
     });
 
-    // Replace default frequent timeupdate with a controlled 1s interval to slash CPU
-    function syncTime() {
-        if (!isSeeking && audioPlayer.duration && !document.hidden && !audioPlayer.paused) {
-            updateTimeUI(Math.floor(audioPlayer.currentTime));
+    // --- Deep Sleep JS Engine Integration ---
+    function startSync() {
+        if (!syncInterval && !audioPlayer.paused) {
+            syncInterval = setInterval(() => {
+                if (!isSeeking && audioPlayer.duration) {
+                    updateTimeUI(Math.floor(audioPlayer.currentTime));
+                }
+            }, 1000);
         }
     }
 
-    audioPlayer.addEventListener("play", () => {
-        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
-        timeUpdateInterval = setInterval(syncTime, 1000);
-    });
+    function stopSync() {
+        if (syncInterval) {
+            clearInterval(syncInterval);
+            syncInterval = null;
+        }
+    }
 
-    audioPlayer.addEventListener("pause", () => {
-        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
-    });
+    audioPlayer.addEventListener("play", startSync);
+    audioPlayer.addEventListener("pause", stopSync);
 
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && !isSeeking && audioPlayer.duration) {
-            updateTimeUI(Math.floor(audioPlayer.currentTime));
+        if (document.hidden) {
+            stopSync(); // Engine completely suspends operations in background
+        } else {
+            if (!audioPlayer.paused) {
+                updateTimeUI(Math.floor(audioPlayer.currentTime));
+                startSync();
+            }
         }
     });
+    // ----------------------------------------
 
     seekBar.addEventListener("input", () => {
         isSeeking = true;
@@ -616,6 +679,7 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
+    // Initialize
     loadPlaylist(playlistSelect.value);
 });
 </script>
