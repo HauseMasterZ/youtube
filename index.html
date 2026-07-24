@@ -15,7 +15,6 @@
             --text-secondary: #a0a0a0;
             --hover-color: #2c2c31;
             --active-color: #38383e;
-            --transition-speed: 0.2s;
         }
 
         body {
@@ -34,7 +33,6 @@
             width: min(80vw, 500px);
             background-color: var(--surface-color);
             border-radius: 20px;
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -59,10 +57,7 @@
             font-weight: 500;
             outline: none;
             cursor: pointer;
-            appearance: none;
-            background-image: url('data:image/svg+xml;utf8,<svg fill="%23a0a0a0" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/></svg>');
-            background-repeat: no-repeat;
-            background-position: right 10px center;
+            appearance: auto; /* Replaced heavy background SVG with standard appearance to save render cost */
         }
 
         select:focus {
@@ -83,7 +78,6 @@
             border-radius: 16px;
             object-fit: cover;
             margin-bottom: 24px;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
             display: none;
             background-color: var(--hover-color);
         }
@@ -118,8 +112,6 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 20px;
-            contain: layout paint style;
-            transform: translateZ(0);
         }
 
         .time-display {
@@ -138,7 +130,6 @@
             border-radius: 4px;
             outline: none;
             cursor: pointer;
-            transform: translateZ(0);
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -149,7 +140,6 @@
             border-radius: 50%;
             background: var(--primary-color);
             cursor: pointer;
-            box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
         }
 
         .playback-controls {
@@ -171,7 +161,6 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            transition: color var(--transition-speed), background-color var(--transition-speed);
         }
 
         .control-btn svg {
@@ -204,7 +193,6 @@
         .main-btn:hover {
             background-color: var(--primary-color);
             color: var(--bg-color);
-            transform: scale(1.05);
         }
 
         .playlist-container {
@@ -235,7 +223,12 @@
             display: flex;
             flex-direction: column;
             border-bottom: 1px solid rgba(255,255,255,0.03);
-            transition: background-color var(--transition-speed);
+            
+            font-size: 14px;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         #track-list li:hover { background-color: var(--hover-color); }
@@ -244,27 +237,9 @@
             background-color: var(--active-color);
             border-left: 4px solid var(--primary-color);
             padding-left: 16px;
-        }
-
-        .track-title {
-            font-size: 15px;
+            color: var(--primary-color);
             font-weight: 600;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
-
-        .track-channel {
-            font-size: 13px;
-            color: var(--text-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .track-title.active-text { color: var(--primary-color); }
     </style>
 </head>
 <body>
@@ -357,10 +332,19 @@ document.addEventListener("DOMContentLoaded", () => {
     let isShuffle = false;
     let repeatMode = 0; 
     let isSeeking = false;
-    let lastUpdateTime = -1;
+    
+    // Throttling timers
+    let lastRenderTime = -1;
+    let timeUpdateInterval = null;
 
     async function loadPlaylist(folderName) {
-        trackList.innerHTML = `<li style="text-align: center; color: var(--text-secondary);">Loading...</li>`;
+        trackList.innerHTML = '';
+        const loadingLi = document.createElement('li');
+        loadingLi.style.textAlign = 'center';
+        loadingLi.style.color = 'var(--text-secondary)';
+        loadingLi.textContent = 'Loading...';
+        trackList.appendChild(loadingLi);
+        
         const targetUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
         try {
             const response = await fetch(targetUrl);
@@ -370,7 +354,12 @@ document.addEventListener("DOMContentLoaded", () => {
             generateQueue(true); 
             renderTracks();
         } catch (error) {
-            trackList.innerHTML = `<li style="color: #ff5555; padding: 20px;">Failed to load playlist database. Ensure JSON exists in the folder.</li>`;
+            trackList.innerHTML = '';
+            const errorLi = document.createElement('li');
+            errorLi.style.color = '#ff5555';
+            errorLi.style.padding = '20px';
+            errorLi.textContent = 'Failed to load playlist database. Ensure JSON exists in the folder.';
+            trackList.appendChild(errorLi);
         }
     }
 
@@ -403,15 +392,13 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const fragment = document.createDocumentFragment();
         
-        currentPlaylistData.forEach((track, originalIndex) => {
+        for (let i = 0; i < currentPlaylistData.length; i++) {
             const li = document.createElement("li");
-            li.dataset.index = originalIndex;
-            li.innerHTML = `
-                <span class="track-title">${originalIndex + 1}. ${escapeHtml(track.title)}</span>
-                <span class="track-channel">${escapeHtml(track.channel)}</span>
-            `;
+            li.dataset.index = i;
+            // Flatten DOM node to save RAM
+            li.textContent = `${i + 1}. ${currentPlaylistData[i].title} - ${currentPlaylistData[i].channel}`;
             fragment.appendChild(li);
-        });
+        }
         
         trackList.appendChild(fragment);
     }
@@ -444,9 +431,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (audioPlayer.currentTime > 3) {
             audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            currentTimeDisplay.textContent = "0:00";
-            lastUpdateTime = -1;
+            updateTimeUI(0);
             audioPlayer.play();
             return;
         }
@@ -459,9 +444,7 @@ document.addEventListener("DOMContentLoaded", () => {
             executePlayback();
         } else {
             audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            currentTimeDisplay.textContent = "0:00";
-            lastUpdateTime = -1;
+            updateTimeUI(0);
             audioPlayer.play();
         }
     }
@@ -477,21 +460,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (activeListItem) {
             activeListItem.classList.remove("active");
-            activeListItem.querySelector('.track-title').classList.remove("active-text");
         }
         
         const items = trackList.children;
         if (items[originalIndex]) {
             activeListItem = items[originalIndex];
             activeListItem.classList.add("active");
-            activeListItem.querySelector('.track-title').classList.add("active-text");
             activeListItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
 
-        seekBar.value = 0;
-        currentTimeDisplay.textContent = "0:00";
+        updateTimeUI(0);
         totalTimeDisplay.textContent = "0:00";
-        lastUpdateTime = -1;
 
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
@@ -501,13 +480,11 @@ document.addEventListener("DOMContentLoaded", () => {
             setPlayUI(true);
         }).catch(e => {});
 
-        let absoluteThumbUrl = "";
         if (track.thumbnail_path) {
             const thumbParts = track.thumbnail_path.split('/');
             const safeThumbPath = thumbParts.map(part => encodeURIComponent(part)).join('/');
             
-            absoluteThumbUrl = `${baseUrl}/${safeThumbPath}`;
-            albumArt.src = absoluteThumbUrl;
+            albumArt.src = `${baseUrl}/${safeThumbPath}`;
             albumArt.style.display = 'block';
         } else {
             albumArt.style.display = 'none';
@@ -531,6 +508,13 @@ document.addEventListener("DOMContentLoaded", () => {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     }
 
+    function updateTimeUI(seconds) {
+        if (seconds === lastRenderTime) return;
+        seekBar.value = seconds;
+        currentTimeDisplay.textContent = formatTime(seconds);
+        lastRenderTime = seconds;
+    }
+
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
@@ -547,7 +531,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnShuffle.addEventListener("click", () => {
         isShuffle = !isShuffle;
-        btnShuffle.classList.toggle("active-state", isShuffle);
+        if (isShuffle) btnShuffle.classList.add("active-state");
+        else btnShuffle.classList.remove("active-state");
         generateQueue(false);
     });
 
@@ -573,23 +558,25 @@ document.addEventListener("DOMContentLoaded", () => {
         totalTimeDisplay.textContent = formatTime(duration);
     });
 
-    audioPlayer.addEventListener("timeupdate", () => {
-        if (isSeeking || !audioPlayer.duration || document.hidden) return;
-        
-        const currentSecond = Math.floor(audioPlayer.currentTime);
-        if (currentSecond !== lastUpdateTime) {
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
+    // Replace default frequent timeupdate with a controlled 1s interval to slash CPU
+    function syncTime() {
+        if (!isSeeking && audioPlayer.duration && !document.hidden && !audioPlayer.paused) {
+            updateTimeUI(Math.floor(audioPlayer.currentTime));
         }
+    }
+
+    audioPlayer.addEventListener("play", () => {
+        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+        timeUpdateInterval = setInterval(syncTime, 1000);
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+        if (timeUpdateInterval) clearInterval(timeUpdateInterval);
     });
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !isSeeking && audioPlayer.duration) {
-            const currentSecond = Math.floor(audioPlayer.currentTime);
-            seekBar.value = currentSecond;
-            currentTimeDisplay.textContent = formatTime(currentSecond);
-            lastUpdateTime = currentSecond;
+            updateTimeUI(Math.floor(audioPlayer.currentTime));
         }
     });
 
@@ -601,15 +588,13 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBar.addEventListener("change", (e) => {
         audioPlayer.currentTime = Number(e.target.value);
         isSeeking = false;
-        currentTimeDisplay.textContent = formatTime(e.target.value);
+        updateTimeUI(Number(e.target.value));
     });
 
     audioPlayer.addEventListener("ended", () => {
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
-            seekBar.value = 0;
-            currentTimeDisplay.textContent = "0:00";
-            lastUpdateTime = -1;
+            updateTimeUI(0);
             audioPlayer.play();
         } else {
             playNext();
@@ -630,13 +615,6 @@ document.addEventListener("DOMContentLoaded", () => {
         btnShuffle.classList.remove("active-state");
         loadPlaylist(e.target.value);
     });
-
-    function escapeHtml(str) {
-        if (!str) return "Unknown";
-        return str.replace(/[&<>"']/g, (m) => ({
-            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-        })[m]);
-    }
 
     loadPlaylist(playlistSelect.value);
 });
