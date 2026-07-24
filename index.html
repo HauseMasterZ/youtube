@@ -16,14 +16,14 @@
 
         /* Sleek, flat premium design - Zero GPU overhead */
         :root {
-            --bg-color: #0c0c0e;
-            --surface-color: #151518;
+            --bg-color: #000000;
+            --surface-color: #000000;
             --primary-color: #8c73ff;
             --text-primary: #e6e6e6;
             --text-secondary: #888899;
-            --hover-color: #1e1e24;
-            --active-color: #24242d;
-            --border-color: #26262e;
+            --hover-color: #111111;
+            --active-color: #1a1a1a;
+            --border-color: #222222;
         }
 
         body {
@@ -43,34 +43,30 @@
             max-width: 550px;
             height: 100dvh;
             max-height: 97vh;
-            background-color: var(--surface-color);
-            border-radius: 12px;
+            background-color: #000000;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            border: 1px solid var(--border-color);
         }
         
         @media (max-width: 600px) {
             .player-container {
                 max-height: 100dvh;
-                border-radius: 0;
             }
         }
 
         .header {
             padding: 14px 20px;
-            background-color: var(--surface-color);
-            border-bottom: 1px solid var(--border-color);
+            background-color: #000000;
             flex-shrink: 0;
         }
 
         select {
             width: 100%;
             padding: 11px;
-            background-color: var(--hover-color);
+            background-color: #000000;
             color: var(--text-primary);
-            border: 1px solid var(--border-color);
+            border: none;
             border-radius: 6px;
             font-size: 15px;
             font-weight: 500;
@@ -79,15 +75,15 @@
             appearance: auto;
         }
 
-        select:focus { border-color: var(--primary-color); }
+        select:focus { border: 1px solid var(--primary-color); }
         
         #search-input {
             width: 100%;
             margin-top: 10px;
             padding: 11px;
-            background-color: var(--hover-color);
+            background-color: #000000;
             color: var(--text-primary);
-            border: 1px solid var(--border-color);
+            border: none;
             border-radius: 6px;
             font-size: 14px;
             font-family: inherit;
@@ -95,7 +91,7 @@
             box-sizing: border-box;
         }
 
-        #search-input:focus { border-color: var(--primary-color); }
+        #search-input:focus { border: 1px solid var(--primary-color); }
 
         .now-playing {
             padding: 22px 20px 16px 20px;
@@ -108,15 +104,37 @@
             box-sizing: border-box;
         }
 
-        #album-art-image {
+        #album-art-container {
             width: 80%;
+            cursor: pointer;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        #album-art-image {
+            width: 100%;
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
-            margin-bottom: 20px;
             display: none;
             background-color: var(--hover-color);
             border: 1px solid var(--border-color);
+        }
+
+        #thumb-toggle-hint {
+            display: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+            text-align: center;
+            padding: 8px 0;
+        }
+
+        #thumb-toggle-hint svg {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
+            vertical-align: middle;
+            margin-right: 4px;
         }
 
         #current-title {
@@ -253,8 +271,7 @@
             flex-grow: 1;
             overflow-y: auto;
             position: relative;
-            background-color: var(--bg-color);
-            border-top: 1px solid var(--border-color);
+            background-color: #000000;
             height: 100%;
         }
 
@@ -269,20 +286,17 @@
             .header {
                 grid-column: 2;
                 grid-row: 1;
-                border-bottom: 1px solid var(--border-color);
             }
             .now-playing {
                 grid-column: 1;
                 grid-row: 1 / 3;
-                border-right: 1px solid var(--border-color);
                 justify-content: center;
             }
             .playlist-container {
                 grid-column: 2;
                 grid-row: 2;
-                border-top: none;
             }
-            #album-art-image {
+            #album-art-container {
                 width: 90%;
             }
         }
@@ -383,7 +397,10 @@
     </div>
 
     <div class="now-playing">
-        <img id="album-art-image" src="" alt="Album Art" decoding="async">
+        <div id="album-art-container">
+            <img id="album-art-image" src="" alt="Album Art" decoding="async">
+            <div id="thumb-toggle-hint"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>Show thumbnails</div>
+        </div>
         <h2 id="current-title">Select a track</h2>
         <p id="current-channel">--</p>
         
@@ -478,6 +495,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let syncRAFId = null;
     let searchDebounceTimer = null;
     let errorSkipTimer = null;
+    let thumbsDisabled = localStorage.getItem('thumbsDisabled') === 'true';
 
     // Virtual Scroller state
     const ITEM_HEIGHT = 48;
@@ -598,9 +616,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const scrollTop = playlistContainer.scrollTop;
         const containerHeight = playlistContainer.clientHeight || 400;
 
-        // Render buffer (3 items above and below viewport to prevent flashing)
-        const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 3);
-        const endIndex = Math.min(filteredIndices.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 3);
+        // Render buffer (10 items above and below viewport for thumbnail pre-loading)
+        const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 10);
+        const endIndex = Math.min(filteredIndices.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 10);
 
         // Only redraw DOM if the index window actually shifted
         if (lastStartIndex === startIndex && lastEndIndex === endIndex) {
@@ -627,7 +645,6 @@ document.addEventListener("DOMContentLoaded", () => {
             
             const thumbImg = document.createElement("img");
             thumbImg.className = "track-thumb";
-            thumbImg.loading = "lazy";
             thumbImg.decoding = "async";
             thumbImg.alt = "";
             
@@ -692,7 +709,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 text += ' [DEAD]';
             }
             
-            if (track.thumbnail_path) {
+            if (!thumbsDisabled && track.thumbnail_path) {
                 const safeThumbPath = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
                 const newSrc = `${baseUrl}/${safeThumbPath}`;
                 
@@ -708,6 +725,31 @@ document.addEventListener("DOMContentLoaded", () => {
             textSpan.textContent = text;
             li.title = text; // Tooltip for full visibility of long names
             linkA.href = track.url || `https://www.youtube.com/watch?v=${track.id}`;
+        }
+        
+        // Lightweight HTTP cache warmer (skip if thumbs disabled)
+        if (!thumbsDisabled) {
+            const prefetchAhead = 15;
+            const prefetchStart = endIndex + 1;
+            const prefetchEnd = Math.min(filteredIndices.length - 1, prefetchStart + prefetchAhead);
+            for (let i = prefetchStart; i <= prefetchEnd; i++) {
+                const pItem = filteredIndices[i];
+                const pTrack = allDatabases[pItem.playlist][pItem.index];
+                if (pTrack.thumbnail_path) {
+                    const img = new Image();
+                    img.src = `${baseUrl}/${pTrack.thumbnail_path.split('/').map(encodeURIComponent).join('/')}`;
+                }
+            }
+            const prefetchBackStart = Math.max(0, startIndex - prefetchAhead);
+            const prefetchBackEnd = startIndex - 1;
+            for (let i = prefetchBackStart; i <= prefetchBackEnd; i++) {
+                const pItem = filteredIndices[i];
+                const pTrack = allDatabases[pItem.playlist][pItem.index];
+                if (pTrack.thumbnail_path) {
+                    const img = new Image();
+                    img.src = `${baseUrl}/${pTrack.thumbnail_path.split('/').map(encodeURIComponent).join('/')}`;
+                }
+            }
         }
         
         isRendering = false;
@@ -862,7 +904,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.play().catch(e => {});
         }
 
-        if (track.thumbnail_path) {
+        if (!thumbsDisabled && track.thumbnail_path) {
             const thumbParts = track.thumbnail_path.split('/');
             const safeThumbPath = thumbParts.map(part => encodeURIComponent(part)).join('/');
             
@@ -1049,8 +1091,40 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 3000);
     });
 
+    const albumArtContainer = document.getElementById('album-art-container');
+    const thumbToggleHint = document.getElementById('thumb-toggle-hint');
+
     albumArt.addEventListener("error", () => {
         albumArt.style.display = 'none';
+    });
+
+    // Initialize thumb toggle hint visibility
+    if (thumbsDisabled) {
+        thumbToggleHint.style.display = 'block';
+    }
+
+    albumArtContainer.addEventListener("click", () => {
+        thumbsDisabled = !thumbsDisabled;
+        localStorage.setItem('thumbsDisabled', thumbsDisabled);
+        
+        if (thumbsDisabled) {
+            albumArt.style.display = 'none';
+            thumbToggleHint.style.display = 'block';
+        } else {
+            thumbToggleHint.style.display = 'none';
+            if (queueIndex >= 0 && queueIndex < playQueue.length) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && track.thumbnail_path) {
+                    const parts = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
+                    albumArt.src = `${baseUrl}/${parts}`;
+                    albumArt.style.display = 'block';
+                }
+            }
+        }
+        
+        // Re-render track list to show/hide track thumbs
+        lastStartIndex = -1;
+        renderVirtualTracks();
     });
 
     playlistSelect.addEventListener("change", (e) => {
