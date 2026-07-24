@@ -413,13 +413,13 @@ document.addEventListener("DOMContentLoaded", () => {
         Driving: null,
         Songs: null
     };
-
     let currentPlaylistData = [];
     let filteredIndices = []; // Stores objects { playlist, index }
     
     let playQueue = [];     
     let queueIndex = -1;    
     let globalActiveOriginalIndex = -1; 
+    let imageDebounceTimer = null; 
     
     let isShuffle = false;
     let repeatMode = 0; 
@@ -564,9 +564,11 @@ document.addEventListener("DOMContentLoaded", () => {
             li.style.display = "flex";
             li.style.alignItems = "center";
             
-            const thumbImg = document.createElement("img");
+            const thumbImg = document.createElement("canvas");
+            thumbImg.width = 64; // High-res retina scale for 32x32 UI element
+            thumbImg.height = 64;
             thumbImg.className = "track-thumb";
-            thumbImg.onload = function() { this.style.opacity = '1'; };
+            thumbImg.style.transition = 'opacity 0.2s ease-in-out';
             
             const textSpan = document.createElement("span");
             textSpan.style.flex = "1";
@@ -631,24 +633,61 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (track.thumbnail_path) {
                 const safeThumbPath = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
+                const newSrc = `${baseUrl}/${safeThumbPath}`;
+                
                 if (thumbImg.dataset.src !== safeThumbPath) {
-                    thumbImg.style.opacity = '0'; // Instantly hide the old image
+                    thumbImg.style.transition = 'none';
+                    thumbImg.style.opacity = '0';
+                    
+                    const ctx = thumbImg.getContext('2d');
+                    ctx.clearRect(0, 0, thumbImg.width, thumbImg.height);
+                    
                     thumbImg.dataset.src = safeThumbPath;
-                    thumbImg.src = `${baseUrl}/${safeThumbPath}`;
-                } else if (thumbImg.complete) {
-                    // If it's already the correct image and loaded, just ensure it's visible
+                    thumbImg.dataset.pendingSrc = newSrc;
+                } else if (!thumbImg.dataset.pendingSrc) {
                     thumbImg.style.opacity = '1';
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
                 thumbImg.dataset.src = "";
+                delete thumbImg.dataset.pendingSrc;
             }
             
             textSpan.textContent = text;
             li.title = text; // Tooltip for full visibility of long names
             linkA.href = track.url || `https://www.youtube.com/watch?v=${track.id}`;
         }
+        
+        // Debounce thumbnail network requests to prevent browser socket starvation during rapid scrolling
+        clearTimeout(imageDebounceTimer);
+        imageDebounceTimer = setTimeout(() => {
+            for (let i = 0; i < trackList.children.length; i++) {
+                const tCanvas = trackList.children[i].childNodes[0];
+                if (tCanvas && tCanvas.dataset.pendingSrc) {
+                    const src = tCanvas.dataset.pendingSrc;
+                    delete tCanvas.dataset.pendingSrc;
+                    
+                    // Client-Side Downscaling: Decodes HD image to 64x64 OFF the main thread to save RAM
+                    fetch(src)
+                        .then(res => res.blob())
+                        .then(blob => createImageBitmap(blob, { resizeWidth: 64, resizeHeight: 64 }))
+                        .then(bitmap => {
+                            // Check if user scrolled away while decoding
+                            if (tCanvas.dataset.src === src.split(`${baseUrl}/`)[1]) {
+                                const ctx = tCanvas.getContext('2d');
+                                ctx.clearRect(0, 0, 64, 64);
+                                ctx.drawImage(bitmap, 0, 0, 64, 64);
+                                
+                                tCanvas.style.transition = 'opacity 0.2s ease-in-out';
+                                tCanvas.style.opacity = '1';
+                            }
+                            bitmap.close(); // Instantly destroy uncompressed bitmap from RAM
+                        })
+                        .catch(err => {}); // Ignore 404s or network aborts
+                }
+            }
+        }, 75);
         
         isRendering = false;
     }
