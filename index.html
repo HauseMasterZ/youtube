@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YT Audio Vault</title>
+    <title>YouTube</title>
     <link rel="icon" type="image/x-icon" href="https://www.youtube.com/favicon.ico">
     <style>
         /* Sleek, flat premium design - Zero GPU overhead */
@@ -531,6 +531,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const currentPl = playlistSelect.value;
         const requiredNodes = (endIndex - startIndex + 1);
+        
+        // Ensure we don't accidentally recycle the "Loading..." or "No results" messages!
+        if (trackList.children.length > 0 && !trackList.children[0].querySelector('a.yt-link-icon')) {
+            trackList.innerHTML = ""; 
+        }
         
         // DOM Object Pooling: Only create elements if we don't have enough in the pool
         while (trackList.children.length < requiredNodes) {
