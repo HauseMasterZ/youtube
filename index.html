@@ -38,7 +38,7 @@
             display: flex;
             flex-direction: column;
             max-height: 97vh;
-            border: 1px solid var(--border-color);
+            border: none;
         }
 
         .header {
@@ -62,6 +62,24 @@
         }
 
         select:focus {
+            border-color: var(--primary-color);
+        }
+        
+        #search-input {
+            width: 100%;
+            margin-top: 12px;
+            padding: 12px;
+            background-color: var(--hover-color);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        #search-input:focus {
             border-color: var(--primary-color);
         }
 
@@ -231,8 +249,8 @@
             padding: 0 16px;
             box-sizing: border-box;
             cursor: pointer;
-            display: flex;
-            align-items: center;
+            display: block;
+            line-height: 48px;
             border: none;
             font-size: 14px;
             color: var(--text-primary);
@@ -261,6 +279,7 @@
             <option value="Driving">Driving</option>
             <option value="Songs">Songs</option>
         </select>
+        <input type="text" id="search-input" placeholder="Search tracks..." autocomplete="off">
     </div>
 
     <div class="now-playing">
@@ -311,6 +330,7 @@
 <script>
 document.addEventListener("DOMContentLoaded", () => {
     const playlistSelect = document.getElementById("playlist-select");
+    const searchInput = document.getElementById("search-input");
     const playlistContainer = document.getElementById("playlist-container");
     const trackList = document.getElementById("track-list");
     const audioPlayer = document.getElementById("audio-player");
@@ -335,7 +355,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const baseUrl = "https://hausemasterz.github.io/youtube_playlist_tracker_downloader";
 
+    const ALL_PLAYLISTS = ["Gym", "Driving", "Songs"];
+    let allDatabases = {
+        Gym: null,
+        Driving: null,
+        Songs: null
+    };
+
     let currentPlaylistData = [];
+    let filteredIndices = []; // Stores objects { playlist, index }
+    
     let playQueue = [];     
     let queueIndex = -1;    
     let globalActiveOriginalIndex = -1; 
@@ -354,20 +383,34 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndIndex = -1;
     let isRendering = false;
 
+    async function preloadAllPlaylists() {
+        for (const pl of ALL_PLAYLISTS) {
+            try {
+                const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`);
+                if (res.ok) {
+                    allDatabases[pl] = await res.json();
+                }
+            } catch (e) {}
+        }
+    }
+
     async function loadPlaylist(folderName) {
         trackList.innerHTML = '<li style="position: static; text-align: center; justify-content: center; border: none; color: var(--text-secondary);">Loading...</li>';
         trackList.style.height = 'auto';
         
-        const targetUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
         try {
-            const response = await fetch(targetUrl);
-            if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+            if (!allDatabases[folderName]) {
+                const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`);
+                if (!res.ok) throw new Error();
+                allDatabases[folderName] = await res.json();
+            }
             
-            currentPlaylistData = await response.json();
+            currentPlaylistData = allDatabases[folderName];
             
-            // Set total height for virtual scroller
-            trackList.style.height = `${currentPlaylistData.length * ITEM_HEIGHT}px`;
+            searchInput.value = '';
+            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
             
+            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             globalActiveOriginalIndex = -1;
             
             generateQueue(true); 
@@ -381,16 +424,70 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    searchInput.addEventListener("input", (e) => {
+        const query = e.target.value.toLowerCase().trim();
+        const currentPl = playlistSelect.value;
+        
+        if (!query) {
+            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
+        } else {
+            filteredIndices = [];
+            const addedIds = new Set();
+            
+            // 1. Current playlist matches
+            if (currentPlaylistData) {
+                for (let i = 0; i < currentPlaylistData.length; i++) {
+                    const track = currentPlaylistData[i];
+                    if (track.title.toLowerCase().includes(query) || track.channel.toLowerCase().includes(query)) {
+                        filteredIndices.push({ playlist: currentPl, index: i });
+                        addedIds.add(track.id);
+                    }
+                }
+            }
+            
+            // 2. Global matches (other playlists)
+            for (const pl of ALL_PLAYLISTS) {
+                if (pl !== currentPl && allDatabases[pl]) {
+                    const data = allDatabases[pl];
+                    for (let i = 0; i < data.length; i++) {
+                        const track = data[i];
+                        if (track.title.toLowerCase().includes(query) || track.channel.toLowerCase().includes(query)) {
+                            if (!addedIds.has(track.id)) {
+                                filteredIndices.push({ playlist: pl, index: i });
+                                addedIds.add(track.id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        if (filteredIndices.length > 0) {
+            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+        } else {
+            trackList.style.height = 'auto';
+        }
+        
+        lastStartIndex = -1;
+        renderVirtualTracks();
+    });
+
     // --- Virtual Scroller Core ---
     function renderVirtualTracks() {
-        if (currentPlaylistData.length === 0) return;
+        if (!currentPlaylistData || currentPlaylistData.length === 0) return;
+        
+        if (filteredIndices.length === 0) {
+            trackList.innerHTML = '<li style="position: static; text-align: center; justify-content: center; border: none; color: var(--text-secondary);">No results found.</li>';
+            isRendering = false;
+            return;
+        }
 
         const scrollTop = playlistContainer.scrollTop;
         const containerHeight = playlistContainer.clientHeight || 400;
 
         // Render buffer (3 items above and below viewport to prevent flashing)
         const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 3);
-        const endIndex = Math.min(currentPlaylistData.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 3);
+        const endIndex = Math.min(filteredIndices.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 3);
 
         // Only redraw DOM if the index window actually shifted
         if (lastStartIndex === startIndex && lastEndIndex === endIndex) {
@@ -403,16 +500,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
         trackList.innerHTML = ""; 
         const fragment = document.createDocumentFragment();
+        const currentPl = playlistSelect.value;
 
         for (let i = startIndex; i <= endIndex; i++) {
+            const item = filteredIndices[i];
+            const track = allDatabases[item.playlist][item.index];
+            
             const li = document.createElement("li");
-            li.dataset.index = i;
+            li.dataset.playlist = item.playlist;
+            li.dataset.index = item.index;
             li.style.top = `${i * ITEM_HEIGHT}px`;
             
-            if (i === globalActiveOriginalIndex) {
+            const isCurrentPlaylist = (item.playlist === currentPl);
+            
+            if (isCurrentPlaylist && item.index === globalActiveOriginalIndex) {
                 li.classList.add("active");
             }
-            li.textContent = `${i + 1}. ${currentPlaylistData[i].title} - ${currentPlaylistData[i].channel}`;
+            
+            let text = `${item.index + 1}. ${track.title} - ${track.channel}`;
+            
+            if (!isCurrentPlaylist) {
+                text += ` [In ${item.playlist}]`;
+                li.style.color = 'var(--text-secondary)';
+            }
+            
+            li.textContent = text;
+            li.title = text; // Tooltip for full visibility of long names
             fragment.appendChild(li);
         }
         
@@ -422,13 +535,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     playlistContainer.addEventListener("scroll", () => {
         if (!isRendering) {
-            // requestAnimationFrame provides ultra-smooth 60fps scrolling without CPU blocking
             window.requestAnimationFrame(renderVirtualTracks);
         }
     });
 
-    function scrollToTrack(index) {
-        const scrollPos = index * ITEM_HEIGHT;
+    function scrollToTrack(originalIndex) {
+        const currentPl = playlistSelect.value;
+        const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
+        
+        if (virtualIndex === -1) {
+            // Track is currently filtered out of view, silently update active class state
+            lastStartIndex = -1;
+            renderVirtualTracks();
+            return; 
+        }
+        
+        const scrollPos = virtualIndex * ITEM_HEIGHT;
         const containerHeight = playlistContainer.clientHeight || 400;
         playlistContainer.scrollTo({ 
             top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
@@ -466,11 +588,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     trackList.addEventListener("click", (e) => {
         const li = e.target.closest("li");
-        if (!li || !li.dataset.index) return;
+        if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
+        const targetPlaylist = li.dataset.playlist;
         const targetOriginalIndex = parseInt(li.dataset.index);
-        queueIndex = playQueue.indexOf(targetOriginalIndex);
-        executePlayback();
+        
+        if (targetPlaylist !== playlistSelect.value) {
+            // Cross-playlist jump!
+            playlistSelect.value = targetPlaylist;
+            loadPlaylist(targetPlaylist).then(() => {
+                queueIndex = playQueue.indexOf(targetOriginalIndex);
+                executePlayback();
+            });
+        } else {
+            queueIndex = playQueue.indexOf(targetOriginalIndex);
+            executePlayback();
+        }
     });
 
     function playNext() {
@@ -682,7 +815,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Initialize
-    loadPlaylist(playlistSelect.value);
+    preloadAllPlaylists().then(() => {
+        loadPlaylist(playlistSelect.value);
+    });
 });
 </script>
 
