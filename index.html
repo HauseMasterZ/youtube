@@ -5,10 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>YouTube</title>
     <link rel="icon" type="image/x-icon" href="https://www.youtube.com/favicon.ico">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
     <style>
+        @font-face {
+            font-family: 'Google Sans Flex';
+            font-style: normal;
+            font-display: swap;
+            font-weight: 100 900;
+            src: url('fonts/GoogleSansFlex-Latin.woff2') format('woff2');
+        }
+
         /* Sleek, flat premium design - Zero GPU overhead */
         :root {
             --bg-color: #0c0c0e;
@@ -24,7 +29,7 @@
         body {
             margin: 0;
             padding: 0;
-            font-family: "Open Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-family: 'Google Sans Flex', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-primary);
             display: flex;
@@ -43,8 +48,7 @@
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            border: none;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 1px solid var(--border-color);
         }
         
         @media (max-width: 600px) {
@@ -55,7 +59,7 @@
         }
 
         .header {
-            padding: clamp(12px, 3vw, 16px) clamp(16px, 4vw, 24px);
+            padding: 14px 20px;
             background-color: var(--surface-color);
             border-bottom: 1px solid var(--border-color);
             flex-shrink: 0;
@@ -63,12 +67,12 @@
 
         select {
             width: 100%;
-            padding: clamp(10px, 2.5vw, 12px);
+            padding: 11px;
             background-color: var(--hover-color);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: clamp(14px, 3.5vw, 15px);
+            font-size: 15px;
             font-weight: 500;
             outline: none;
             cursor: pointer;
@@ -79,13 +83,13 @@
         
         #search-input {
             width: 100%;
-            margin-top: clamp(8px, 2vw, 12px);
-            padding: clamp(10px, 2.5vw, 12px);
+            margin-top: 10px;
+            padding: 11px;
             background-color: var(--hover-color);
             color: var(--text-primary);
             border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: clamp(13px, 3vw, 14px);
+            font-size: 14px;
             font-family: inherit;
             outline: none;
             box-sizing: border-box;
@@ -94,7 +98,7 @@
         #search-input:focus { border-color: var(--primary-color); }
 
         .now-playing {
-            padding: clamp(16px, 5vw, 28px) clamp(16px, 4vw, 24px) clamp(12px, 3vw, 20px) clamp(16px, 4vw, 24px);
+            padding: 22px 20px 16px 20px;
             text-align: center;
             display: flex;
             flex-direction: column;
@@ -109,7 +113,7 @@
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
-            margin-bottom: clamp(16px, 4vw, 24px);
+            margin-bottom: 20px;
             display: none;
             background-color: var(--hover-color);
             border: 1px solid var(--border-color);
@@ -130,7 +134,7 @@
         #current-channel {
             font-size: clamp(13px, 3vw, 15px);
             color: var(--primary-color);
-            margin: 0 0 clamp(16px, 4vw, 24px) 0;
+            margin: 0 0 20px 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -145,11 +149,11 @@
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: clamp(12px, 3.5vw, 20px);
+            margin-bottom: 16px;
         }
 
         .time-display {
-            font-size: clamp(11px, 2.5vw, 13px);
+            font-size: 13px;
             color: var(--text-secondary);
             min-width: 40px;
             font-weight: 600;
@@ -182,7 +186,7 @@
             justify-content: space-between;
             width: 100%;
             padding: 0 10px;
-            margin-bottom: clamp(4px, 1.5vw, 10px);
+            margin-bottom: 8px;
             box-sizing: border-box;
         }
 
@@ -191,7 +195,7 @@
             border: none;
             color: var(--text-secondary);
             cursor: pointer;
-            padding: clamp(6px, 1.5vw, 8px);
+            padding: 7px;
             border-radius: 50%;
             display: flex;
             justify-content: center;
@@ -199,8 +203,8 @@
         }
 
         .control-btn svg {
-            width: clamp(20px, 5vw, 24px);
-            height: clamp(20px, 5vw, 24px);
+            width: 24px;
+            height: 24px;
             fill: currentColor;
         }
 
@@ -223,8 +227,6 @@
             vertical-align: middle;
             flex-shrink: 0;
             background-color: #2a2a2a;
-            transition: opacity 0.2s ease-in-out;
-            opacity: 0;
         }
 
         .control-btn.active-state { color: var(--primary-color); }
@@ -232,13 +234,13 @@
         .main-btn {
             background-color: var(--primary-color);
             color: #000000;
-            width: clamp(48px, 12vw, 56px);
-            height: clamp(48px, 12vw, 56px);
+            width: 52px;
+            height: 52px;
         }
         
         .main-btn svg {
-            width: clamp(26px, 7vw, 32px);
-            height: clamp(26px, 7vw, 32px);
+            width: 30px;
+            height: 30px;
         }
 
         .main-btn:hover {
@@ -343,8 +345,6 @@
             height: 32px;
             border-radius: 50%;
             text-decoration: none;
-            opacity: 1;
-            transition: color 0.2s, background-color 0.2s;
             z-index: 2;
         }
 
@@ -383,7 +383,7 @@
     </div>
 
     <div class="now-playing">
-        <img id="album-art-image" src="" alt="Album Art" onload="this.style.maxWidth = Math.min(this.naturalWidth, this.naturalHeight) + 'px'">
+        <img id="album-art-image" src="" alt="Album Art" decoding="async">
         <h2 id="current-title">Select a track</h2>
         <p id="current-channel">--</p>
         
@@ -467,7 +467,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let playQueue = [];     
     let queueIndex = -1;    
     let globalActiveOriginalIndex = -1; 
-    let imageDebounceTimer = null; 
+    
     
     let isShuffle = false;
     let repeatMode = 0; 
@@ -475,7 +475,9 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // UI Throttling
     let lastRenderTime = -1;
-    let syncInterval = null;
+    let syncRAFId = null;
+    let searchDebounceTimer = null;
+    let errorSkipTimer = null;
 
     // Virtual Scroller state
     const ITEM_HEIGHT = 48;
@@ -533,51 +535,54 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     searchInput.addEventListener("input", (e) => {
-        const query = e.target.value.toLowerCase().trim();
-        const currentPl = playlistSelect.value;
-        
-        if (!query) {
-            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
-        } else {
-            filteredIndices = [];
-            const addedIds = new Set();
+        clearTimeout(searchDebounceTimer);
+        searchDebounceTimer = setTimeout(() => {
+            const query = e.target.value.toLowerCase().trim();
+            const currentPl = playlistSelect.value;
             
-            // 1. Current playlist matches
-            if (currentPlaylistData) {
-                for (let i = 0; i < currentPlaylistData.length; i++) {
-                    const track = currentPlaylistData[i];
-                    if (track._searchString.includes(query)) {
-                        filteredIndices.push({ playlist: currentPl, index: i });
-                        addedIds.add(track.id);
+            if (!query) {
+                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
+            } else {
+                filteredIndices = [];
+                const addedIds = new Set();
+                
+                // 1. Current playlist matches
+                if (currentPlaylistData) {
+                    for (let i = 0; i < currentPlaylistData.length; i++) {
+                        const track = currentPlaylistData[i];
+                        if (track._searchString.includes(query)) {
+                            filteredIndices.push({ playlist: currentPl, index: i });
+                            addedIds.add(track.id);
+                        }
                     }
                 }
-            }
-            
-            // 2. Global matches (other playlists)
-            for (const pl of ALL_PLAYLISTS) {
-                if (pl !== currentPl && allDatabases[pl]) {
-                    const data = allDatabases[pl];
-                    for (let i = 0; i < data.length; i++) {
-                        const track = data[i];
-                        if (track._searchString.includes(query)) {
-                            if (!addedIds.has(track.id)) {
-                                filteredIndices.push({ playlist: pl, index: i });
-                                addedIds.add(track.id);
+                
+                // 2. Global matches (other playlists)
+                for (const pl of ALL_PLAYLISTS) {
+                    if (pl !== currentPl && allDatabases[pl]) {
+                        const data = allDatabases[pl];
+                        for (let i = 0; i < data.length; i++) {
+                            const track = data[i];
+                            if (track._searchString.includes(query)) {
+                                if (!addedIds.has(track.id)) {
+                                    filteredIndices.push({ playlist: pl, index: i });
+                                    addedIds.add(track.id);
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        
-        if (filteredIndices.length > 0) {
-            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-        } else {
-            trackList.style.height = 'auto';
-        }
-        
-        lastStartIndex = -1;
-        renderVirtualTracks();
+            
+            if (filteredIndices.length > 0) {
+                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+            } else {
+                trackList.style.height = 'auto';
+            }
+            
+            lastStartIndex = -1;
+            renderVirtualTracks();
+        }, 150);
     });
 
     // --- Virtual Scroller Core ---
@@ -609,9 +614,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentPl = playlistSelect.value;
         const requiredNodes = (endIndex - startIndex + 1);
         
-        // Active Fetch Controllers to abort unused TCP sockets mid-flight
-        if (!window.activeFetches) window.activeFetches = new Map();
-        
         // Ensure we don't accidentally recycle the "Loading..." or "No results" messages!
         if (trackList.children.length > 0 && !trackList.children[0].querySelector('a.yt-link-icon')) {
             trackList.innerHTML = ""; 
@@ -623,11 +625,11 @@ document.addEventListener("DOMContentLoaded", () => {
             li.style.display = "flex";
             li.style.alignItems = "center";
             
-            const thumbImg = document.createElement("canvas");
-            thumbImg.width = 64; // High-res retina scale for 32x32 UI element
-            thumbImg.height = 64;
+            const thumbImg = document.createElement("img");
             thumbImg.className = "track-thumb";
-            thumbImg.style.transition = 'opacity 0.2s ease-in-out';
+            thumbImg.loading = "lazy";
+            thumbImg.decoding = "async";
+            thumbImg.alt = "";
             
             const textSpan = document.createElement("span");
             textSpan.style.flex = "1";
@@ -694,82 +696,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 const safeThumbPath = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
                 const newSrc = `${baseUrl}/${safeThumbPath}`;
                 
-                if (thumbImg.dataset.src !== safeThumbPath) {
-                    if (thumbImg.dataset.pendingSrc) {
-                        const oldController = window.activeFetches.get(thumbImg.dataset.pendingSrc);
-                        if (oldController) {
-                            oldController.abort();
-                            window.activeFetches.delete(thumbImg.dataset.pendingSrc);
-                        }
-                    }
-                    
-                    thumbImg.style.transition = 'none';
-                    thumbImg.style.opacity = '0';
-                    
-                    const ctx = thumbImg.getContext('2d');
-                    ctx.clearRect(0, 0, thumbImg.width, thumbImg.height);
-                    
-                    thumbImg.dataset.src = safeThumbPath;
-                    thumbImg.dataset.pendingSrc = newSrc;
-                } else if (!thumbImg.dataset.pendingSrc) {
-                    thumbImg.style.opacity = '1';
+                if (thumbImg.src !== newSrc) {
+                    thumbImg.src = newSrc;
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                
-                if (thumbImg.dataset.pendingSrc) {
-                    const oldController = window.activeFetches.get(thumbImg.dataset.pendingSrc);
-                    if (oldController) {
-                        oldController.abort();
-                        window.activeFetches.delete(thumbImg.dataset.pendingSrc);
-                    }
-                }
-                
-                thumbImg.dataset.src = "";
-                delete thumbImg.dataset.pendingSrc;
+                thumbImg.removeAttribute("src");
             }
             
             textSpan.textContent = text;
             li.title = text; // Tooltip for full visibility of long names
             linkA.href = track.url || `https://www.youtube.com/watch?v=${track.id}`;
         }
-        
-        // Debounce thumbnail network requests to prevent browser socket starvation during rapid scrolling
-        clearTimeout(imageDebounceTimer);
-        imageDebounceTimer = setTimeout(() => {
-            for (let i = 0; i < trackList.children.length; i++) {
-                const tCanvas = trackList.children[i].childNodes[0];
-                if (tCanvas && tCanvas.dataset.pendingSrc) {
-                    const src = tCanvas.dataset.pendingSrc;
-                    delete tCanvas.dataset.pendingSrc;
-                    
-                    const controller = new AbortController();
-                    window.activeFetches.set(src, controller);
-                    
-                    // Client-Side Downscaling: Decodes HD image to 64x64 OFF the main thread to save RAM
-                    fetch(src, { signal: controller.signal })
-                        .then(res => res.blob())
-                        .then(blob => createImageBitmap(blob, { resizeWidth: 64, resizeHeight: 64 }))
-                        .then(bitmap => {
-                            window.activeFetches.delete(src);
-                            // Check if user scrolled away while decoding
-                            if (tCanvas.dataset.src === src.split(`${baseUrl}/`)[1]) {
-                                const ctx = tCanvas.getContext('2d');
-                                ctx.clearRect(0, 0, 64, 64);
-                                ctx.drawImage(bitmap, 0, 0, 64, 64);
-                                
-                                tCanvas.style.transition = 'opacity 0.2s ease-in-out';
-                                tCanvas.style.opacity = '1';
-                            }
-                            bitmap.close(); // Instantly destroy uncompressed bitmap from RAM
-                        })
-                        .catch(err => {
-                            window.activeFetches.delete(src);
-                        }); // Ignore 404s or network aborts
-                }
-            }
-        }, 75);
         
         isRendering = false;
     }
@@ -795,7 +734,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const containerHeight = playlistContainer.clientHeight || 400;
         playlistContainer.scrollTo({ 
             top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
-            behavior: "smooth" 
+            behavior: "instant" 
         });
         
         // Force highlight update immediately even during scroll
@@ -891,6 +830,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function executePlayback(preventAutoplay = false) {
+        // Cancel any pending error auto-skip when user manually selects a track
+        if (errorSkipTimer) {
+            clearTimeout(errorSkipTimer);
+            errorSkipTimer = null;
+        }
         if (queueIndex < 0 || queueIndex >= playQueue.length) return;
         
         const originalIndex = playQueue[queueIndex];
@@ -1015,23 +959,32 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // --- Deep Sleep JS Engine Integration ---
+    // --- Deep Sleep JS Engine Integration (rAF-based) ---
+    function syncLoop() {
+        if (audioPlayer.paused || document.hidden) {
+            syncRAFId = null;
+            return;
+        }
+        if (!isSeeking && audioPlayer.duration) {
+            const ct = Math.floor(audioPlayer.currentTime);
+            if (ct !== lastRenderTime) {
+                updateTimeUI(ct);
+                localStorage.setItem("lastTime", audioPlayer.currentTime);
+            }
+        }
+        syncRAFId = requestAnimationFrame(syncLoop);
+    }
+
     function startSync() {
-        if (!syncInterval && !audioPlayer.paused) {
-            syncInterval = setInterval(() => {
-                if (!isSeeking && audioPlayer.duration) {
-                    const ct = Math.floor(audioPlayer.currentTime);
-                    updateTimeUI(ct);
-                    localStorage.setItem("lastTime", audioPlayer.currentTime);
-                }
-            }, 1000);
+        if (!syncRAFId && !audioPlayer.paused && !document.hidden) {
+            syncRAFId = requestAnimationFrame(syncLoop);
         }
     }
 
     function stopSync() {
-        if (syncInterval) {
-            clearInterval(syncInterval);
-            syncInterval = null;
+        if (syncRAFId) {
+            cancelAnimationFrame(syncRAFId);
+            syncRAFId = null;
         }
     }
 
@@ -1047,7 +1000,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("visibilitychange", () => {
         if (document.hidden) {
-            stopSync(); // Engine completely suspends operations in background
+            stopSync();
         } else {
             if (!audioPlayer.paused) {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
@@ -1090,7 +1043,8 @@ document.addEventListener("DOMContentLoaded", () => {
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";
         setPlayUI(false);
-        setTimeout(() => {
+        errorSkipTimer = setTimeout(() => {
+            errorSkipTimer = null;
             playNext();
         }, 3000);
     });
