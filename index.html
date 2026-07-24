@@ -107,7 +107,6 @@
 
         #album-art-image {
             width: 80%;
-            max-width: 340px;
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
@@ -345,7 +344,7 @@
     </div>
 
     <div class="now-playing">
-        <img id="album-art-image" src="" alt="Album Art">
+        <img id="album-art-image" src="" alt="Album Art" onload="this.style.maxWidth = Math.min(this.naturalWidth, this.naturalHeight) + 'px'">
         <h2 id="current-title">Select a track</h2>
         <p id="current-channel">--</p>
         
