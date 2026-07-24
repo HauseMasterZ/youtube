@@ -118,6 +118,8 @@
             align-items: center;
             gap: 12px;
             margin-bottom: 20px;
+            contain: layout paint style;
+            transform: translateZ(0);
         }
 
         .time-display {
@@ -128,72 +130,15 @@
             font-variant-numeric: tabular-nums;
         }
 
-        .slider-wrapper {
-            position: relative;
-            width: 100%;
-            height: 14px;
-            display: flex;
-            align-items: center;
-            container-type: inline-size;
-        }
-
-        #progress-track {
-            position: absolute;
+        input[type="range"] {
+            -webkit-appearance: none;
             width: 100%;
             height: 6px;
             background: rgba(255,255,255,0.1);
             border-radius: 4px;
-            pointer-events: none;
-        }
-
-        #progress-fill {
-            position: absolute;
-            left: 0;
-            width: 100%;
-            height: 6px;
-            background: var(--primary-color);
-            border-radius: 4px;
-            transform-origin: left;
-            transform: scale3d(var(--ratio, 0), 1, 1);
-            will-change: transform;
-            pointer-events: none;
-        }
-
-        #progress-thumb {
-            position: absolute;
-            left: 0;
-            width: 14px;
-            height: 14px;
-            border-radius: 50%;
-            background: var(--primary-color);
-            box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
-            transform: translate3d(calc(var(--ratio, 0) * (100cqw - 14px)), 0, 0);
-            will-change: transform;
-            pointer-events: none;
-        }
-
-        .playing-animation #progress-fill {
-            transform: scale3d(1, 1, 1);
-            transition: transform var(--track-duration, 0s) linear;
-        }
-
-        .playing-animation #progress-thumb {
-            transform: translate3d(calc(100cqw - 14px), 0, 0);
-            transition: transform var(--track-duration, 0s) linear;
-        }
-
-        input[type="range"] {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 100%;
-            height: 100%;
-            background: transparent;
             outline: none;
             cursor: pointer;
-            position: absolute;
-            z-index: 2;
-            margin: 0;
-            opacity: 0; 
+            transform: translateZ(0);
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -201,9 +146,10 @@
             appearance: none;
             width: 14px;
             height: 14px;
-            background: transparent;
-            border: none;
+            border-radius: 50%;
+            background: var(--primary-color);
             cursor: pointer;
+            box-shadow: 0 0 8px rgba(187, 134, 252, 0.4);
         }
 
         .playback-controls {
@@ -341,12 +287,7 @@
 
         <div class="progress-container">
             <span id="current-time" class="time-display">0:00</span>
-            <div id="slider-wrapper" class="slider-wrapper">
-                <div id="progress-track"></div>
-                <div id="progress-fill"></div>
-                <div id="progress-thumb"></div>
-                <input type="range" id="seek-bar" min="0" value="0" step="1">
-            </div>
+            <input type="range" id="seek-bar" min="0" value="0" step="1">
             <span id="total-time" class="time-display">0:00</span>
         </div>
         
@@ -403,7 +344,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const iconRepeatOne = document.getElementById("icon-repeat-one");
 
     const seekBar = document.getElementById("seek-bar");
-    const sliderWrapper = document.getElementById("slider-wrapper");
     const currentTimeDisplay = document.getElementById("current-time");
     const totalTimeDisplay = document.getElementById("total-time");
 
@@ -416,56 +356,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     let isShuffle = false;
     let repeatMode = 0; 
-
-    function startCSSAnimation() {
-        if (!audioPlayer.duration) return;
-        const remainingTime = audioPlayer.duration - audioPlayer.currentTime;
-        if (remainingTime <= 0) return;
-
-        sliderWrapper.style.setProperty('--ratio', audioPlayer.currentTime / audioPlayer.duration);
-        sliderWrapper.style.setProperty('--track-duration', `${remainingTime}s`);
-        
-        sliderWrapper.classList.remove('playing-animation');
-        void sliderWrapper.offsetWidth; 
-        sliderWrapper.classList.add('playing-animation');
-    }
-
-    function pauseCSSAnimation() {
-        if (!audioPlayer.duration) return;
-        sliderWrapper.classList.remove('playing-animation');
-        sliderWrapper.style.setProperty('--ratio', audioPlayer.currentTime / audioPlayer.duration);
-    }
-
-    if ('mediaSession' in navigator) {
-        navigator.mediaSession.setActionHandler('previoustrack', playPrev);
-        navigator.mediaSession.setActionHandler('nexttrack', playNext);
-        
-        navigator.mediaSession.setActionHandler('play', () => {
-            audioPlayer.play();
-            setPlayUI(true);
-            startCSSAnimation();
-        });
-
-        navigator.mediaSession.setActionHandler('pause', () => {
-            audioPlayer.pause();
-            setPlayUI(false);
-            pauseCSSAnimation();
-        });
-
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-            const targetTime = details.fastSeek && 'fastSeek' in audioPlayer ? details.seekTime : details.seekTime;
-            audioPlayer.currentTime = targetTime;
-            seekBar.value = Math.floor(targetTime);
-            
-            sliderWrapper.classList.remove('playing-animation');
-            sliderWrapper.style.setProperty('--ratio', targetTime / audioPlayer.duration);
-            
-            if (!audioPlayer.paused) startCSSAnimation();
-
-            currentTimeDisplay.textContent = formatTime(targetTime);
-            updateMediaSessionPosition();
-        });
-    }
+    let isSeeking = false;
+    let lastUpdateTime = -1;
 
     async function loadPlaylist(folderName) {
         trackList.innerHTML = `<li style="text-align: center; color: var(--text-secondary);">Loading...</li>`;
@@ -544,7 +436,6 @@ document.addEventListener("DOMContentLoaded", () => {
             executePlayback();
         } else {
             setPlayUI(false);
-            sliderWrapper.classList.remove('playing-animation');
         }
     }
 
@@ -552,10 +443,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (playQueue.length === 0) return;
 
         if (audioPlayer.currentTime > 3) {
-            resetTimeAndVisuals();
+            audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
-            startCSSAnimation();
-            updateMediaSessionPosition();
             return;
         }
 
@@ -566,19 +458,12 @@ document.addEventListener("DOMContentLoaded", () => {
             queueIndex = playQueue.length - 1;
             executePlayback();
         } else {
-            resetTimeAndVisuals();
+            audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
-            startCSSAnimation();
-            updateMediaSessionPosition();
         }
-    }
-
-    function resetTimeAndVisuals() {
-        audioPlayer.currentTime = 0;
-        seekBar.value = 0;
-        sliderWrapper.classList.remove('playing-animation');
-        sliderWrapper.style.setProperty('--ratio', 0);
-        currentTimeDisplay.textContent = "0:00";
     }
 
     function executePlayback() {
@@ -603,8 +488,10 @@ document.addEventListener("DOMContentLoaded", () => {
             activeListItem.scrollIntoView({ behavior: "smooth", block: "nearest" });
         }
 
-        resetTimeAndVisuals();
+        seekBar.value = 0;
+        currentTimeDisplay.textContent = "0:00";
         totalTimeDisplay.textContent = "0:00";
+        lastUpdateTime = -1;
 
         const audioPathParts = track.file_path.split('/');
         const safeAudioPath = audioPathParts.map(part => encodeURIComponent(part)).join('/');
@@ -612,7 +499,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         audioPlayer.play().then(() => {
             setPlayUI(true);
-            startCSSAnimation();
         }).catch(e => {});
 
         let absoluteThumbUrl = "";
@@ -625,29 +511,6 @@ document.addEventListener("DOMContentLoaded", () => {
             albumArt.style.display = 'block';
         } else {
             albumArt.style.display = 'none';
-        }
-
-        if ('mediaSession' in navigator) {
-            const artworkArray = absoluteThumbUrl ? [{ src: absoluteThumbUrl, sizes: '512x512', type: 'image/jpeg' }] : [];
-            
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: track.title,
-                artist: track.channel,
-                album: playlistSelect.value,
-                artwork: artworkArray
-            });
-        }
-    }
-
-    function updateMediaSessionPosition() {
-        if ('mediaSession' in navigator && 'setPositionState' in navigator.mediaSession) {
-            try {
-                navigator.mediaSession.setPositionState({
-                    duration: audioPlayer.duration || 0,
-                    playbackRate: audioPlayer.playbackRate || 1,
-                    position: audioPlayer.currentTime || 0
-                });
-            } catch (error) {}
         }
     }
 
@@ -673,11 +536,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.paused) {
             audioPlayer.play();
             setPlayUI(true);
-            startCSSAnimation();
         } else {
             audioPlayer.pause();
             setPlayUI(false);
-            pauseCSSAnimation();
         }
     });
 
@@ -710,33 +571,46 @@ document.addEventListener("DOMContentLoaded", () => {
         const duration = Math.floor(audioPlayer.duration);
         seekBar.max = duration;
         totalTimeDisplay.textContent = formatTime(duration);
-        updateMediaSessionPosition();
     });
 
-    seekBar.addEventListener("input", (e) => {
-        sliderWrapper.classList.remove('playing-animation');
-        const targetValue = Number(e.target.value);
-        currentTimeDisplay.textContent = formatTime(targetValue);
-        sliderWrapper.style.setProperty('--ratio', targetValue / audioPlayer.duration);
+    audioPlayer.addEventListener("timeupdate", () => {
+        if (isSeeking || !audioPlayer.duration || document.hidden) return;
+        
+        const currentSecond = Math.floor(audioPlayer.currentTime);
+        if (currentSecond !== lastUpdateTime) {
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && !isSeeking && audioPlayer.duration) {
+            const currentSecond = Math.floor(audioPlayer.currentTime);
+            seekBar.value = currentSecond;
+            currentTimeDisplay.textContent = formatTime(currentSecond);
+            lastUpdateTime = currentSecond;
+        }
+    });
+
+    seekBar.addEventListener("input", () => {
+        isSeeking = true;
+        currentTimeDisplay.textContent = formatTime(seekBar.value);
     });
 
     seekBar.addEventListener("change", (e) => {
-        const targetValue = Number(e.target.value);
-        audioPlayer.currentTime = targetValue;
-        
-        if (!audioPlayer.paused) {
-            startCSSAnimation();
-        }
-        currentTimeDisplay.textContent = formatTime(targetValue);
-        updateMediaSessionPosition();
+        audioPlayer.currentTime = Number(e.target.value);
+        isSeeking = false;
+        currentTimeDisplay.textContent = formatTime(e.target.value);
     });
 
     audioPlayer.addEventListener("ended", () => {
         if (repeatMode === 2) { 
-            resetTimeAndVisuals();
+            audioPlayer.currentTime = 0;
+            seekBar.value = 0;
+            currentTimeDisplay.textContent = "0:00";
+            lastUpdateTime = -1;
             audioPlayer.play();
-            startCSSAnimation();
-            updateMediaSessionPosition();
         } else {
             playNext();
         }
@@ -745,7 +619,6 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("error", () => {
         currentTitle.textContent = "Error loading audio file";
         setPlayUI(false);
-        sliderWrapper.classList.remove('playing-animation');
     });
 
     albumArt.addEventListener("error", () => {
