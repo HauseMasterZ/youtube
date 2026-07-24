@@ -34,14 +34,23 @@
         }
 
         .player-container {
-            width: min(80vw, 450px);
-            height: 97vh;
+            width: 100%;
+            max-width: 550px;
+            height: 100dvh; /* use dynamic viewport height for mobile */
+            max-height: 97vh;
             background-color: var(--surface-color);
             border-radius: 12px;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             border: none;
+        }
+        
+        @media (max-width: 600px) {
+            .player-container {
+                max-height: 100dvh;
+                border-radius: 0;
+            }
         }
 
         .header {
@@ -97,7 +106,8 @@
         }
 
         #album-art-image {
-            width: min(100%, 300px);
+            width: 80%;
+            max-width: 340px;
             aspect-ratio: 1 / 1;
             border-radius: 8px;
             object-fit: cover;
