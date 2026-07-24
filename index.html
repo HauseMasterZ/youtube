@@ -695,7 +695,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 li.classList.remove("active");
             }
             
-            let text = `${item.index + 1}. ${track.title} - ${track.channel}`;
+            let text = `${track.title} - ${track.channel}`;
             
             if (!isCurrentPlaylist) {
                 text += ` [In ${item.playlist}]`;
@@ -723,7 +723,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             textSpan.textContent = text;
-            li.title = text; // Tooltip for full visibility of long names
+            li.title = `${item.index + 1}. ${text}`; // Tooltip for full visibility of long names
             linkA.href = track.url || `https://www.youtube.com/watch?v=${track.id}`;
         }
         
