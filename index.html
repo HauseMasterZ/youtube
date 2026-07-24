@@ -197,6 +197,22 @@
             background-color: var(--hover-color);
         }
 
+        .yt-link-icon:hover {
+            color: var(--text-primary);
+            background-color: var(--border-color);
+        }
+
+        .track-thumb {
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
+            margin-right: 12px;
+            object-fit: cover;
+            vertical-align: middle;
+            flex-shrink: 0;
+            background-color: #2a2a2a;
+        }
+
         .control-btn.active-state {
             color: var(--primary-color);
         }
@@ -540,7 +556,19 @@ document.addEventListener("DOMContentLoaded", () => {
         // DOM Object Pooling: Only create elements if we don't have enough in the pool
         while (trackList.children.length < requiredNodes) {
             const li = document.createElement("li");
+            li.style.display = "flex";
+            li.style.alignItems = "center";
+            
+            const thumbImg = document.createElement("img");
+            thumbImg.className = "track-thumb";
+            thumbImg.loading = "lazy";
+            
             const textSpan = document.createElement("span");
+            textSpan.style.flex = "1";
+            textSpan.style.whiteSpace = "nowrap";
+            textSpan.style.overflow = "hidden";
+            textSpan.style.textOverflow = "ellipsis";
+            textSpan.style.paddingRight = "40px";
             
             const linkA = document.createElement("a");
             linkA.target = "_blank";
@@ -549,6 +577,7 @@ document.addEventListener("DOMContentLoaded", () => {
             linkA.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>';
             linkA.addEventListener("click", (e) => e.stopPropagation());
             
+            li.appendChild(thumbImg);
             li.appendChild(textSpan);
             li.appendChild(linkA);
             trackList.appendChild(li);
@@ -564,10 +593,11 @@ document.addEventListener("DOMContentLoaded", () => {
             const item = filteredIndices[i];
             const track = allDatabases[item.playlist][item.index];
             const li = trackList.children[childIdx++];
-            const textSpan = li.firstChild;
-            const linkA = li.lastChild;
+            const thumbImg = li.childNodes[0];
+            const textSpan = li.childNodes[1];
+            const linkA = li.childNodes[2];
             
-            li.style.display = "block";
+            li.style.display = "flex";
             li.dataset.playlist = item.playlist;
             li.dataset.index = item.index;
             li.style.top = `${i * ITEM_HEIGHT}px`;
@@ -587,6 +617,19 @@ document.addEventListener("DOMContentLoaded", () => {
                 li.style.color = 'var(--text-secondary)';
             } else {
                 li.style.color = ''; // reset to CSS default
+            }
+            
+            if (track.is_dead) {
+                li.style.color = '#ff5555';
+                text += ' [DEAD]';
+            }
+            
+            if (track.thumbnail_path) {
+                const safeThumbPath = track.thumbnail_path.split('/').map(encodeURIComponent).join('/');
+                thumbImg.src = `${baseUrl}/${safeThumbPath}`;
+                thumbImg.style.display = "block";
+            } else {
+                thumbImg.style.display = "none";
             }
             
             textSpan.textContent = text;
