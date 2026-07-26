@@ -55,6 +55,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     let shuffleMode = parseInt(localStorage.getItem('shuffleMode')) || 0;
     let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 
+    
+    const dominantColorCache = new Map();
 
     function applyShuffleUI() {
         btnShuffle.classList.remove("active-state");
@@ -484,6 +486,12 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 // Cross-playlist jump with full reload
                 playlistSelect.value = targetPlaylist;
+                
+                // Clear search before loading new playlist so filteredIndices syncs properly
+                if (searchInput.value.trim() !== "") {
+                    searchInput.value = "";
+                }
+                
                 loadPlaylist(targetPlaylist).then(() => {
                     queueIndex = playQueue.indexOf(targetOriginalIndex);
                     executePlayback();
@@ -637,96 +645,80 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: getThumbUrl(track) ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
+                artwork: (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
-        const isMobile = window.innerWidth <= 800;
-
-        if (isMobile) {
-            const audioUrl = getAudioUrl(track);
-            
-            // Fast-path: Preloaded Blob
-            if (preloadedBlobs.has(audioUrl)) {
-                const oldURL = activeObjectURL;
-                activeObjectURL = preloadedBlobs.get(audioUrl);
-                audioPlayer.src = activeObjectURL;
-                if (oldURL) URL.revokeObjectURL(oldURL);
-                currentTitle.textContent = track.title;
-                if (!preventAutoplay) {
-                    audioPlayer.play().catch(e => {});
-                }
-                triggerPreloads();
-            } else {
-                currentTitle.textContent = "Loading... " + track.title;
-                
-                let fetchPromise = preloadedFetches.get(audioUrl);
-                if (!fetchPromise) {
-                    fetchPromise = caches.match(audioUrl).then(cachedResponse => {
-                        if (cachedResponse) return cachedResponse.blob();
-                        return fetch(audioUrl, { priority: 'high' }).then(response => {
-                            if (!response.ok) throw new Error("Network error");
-                            const cloned = response.clone();
-                            caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned));
-                            return response.blob();
-                        });
-                    });
-                }
-
-                fetchPromise
-                .then(blob => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    const oldURL = activeObjectURL;
-                    activeObjectURL = preloadedBlobs.get(audioUrl) || URL.createObjectURL(blob);
-                    audioPlayer.src = activeObjectURL;
-                    if (oldURL) URL.revokeObjectURL(oldURL);
-                    currentTitle.textContent = track.title;
-                    if (!preventAutoplay) {
-                        audioPlayer.oncanplay = () => {
-                            audioPlayer.oncanplay = null;
-                            audioPlayer.play().catch(e => {});
-                        };
-                    }
-                    triggerPreloads();
-                })
-                .catch(err => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    if (activeObjectURL) {
-                        URL.revokeObjectURL(activeObjectURL);
-                        activeObjectURL = null;
-                    }
-                    audioPlayer.src = audioUrl;
-                    currentTitle.textContent = track.title;
-                    if (!preventAutoplay) {
-                        audioPlayer.oncanplay = () => {
-                            audioPlayer.oncanplay = null;
-                            audioPlayer.play().catch(e => {});
-                        };
-                    }
-                    triggerPreloads();
-                });
-            }
-        } else {
-            if (activeObjectURL) {
-                URL.revokeObjectURL(activeObjectURL);
-                activeObjectURL = null;
-            }
-            audioPlayer.src = getAudioUrl(track);
-            currentTitle.textContent = track.title;
-            if (!preventAutoplay) {
-                audioPlayer.play().catch(e => {});
-            }
-            triggerPreloads();
+        const audioUrl = getAudioUrl(track);
+        
+        // Fast-path: Revoke old object URL if any
+        if (activeObjectURL) {
+            URL.revokeObjectURL(activeObjectURL);
+            activeObjectURL = null;
         }
+        
+        const cacheKey = `${baseUrl}/_cache/${track.id}`;
+        
+        // Mobile & Desktop natively stream the audioUrl for instant playback
+        // If it was already preloaded into memory blob, use it
+        if (preloadedBlobs.has(cacheKey)) {
+            activeObjectURL = preloadedBlobs.get(cacheKey);
+            audioPlayer.src = activeObjectURL;
+        } else {
+            audioPlayer.src = audioUrl;
+            
+            // 5-second Delayed Background Offline Caching
+            // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
+            if (isMobileDevice) {
+                setTimeout(() => {
+                    if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
+                        caches.match(cacheKey).then(cachedResponse => {
+                            if (!cachedResponse) {
+                                fetch(audioUrl, { priority: 'low' }).then(response => {
+                                    if (response.ok) {
+                                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
+                                    }
+                                }).catch(() => {});
+                            }
+                        });
+                    }
+                }, 5000);
+            }
+        }
+        
+        currentTitle.textContent = track.title;
+        if (!preventAutoplay) {
+            audioPlayer.play().catch(e => {});
+        }
+        triggerPreloads();
 
         if (!thumbsDisabled && getThumbUrl(track)) {
-            albumArt.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-            albumArt.style.display = 'block';
-            
-            // Strictly delay album art fetch to guarantee audio gets first network hit
-            setTimeout(() => {
-                albumArt.src = getThumbUrl(track);
-            }, 100);
+            const thumbUrl = getThumbUrl(track);
+            if (dominantColorCache.has(track.id)) {
+                // Instantly apply cached assets without any blocking or flicker
+                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                albumArt.src = thumbUrl;
+                albumArt.style.display = 'block';
+            } else {
+                // Seamlessly preload new thumbnail in the background while keeping the old one visible
+                const tempImg = new Image();
+                tempImg.crossOrigin = "Anonymous";
+                tempImg.onload = () => {
+                    // Only apply if the user hasn't frantically skipped to another track while it was loading
+                    if (currentPlaybackSequence === sequenceId) {
+                        const color = getDominantColor(tempImg, track.id);
+                        document.documentElement.style.setProperty('--primary-color', color);
+                        albumArt.src = thumbUrl;
+                        albumArt.style.display = 'block';
+                    }
+                };
+                // Delay network fetch by 50ms to ensure the audio stream gets initial network priority
+                setTimeout(() => {
+                    if (currentPlaybackSequence === sequenceId) {
+                        tempImg.src = thumbUrl;
+                    }
+                }, 50);
+            }
         } else {
             albumArt.style.display = 'none';
         }
@@ -741,25 +733,27 @@ document.addEventListener("DOMContentLoaded", () => {
     function preloadTrack(track) {
         if (!isMobileDevice || !track) return;
         const audioUrl = getAudioUrl(track);
-        if (preloadedBlobs.has(audioUrl) || preloadedFetches.has(audioUrl)) return;
+        const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
-        const fetchPromise = caches.match(audioUrl).then(cachedResponse => {
+        if (preloadedBlobs.has(cacheKey) || preloadedFetches.has(cacheKey)) return;
+        
+        const fetchPromise = caches.match(cacheKey).then(cachedResponse => {
             if (cachedResponse) return cachedResponse.blob();
             return fetch(audioUrl, { priority: 'low' }).then(response => {
                 if (!response.ok) throw new Error();
                 const cloned = response.clone();
-                caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned));
+                caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned));
                 return response.blob();
             });
         }).then(blob => {
-            if (!preloadedBlobs.has(audioUrl)) {
-                preloadedBlobs.set(audioUrl, URL.createObjectURL(blob));
+            if (!preloadedBlobs.has(cacheKey)) {
+                preloadedBlobs.set(cacheKey, URL.createObjectURL(blob));
             }
             return blob;
         });
         
         fetchPromise.catch(e => {});
-        preloadedFetches.set(audioUrl, fetchPromise);
+        preloadedFetches.set(cacheKey, fetchPromise);
     }
 
     function triggerPreloads() {
@@ -1309,8 +1303,9 @@ document.addEventListener("DOMContentLoaded", () => {
         albumArt.style.display = 'none';
     });
     
-    function getDominantColor(imgEl) {
-        if (imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
+    function getDominantColor(imgEl, trackId) {
+        if (trackId && dominantColorCache.has(trackId)) return dominantColorCache.get(trackId);
+        if (imgEl.dataset && imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
         let canvas = document.createElement('canvas');
         let ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return '#8c73ff';
@@ -1340,15 +1335,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 g = Math.min(255, Math.floor(g * factor));
                 b = Math.min(255, Math.floor(b * factor));
             }
-            return `rgb(${r}, ${g}, ${b})`;
+            const finalColor = `rgb(${r}, ${g}, ${b})`;
+            if (trackId) dominantColorCache.set(trackId, finalColor);
+            return finalColor;
         } catch(e) { return '#8c73ff'; }
     }
-
-    albumArt.addEventListener("load", () => {
-        if (!thumbsDisabled && albumArt.src && !albumArt.src.startsWith('data:')) {
-            document.documentElement.style.setProperty('--primary-color', getDominantColor(albumArt));
-        }
-    });
 
     // Initialize thumb toggle hint visibility
     if (thumbsDisabled) {
