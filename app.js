@@ -726,12 +726,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         albumArt.style.display = 'block';
                     }
                 };
-                // Delay network fetch by 50ms to ensure the audio stream gets initial network priority
-                setTimeout(() => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        tempImg.src = thumbUrl;
-                    }
-                }, 50);
+                if (currentPlaybackSequence === sequenceId) {
+                    tempImg.src = thumbUrl;
+                }
             }
         } else {
             albumArt.style.display = 'none';
