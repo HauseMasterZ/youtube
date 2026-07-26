@@ -679,21 +679,20 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // 5-second Delayed Background Offline Caching
             // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
-            if (isMobileDevice) {
-                setTimeout(() => {
-                    if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
-                        caches.match(cacheKey).then(cachedResponse => {
-                            if (!cachedResponse) {
-                                fetch(audioUrl, { priority: 'low' }).then(response => {
-                                    if (response.ok) {
-                                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
-                                    }
-                                }).catch(() => {});
-                            }
-                        });
-                    }
-                }, 5000);
-            }
+                        // Enabled for Desktop too to handle out-of-order track caching
+            setTimeout(() => {
+                if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
+                    caches.match(cacheKey).then(cachedResponse => {
+                        if (!cachedResponse) {
+                            fetch(audioUrl, { priority: 'low' }).then(response => {
+                                if (response.ok) {
+                                    caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
+                                }
+                            }).catch(() => {});
+                        }
+                    });
+                }
+            }, 5000);
         }
         
         currentTitle.textContent = track.title;
