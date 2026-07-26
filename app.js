@@ -652,7 +652,9 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
+                artwork: (!thumbsDisabled && getThumbUrl(track)) ? 
+                    [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : 
+                    [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
