@@ -695,13 +695,15 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
-        // Force the media engine to synchronously drop the old buffer and parse the new src
-        // This prevents Chrome from playing a 100ms jar-clip of the old song if play() executes before the async load begins
-        audioPlayer.load();
-        
         currentTitle.textContent = track.title;
         if (!preventAutoplay) {
-            audioPlayer.play().catch(e => {});
+            // Delay play() by 100ms to give the hardware decoder thread time to parse the new src and flush the old buffer
+            // This prevents the brief 100ms audio clipping glitch of the previous track on mobile
+            setTimeout(() => {
+                if (audioPlayer.src === audioUrl || audioPlayer.src === activeObjectURL) {
+                    audioPlayer.play().catch(e => {});
+                }
+            }, 100);
         }
         triggerPreloads();
 
