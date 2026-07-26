@@ -731,7 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function preloadTrack(track) {
-        if (!isMobileDevice || !track) return;
+        if (isMobileDevice || !track) return;
         const audioUrl = getAudioUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
@@ -757,7 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function triggerPreloads() {
-        if (!isMobileDevice) return;
+        if (isMobileDevice) return;
         
         let nextTrack = null;
         let prevTrack = null;
