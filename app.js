@@ -717,6 +717,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } else {
                 // Seamlessly preload new thumbnail in the background while keeping the old one visible
                 const tempImg = new Image();
+                tempImg.fetchPriority = "high";
                 tempImg.crossOrigin = "Anonymous";
                 tempImg.onload = () => {
                     // Only apply if the user hasn't frantically skipped to another track while it was loading
