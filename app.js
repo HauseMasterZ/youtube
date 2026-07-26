@@ -1528,9 +1528,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 btnPrev.click();
             } else if (key === 'e') {
                 btnNext.click();
-            } else if (e.key === 'ArrowLeft') {
+            } else if (e.key === 'ArrowLeft' || key === 'a') {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
-            } else if (e.key === 'ArrowRight') {
+            } else if (e.key === 'ArrowRight' || key === 'd') {
                 audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 5);
             }
         });
