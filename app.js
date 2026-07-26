@@ -637,8 +637,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Halt current audio buffer to prevent 100ms jar clipping on skip
         audioPlayer.pause();
-        audioPlayer.removeAttribute('src');
-        audioPlayer.load(); // Synchronously purge hardware buffer on Android
+        audioPlayer.muted = true; // Mute the player temporarily to hide hardware buffer clipping
         
         // Android Lock-Screen Bypass: Play a silent WAV track before clearing `.src`
         // This tricks the OS into keeping the MediaSession bound and active during the gap!
@@ -700,6 +699,10 @@ document.addEventListener("DOMContentLoaded", () => {
         currentTitle.textContent = track.title;
         if (!preventAutoplay) {
             audioPlayer.play().catch(e => {});
+            // Unmute after 150ms to completely mask the Android buffer clipping glitch
+            setTimeout(() => {
+                audioPlayer.muted = false;
+            }, 150);
         }
         triggerPreloads();
 
