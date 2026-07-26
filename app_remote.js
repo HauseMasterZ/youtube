@@ -657,9 +657,15 @@ document.addEventListener("DOMContentLoaded", () => {
     function parseLRC(text) {
         const lines = text.split(/\r?\n/);
         const lyrics = [];
+        let isAiGenerated = false;
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
+            
+            if (line.includes('[au:AI_GENERATED]')) {
+                isAiGenerated = true;
+                continue;
+            }
             
             // Matches [mm:ss.xx] or [mm:ss.xxx]
             const match = line.match(/^\[(\d{2,}):(\d{2})(?:\.(\d{2,3}))?\](.*)/);
@@ -676,10 +682,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         }
-        return lyrics;
+        return { lyrics, isAiGenerated };
     }
 
     async function loadLyrics(track) {
+        const existingBadge = lyricsContainer.querySelector('.ai-lyrics-badge');
+        if (existingBadge) existingBadge.remove();
+
         lyricsContent.innerHTML = '<p class="lyrics-placeholder">Loading lyrics...</p>';
         currentLyrics = [];
         fetchingLyrics = true;
@@ -692,12 +701,20 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             const text = await res.text();
-            currentLyrics = parseLRC(text);
+            const parsed = parseLRC(text);
+            currentLyrics = parsed.lyrics;
             
             if (currentLyrics.length === 0) throw new Error();
             
             lyricsContent.innerHTML = '';
             lyricsContent.style.display = 'block'; // Remove inline flex styles
+            
+            if (parsed.isAiGenerated) {
+                const badge = document.createElement('div');
+                badge.className = 'ai-lyrics-badge';
+                badge.innerHTML = '<span>✨ AI Generated</span>';
+                lyricsContainer.appendChild(badge);
+            }
             
             const lyricsInner = document.createElement('div');
             lyricsInner.id = 'lyrics-inner';
