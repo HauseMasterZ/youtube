@@ -55,3 +55,7 @@ This project is split across two main workspaces:
     *   Missing/Broken lyrics are fixed by simply deleting the `.lrc` file and letting the cron job re-download them using the advanced fallbacks.
     *   Uses `yt-dlp` to fetch the raw `webm/opus` audio.
 
+*   **Design & Iconography**:
+    *   ALWAYS use the circular YouTube Music logo (with the play button in the middle) for all icons, SVGs, PNGs, and MediaSession assets.
+    *   NEVER use, download, or store the standard rectangular YouTube logo.
+
