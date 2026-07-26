@@ -654,7 +654,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 artist: track.channel,
                 artwork: (!thumbsDisabled && getThumbUrl(track)) ? 
                     [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : 
-                    [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }]
+                    [{ src: new URL('icon-512.png', window.location.href).href, sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
