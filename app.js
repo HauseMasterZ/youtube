@@ -93,6 +93,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Lyrics State
     let lyricsActive = false;
     let currentLyrics = []; // Array of { time: float, text: string }
+    let currentLyricsIsAi = false;
     let fetchingLyrics = false;
     
     // UI Throttling
@@ -872,6 +873,7 @@ document.addEventListener("DOMContentLoaded", () => {
         lyricsContent.innerHTML = '<p class="lyrics-placeholder" style="font-size: 32px; letter-spacing: 4px; font-weight: 800; color: var(--primary-color); opacity: 0.8; margin: auto;">...</p>';
         lyricsContent.style.display = 'flex';
         currentLyrics = [];
+        currentLyricsIsAi = false;
         fetchingLyrics = true;
         
         try {
@@ -884,6 +886,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const text = await res.text();
             const parsed = parseLRC(text);
             currentLyrics = parsed.lyrics;
+            currentLyricsIsAi = parsed.isAiGenerated;
             
             if (currentLyrics.length === 0) throw new Error();
             
@@ -913,11 +916,13 @@ document.addEventListener("DOMContentLoaded", () => {
             
             currentLyrics.forEach((line) => {
                 const p = document.createElement('p');
-                p.textContent = `[${formatTime(line.time)}] ${line.text}`;
+                p.textContent = currentLyricsIsAi ? line.text : `[${formatTime(line.time)}] ${line.text}`;
                 p.className = 'lyric-line';
-                p.addEventListener('click', () => {
-                    audioPlayer.currentTime = line.time;
-                });
+                if (!currentLyricsIsAi) {
+                    p.addEventListener('click', () => {
+                        audioPlayer.currentTime = line.time;
+                    });
+                }
                 lyricsInner.appendChild(p);
             });
             
@@ -926,7 +931,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // Build layout cache to prevent DOM layout thrashing
             requestAnimationFrame(() => {
                 buildLyricsCache();
-                if (lyricsActive) {
+                if (lyricsActive && !currentLyricsIsAi) {
                     activeLyricIndex = -1;
                     updateLyricsUI(audioPlayer.currentTime);
                 }
@@ -985,7 +990,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function updateLyricsUI(currentTime) {
-        if (!lyricsActive || currentLyrics.length === 0) return;
+        if (!lyricsActive || currentLyrics.length === 0 || currentLyricsIsAi) return;
         
         let newIndex = -1;
         for (let i = currentLyrics.length - 1; i >= 0; i--) {
@@ -1017,7 +1022,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastLyricsRender = 0;
     
     function lyricsLoop(timestamp) {
-        if (!lyricsActive || audioPlayer.paused) {
+        if (!lyricsActive || audioPlayer.paused || currentLyricsIsAi) {
             lyricsRafId = null;
             return;
         }
@@ -1065,7 +1070,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (queueIndex >= 0 && queueIndex < playQueue.length) {
                 loadLyrics(currentPlaylistData[playQueue[queueIndex]]);
             }
-            if (!audioPlayer.paused && !lyricsRafId) {
+            if (!audioPlayer.paused && !lyricsRafId && !currentLyricsIsAi) {
                 lyricsRafId = requestAnimationFrame(lyricsLoop);
             }
         } else {
@@ -1226,7 +1231,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
         }
-        if (lyricsActive && !lyricsRafId) {
+        if (lyricsActive && !lyricsRafId && !currentLyricsIsAi) {
             lyricsRafId = requestAnimationFrame(lyricsLoop);
         }
         if (isMobileDevice) {
