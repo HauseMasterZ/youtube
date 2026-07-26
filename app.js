@@ -1084,13 +1084,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder during a pause, re-assigning the blob revives it.
+                // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
                 const currentSrc = audioPlayer.src;
-                audioPlayer.src = '';
+                
+                // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
+                audioPlayer.removeAttribute("src");
+                audioPlayer.load();
                 audioPlayer.src = currentSrc;
-                audioPlayer.currentTime = savedTime;
-                audioPlayer.play().catch(err => console.error("Revival failed:", err));
+                
+                // For remote streams, we must wait until metadata is parsed before seeking
+                const onMeta = () => {
+                    audioPlayer.currentTime = savedTime;
+                    audioPlayer.play().catch(err => console.error("Revival failed:", err));
+                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                };
+                audioPlayer.addEventListener('loadedmetadata', onMeta);
             });
         } else {
             audioPlayer.pause();
