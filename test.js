@@ -1,0 +1,1 @@
+var file = WScript.Arguments(0); var fso = new ActiveXObject('Scripting.FileSystemObject'); var content = fso.OpenTextFile(file, 1).ReadAll(); try { eval(content); } catch(e) { WScript.Echo(e.name + ': ' + e.message + ' ' + e.line); } 
