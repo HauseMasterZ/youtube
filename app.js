@@ -379,10 +379,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         // Strictly delay thumbnail fetch to guarantee audio gets first network hit and debounce fast scrolling
                         setTimeout(() => {
                             if (thumbImg.dataset.targetSrc === getThumbUrl(track)) {
-                                requestedThumbs.add(getThumbUrl(track));
-                                thumbImg.src = getThumbUrl(track);
+                                const url = getThumbUrl(track);
+                                const temp = new Image();
+                                temp.onload = () => {
+                                    requestedThumbs.add(url);
+                                    if (thumbImg.dataset.targetSrc === url) {
+                                        thumbImg.src = url;
+                                    }
+                                };
+                                temp.src = url;
                             }
-                        }, 400);
+                        }, 250);
                     }
                 }
                 thumbImg.style.display = "block";
