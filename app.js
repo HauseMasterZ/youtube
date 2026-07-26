@@ -693,6 +693,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
         
+        // Force the media engine to synchronously drop the old buffer and parse the new src
+        // This prevents Chrome from playing a 100ms jar-clip of the old song if play() executes before the async load begins
+        audioPlayer.load();
+        
         currentTitle.textContent = track.title;
         if (!preventAutoplay) {
             audioPlayer.play().catch(e => {});
