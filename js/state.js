@@ -36,6 +36,7 @@
     let thumbsDisabled = storedThumbsDisabled === null ? true : storedThumbsDisabled === 'true';
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
+    const preloadedBlobs = new Map(); // audioUrl -> blobUrl
     let requestedThumbs = new Set();
     
     // Android Chrome Lock-Screen Notification Teardown Bypass
