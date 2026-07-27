@@ -133,13 +133,20 @@
         }
         if (audioPlayer.paused) {
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder, re-stream
+                // Only revive if Android actually suspended the decoder/prevented autoplay
+                if (e.name !== 'NotAllowedError') return;
+                
                 const savedTime = audioPlayer.currentTime;
                 const track = currentPlaylistData[playQueue[queueIndex]];
                 if (!track) return;
+                
+                // Mute briefly to mask buffer clip during revival
+                audioPlayer.muted = true;
+                
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
                     audioPlayer.play().catch(() => {});
+                    setTimeout(() => audioPlayer.muted = false, 150);
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
                 audioPlayer.addEventListener("loadedmetadata", onMeta);
@@ -301,6 +308,14 @@
 
     audioPlayer.addEventListener("error", () => {
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
+        
+        // Android Power Management: If the app is in the background and paused, 
+        // Android suspends the audio decoder, firing an error. We MUST ignore this 
+        // to prevent dropping the Media Session or auto-skipping tracks!
+        if (document.hidden && audioPlayer.paused) {
+            return;
+        }
+
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";
         setPlayUI(false);
@@ -328,33 +343,19 @@
         e.stopPropagation();
         
         const rect = albumArtContainer.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
+        let clientX = e.clientX;
+        if (e.touches && e.touches.length > 0) clientX = e.touches[0].clientX;
+        else if (e.changedTouches && e.changedTouches.length > 0) clientX = e.changedTouches[0].clientX;
+
+        const clickX = clientX - rect.left;
         const width = rect.width;
         
+        // Prevent NaN logic from defaulting to isMiddle
+        if (isNaN(clickX) || width === 0) return;
+
         const isLeft = clickX < width * 0.33;
         const isRight = clickX > width * 0.66;
         const isMiddle = !isLeft && !isRight;
-
-        const now = Date.now();
-        const isDoubleClick = (now - lastArtClickTime) < 300;
-        lastArtClickTime = now;
-
-        if (isDoubleClick) {
-            if (isLeft) {
-                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            } else if (isRight) {
-                let dur = audioPlayer.duration;
-                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
-                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            }
-            return;
-        }
 
         if (isMiddle) {
             thumbsDisabled = !thumbsDisabled;
@@ -388,6 +389,27 @@
             }
             lastStartIndex = -1;
             renderVirtualTracks();
+            return;
+        }
+
+        const now = Date.now();
+        const isDoubleClick = (now - lastArtClickTime) < 300;
+        lastArtClickTime = now;
+
+        if (isDoubleClick) {
+            if (isLeft) {
+                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+                updateTimeUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                updateMediaSessionPosition();
+            } else if (isRight) {
+                let dur = audioPlayer.duration;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
+                updateTimeUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                updateMediaSessionPosition();
+            }
         }
     });
 

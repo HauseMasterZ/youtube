@@ -20,13 +20,19 @@
                 return;
             }
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder, re-stream without clearing src
+                // Only revive if Android actually suspended the decoder/prevented autoplay
+                if (e.name !== 'NotAllowedError') return;
+                
                 const savedTime = audioPlayer.currentTime;
                 const track = currentPlaylistData[playQueue[queueIndex]];
                 if (!track) return;
+                
+                audioPlayer.muted = true;
+                
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
                     audioPlayer.play().catch(() => {});
+                    setTimeout(() => audioPlayer.muted = false, 150);
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
                 audioPlayer.addEventListener("loadedmetadata", onMeta);
