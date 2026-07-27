@@ -716,6 +716,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         albumArt.style.display = 'block';
                     }
                 };
+                tempImg.onerror = () => {
+                    if (currentPlaybackSequence === sequenceId) {
+                        // Fallback to default purple if image is missing/404
+                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                        albumArt.src = thumbUrl; // Browser will natively show a broken image icon
+                        albumArt.style.display = 'block';
+                    }
+                };
                 if (currentPlaybackSequence === sequenceId) {
                     tempImg.src = thumbUrl;
                 }
@@ -1563,5 +1571,6 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         deferredPrompt = e;
     });
+
 
 
