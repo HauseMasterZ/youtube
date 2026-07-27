@@ -12,6 +12,7 @@
             this.silent.loop = true;
             this.isSwapping = false;
             this.silentPlaying = false;
+            this.fadeInterval = null;
             
             const events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             const forwardEvent = (e) => {
@@ -38,15 +39,39 @@
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
+            if (this.fadeInterval) clearInterval(this.fadeInterval);
+            this.active.volume = 1;
             return this.active.play().catch(e => console.error("Play error:", e)); 
         }
+        
         pause() { 
             if (this.silentPlaying) {
                 this.silent.pause();
                 this.silentPlaying = false;
             }
-            return this.active.pause(); 
+            if (this.active.paused) return Promise.resolve();
+            return this.fadeOutAndPause();
         }
+
+        fadeOutAndPause() {
+            return new Promise(resolve => {
+                if (this.fadeInterval) clearInterval(this.fadeInterval);
+                const step = 0.25;
+                this.fadeInterval = setInterval(() => {
+                    const nextVol = this.active.volume - step;
+                    if (nextVol > 0) {
+                        this.active.volume = nextVol;
+                    } else {
+                        clearInterval(this.fadeInterval);
+                        this.fadeInterval = null;
+                        this.active.pause();
+                        this.active.volume = 1;
+                        resolve();
+                    }
+                }, 10); // 40ms total fade
+            });
+        }
+        
         load() { return this.active.load(); }
         removeAttribute(attr) { if (attr === 'src') { this.active.removeAttribute('src'); } }
         getAttribute(attr) { if (attr === 'src') { return this.active.getAttribute('src'); } return null; }
@@ -60,31 +85,33 @@
             let p = null;
             this.isSwapping = true;
             
-            // Mute BEFORE pausing to hide any OS hardware decoder pop
-            this.active.muted = true;
-            this.active.pause();
-            this.active.removeAttribute('src');
-            this.active.load();
-            this.active.src = url;
-            
-            if (!preventAutoplay) {
-                p = this.active.play().then(() => {
+            const doSwap = () => {
+                this.active.removeAttribute('src');
+                this.active.load();
+                this.active.src = url;
+                
+                if (!preventAutoplay) {
+                    p = this.active.play().then(() => {
+                        this.isSwapping = false;
+                    }).catch(e => {
+                        this.isSwapping = false;
+                        console.error("Autoplay prevented:", e);
+                    });
+                } else {
+                    if (this.silentPlaying) {
+                        this.silent.pause();
+                        this.silentPlaying = false;
+                    }
                     this.isSwapping = false;
-                    // Unmute AFTER stream successfully starts to hide startup pop
-                    this.active.muted = false;
-                }).catch(e => {
-                    this.isSwapping = false;
-                    this.active.muted = false;
-                    console.error("Autoplay prevented:", e);
-                });
-            } else {
-                if (this.silentPlaying) {
-                    this.silent.pause();
-                    this.silentPlaying = false;
                 }
-                this.isSwapping = false;
-                this.active.muted = false;
+            };
+
+            if (!this.active.paused) {
+                this.fadeOutAndPause().then(doSwap);
+            } else {
+                doSwap();
             }
+            
             return p;
         }
     }
