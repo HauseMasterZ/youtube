@@ -278,25 +278,7 @@
         if (!uiOnly) {
             audioPlayer.src = audioUrl;
             
-            if (true) {
-                
-                // 5-second Delayed Background Offline Caching
-                // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
-                            // Enabled for Desktop too to handle out-of-order track caching
-                setTimeout(() => {
-                    if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
-                        caches.match(cacheKey).then(cachedResponse => {
-                            if (!cachedResponse) {
-                                fetch(audioUrl, { priority: 'low' }).then(response => {
-                                    if (response.ok) {
-                                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
-                                    }
-                                }).catch(() => {});
-                            }
-                        });
-                    }
-                }, 5000);
-            }
+
             
             audioPlayer.play().catch(e => {});
             // Unmute after 150ms to completely mask the Android buffer clipping glitch
