@@ -21,23 +21,23 @@
             }
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             audioPlayer.play().catch(e => {
-                // Only revive if Android actually suspended the decoder/prevented autoplay
-                if (e.name !== 'NotAllowedError') {
-                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-                    return;
-                }
-                
                 const savedTime = audioPlayer.currentTime;
                 const track = currentPlaylistData[playQueue[queueIndex]];
                 if (!track) return;
                 
-                // Use switchTrack to safely spawn a fresh audio element without hardware pops
-                audioPlayer.switchTrack(getAudioUrl(track), false).then(() => {
+                const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-                }).catch(() => {
-                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-                });
+                    audioPlayer.play().then(() => {
+                        if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+                    }).catch(() => {
+                        if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    });
+                    audioPlayer.removeEventListener("loadedmetadata", onMeta);
+                };
+                audioPlayer.addEventListener("loadedmetadata", onMeta);
+                audioPlayer.removeAttribute('src');
+                audioPlayer.load();
+                audioPlayer.src = getAudioUrl(track);
             });
         });
         navigator.mediaSession.setActionHandler('pause', () => {

@@ -308,7 +308,6 @@
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
             } else {
                 const tempImg = new Image();
-                tempImg.fetchPriority = "low";
                 tempImg.crossOrigin = "Anonymous";
                 tempImg.onload = () => {
                     if (currentPlaybackSequence === sequenceId) {
