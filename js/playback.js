@@ -467,4 +467,3 @@
             syncRAFId = null;
         }
     }
-setTimeout(() => document.title = \ lyricsActive: \ + lyricsActive, 5000)
