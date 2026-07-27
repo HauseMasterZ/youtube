@@ -1,14 +1,22 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v13';
+const CACHE_NAME = 'yt-player-cache-v14';
 
 const CORE_ASSETS = [
     './index.html',
-    './app.js',
-    './style.css',
+    './js/dom.js',
+    './js/utils.js',
+    './js/state.js',
+    './js/ui.js',
+    './js/mediaSession.js',
+    './js/lyrics.js',
+    './js/playback.js',
+    './js/main.js',
+    './css/style.css',
     './manifest.json',
-    './icon-192.png',
-    './icon-512.png',
-    './icon.svg'
+    './assets/icon-192.png',
+    './assets/icon-512.png',
+    './assets/icon.svg',
+    './assets/fonts/GoogleSansFlex-Latin.woff2'
 ];
 
 self.addEventListener('install', (event) => {

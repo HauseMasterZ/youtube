@@ -209,6 +209,9 @@
         }
     }
     function executePlayback(preventAutoplay = false) {
+        // preventAutoplay here acts as a uiOnly flag for restoring the last played track
+        const uiOnly = preventAutoplay;
+        
         // Cancel any pending error auto-skip when user manually selects a track
         if (errorSkipTimer) {
             clearTimeout(errorSkipTimer);
@@ -235,10 +238,17 @@
 
         updateTimeUI(0);
         totalTimeDisplay.textContent = "0:00";
+        seekBar.max = 0; // Reset seekbar to prevent seeking before load
+        seekBar.value = 0;
 
-        // Halt current audio buffer to prevent 100ms jar clipping on skip
-        audioPlayer.pause();
-        audioPlayer.muted = true; // Mute the player temporarily to hide hardware buffer clipping
+        if (uiOnly) {
+            audioPlayer.removeAttribute("src"); // Clear any existing stream
+            audioPlayer.load();
+        } else {
+            // Halt current audio buffer to prevent 100ms jar clipping on skip
+            audioPlayer.pause();
+            audioPlayer.muted = true; // Mute the player temporarily to hide hardware buffer clipping
+        }
         
         // Android Lock-Screen Bypass: Play a silent WAV track before clearing `.src`
         // This tricks the OS into keeping the MediaSession bound and active during the gap!
@@ -265,30 +275,29 @@
         
         // Mobile & Desktop natively stream the audioUrl for instant playback
         // This avoids Chromium bugs where blob: URLs of WebM files without cues cannot be seeked
-        audioPlayer.src = audioUrl;
-        
-        if (true) {
+        if (!uiOnly) {
+            audioPlayer.src = audioUrl;
             
-            // 5-second Delayed Background Offline Caching
-            // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
-                        // Enabled for Desktop too to handle out-of-order track caching
-            setTimeout(() => {
-                if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
-                    caches.match(cacheKey).then(cachedResponse => {
-                        if (!cachedResponse) {
-                            fetch(audioUrl, { priority: 'low' }).then(response => {
-                                if (response.ok) {
-                                    caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
-                                }
-                            }).catch(() => {});
-                        }
-                    });
-                }
-            }, 5000);
-        }
-        
-        currentTitle.textContent = track.title;
-        if (!preventAutoplay) {
+            if (true) {
+                
+                // 5-second Delayed Background Offline Caching
+                // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
+                            // Enabled for Desktop too to handle out-of-order track caching
+                setTimeout(() => {
+                    if (currentPlaybackSequence === sequenceId && !audioPlayer.paused) {
+                        caches.match(cacheKey).then(cachedResponse => {
+                            if (!cachedResponse) {
+                                fetch(audioUrl, { priority: 'low' }).then(response => {
+                                    if (response.ok) {
+                                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, response.clone()));
+                                    }
+                                }).catch(() => {});
+                            }
+                        });
+                    }
+                }, 5000);
+            }
+            
             audioPlayer.play().catch(e => {});
             // Unmute after 150ms to completely mask the Android buffer clipping glitch
             setTimeout(() => {
@@ -336,7 +345,7 @@
 
         // MediaSession metadata already updated at the top of executePlayback
         
-        if (lyricsActive) {
+        if (window.lyricsActive) {
             loadLyrics(track);
         }
     }
@@ -458,3 +467,4 @@
             syncRAFId = null;
         }
     }
+setTimeout(() => document.title = \ lyricsActive: \ + lyricsActive, 5000)

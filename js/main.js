@@ -94,7 +94,7 @@
     });
     window.addEventListener("popstate", (e) => {
         const view = e.state ? e.state.view : null;
-        if (view !== 'lyrics' && lyricsActive) {
+        if (view !== 'lyrics' && window.lyricsActive) {
             closeLyricsUI();
         }
         if (view !== 'player' && view !== 'lyrics' && nowPlaying.classList.contains("expanded")) {
@@ -102,8 +102,8 @@
         }
     });
     lyricsToggleHint.addEventListener('click', () => {
-        if (!lyricsActive) {
-            lyricsActive = true;
+        if (!window.lyricsActive) {
+            window.lyricsActive = true;
             pushHistoryState('lyrics');
             lyricsToggleHint.style.color = 'var(--primary-color)';
             lyricsContainer.style.display = 'flex';
@@ -119,16 +119,23 @@
     });
 
     document.getElementById('btn-close-lyrics').addEventListener('click', () => {
-        if (lyricsActive) history.back();
+        if (window.lyricsActive) history.back();
     });
     btnPlayPause.addEventListener("click", () => {
-        if (!audioPlayer.src) return; 
+        if (!audioPlayer.src) {
+            if (playQueue.length > 0 && queueIndex !== -1) {
+                executePlayback(false); // Play the uiOnly track
+            } else if (playQueue.length > 0) {
+                queueIndex = 0;
+                executePlayback(false);
+            }
+            return;
+        }
         if (audioPlayer.paused) {
             audioPlayer.muted = false; // Unmute if the track was loaded with preventAutoplay
             audioPlayer.play().catch(e => {
                 // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
-                const currentSrc = audioPlayer.src;
                 
                 // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
                 audioPlayer.removeAttribute("src");
@@ -138,12 +145,13 @@
                 // Attach the event BEFORE setting src to prevent missing synchronous metadata events
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(err => console.error("Revival failed:", err));
-                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                    audioPlayer.play().catch(e => {});
+                    audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
-                audioPlayer.addEventListener('loadedmetadata', onMeta);
+                audioPlayer.addEventListener("loadedmetadata", onMeta);
                 
-                audioPlayer.src = currentSrc;
+                // Setting src begins the network request
+                audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
             });
         } else {
             audioPlayer.pause();
@@ -207,7 +215,7 @@
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
         }
-        if (lyricsActive && !lyricsRafId && !currentLyricsIsAi) {
+        if (window.lyricsActive && !lyricsRafId && !currentLyricsIsAi) {
             lyricsRafId = requestAnimationFrame(lyricsLoop);
         }
         if (isMobileDevice) {
@@ -285,7 +293,7 @@
         audioPlayer.currentTime = Number(e.target.value);
         isSeeking = false;
         updateTimeUI(Number(e.target.value));
-        if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+        if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
         updateMediaSessionPosition();
     });
 
@@ -398,9 +406,11 @@
         }
         loadPlaylist(e.target.value);
     });
-            navigator.serviceWorker.register('sw.js').catch((error) => {
-                console.error('ServiceWorker registration failed: ', error);
-            });
+
+    // --- Register Service Worker for PWA Installability ---
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch((error) => {
+            console.error('ServiceWorker registration failed: ', error);
         });
     }
 

@@ -22,7 +22,7 @@
     let crossShufflePos = -1;
     
     // Lyrics State
-    let lyricsActive = false;
+    window.lyricsActive = false;
     let currentLyrics = []; // Array of { time: float, text: string }
     let currentLyricsIsAi = false;
     let fetchingLyrics = false;

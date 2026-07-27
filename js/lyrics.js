@@ -30,6 +30,7 @@
     }
 
     async function loadLyrics(track) {
+        const sequenceId = currentPlaybackSequence; // Track the sequence ID to prevent race conditions
         const existingBadge = lyricsContainer.querySelector('.ai-lyrics-badge');
         if (existingBadge) existingBadge.remove();
 
@@ -47,6 +48,10 @@
             const res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             const text = await res.text();
+            
+            // Abort if the user skipped to another track while the fetch was pending
+            if (currentPlaybackSequence !== sequenceId) return;
+            
             const parsed = parseLRC(text);
             currentLyrics = parsed.lyrics;
             currentLyricsIsAi = parsed.isAiGenerated;
@@ -94,7 +99,7 @@
             // Build layout cache to prevent DOM layout thrashing
             requestAnimationFrame(() => {
                 buildLyricsCache();
-                if (lyricsActive && !currentLyricsIsAi) {
+                if (window.lyricsActive && !currentLyricsIsAi) {
                     activeLyricIndex = -1;
                     updateLyricsUI(audioPlayer.currentTime);
                 }
@@ -138,7 +143,7 @@
     window.addEventListener('resize', () => {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
-            if (lyricsActive) {
+            if (window.lyricsActive) {
                 buildLyricsCache();
                 if (activeLyricIndex >= 0 && activeLyricIndex < lyricsLayoutCache.length) {
                     const cache = lyricsLayoutCache[activeLyricIndex];
@@ -153,7 +158,7 @@
     });
 
     function updateLyricsUI(currentTime) {
-        if (!lyricsActive || currentLyrics.length === 0 || currentLyricsIsAi) return;
+        if (!window.lyricsActive || currentLyrics.length === 0 || currentLyricsIsAi) return;
         
         let newIndex = -1;
         for (let i = currentLyrics.length - 1; i >= 0; i--) {
@@ -185,7 +190,7 @@
     let lastLyricsRender = 0;
     
     function lyricsLoop(timestamp) {
-        if (!lyricsActive || audioPlayer.paused || currentLyricsIsAi) {
+        if (!window.lyricsActive || audioPlayer.paused || currentLyricsIsAi) {
             lyricsRafId = null;
             return;
         }
@@ -203,7 +208,7 @@
     }
 
     function closeLyricsUI() {
-        lyricsActive = false;
+        window.lyricsActive = false;
         lyricsToggleHint.style.color = 'var(--text-secondary)';
         lyricsContainer.style.display = 'none';
         if (lyricsRafId) {

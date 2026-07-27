@@ -3,8 +3,8 @@
             font-family: 'Google Sans Flex';
             font-style: normal;
             font-display: swap;
-            font-weight: 100 900;
-            src: url('fonts/GoogleSansFlex-Latin.woff2') format('woff2');
+            font-weight: 100 1000;
+            src: url('../assets/fonts/GoogleSansFlex-Latin.woff2') format('woff2');
         }
 
         @property --primary-color {

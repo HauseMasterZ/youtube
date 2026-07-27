@@ -10,26 +10,31 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            if (!audioPlayer.src) {
+                if (playQueue.length > 0 && queueIndex !== -1) {
+                    executePlayback(false); // Play the uiOnly track
+                } else if (playQueue.length > 0) {
+                    queueIndex = 0;
+                    executePlayback(false);
+                }
+                return;
+            }
             audioPlayer.muted = false; // Unmute if the track was loaded with preventAutoplay
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder during a pause, re-assigning the blob revives it.
+                // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
-                const currentSrc = audioPlayer.src;
                 
-                // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
                 audioPlayer.removeAttribute("src");
                 audioPlayer.load();
                 
-                // For remote streams, we must wait until metadata is parsed before seeking
-                // Attach the event BEFORE setting src to prevent missing synchronous metadata events
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(err => console.error("Revival failed:", err));
-                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                    audioPlayer.play().catch(e => {});
+                    audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
-                audioPlayer.addEventListener('loadedmetadata', onMeta);
+                audioPlayer.addEventListener("loadedmetadata", onMeta);
                 
-                audioPlayer.src = currentSrc;
+                audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
             });
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
         });
@@ -93,7 +98,3 @@
         });
     }
 
-});
-
-    // --- Register Service Worker for PWA Installability ---
-    if ('serviceWorker' in navigator) {
