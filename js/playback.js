@@ -245,17 +245,7 @@
             audioPlayer.removeAttribute("src"); // Clear any existing stream
             audioPlayer.load();
         } else {
-            // Halt current audio buffer to prevent 100ms jar clipping on skip
             audioPlayer.pause();
-            audioPlayer.muted = true; // Mute the player temporarily to hide hardware buffer clipping
-        }
-        
-        // Android Lock-Screen Bypass: Play a silent WAV track before clearing `.src`
-        // This tricks the OS into keeping the MediaSession bound and active during the gap!
-        if (isMobileDevice && !preventAutoplay) {
-            silentKeepAliveAudio.play().catch(e => {});
-            if (silentKeepAliveTimer) clearTimeout(silentKeepAliveTimer);
-            silentKeepAliveTimer = setTimeout(() => silentKeepAliveAudio.pause(), 10000);
         }
         
         audioPlayer.currentTime = 0;
@@ -276,15 +266,24 @@
         // Mobile & Desktop natively stream the audioUrl for instant playback
         // This avoids Chromium bugs where blob: URLs of WebM files without cues cannot be seeked
         if (!uiOnly) {
-            audioPlayer.src = audioUrl;
-            
+            const startPlayback = () => {
+                audioPlayer.src = audioUrl;
+                audioPlayer.play().catch(e => {});
+            };
 
-            
-            audioPlayer.play().catch(e => {});
-            // Unmute after 150ms to completely mask the Android buffer clipping glitch
-            setTimeout(() => {
-                audioPlayer.muted = false;
-            }, 150);
+            // Android Lock-Screen Bypass: Play a silent WAV track before clearing `.src`
+            // Awaiting this promise guarantees the OS session survives the main audio player URL swap
+            if (isMobileDevice && !preventAutoplay) {
+                silentKeepAliveAudio.play().then(() => {
+                    startPlayback();
+                }).catch(() => {
+                    startPlayback();
+                });
+                if (silentKeepAliveTimer) clearTimeout(silentKeepAliveTimer);
+                silentKeepAliveTimer = setTimeout(() => silentKeepAliveAudio.pause(), 10000);
+            } else {
+                startPlayback();
+            }
         }
         triggerPreloads();
 

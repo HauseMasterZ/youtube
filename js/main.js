@@ -132,7 +132,6 @@
             return;
         }
         if (audioPlayer.paused) {
-            audioPlayer.muted = false; // Unmute if the track was loaded with preventAutoplay
             audioPlayer.play().catch(e => {
                 // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
@@ -361,40 +360,39 @@
             return;
         }
 
-        if (isMiddle) {
-            thumbsDisabled = !thumbsDisabled;
-            
-            if (thumbsDisabled) {
-                albumArt.style.display = 'none';
-                thumbToggleHint.style.display = 'block';
-                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-            } else {
-                thumbToggleHint.style.display = 'none';
-                if (queueIndex >= 0 && queueIndex < playQueue.length) {
-                    const track = currentPlaylistData[playQueue[queueIndex]];
-                    if (track && getThumbUrl(track)) {
-                        albumArt.src = getThumbUrl(track);
-                        albumArt.style.display = 'block';
-                        
-                        if (dominantColorCache.has(track.id)) {
-                            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                        } else {
-                            const tempImg = new Image();
-                            tempImg.crossOrigin = "Anonymous";
-                            tempImg.onload = () => {
-                                const color = getDominantColor(tempImg, track.id);
-                                document.documentElement.style.setProperty('--primary-color', color);
-                            };
-                            tempImg.src = getThumbUrl(track);
-                        }
+        // Any single click anywhere on the album art toggles the thumbnail
+        thumbsDisabled = !thumbsDisabled;
+        
+        if (thumbsDisabled) {
+            albumArt.style.display = 'none';
+            thumbToggleHint.style.display = 'block';
+            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+        } else {
+            thumbToggleHint.style.display = 'none';
+            if (queueIndex >= 0 && queueIndex < playQueue.length) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && getThumbUrl(track)) {
+                    albumArt.src = getThumbUrl(track);
+                    albumArt.style.display = 'block';
+                    
+                    if (dominantColorCache.has(track.id)) {
+                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                    } else {
+                        const tempImg = new Image();
+                        tempImg.crossOrigin = "Anonymous";
+                        tempImg.onload = () => {
+                            const color = getDominantColor(tempImg, track.id);
+                            document.documentElement.style.setProperty('--primary-color', color);
+                        };
+                        tempImg.src = getThumbUrl(track);
                     }
                 }
             }
-            
-            // Re-render track list to show/hide track thumbs
-            lastStartIndex = -1;
-            renderVirtualTracks();
         }
+        
+        // Re-render track list to show/hide track thumbs
+        lastStartIndex = -1;
+        renderVirtualTracks();
     });
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {

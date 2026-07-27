@@ -19,7 +19,6 @@
                 }
                 return;
             }
-            audioPlayer.muted = false; // Unmute if the track was loaded with preventAutoplay
             audioPlayer.play().catch(e => {
                 // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
