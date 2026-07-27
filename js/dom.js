@@ -11,6 +11,7 @@
             this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
             this.silent.loop = true;
             this.isSwapping = false;
+            this.silentPlaying = false;
             
             const events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             const forwardEvent = (e) => {
@@ -34,9 +35,16 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
+            if (window.hasMediaSession && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
             return this.active.play().catch(e => console.error("Play error:", e)); 
         }
         pause() { 
+            if (this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
+            }
             return this.active.pause(); 
         }
         load() { return this.active.load(); }
@@ -45,8 +53,8 @@
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
     
         switchTrack(url, preventAutoplay) {
-            if (window.hasMediaSession) {
-                this.silent.play().catch(e => {});
+            if (window.hasMediaSession && !this.silentPlaying && !preventAutoplay) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
 
             let p = null;
@@ -61,18 +69,19 @@
             
             if (!preventAutoplay) {
                 p = this.active.play().then(() => {
-                    this.silent.pause();
                     this.isSwapping = false;
                     // Unmute AFTER stream successfully starts to hide startup pop
                     this.active.muted = false;
                 }).catch(e => {
-                    this.silent.pause();
                     this.isSwapping = false;
                     this.active.muted = false;
                     console.error("Autoplay prevented:", e);
                 });
             } else {
-                this.silent.pause();
+                if (this.silentPlaying) {
+                    this.silent.pause();
+                    this.silentPlaying = false;
+                }
                 this.isSwapping = false;
                 this.active.muted = false;
             }

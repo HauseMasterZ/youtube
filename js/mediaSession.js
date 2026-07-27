@@ -19,9 +19,13 @@
                 }
                 return;
             }
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             audioPlayer.play().catch(e => {
                 // Only revive if Android actually suspended the decoder/prevented autoplay
-                if (e.name !== 'NotAllowedError') return;
+                if (e.name !== 'NotAllowedError') {
+                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    return;
+                }
                 
                 const savedTime = audioPlayer.currentTime;
                 const track = currentPlaylistData[playQueue[queueIndex]];
@@ -31,7 +35,9 @@
                 
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(() => {});
+                    audioPlayer.play().catch(() => {
+                        if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    });
                     setTimeout(() => { audioPlayer.muted = false; }, 150);
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
@@ -40,11 +46,10 @@
                 audioPlayer.load();
                 audioPlayer.src = getAudioUrl(track);
             });
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-            audioPlayer.pause();
             if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+            audioPlayer.pause();
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());

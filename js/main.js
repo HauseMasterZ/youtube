@@ -132,9 +132,13 @@
             return;
         }
         if (audioPlayer.paused) {
+            setPlayUI(true);
             audioPlayer.play().catch(e => {
                 // Only revive if Android actually suspended the decoder/prevented autoplay
-                if (e.name !== 'NotAllowedError') return;
+                if (e.name !== 'NotAllowedError') {
+                    setPlayUI(false);
+                    return;
+                }
                 
                 const savedTime = audioPlayer.currentTime;
                 const track = currentPlaylistData[playQueue[queueIndex]];
@@ -145,7 +149,7 @@
                 
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(() => {});
+                    audioPlayer.play().catch(() => { setPlayUI(false); });
                     setTimeout(() => audioPlayer.muted = false, 150);
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
@@ -153,6 +157,7 @@
                 audioPlayer.src = getAudioUrl(track);
             });
         } else {
+            setPlayUI(false);
             audioPlayer.pause();
         }
     });
