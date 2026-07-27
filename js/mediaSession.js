@@ -19,6 +19,7 @@
                 }
                 return;
             }
+            audioPlayer.muted = true;
             audioPlayer.play().catch(e => {
                 // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
@@ -35,10 +36,12 @@
                 
                 audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
             });
+            setTimeout(() => { audioPlayer.muted = false; }, 150);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-            audioPlayer.pause();
+            audioPlayer.muted = true;
+            setTimeout(() => { audioPlayer.pause(); }, 50);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());

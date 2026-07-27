@@ -256,6 +256,7 @@
             audioPlayer.removeAttribute("src"); // Clear any existing stream
             audioPlayer.load();
         } else {
+            audioPlayer.muted = true; // Mute to hide 100ms hardware buffer clipping on Android
             audioPlayer.pause();
         }
         
@@ -280,21 +281,14 @@
             const startPlayback = () => {
                 audioPlayer.src = audioUrl;
                 audioPlayer.play().catch(e => {});
+                // Unmute after 150ms to mask the Android buffer clip
+                setTimeout(() => {
+                    audioPlayer.muted = false;
+                }, 150);
             };
 
-            // Android Lock-Screen Bypass: Play a silent WAV track before clearing `.src`
-            // Awaiting this promise guarantees the OS session survives the main audio player URL swap
-            if (isMobileDevice && !preventAutoplay) {
-                silentKeepAliveAudio.play().then(() => {
-                    startPlayback();
-                }).catch(() => {
-                    startPlayback();
-                });
-                if (silentKeepAliveTimer) clearTimeout(silentKeepAliveTimer);
-                silentKeepAliveTimer = setTimeout(() => silentKeepAliveAudio.pause(), 10000);
-            } else {
-                startPlayback();
-            }
+            // Start playback immediately
+            startPlayback();
         }
         triggerPreloads();
 

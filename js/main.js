@@ -132,6 +132,7 @@
             return;
         }
         if (audioPlayer.paused) {
+            audioPlayer.muted = true; // Mute to hide buffer clipping on resume
             audioPlayer.play().catch(e => {
                 // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
                 const savedTime = audioPlayer.currentTime;
@@ -152,8 +153,10 @@
                 // Setting src begins the network request
                 audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
             });
+            setTimeout(() => { audioPlayer.muted = false; }, 150);
         } else {
-            audioPlayer.pause();
+            audioPlayer.muted = true;
+            setTimeout(() => { audioPlayer.pause(); }, 50);
         }
     });
 
@@ -220,10 +223,6 @@
         }
         if (window.lyricsActive && !lyricsRafId && !currentLyricsIsAi) {
             lyricsRafId = requestAnimationFrame(lyricsLoop);
-        }
-        if (isMobileDevice) {
-            silentKeepAliveAudio.pause();
-            if (silentKeepAliveTimer) clearTimeout(silentKeepAliveTimer);
         }
     });
     audioPlayer.addEventListener("pause", () => {
@@ -350,6 +349,10 @@
         lastArtClickTime = now;
 
         if (isDoubleClick) {
+            if (window.thumbToggleTimer) {
+                clearTimeout(window.thumbToggleTimer);
+                window.thumbToggleTimer = null;
+            }
             if (isLeft) {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
                 updateTimeUI(audioPlayer.currentTime);
@@ -364,8 +367,9 @@
             return;
         }
 
-        // Any single click anywhere on the album art toggles the thumbnail
-        thumbsDisabled = !thumbsDisabled;
+        window.thumbToggleTimer = setTimeout(() => {
+            // Any single click anywhere on the album art toggles the thumbnail
+            thumbsDisabled = !thumbsDisabled;
         
         if (thumbsDisabled) {
             albumArt.style.display = 'none';
@@ -397,7 +401,9 @@
         // Re-render track list to show/hide track thumbs
         lastStartIndex = -1;
         renderVirtualTracks();
+    }, 300); // 300ms delay to wait for potential double click
     });
+
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
         if (e.target.value === "INSTALL_APP") {

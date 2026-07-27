@@ -40,9 +40,7 @@
     let requestedThumbs = new Set();
     
     // Android Chrome Lock-Screen Notification Teardown Bypass
-    const silentKeepAliveAudio = new Audio('data:audio/wav;base64,UklGRjIAAABXQVZFZm10IBIAAAABAAEAQB8AAEAfAAABAAgAAABmYWN0BAAAAAAAAABkYXRhAAAAAA==');
-    silentKeepAliveAudio.loop = true;
-    let silentKeepAliveTimer = null;
+
     // Virtual Scroller state
     const ITEM_HEIGHT = 48;
     let lastStartIndex = -1;
