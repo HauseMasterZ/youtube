@@ -52,6 +52,8 @@
             let p = null;
             this.isSwapping = true;
             
+            // Mute BEFORE pausing to hide any OS hardware decoder pop
+            this.active.muted = true;
             this.active.pause();
             this.active.removeAttribute('src');
             this.active.load();
@@ -61,14 +63,18 @@
                 p = this.active.play().then(() => {
                     this.silent.pause();
                     this.isSwapping = false;
+                    // Unmute AFTER stream successfully starts to hide startup pop
+                    this.active.muted = false;
                 }).catch(e => {
                     this.silent.pause();
                     this.isSwapping = false;
+                    this.active.muted = false;
                     console.error("Autoplay prevented:", e);
                 });
             } else {
                 this.silent.pause();
                 this.isSwapping = false;
+                this.active.muted = false;
             }
             return p;
         }
