@@ -237,8 +237,19 @@
         scrollToTrack(originalIndex);
 
         updateTimeUI(0);
-        totalTimeDisplay.textContent = "0:00";
-        seekBar.max = 0; // Reset seekbar to prevent seeking before load
+        if (track.duration) {
+            const parsedDuration = parseISODuration(track.duration);
+            if (parsedDuration > 0) {
+                seekBar.max = parsedDuration;
+                totalTimeDisplay.textContent = formatTime(parsedDuration);
+            } else {
+                seekBar.max = 0;
+                totalTimeDisplay.textContent = "0:00";
+            }
+        } else {
+            seekBar.max = 0; // Reset seekbar to prevent seeking before load
+            totalTimeDisplay.textContent = "0:00";
+        }
         seekBar.value = 0;
 
         if (uiOnly) {

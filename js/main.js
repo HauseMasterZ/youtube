@@ -200,9 +200,13 @@
     });
     audioPlayer.addEventListener("loadedmetadata", () => {
         const duration = Math.floor(audioPlayer.duration);
-        seekBar.max = duration;
-        totalTimeDisplay.textContent = formatTime(duration);
-        updateMediaSessionPosition();
+        if (!isNaN(duration) && duration !== Infinity) {
+            seekBar.max = duration;
+            totalTimeDisplay.textContent = formatTime(duration);
+            updateMediaSessionPosition();
+        } else if (seekBar.max > 0) {
+            updateMediaSessionPosition();
+        }
     });
 
     audioPlayer.addEventListener("seeked", updateMediaSessionPosition);
