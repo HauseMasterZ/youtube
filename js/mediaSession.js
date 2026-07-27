@@ -32,10 +32,12 @@
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
                     audioPlayer.play().catch(() => {});
-                    setTimeout(() => audioPlayer.muted = false, 150);
+                    setTimeout(() => { audioPlayer.muted = false; }, 150);
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
                 audioPlayer.addEventListener("loadedmetadata", onMeta);
+                audioPlayer.removeAttribute('src');
+                audioPlayer.load();
                 audioPlayer.src = getAudioUrl(track);
             });
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';

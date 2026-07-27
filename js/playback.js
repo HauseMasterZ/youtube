@@ -272,27 +272,7 @@
             audioPlayer.removeAttribute("src");
             audioPlayer.load();
         } else {
-            // Unmute initially, in case it was muted
-            audioPlayer.muted = false;
-            
-            // To prevent Android from repeating the last 50ms of audio (buffer clipping glitch)
-            audioPlayer.removeAttribute("src");
-            audioPlayer.load();
-            
-            // Re-assign new source and play
-            audioPlayer.src = audioUrl;
-            if (!preventAutoplay) {
-                // Ensure MediaSession knows we INTEND to keep playing despite the network gap
-                if (hasMediaSession) navigator.mediaSession.playbackState = "playing";
-                
-                audioPlayer.play().catch(e => console.error("Autoplay prevented:", e));
-                
-                // Mute for 150ms to completely mask any lingering buffer pops from the hardware decoder
-                audioPlayer.muted = true;
-                setTimeout(() => {
-                    audioPlayer.muted = false;
-                }, 150);
-            }
+            audioPlayer.switchTrack(audioUrl, preventAutoplay);
         }
         
         triggerPreloads();

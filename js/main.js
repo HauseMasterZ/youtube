@@ -343,11 +343,7 @@
         e.stopPropagation();
         
         const rect = albumArtContainer.getBoundingClientRect();
-        let clientX = e.clientX;
-        if (e.touches && e.touches.length > 0) clientX = e.touches[0].clientX;
-        else if (e.changedTouches && e.changedTouches.length > 0) clientX = e.changedTouches[0].clientX;
-
-        const clickX = clientX - rect.left;
+        const clickX = e.clientX - rect.left;
         const width = rect.width;
         
         // Prevent NaN logic from defaulting to isMiddle
