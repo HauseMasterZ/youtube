@@ -56,6 +56,7 @@
         // DOM Object Pooling: Only create elements if we don't have enough in the pool
         while (trackList.children.length < requiredNodes) {
             const li = document.createElement("li");
+            li.className = "track-item";
             li.style.display = "flex";
             li.style.alignItems = "center";
             

@@ -20,6 +20,7 @@
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
+    let prefetchedUrls = new Set();
     
     // Lyrics State
     window.lyricsActive = false;

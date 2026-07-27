@@ -331,63 +331,53 @@
         const clickX = e.clientX - rect.left;
         const width = rect.width;
         
-        if (artClickTimer) {
-            // Second click within 300ms — double click for seek
-            clearTimeout(artClickTimer);
-            artClickTimer = null;
-            const isLeft = clickX < width * 0.33;
-            const isRight = clickX > width * 0.66;
-            if (isLeft) {
-                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            } else if (isRight) {
-                let dur = audioPlayer.duration;
-                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
-                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            }
+        const isLeft = clickX < width * 0.33;
+        const isRight = clickX > width * 0.66;
+        
+        if (isLeft) {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+            updateTimeUI(audioPlayer.currentTime);
+            if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+            updateMediaSessionPosition();
+        } else if (isRight) {
+            let dur = audioPlayer.duration;
+            if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+            audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
+            updateTimeUI(audioPlayer.currentTime);
+            if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+            updateMediaSessionPosition();
         } else {
-            // First click — wait 300ms to disambiguate single vs double click
-            const capturedX = clickX;
-            artClickTimer = setTimeout(() => {
-                artClickTimer = null;
-                const isMiddle = capturedX >= width * 0.33 && capturedX <= width * 0.66;
-                if (isMiddle) {
-                    thumbsDisabled = !thumbsDisabled;
-                    if (thumbsDisabled) {
-                        albumArt.style.display = 'none';
-                        thumbToggleHint.style.display = 'block';
-                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    } else {
-                        thumbToggleHint.style.display = 'none';
-                        if (queueIndex >= 0 && queueIndex < playQueue.length) {
-                            const track = currentPlaylistData[playQueue[queueIndex]];
-                            if (track && getThumbUrl(track)) {
-                                albumArt.src = getThumbUrl(track);
-                                albumArt.style.display = 'block';
-                                
-                                if (dominantColorCache.has(track.id)) {
-                                    document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                                } else {
-                                    const tempImg = new Image();
-                                    tempImg.crossOrigin = "Anonymous";
-                                    tempImg.onload = () => {
-                                        const color = getDominantColor(tempImg, track.id);
-                                        document.documentElement.style.setProperty('--primary-color', color);
-                                    };
-                                    tempImg.src = getThumbUrl(track);
-                                }
-                            }
+            thumbsDisabled = !thumbsDisabled;
+            if (thumbsDisabled) {
+                albumArt.style.display = 'none';
+                thumbToggleHint.style.display = 'block';
+                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+            } else {
+                thumbToggleHint.style.display = 'none';
+                if (queueIndex >= 0 && queueIndex < playQueue.length) {
+                    const track = currentPlaylistData[playQueue[queueIndex]];
+                    if (track && getThumbUrl(track)) {
+                        albumArt.src = getThumbUrl(track);
+                        albumArt.style.display = 'block';
+                        
+                        if (dominantColorCache.has(track.id)) {
+                            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                        } else {
+                            const tempImg = new Image();
+                            tempImg.crossOrigin = "Anonymous";
+                            tempImg.onload = () => {
+                                const color = getDominantColor(tempImg, track.id);
+                                document.documentElement.style.setProperty('--primary-color', color);
+                            };
+                            tempImg.src = getThumbUrl(track);
                         }
+                    } else {
+                        albumArt.style.display = 'none';
                     }
-                    lastStartIndex = -1;
-                    renderVirtualTracks();
                 }
-            }, 300);
+            }
+            lastStartIndex = -1;
+            renderVirtualTracks();
         }
     });
 
