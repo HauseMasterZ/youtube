@@ -104,9 +104,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let storedThumbsDisabled = localStorage.getItem('thumbsDisabled');
     let thumbsDisabled = storedThumbsDisabled === null ? true : storedThumbsDisabled === 'true';
     
-    let activeObjectURL = null;
     let currentPlaybackSequence = 0;
-    const preloadedBlobs = new Map(); // audioUrl -> blobUrl
     const preloadedFetches = new Map(); // audioUrl -> Promise
     let requestedThumbs = new Set();
     
@@ -661,22 +659,13 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
         const audioUrl = getAudioUrl(track);
-        
-        // Fast-path: Revoke old object URL if any
-        if (activeObjectURL) {
-            URL.revokeObjectURL(activeObjectURL);
-            activeObjectURL = null;
-        }
-        
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
         // Mobile & Desktop natively stream the audioUrl for instant playback
-        // If it was already preloaded into memory blob, use it
-        if (preloadedBlobs.has(cacheKey)) {
-            activeObjectURL = preloadedBlobs.get(cacheKey);
-            audioPlayer.src = activeObjectURL;
-        } else {
-            audioPlayer.src = audioUrl;
+        // This avoids Chromium bugs where blob: URLs of WebM files without cues cannot be seeked
+        audioPlayer.src = audioUrl;
+        
+        if (true) {
             
             // 5-second Delayed Background Offline Caching
             // If user listens for 5s, we trigger a silent background fetch to cache the entire song offline
@@ -1205,10 +1194,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const ct = Math.floor(audioPlayer.currentTime);
             if (ct !== lastRenderTime) {
                 updateTimeUI(ct);
-                if (++localStorageCounter >= 5) {
-                    localStorageCounter = 0;
-                    localStorage.setItem("lastTime", audioPlayer.currentTime);
-                }
             }
         }
         syncRAFId = setTimeout(syncLoop, 1000);
@@ -1533,25 +1518,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (targetOriginalIndex !== -1) {
                 queueIndex = playQueue.indexOf(targetOriginalIndex);
                 executePlayback(true); // true = preventAutoplay
-                
-                const savedTime = localStorage.getItem("lastTime");
-                if (savedTime) {
-                    localStorage.removeItem("lastTime"); // Clear immediately so it only applies once
-                    const parsedTime = parseFloat(savedTime);
-                    if (!isNaN(parsedTime)) {
-                        const restoreTime = () => {
-                            audioPlayer.removeEventListener("loadedmetadata", restoreTime);
-                            if (localStorage.getItem("lastTrackId") === lastTrackId && !isNaN(audioPlayer.duration)) {
-                                const targetTime = Math.min(parsedTime, audioPlayer.duration - 1);
-                                if (targetTime > 0) {
-                                    audioPlayer.currentTime = targetTime;
-                                    updateTimeUI(targetTime);
-                                }
-                            }
-                        };
-                        audioPlayer.addEventListener("loadedmetadata", restoreTime);
-                    }
-                }
             }
         }
     });
@@ -1597,3 +1563,5 @@ document.addEventListener("DOMContentLoaded", () => {
         e.preventDefault();
         deferredPrompt = e;
     });
+
+
