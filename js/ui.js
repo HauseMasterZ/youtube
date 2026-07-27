@@ -188,7 +188,7 @@
         currentTimeDisplay.textContent = formatTime(seconds);
         lastRenderTime = seconds;
     }
-    const albumArtContainer = document.getElementById('album-art-container');
+    // Removed duplicate albumArtContainer, already in dom.js
     const thumbToggleHint = document.getElementById('thumb-toggle-hint');
 
     albumArt.addEventListener("error", () => {
