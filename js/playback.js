@@ -308,31 +308,29 @@
 
         if (!thumbsDisabled && getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
+            // Immediately display the album art so it doesn't wait for the slower CORS preflight request
+            albumArt.src = thumbUrl;
+            albumArt.style.display = 'block';
+
             if (dominantColorCache.has(track.id)) {
-                // Instantly apply cached assets without any blocking or flicker
+                // Instantly apply cached color
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                albumArt.src = thumbUrl;
-                albumArt.style.display = 'block';
             } else {
-                // Seamlessly preload new thumbnail in the background while keeping the old one visible
+                // Extract dominant color in the background using a CORS-enabled image
                 const tempImg = new Image();
-                tempImg.fetchPriority = "high";
+                tempImg.fetchPriority = "low";
                 tempImg.crossOrigin = "Anonymous";
                 tempImg.onload = () => {
-                    // Only apply if the user hasn't frantically skipped to another track while it was loading
+                    // Only apply if the user hasn't skipped to another track while it was loading
                     if (currentPlaybackSequence === sequenceId) {
                         const color = getDominantColor(tempImg, track.id);
                         document.documentElement.style.setProperty('--primary-color', color);
-                        albumArt.src = thumbUrl;
-                        albumArt.style.display = 'block';
                     }
                 };
                 tempImg.onerror = () => {
                     if (currentPlaybackSequence === sequenceId) {
                         // Fallback to default purple if image is missing/404
                         document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                        albumArt.src = thumbUrl; // Browser will natively show a broken image icon
-                        albumArt.style.display = 'block';
                     }
                 };
                 if (currentPlaybackSequence === sequenceId) {

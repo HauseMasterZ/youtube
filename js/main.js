@@ -363,7 +363,6 @@
 
         if (isMiddle) {
             thumbsDisabled = !thumbsDisabled;
-            localStorage.setItem('thumbsDisabled', thumbsDisabled);
             
             if (thumbsDisabled) {
                 albumArt.style.display = 'none';
@@ -376,6 +375,18 @@
                     if (track && getThumbUrl(track)) {
                         albumArt.src = getThumbUrl(track);
                         albumArt.style.display = 'block';
+                        
+                        if (dominantColorCache.has(track.id)) {
+                            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                        } else {
+                            const tempImg = new Image();
+                            tempImg.crossOrigin = "Anonymous";
+                            tempImg.onload = () => {
+                                const color = getDominantColor(tempImg, track.id);
+                                document.documentElement.style.setProperty('--primary-color', color);
+                            };
+                            tempImg.src = getThumbUrl(track);
+                        }
                     }
                 }
             }

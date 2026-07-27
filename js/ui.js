@@ -217,25 +217,12 @@
         let canvas = document.createElement('canvas');
         let ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return '#8c73ff';
-        canvas.width = 10; canvas.height = 10;
+        canvas.width = 1; canvas.height = 1;
         try {
-            ctx.drawImage(imgEl, 0, 0, 10, 10);
-            let data = ctx.getImageData(0, 0, 10, 10).data;
-            let r=0, g=0, b=0, count=0;
-            for (let i = 0; i < data.length; i += 4) {
-                let pr = data[i], pg = data[i+1], pb = data[i+2];
-                let max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
-                if (max > 40 && max < 250 && (max - min) > 15) { 
-                    r += pr; g += pg; b += pb; count++;
-                }
-            }
-            if (count === 0) { 
-                for (let i = 0; i < data.length; i += 4) {
-                    r += data[i]; g += data[i+1]; b += data[i+2]; count++;
-                }
-            }
-            if (count === 0) return '#8c73ff';
-            r = Math.floor(r/count); g = Math.floor(g/count); b = Math.floor(b/count);
+            ctx.drawImage(imgEl, 0, 0, 1, 1);
+            let data = ctx.getImageData(0, 0, 1, 1).data;
+            let r = data[0], g = data[1], b = data[2];
+            
             let brightness = (r * 299 + g * 587 + b * 114) / 1000;
             if (brightness < 120) {
                 let factor = 120 / Math.max(brightness, 1);

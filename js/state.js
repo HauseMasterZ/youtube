@@ -32,8 +32,8 @@
     let syncRAFId = null;
     let searchDebounceTimer = null;
     let errorSkipTimer = null;
-    let storedThumbsDisabled = localStorage.getItem('thumbsDisabled');
-    let thumbsDisabled = storedThumbsDisabled === null ? true : storedThumbsDisabled === 'true';
+    // Enforce hidden thumbnails on page load to save inrush bandwidth
+    let thumbsDisabled = true;
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
     const preloadedBlobs = new Map(); // audioUrl -> blobUrl
