@@ -12,7 +12,7 @@
             this.silent.loop = true;
             this.isSwapping = false;
             
-            const events = ['play', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
+            const events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             const forwardEvent = (e) => {
                 if (this.isSwapping && e.type === 'pause') return;
                 this.dispatchEvent(new Event(e.type));
