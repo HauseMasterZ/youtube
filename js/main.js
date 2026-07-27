@@ -356,8 +356,6 @@
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
-        // In mobile mini-player mode, let click bubble up to expand player
-        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
         e.stopPropagation();
         
         const rect = albumArtContainer.getBoundingClientRect();

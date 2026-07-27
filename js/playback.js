@@ -284,6 +284,17 @@
                     albumArt.src = thumbUrl;
                     albumArt.style.display = 'block';
                     fetchDominantColor(track.id, thumbUrl, sequenceId, track);
+                    
+                    if (hasMediaSession) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: track.title,
+                            artist: track.channel,
+                            artwork: [
+                                { src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' },
+                                { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
+                            ]
+                        });
+                    }
                 }
                 audioPlayer.removeEventListener('playing', onPlayStart);
             };
@@ -314,11 +325,16 @@
             } else {
                 const tempImg = new Image();
                 tempImg.fetchPriority = "low";
-                tempImg.crossOrigin = "Anonymous";
+                // Only attempt CORS if NOT on local IP, otherwise let it fail gracefully to fallback color
+                if (!window.location.hostname.match(/^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost)/)) {
+                    tempImg.crossOrigin = "Anonymous";
+                }
                 tempImg.onload = () => {
                     if (currentPlaybackSequence === sequenceId) {
-                        const color = getDominantColor(tempImg, trackId);
-                        document.documentElement.style.setProperty('--primary-color', color);
+                        try {
+                            const color = getDominantColor(tempImg, trackId);
+                            document.documentElement.style.setProperty('--primary-color', color);
+                        } catch(e) {}
                     }
                 };
                 tempImg.onerror = () => {
@@ -328,44 +344,6 @@
                 };
                 if (currentPlaybackSequence === sequenceId) {
                     tempImg.src = thumbUrl;
-                }
-            }
-
-            // Generate Square thumbnail for MediaSession to prevent pillarboxing
-            if (hasMediaSession) {
-                const squareImg = new Image();
-                squareImg.crossOrigin = "Anonymous";
-                squareImg.onload = () => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    // Force 512x512 square crop for MediaSession
-                    canvas.width = 512;
-                    canvas.height = 512;
-                    
-                    // Calculate crop for center of 16:9 image
-                    const srcWidth = squareImg.width;
-                    const srcHeight = squareImg.height;
-                    const size = Math.min(srcWidth, srcHeight);
-                    const startX = (srcWidth - size) / 2;
-                    const startY = (srcHeight - size) / 2;
-                    
-                    ctx.drawImage(squareImg, startX, startY, size, size, 0, 0, 512, 512);
-                    
-                    const squareDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-                    
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: track.title,
-                        artist: track.channel,
-                        artwork: [
-                            { src: squareDataUrl, sizes: '512x512', type: 'image/jpeg' }
-                        ]
-                    });
-                };
-                if (currentPlaybackSequence === sequenceId) {
-                    squareImg.src = thumbUrl;
                 }
             }
         }

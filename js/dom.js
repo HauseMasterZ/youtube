@@ -12,7 +12,6 @@
             this.silent.loop = true;
             this.isSwapping = false;
             this.silentPlaying = false;
-            this.fadeInterval = null;
 
             const events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             const forwardEvent = (e) => {
@@ -36,54 +35,24 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
-            if (hasMediaSession && !this.silentPlaying) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            // Main track is playing, so we don't need the silent loop to keep WebView alive.
+            // Pausing it prevents Android hardware mixer pops caused by dual-stream mixing.
+            if (this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
             }
-            if (this.fadeInterval) clearInterval(this.fadeInterval);
-            
-            // Fade in to prevent hardware decoding pops on start
-            this.active.volume = 0;
-            const p = this.active.play().catch(e => console.error("Play error:", e)); 
-            
-            let currentVol = 0;
-            this.fadeInterval = setInterval(() => {
-                currentVol += 0.25;
-                if (currentVol < 1) {
-                    this.active.volume = currentVol;
-                } else {
-                    this.active.volume = 1;
-                    clearInterval(this.fadeInterval);
-                    this.fadeInterval = null;
-                }
-            }, 10);
-            
-            return p;
+            return this.active.play().catch(e => console.error("Play error:", e)); 
         }
         
         pause() { 
+            // Start the silent loop BEFORE pausing the main track to ensure the Android
+            // audio session never drops to 0 active streams, preventing WebView suspension.
+            if (hasMediaSession && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
             if (this.active.paused) return Promise.resolve();
-            return this.fadeOutAndPause();
-        }
-
-        fadeOutAndPause() {
-            return new Promise(resolve => {
-                if (this.fadeInterval) clearInterval(this.fadeInterval);
-                const step = 0.25;
-                let currentVol = 1.0;
-                
-                this.fadeInterval = setInterval(() => {
-                    currentVol -= step;
-                    if (currentVol > 0) {
-                        this.active.volume = currentVol;
-                    } else {
-                        clearInterval(this.fadeInterval);
-                        this.fadeInterval = null;
-                        this.active.pause();
-                        this.active.volume = 1;
-                        resolve();
-                    }
-                }, 10); // 40ms total fade
-            });
+            this.active.pause();
+            return Promise.resolve();
         }
         
         load() { return this.active.load(); }
@@ -92,34 +61,31 @@
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
     
         switchTrack(url, preventAutoplay) {
-            if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
-            }
-
             let p = null;
             this.isSwapping = true;
             
-            const doSwap = () => {
-                this.active.removeAttribute('src');
-                this.active.load();
-                this.active.src = url;
-                
-                if (!preventAutoplay) {
-                    p = this.active.play().then(() => {
-                        this.isSwapping = false;
-                    }).catch(e => {
-                        this.isSwapping = false;
-                        console.error("Autoplay prevented:", e);
-                    });
-                } else {
-                    this.isSwapping = false;
+            // Set source directly. Do NOT call removeAttribute('src') or load(), 
+            // as those violently flush the hardware decoder and cause a massive pop!
+            this.active.src = url;
+            
+            if (!preventAutoplay) {
+                // If autoplaying, ensure silent track is stopped
+                if (this.silentPlaying) {
+                    this.silent.pause();
+                    this.silentPlaying = false;
                 }
-            };
-
-            if (!this.active.paused) {
-                this.fadeOutAndPause().then(doSwap);
+                p = this.active.play().then(() => {
+                    this.isSwapping = false;
+                }).catch(e => {
+                    this.isSwapping = false;
+                    console.error("Autoplay prevented:", e);
+                });
             } else {
-                doSwap();
+                // If paused, ensure silent track is playing to maintain background audio session
+                if (hasMediaSession && !this.silentPlaying) {
+                    this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+                }
+                this.isSwapping = false;
             }
             
             return p;
