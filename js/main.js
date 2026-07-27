@@ -352,12 +352,14 @@
             if (isLeft) {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
                 updateTimeUI(audioPlayer.currentTime);
-                if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             } else if (isRight) {
-                audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 5);
+                let dur = audioPlayer.duration;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
                 updateTimeUI(audioPlayer.currentTime);
-                if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             }
             return;
@@ -464,7 +466,9 @@
             } else if (e.key === 'ArrowLeft' || key === 'a') {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
             } else if (e.key === 'ArrowRight' || key === 'd') {
-                audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 5);
+                let dur = audioPlayer.duration;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
             }
         });
     }

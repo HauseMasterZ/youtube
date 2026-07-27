@@ -10,7 +10,10 @@
     }
     function parseISODuration(pt) {
         if (!pt) return 0;
-        const match = pt.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        // If it's already a number or a numeric string, just return it
+        if (!isNaN(pt)) return parseInt(pt, 10);
+        
+        const match = String(pt).match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
         if (!match) return 0;
         const h = parseInt(match[1] || 0, 10);
         const m = parseInt(match[2] || 0, 10);

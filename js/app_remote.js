@@ -963,16 +963,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("loadedmetadata", () => {
         const duration = Math.floor(audioPlayer.duration);
-        seekBar.max = duration;
-        totalTimeDisplay.textContent = formatTime(duration);
-        updateMediaSessionPosition();
+        if (!isNaN(duration) && duration !== Infinity) {
+            seekBar.max = duration;
+            totalTimeDisplay.textContent = formatTime(duration);
+            updateMediaSessionPosition();
+        } else if (seekBar.max > 0) {
+            updateMediaSessionPosition();
+        }
     });
 
     // --- Deep Sleep JS Engine Integration (1Hz timer) ---
     function syncLoop() {
         syncRAFId = null;
         if (audioPlayer.paused || document.hidden) return;
-        if (!isSeeking && audioPlayer.duration) {
+        let dur = audioPlayer.duration;
+        if (!dur || isNaN(dur) || dur === Infinity) {
+            dur = parseInt(seekBar.max) || 0;
+        }
+        if (!isSeeking && dur > 0) {
             const ct = Math.floor(audioPlayer.currentTime);
             if (ct !== lastRenderTime) {
                 updateTimeUI(ct);
@@ -1184,7 +1192,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             } else if (isRight) {
-                audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 5);
+                let dur = audioPlayer.duration;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
                 updateTimeUI(audioPlayer.currentTime);
                 if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();

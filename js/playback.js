@@ -430,7 +430,11 @@
     function syncLoop() {
         syncRAFId = null;
         if (audioPlayer.paused || document.hidden) return;
-        if (!isSeeking && audioPlayer.duration) {
+        let dur = audioPlayer.duration;
+        if (!dur || isNaN(dur) || dur === Infinity) {
+            dur = parseInt(seekBar.max) || 0;
+        }
+        if (!isSeeking && dur > 0) {
             const ct = Math.floor(audioPlayer.currentTime);
             if (ct !== lastRenderTime) {
                 updateTimeUI(ct);
