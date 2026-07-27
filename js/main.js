@@ -321,6 +321,19 @@
             return;
         }
 
+        // If the user just pressed play after a long pause, the OS might have killed the network connection.
+        // Try to recover by reloading the stream instead of immediately skipping.
+        if (!audioPlayer.paused && audioPlayer.currentTime > 0) {
+            const savedTime = audioPlayer.currentTime;
+            const currentSrc = audioPlayer.getAttribute('src');
+            audioPlayer.removeAttribute('src');
+            audioPlayer.load();
+            audioPlayer.src = currentSrc;
+            audioPlayer.currentTime = savedTime;
+            audioPlayer.play().catch(() => {});
+            return;
+        }
+
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";
         setPlayUI(false);

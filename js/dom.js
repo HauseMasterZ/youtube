@@ -14,6 +14,19 @@
             this.silentPlaying = false;
             this.fadeInterval = null;
             
+            try {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.audioCtx = new AudioContext();
+                this.sourceNode = this.audioCtx.createMediaElementSource(this.active);
+                this.gainNode = this.audioCtx.createGain();
+                this.sourceNode.connect(this.gainNode);
+                this.gainNode.connect(this.audioCtx.destination);
+                this.hasWebAudio = true;
+            } catch (e) {
+                console.warn("Web Audio API failed, falling back to standard volume:", e);
+                this.hasWebAudio = false;
+            }
+
             const events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             const forwardEvent = (e) => {
                 if (this.isSwapping && e.type === 'pause') return;
@@ -39,16 +52,19 @@
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
+            if (this.hasWebAudio && this.audioCtx.state === 'suspended') {
+                this.audioCtx.resume();
+            }
             if (this.fadeInterval) clearInterval(this.fadeInterval);
-            this.active.volume = 1;
+            if (this.hasWebAudio) {
+                this.gainNode.gain.value = 1;
+            } else {
+                this.active.volume = 1;
+            }
             return this.active.play().catch(e => console.error("Play error:", e)); 
         }
         
         pause() { 
-            if (this.silentPlaying) {
-                this.silent.pause();
-                this.silentPlaying = false;
-            }
             if (this.active.paused) return Promise.resolve();
             return this.fadeOutAndPause();
         }
@@ -57,15 +73,25 @@
             return new Promise(resolve => {
                 if (this.fadeInterval) clearInterval(this.fadeInterval);
                 const step = 0.25;
+                let currentVol = 1.0;
+                
                 this.fadeInterval = setInterval(() => {
-                    const nextVol = this.active.volume - step;
-                    if (nextVol > 0) {
-                        this.active.volume = nextVol;
+                    currentVol -= step;
+                    if (currentVol > 0) {
+                        if (this.hasWebAudio) {
+                            this.gainNode.gain.value = currentVol;
+                        } else {
+                            this.active.volume = currentVol;
+                        }
                     } else {
                         clearInterval(this.fadeInterval);
                         this.fadeInterval = null;
                         this.active.pause();
-                        this.active.volume = 1;
+                        if (this.hasWebAudio) {
+                            this.gainNode.gain.value = 1;
+                        } else {
+                            this.active.volume = 1;
+                        }
                         resolve();
                     }
                 }, 10); // 40ms total fade
@@ -98,10 +124,6 @@
                         console.error("Autoplay prevented:", e);
                     });
                 } else {
-                    if (this.silentPlaying) {
-                        this.silent.pause();
-                        this.silentPlaying = false;
-                    }
                     this.isSwapping = false;
                 }
             };

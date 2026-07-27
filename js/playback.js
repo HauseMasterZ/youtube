@@ -280,22 +280,10 @@
             // Wait for audio to successfully start playing before downloading art
             // This strictly reserves 100% bandwidth for the music stream
             const onPlayStart = () => {
-                // Ensure the user hasn't skipped while waiting
                 if (currentPlaybackSequence === sequenceId) {
                     albumArt.src = thumbUrl;
                     albumArt.style.display = 'block';
-                    fetchDominantColor(track.id, thumbUrl, sequenceId);
-                    
-                    if (hasMediaSession) {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: track.title,
-                            artist: track.channel,
-                            artwork: [
-                                { src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' },
-                                { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
-                            ]
-                        });
-                    }
+                    fetchDominantColor(track.id, thumbUrl, sequenceId, track);
                 }
                 audioPlayer.removeEventListener('playing', onPlayStart);
             };
@@ -320,17 +308,14 @@
         
         triggerPreloads();
 
-        function fetchDominantColor(trackId, thumbUrl, sequenceId) {
+        function fetchDominantColor(trackId, thumbUrl, sequenceId, track) {
             if (dominantColorCache.has(trackId)) {
-                // Instantly apply cached color
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
             } else {
-                // Extract dominant color in the background using a CORS-enabled image
                 const tempImg = new Image();
                 tempImg.fetchPriority = "low";
                 tempImg.crossOrigin = "Anonymous";
                 tempImg.onload = () => {
-                    // Only apply if the user hasn't skipped to another track while it was loading
                     if (currentPlaybackSequence === sequenceId) {
                         const color = getDominantColor(tempImg, trackId);
                         document.documentElement.style.setProperty('--primary-color', color);
@@ -338,12 +323,49 @@
                 };
                 tempImg.onerror = () => {
                     if (currentPlaybackSequence === sequenceId) {
-                        // Fallback to default purple if image is missing/404
                         document.documentElement.style.setProperty('--primary-color', '#8c73ff');
                     }
                 };
                 if (currentPlaybackSequence === sequenceId) {
                     tempImg.src = thumbUrl;
+                }
+            }
+
+            // Generate Square thumbnail for MediaSession to prevent pillarboxing
+            if (hasMediaSession) {
+                const squareImg = new Image();
+                squareImg.crossOrigin = "Anonymous";
+                squareImg.onload = () => {
+                    if (currentPlaybackSequence !== sequenceId) return;
+                    
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Force 512x512 square crop for MediaSession
+                    canvas.width = 512;
+                    canvas.height = 512;
+                    
+                    // Calculate crop for center of 16:9 image
+                    const srcWidth = squareImg.width;
+                    const srcHeight = squareImg.height;
+                    const size = Math.min(srcWidth, srcHeight);
+                    const startX = (srcWidth - size) / 2;
+                    const startY = (srcHeight - size) / 2;
+                    
+                    ctx.drawImage(squareImg, startX, startY, size, size, 0, 0, 512, 512);
+                    
+                    const squareDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+                    
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: track.title,
+                        artist: track.channel,
+                        artwork: [
+                            { src: squareDataUrl, sizes: '512x512', type: 'image/jpeg' }
+                        ]
+                    });
+                };
+                if (currentPlaybackSequence === sequenceId) {
+                    squareImg.src = thumbUrl;
                 }
             }
         }
