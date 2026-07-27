@@ -1118,15 +1118,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
                 audioPlayer.removeAttribute("src");
                 audioPlayer.load();
-                audioPlayer.src = currentSrc;
                 
                 // For remote streams, we must wait until metadata is parsed before seeking
+                // Attach the event BEFORE setting src to prevent missing synchronous metadata events
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
                     audioPlayer.play().catch(err => console.error("Revival failed:", err));
                     audioPlayer.removeEventListener('loadedmetadata', onMeta);
                 };
                 audioPlayer.addEventListener('loadedmetadata', onMeta);
+                
+                audioPlayer.src = currentSrc;
             });
         } else {
             audioPlayer.pause();
@@ -1483,15 +1485,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
                 audioPlayer.removeAttribute("src");
                 audioPlayer.load();
-                audioPlayer.src = currentSrc;
                 
                 // For remote streams, we must wait until metadata is parsed before seeking
+                // Attach the event BEFORE setting src to prevent missing synchronous metadata events
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
                     audioPlayer.play().catch(err => console.error("Revival failed:", err));
                     audioPlayer.removeEventListener('loadedmetadata', onMeta);
                 };
                 audioPlayer.addEventListener('loadedmetadata', onMeta);
+                
+                audioPlayer.src = currentSrc;
             });
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
         });
@@ -1533,14 +1537,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 const savedTime = localStorage.getItem("lastTime");
                 if (savedTime) {
                     localStorage.removeItem("lastTime"); // Clear immediately so it only applies once
-                    const restoreTime = () => {
-                        audioPlayer.removeEventListener("loadedmetadata", restoreTime);
-                        if (localStorage.getItem("lastTrackId") === lastTrackId) {
-                            audioPlayer.currentTime = parseFloat(savedTime);
-                            updateTimeUI(parseFloat(savedTime));
-                        }
-                    };
-                    audioPlayer.addEventListener("loadedmetadata", restoreTime);
+                    const parsedTime = parseFloat(savedTime);
+                    if (!isNaN(parsedTime)) {
+                        const restoreTime = () => {
+                            audioPlayer.removeEventListener("loadedmetadata", restoreTime);
+                            if (localStorage.getItem("lastTrackId") === lastTrackId && !isNaN(audioPlayer.duration)) {
+                                const targetTime = Math.min(parsedTime, audioPlayer.duration - 1);
+                                if (targetTime > 0) {
+                                    audioPlayer.currentTime = targetTime;
+                                    updateTimeUI(targetTime);
+                                }
+                            }
+                        };
+                        audioPlayer.addEventListener("loadedmetadata", restoreTime);
+                    }
                 }
             }
         }
