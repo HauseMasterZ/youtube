@@ -575,22 +575,22 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTimeUI(0);
         totalTimeDisplay.textContent = "0:00";
 
-        // Halt current audio buffer to prevent 100ms jar clipping on skip
-        audioPlayer.pause();
-        audioPlayer.currentTime = 0;
+        // Do NOT halt here, let PingPongAudio handle gapless transition
         
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: getThumbUrl(track) ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
+                artwork: getThumbUrl(track) && !thumbsDisabled ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
-        if (activeObjectURL) {
-            URL.revokeObjectURL(activeObjectURL);
-            activeObjectURL = null;
+        
+        if (window.previousObjectURL) {
+            URL.revokeObjectURL(window.previousObjectURL);
+            window.previousObjectURL = null;
         }
+        window.previousObjectURL = activeObjectURL;
 
         const isMobile = window.innerWidth <= 800;
 
@@ -608,41 +608,26 @@ document.addEventListener("DOMContentLoaded", () => {
             })
             .then(blob => {
                 activeObjectURL = URL.createObjectURL(blob);
-                audioPlayer.src = activeObjectURL;
+                audioPlayer.switchTrack(activeObjectURL, preventAutoplay);
                 currentTitle.textContent = track.title;
-                if (!preventAutoplay) {
-                    audioPlayer.oncanplay = () => {
-                        audioPlayer.oncanplay = null;
-                        audioPlayer.play().catch(e => {});
-                    };
-                }
             })
             .catch(err => {
-                audioPlayer.src = audioUrl;
+                audioPlayer.switchTrack(audioUrl, preventAutoplay);
                 currentTitle.textContent = track.title;
-                if (!preventAutoplay) {
-                    audioPlayer.oncanplay = () => {
-                        audioPlayer.oncanplay = null;
-                        audioPlayer.play().catch(e => {});
-                    };
-                }
             });
         } else {
-            audioPlayer.src = getAudioUrl(track);
+            audioPlayer.switchTrack(getAudioUrl(track), preventAutoplay);
             currentTitle.textContent = track.title;
-            if (!preventAutoplay) {
-                audioPlayer.play().catch(e => {});
-            }
         }
 
         if (!thumbsDisabled && getThumbUrl(track)) {
-            albumArt.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-            albumArt.style.display = 'block';
-            
-            // Strictly delay album art fetch to guarantee audio gets first network hit
-            setTimeout(() => {
-                albumArt.src = getThumbUrl(track);
-            }, 100);
+            const thumbUrl = getThumbUrl(track);
+            const onPlayStart = () => {
+                albumArt.src = thumbUrl;
+                albumArt.style.display = 'block';
+                audioPlayer.removeEventListener('play', onPlayStart);
+            };
+            audioPlayer.addEventListener('play', onPlayStart);
         } else {
             albumArt.style.display = 'none';
         }
@@ -1168,41 +1153,43 @@ document.addEventListener("DOMContentLoaded", () => {
         thumbToggleHint.style.display = 'block';
     }
 
-    let lastArtClickTime = 0;
+    let artClickTimer = null;
     
-    albumArtContainer.addEventListener("click", (e) => {
+    albumArtContainer.addEventListener("pointerup", (e) => {
+        // In mobile mini-player mode, let click bubble up to expand player
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
         e.stopPropagation();
         
         const rect = albumArtContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const width = rect.width;
         
-        const isLeft = clickX < width * 0.33;
-        const isRight = clickX > width * 0.66;
-        const isMiddle = !isLeft && !isRight;
-
-        const now = Date.now();
-        const isDoubleClick = (now - lastArtClickTime) < 300;
-        lastArtClickTime = now;
-
-        if (isDoubleClick) {
+        if (artClickTimer) {
+            // Second click within 300ms — double click for seek
+            clearTimeout(artClickTimer);
+            artClickTimer = null;
+            const isLeft = clickX < width * 0.33;
+            const isRight = clickX > width * 0.66;
             if (isLeft) {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
                 updateTimeUI(audioPlayer.currentTime);
-                if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             } else if (isRight) {
                 let dur = audioPlayer.duration;
                 if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
                 audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
                 updateTimeUI(audioPlayer.currentTime);
-                if (lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             }
-            return;
-        }
-
-        if (isMiddle) {
+        } else {
+            // First click — wait 300ms to disambiguate single vs double click
+            const capturedX = clickX;
+            artClickTimer = setTimeout(() => {
+                artClickTimer = null;
+                const isMiddle = capturedX >= width * 0.33 && capturedX <= width * 0.66;
+                if (isMiddle) {
             thumbsDisabled = !thumbsDisabled;
             localStorage.setItem('thumbsDisabled', thumbsDisabled);
             
@@ -1217,6 +1204,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (track && getThumbUrl(track)) {
                         albumArt.src = getThumbUrl(track);
                         albumArt.style.display = 'block';
+                        if (albumArt.complete && !albumArt.src.startsWith('data:')) {
+                            document.documentElement.style.setProperty('--primary-color', getDominantColor(albumArt));
+                        }
                     }
                 }
             }
@@ -1224,6 +1214,8 @@ document.addEventListener("DOMContentLoaded", () => {
             // Re-render track list to show/hide track thumbs
             lastStartIndex = -1;
             renderVirtualTracks();
+                }
+            }, 300);
         }
     });
 

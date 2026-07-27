@@ -129,35 +129,18 @@
             }
             
             if (!thumbsDisabled && getThumbUrl(track)) {
-                if (thumbImg.dataset.targetSrc !== getThumbUrl(track)) {
-                    thumbImg.dataset.targetSrc = getThumbUrl(track);
-                    
-                    if (requestedThumbs.has(getThumbUrl(track))) {
-                        thumbImg.src = getThumbUrl(track);
-                    } else {
-                        thumbImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                        
-                        // Strictly delay thumbnail fetch to guarantee audio gets first network hit and debounce fast scrolling
-                        setTimeout(() => {
-                            if (thumbImg.dataset.targetSrc === getThumbUrl(track)) {
-                                const url = getThumbUrl(track);
-                                const temp = new Image();
-                                temp.onload = () => {
-                                    requestedThumbs.add(url);
-                                    if (thumbImg.dataset.targetSrc === url) {
-                                        thumbImg.src = url;
-                                    }
-                                };
-                                temp.src = url;
-                            }
-                        }, 250);
-                    }
+                const thumbUrl = getThumbUrl(track);
+                if (thumbImg.dataset.src !== thumbUrl) {
+                    thumbImg.dataset.src = thumbUrl;
+                    thumbImg.src = thumbUrl;
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                thumbImg.removeAttribute("src");
-                thumbImg.removeAttribute("data-target-src");
+                if (thumbImg.hasAttribute("src")) {
+                    thumbImg.removeAttribute("src");
+                    delete thumbImg.dataset.src;
+                }
             }
             
             textSpan.textContent = text;

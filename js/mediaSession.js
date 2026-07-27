@@ -12,36 +12,30 @@
         navigator.mediaSession.setActionHandler('play', () => {
             if (!audioPlayer.src) {
                 if (playQueue.length > 0 && queueIndex !== -1) {
-                    executePlayback(false); // Play the uiOnly track
+                    executePlayback(false);
                 } else if (playQueue.length > 0) {
                     queueIndex = 0;
                     executePlayback(false);
                 }
                 return;
             }
-            audioPlayer.muted = true;
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
+                // Audio Element Revival: If Android suspended the decoder, re-stream without clearing src
                 const savedTime = audioPlayer.currentTime;
-                
-                audioPlayer.removeAttribute("src");
-                audioPlayer.load();
-                
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (!track) return;
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(e => {});
+                    audioPlayer.play().catch(() => {});
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
                 audioPlayer.addEventListener("loadedmetadata", onMeta);
-                
-                audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
+                audioPlayer.src = getAudioUrl(track);
             });
-            setTimeout(() => { audioPlayer.muted = false; }, 150);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-            audioPlayer.muted = true;
-            setTimeout(() => { audioPlayer.pause(); }, 50);
+            audioPlayer.pause();
             if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());

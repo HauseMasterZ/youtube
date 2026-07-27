@@ -124,7 +124,7 @@
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) {
             if (playQueue.length > 0 && queueIndex !== -1) {
-                executePlayback(false); // Play the uiOnly track
+                executePlayback(false);
             } else if (playQueue.length > 0) {
                 queueIndex = 0;
                 executePlayback(false);
@@ -132,31 +132,21 @@
             return;
         }
         if (audioPlayer.paused) {
-            audioPlayer.muted = true; // Mute to hide buffer clipping on resume
             audioPlayer.play().catch(e => {
-                // Audio Element Revival: If Android suspended the decoder during a pause, reload the stream.
+                // Audio Element Revival: If Android suspended the decoder, re-stream
                 const savedTime = audioPlayer.currentTime;
-                
-                // Do not set src = '' as it triggers MEDIA_ERR_SRC_NOT_SUPPORTED on remote streams
-                audioPlayer.removeAttribute("src");
-                audioPlayer.load();
-                
-                // For remote streams, we must wait until metadata is parsed before seeking
-                // Attach the event BEFORE setting src to prevent missing synchronous metadata events
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (!track) return;
                 const onMeta = () => {
                     audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(e => {});
+                    audioPlayer.play().catch(() => {});
                     audioPlayer.removeEventListener("loadedmetadata", onMeta);
                 };
                 audioPlayer.addEventListener("loadedmetadata", onMeta);
-                
-                // Setting src begins the network request
-                audioPlayer.src = getAudioUrl(currentPlaylistData[playQueue[queueIndex]]);
+                audioPlayer.src = getAudioUrl(track);
             });
-            setTimeout(() => { audioPlayer.muted = false; }, 150);
         } else {
-            audioPlayer.muted = true;
-            setTimeout(() => { audioPlayer.pause(); }, 50);
+            audioPlayer.pause();
         }
     });
 
@@ -310,15 +300,14 @@
     });
 
     audioPlayer.addEventListener("error", () => {
+        if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";
         setPlayUI(false);
         
-        // Clearing src prevents the OS from tearing down the MediaSession due to a broken media state
-        audioPlayer.removeAttribute("src");
-        audioPlayer.load();
+        // Keep MediaSession notification alive — do NOT clear src or call load()
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = "playing";
+            navigator.mediaSession.playbackState = "paused";
         }
         
         errorSkipTimer = setTimeout(() => {
@@ -331,24 +320,23 @@
         thumbToggleHint.style.display = 'block';
     }
 
-    let lastArtClickTime = 0;
+    let artClickTimer = null;
     
-    albumArtContainer.addEventListener("click", (e) => {
+    albumArtContainer.addEventListener("pointerup", (e) => {
+        // In mobile mini-player mode, let click bubble up to expand player
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
         e.stopPropagation();
         
         const rect = albumArtContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const width = rect.width;
         
-        const isLeft = clickX < width * 0.33;
-        const isRight = clickX > width * 0.66;
-        const isMiddle = !isLeft && !isRight;
-
-        const now = Date.now();
-        const isDoubleClick = (now - lastArtClickTime) < 300;
-        lastArtClickTime = now;
-
-        if (isDoubleClick) {
+        if (artClickTimer) {
+            // Second click within 300ms — double click for seek
+            clearTimeout(artClickTimer);
+            artClickTimer = null;
+            const isLeft = clickX < width * 0.33;
+            const isRight = clickX > width * 0.66;
             if (isLeft) {
                 audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
                 updateTimeUI(audioPlayer.currentTime);
@@ -362,42 +350,44 @@
                 if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
                 updateMediaSessionPosition();
             }
-            return;
-        }
-
-        if (isMiddle) {
-            thumbsDisabled = !thumbsDisabled;
-            
-            if (thumbsDisabled) {
-                albumArt.style.display = 'none';
-                thumbToggleHint.style.display = 'block';
-                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-            } else {
-                thumbToggleHint.style.display = 'none';
-                if (queueIndex >= 0 && queueIndex < playQueue.length) {
-                    const track = currentPlaylistData[playQueue[queueIndex]];
-                    if (track && getThumbUrl(track)) {
-                        albumArt.src = getThumbUrl(track);
-                        albumArt.style.display = 'block';
-                        
-                        if (dominantColorCache.has(track.id)) {
-                            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                        } else {
-                            const tempImg = new Image();
-                            tempImg.crossOrigin = "Anonymous";
-                            tempImg.onload = () => {
-                                const color = getDominantColor(tempImg, track.id);
-                                document.documentElement.style.setProperty('--primary-color', color);
-                            };
-                            tempImg.src = getThumbUrl(track);
+        } else {
+            // First click — wait 300ms to disambiguate single vs double click
+            const capturedX = clickX;
+            artClickTimer = setTimeout(() => {
+                artClickTimer = null;
+                const isMiddle = capturedX >= width * 0.33 && capturedX <= width * 0.66;
+                if (isMiddle) {
+                    thumbsDisabled = !thumbsDisabled;
+                    if (thumbsDisabled) {
+                        albumArt.style.display = 'none';
+                        thumbToggleHint.style.display = 'block';
+                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                    } else {
+                        thumbToggleHint.style.display = 'none';
+                        if (queueIndex >= 0 && queueIndex < playQueue.length) {
+                            const track = currentPlaylistData[playQueue[queueIndex]];
+                            if (track && getThumbUrl(track)) {
+                                albumArt.src = getThumbUrl(track);
+                                albumArt.style.display = 'block';
+                                
+                                if (dominantColorCache.has(track.id)) {
+                                    document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                                } else {
+                                    const tempImg = new Image();
+                                    tempImg.crossOrigin = "Anonymous";
+                                    tempImg.onload = () => {
+                                        const color = getDominantColor(tempImg, track.id);
+                                        document.documentElement.style.setProperty('--primary-color', color);
+                                    };
+                                    tempImg.src = getThumbUrl(track);
+                                }
+                            }
                         }
                     }
+                    lastStartIndex = -1;
+                    renderVirtualTracks();
                 }
-            }
-            
-            // Re-render track list to show/hide track thumbs
-            lastStartIndex = -1;
-            renderVirtualTracks();
+            }, 300);
         }
     });
 

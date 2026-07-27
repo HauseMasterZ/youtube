@@ -37,7 +37,7 @@
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
     const preloadedBlobs = new Map(); // audioUrl -> blobUrl
-    let requestedThumbs = new Set();
+    let currentAbortController = null;
     
     // Android Chrome Lock-Screen Notification Teardown Bypass
 
@@ -47,5 +47,4 @@
     let lastEndIndex = -1;
     let isRendering = false;
     let poolInitialized = false;
-    const prefetchedUrls = new Set();
     let localStorageCounter = 0;
