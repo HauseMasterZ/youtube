@@ -330,15 +330,14 @@
 
             // Generate Square thumbnail for MediaSession to prevent pillarboxing
             if (hasMediaSession) {
-                const setMediaMetadata = (artworkSrc) => {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: track.title,
-                        artist: track.channel,
-                        artwork: [
-                            { src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }
-                        ]
-                    });
-                };
+                // Instantly set metadata with 16:9 so lockscreen isn't blank while downloading
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [
+                        { src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }
+                    ]
+                });
 
                 const squareImg = new Image();
                 squareImg.crossOrigin = "Anonymous";
@@ -353,15 +352,16 @@
                         const startX = (squareImg.width - size) / 2;
                         const startY = (squareImg.height - size) / 2;
                         ctx.drawImage(squareImg, startX, startY, size, size, 0, 0, 512, 512);
-                        setMediaMetadata(canvas.toDataURL('image/jpeg', 0.9));
-                    } catch(e) {
-                        setMediaMetadata(thumbUrl); // Fallback if canvas tainted
-                    }
-                };
-                squareImg.onerror = () => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        setMediaMetadata(thumbUrl); // Fallback if CORS blocked
-                    }
+                        
+                        // Update with square crop
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: track.title,
+                            artist: track.channel,
+                            artwork: [
+                                { src: canvas.toDataURL('image/jpeg', 0.9), sizes: '512x512', type: 'image/jpeg' }
+                            ]
+                        });
+                    } catch(e) {}
                 };
                 if (currentPlaybackSequence === sequenceId) {
                     squareImg.src = thumbUrl;

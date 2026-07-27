@@ -41,13 +41,29 @@
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
-            return this.active.play().catch(e => console.error("Play error:", e)); 
+            return this.active.play().catch(e => {
+                console.error("Play error:", e);
+                throw e; // Must throw so mediaSession revive logic catches it
+            }); 
         }
         
         pause() { 
             if (this.active.paused) return Promise.resolve();
-            this.active.pause();
-            return Promise.resolve();
+            return new Promise(resolve => {
+                let currentVol = this.active.volume;
+                const step = currentVol / 10;
+                const interval = setInterval(() => {
+                    currentVol -= step;
+                    if (currentVol > 0) {
+                        this.active.volume = currentVol;
+                    } else {
+                        clearInterval(interval);
+                        this.active.pause();
+                        this.active.volume = 1.0; // Reset volume for next time
+                        resolve();
+                    }
+                }, 10);
+            });
         }
         
         load() { return this.active.load(); }
@@ -68,9 +84,19 @@
             newAudio.id = "audio-player";
             newAudio.preload = "auto";
             
-            // Instantly pause old audio to prevent playing during download, 
-            // and avoid load() to completely stop hardware decoder pops!
-            oldAudio.pause();
+            // Fade out then pause old audio to prevent abrupt cutoff
+            let oldVol = oldAudio.volume;
+            const step = oldVol / 10;
+            const fadeInterval = setInterval(() => {
+                oldVol -= step;
+                if (oldVol > 0) {
+                    oldAudio.volume = oldVol;
+                } else {
+                    clearInterval(fadeInterval);
+                    oldAudio.pause();
+                    oldAudio.volume = 1.0;
+                }
+            }, 10);
             
             this.events.forEach(evt => {
                 oldAudio.removeEventListener(evt, this.forwardEvent);
