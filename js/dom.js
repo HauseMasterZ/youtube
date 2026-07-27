@@ -65,6 +65,7 @@
     const audioPlayer = new PingPongAudio();
     const currentTitle = document.getElementById("current-title");
     const currentChannel = document.getElementById("current-channel");
+    const albumArtContainer = document.getElementById("album-art-container");
     const albumArt = document.getElementById("album-art-image");
     
     const btnPlayPause = document.getElementById("btn-play-pause");
