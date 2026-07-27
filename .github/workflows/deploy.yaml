@@ -5,8 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'app.js'
-      - 'app_remote.js'
+      - 'js/**'
       - 'style.css'
       - 'index.html'
       - 'sw.js'
@@ -31,8 +30,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for 2 minutes to batch commits
-        run: sleep 120
+      - name: Wait for 1.5 minutes to batch commits
+        run: sleep 90
       - name: Checkout
         uses: actions/checkout@v4
       - name: Setup Pages
