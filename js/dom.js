@@ -35,35 +35,18 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
-            // Overlap starting the main track with pausing the silent track by 50ms
-            // to ensure Android NEVER sees 0 active streams, preventing MediaSession drop.
-            const p = this.active.play().catch(e => console.error("Play error:", e)); 
-            
-            if (this.silentPlaying) {
-                this.silentPlaying = false;
-                setTimeout(() => {
-                    this.silent.pause();
-                }, 50);
+            // Start the silent loop on first play and NEVER pause it. 
+            // This guarantees the Android audio session stays alive permanently,
+            // preventing the MediaSession controls from disappearing during pauses!
+            if (hasMediaSession && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
-            
-            return p;
+            return this.active.play().catch(e => console.error("Play error:", e)); 
         }
         
         pause() { 
-            // Start the silent loop BEFORE pausing the main track to ensure the Android
-            // audio session never drops to 0 active streams, preventing WebView suspension.
-            if (hasMediaSession && !this.silentPlaying) {
-                this.silentPlaying = true;
-                this.silent.play().catch(e => {});
-                
-                return new Promise(resolve => {
-                    setTimeout(() => {
-                        if (!this.active.paused) this.active.pause();
-                        resolve();
-                    }, 50);
-                });
-            }
-            if (!this.active.paused) this.active.pause();
+            if (this.active.paused) return Promise.resolve();
+            this.active.pause();
             return Promise.resolve();
         }
         
@@ -73,15 +56,21 @@
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
     
         switchTrack(url, preventAutoplay) {
+            if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
+
             let p = null;
             this.isSwapping = true;
             
-            // To completely eliminate hardware decoder pops and prevent the first 1-2 seconds
-            // of the song from being skipped, we completely swap the audio element in the DOM!
             const oldAudio = this.active;
             const newAudio = document.createElement("audio");
             newAudio.id = "audio-player";
             newAudio.preload = "auto";
+            
+            // Instantly pause old audio to prevent playing during download, 
+            // and avoid load() to completely stop hardware decoder pops!
+            oldAudio.pause();
             
             this.events.forEach(evt => {
                 oldAudio.removeEventListener(evt, this.forwardEvent);
@@ -90,35 +79,40 @@
             
             oldAudio.parentNode.replaceChild(newAudio, oldAudio);
             
-            // Gracefully pause old audio
-            oldAudio.pause();
-            oldAudio.removeAttribute('src'); 
-            oldAudio.load();
-            
             this.active = newAudio;
             this.active.src = url;
-            this.active.load(); // Fresh decoder buffer, immediately parses new track!
+            this.active.load(); // Fresh decoder buffer
             
             if (!preventAutoplay) {
-                p = this.active.play().then(() => {
-                    this.isSwapping = false;
-                }).catch(e => {
-                    this.isSwapping = false;
-                    console.error("Autoplay prevented:", e);
+                // Wait for the new audio to buffer before playing so it doesn't skip the first second
+                p = new Promise((resolve) => {
+                    const onCanPlay = () => {
+                        // If this audio is no longer the active one (user clicked next again rapidly), abort
+                        if (this.active !== newAudio) {
+                            resolve();
+                            return;
+                        }
+                        
+                        newAudio.play().then(() => {
+                            this.isSwapping = false;
+                            resolve();
+                        }).catch(e => {
+                            this.isSwapping = false;
+                            console.error("Autoplay prevented:", e);
+                            resolve(); 
+                        });
+                    };
+                    
+                    if (newAudio.readyState >= 3) { // HAVE_FUTURE_DATA
+                        onCanPlay();
+                    } else {
+                        newAudio.addEventListener('canplay', onCanPlay, { once: true });
+                        newAudio.addEventListener('error', onCanPlay, { once: true });
+                    }
                 });
-                
-                if (this.silentPlaying) {
-                    this.silentPlaying = false;
-                    setTimeout(() => {
-                        this.silent.pause();
-                    }, 50);
-                }
             } else {
-                if (hasMediaSession && !this.silentPlaying) {
-                    this.silentPlaying = true;
-                    this.silent.play().catch(e => {});
-                }
                 this.isSwapping = false;
+                p = Promise.resolve();
             }
             
             return p;

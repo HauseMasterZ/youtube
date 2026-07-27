@@ -299,12 +299,7 @@
         }
 
         // Mobile & Desktop natively stream the audioUrl for instant playback
-        if (uiOnly) {
-            audioPlayer.removeAttribute("src");
-            audioPlayer.load();
-        } else {
-            audioPlayer.switchTrack(audioUrl, preventAutoplay);
-        }
+        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
         
         triggerPreloads();
 
