@@ -35,7 +35,7 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
-            if (window.hasMediaSession && !this.silentPlaying) {
+            if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
             return this.active.play().catch(e => console.error("Play error:", e)); 
@@ -53,7 +53,7 @@
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
     
         switchTrack(url, preventAutoplay) {
-            if (window.hasMediaSession && !this.silentPlaying && !preventAutoplay) {
+            if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
 
