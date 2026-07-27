@@ -1,0 +1,21 @@
+diff --git a/app.js.old b/app.js
+index 27eabf9..c929fb3 100644
+--- a/app.js.old
++++ b/app.js
+@@ -654,7 +654,7 @@ document.addEventListener("DOMContentLoaded", () => {
+                 artist: track.channel,
+                 artwork: (!thumbsDisabled && getThumbUrl(track)) ? 
+                     [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : 
+-                    [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }]
++                    [{ src: new URL('icon-512.png', window.location.href).href, sizes: '512x512', type: 'image/png' }]
+             });
+             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
+         }
+@@ -717,6 +717,7 @@ document.addEventListener("DOMContentLoaded", () => {
+             } else {
+                 // Seamlessly preload new thumbnail in the background while keeping the old one visible
+                 const tempImg = new Image();
++                tempImg.fetchPriority = "high";
+                 tempImg.crossOrigin = "Anonymous";
+                 tempImg.onload = () => {
+                     // Only apply if the user hasn't frantically skipped to another track while it was loading
