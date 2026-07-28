@@ -317,15 +317,8 @@
 
             // Generate Square thumbnail for MediaSession to prevent pillarboxing
             if (hasMediaSession) {
-                // Instantly set metadata with 16:9 so lockscreen isn't blank while downloading
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [
-                        { src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }
-                    ]
-                });
-
+                // We deliberately do NOT set the 16:9 metadata here to avoid a flashing 
+                // aspect ratio on the lockscreen before the 1:1 canvas crop finishes.
                 const squareImg = new Image();
                 squareImg.crossOrigin = "Anonymous";
                 squareImg.onload = () => {

@@ -314,23 +314,20 @@
     audioPlayer.addEventListener("error", () => {
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
         
-        // Android Power Management: If the app is in the background and paused, 
-        // Android suspends the audio decoder, firing an error. We MUST ignore this 
-        // to prevent dropping the Media Session or auto-skipping tracks!
-        if (document.hidden && audioPlayer.paused) {
-            return;
-        }
-
-        // If the user just pressed play after a long pause, the OS might have killed the network connection.
-        // Try to recover by reloading the stream instead of immediately skipping.
-        if (!audioPlayer.paused && audioPlayer.currentTime > 0) {
+        // Android Power Management / Network drop: Try to recover ONCE before skipping.
+        if (audioPlayer.currentTime > 0 && !audioPlayer.isRecovering) {
+            audioPlayer.isRecovering = true;
             const savedTime = audioPlayer.currentTime;
             const currentSrc = audioPlayer.getAttribute('src');
             audioPlayer.removeAttribute('src');
             audioPlayer.load();
             audioPlayer.src = currentSrc;
             audioPlayer.currentTime = savedTime;
-            audioPlayer.play().catch(() => {});
+            audioPlayer.play().then(() => {
+                audioPlayer.isRecovering = false;
+            }).catch(() => {
+                audioPlayer.isRecovering = false;
+            });
             return;
         }
 
@@ -345,6 +342,7 @@
         
         errorSkipTimer = setTimeout(() => {
             errorSkipTimer = null;
+            audioPlayer.isRecovering = false;
             playNext();
         }, 3000);
     });
