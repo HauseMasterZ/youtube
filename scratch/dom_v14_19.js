@@ -17,6 +17,7 @@
             this.isSwapping = false;
             this.silentPlaying = false;
             this.blessed = false;
+            this.lastPauseTime = 0;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
@@ -79,27 +80,16 @@
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
             
-            // If the audio is completely paused, the OS or Cloudflare may have instantly killed the TCP connection.
-            // We use the two-element trick: buffer the fresh stream into the inactive element, play it, and then swap.
-            // This prevents Android Chrome from dropping the MediaSession or consuming the gesture token on a mutated active tag.
-            if (this.active.paused && this.active.src && this.active.currentTime > 0) {
+            // If the audio was paused for more than 10 seconds, the OS or Cloudflare likely killed the TCP connection.
+            // We must synchronously recreate the audio stream BEFORE calling play() so the Android gesture token isn't lost during async error recovery.
+            if (this.lastPauseTime > 0 && Date.now() - this.lastPauseTime > 10000 && this.active.src && this.active.currentTime > 0) {
                 const savedTime = this.active.currentTime;
                 const src = this.active.src;
-                
-                const oldActive = this.active;
-                this.active = this.inactive;
-                this.inactive = oldActive;
-                
-                this.active.volume = 1.0;
+                this.active.removeAttribute('src');
+                this.active.load();
                 this.active.src = src;
                 this.active.currentTime = savedTime;
-                
-                return this.active.play().then(() => {
-                    this.inactive.removeAttribute('src');
-                }).catch(e => {
-                    console.error("Play error:", e);
-                    throw e;
-                });
+                this.lastPauseTime = 0;
             }
             
             return this.active.play().catch(e => {
@@ -109,6 +99,7 @@
         }
         
         pause() { 
+            this.lastPauseTime = Date.now();
             if (this.active.paused) return Promise.resolve();
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
@@ -141,35 +132,45 @@
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
 
+            let p = null;
             this.isSwapping = true;
             
-            const oldActive = this.active;
-            this.active = this.inactive;
-            this.inactive = oldActive;
+            const oldAudio = this.active;
+            const newAudio = this.inactive;
             
-            this.active.volume = 1.0;
+            // Fade out then pause old audio to prevent abrupt cutoff
+            let oldVol = oldAudio.volume;
+            const step = oldVol / 10;
+            const fadeInterval = setInterval(() => {
+                oldVol -= step;
+                if (oldVol > 0) {
+                    oldAudio.volume = oldVol;
+                } else {
+                    clearInterval(fadeInterval);
+                    oldAudio.pause();
+                    oldAudio.volume = 1.0;
+                }
+            }, 10);
             
-            let p;
+            // Swap active pointer
+            this.active = newAudio;
+            this.inactive = oldAudio;
             
             if (!preventAutoplay) {
                 this.active.src = url;
+                this.active.load();
                 p = this.active.play().then(() => {
-                    this.inactive.pause();
-                    this.inactive.removeAttribute('src');
                     this.isSwapping = false;
                 }).catch(e => {
-                    this.inactive.pause();
-                    console.error("Autoplay failed on switch", e);
                     this.isSwapping = false;
-                    throw e;
+                    console.error("Autoplay prevented:", e);
                 });
             } else {
-                this.inactive.pause();
                 this.active.src = url;
+                this.active.load();
                 this.isSwapping = false;
                 p = Promise.resolve();
             }
-            
             return p;
         }
     }
