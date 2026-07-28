@@ -354,21 +354,6 @@
                 });
             }
         }
-            // Provide thumbUrl natively to MediaSession.
-            // We CANNOT use a background Canvas to crop to 1:1 because Chrome on Android 
-            // strictly defers decoding of offscreen images when the tab is in the background,
-            // causing the lockscreen thumbnail to never load until the app is opened.
-            if (hasMediaSession) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [
-                        { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
-                    ]
-                });
-            }
-        }
-
         // MediaSession metadata already updated at the top of executePlayback
         
         if (window.lyricsActive) {
