@@ -276,9 +276,7 @@
             albumArt.removeAttribute('src'); // Instantly clear the old image src
             albumArt.style.display = 'none'; // Instantly hide the old thumbnail
             
-            albumArt.src = thumbUrl;
-            albumArt.style.display = 'block';
-            fetchDominantColorAndThumbnail(track.id, thumbUrl, sequenceId, track);
+            fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
@@ -289,72 +287,89 @@
         
         triggerPreloads();
 
-        function fetchDominantColorAndThumbnail(trackId, thumbUrl, sequenceId, track) {
-            // First, update MediaSession with the original thumbnail instantly so it's never empty
+        function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
+            const hasCachedColor = dominantColorCache.has(trackId);
+            const hasCachedSquare = squareThumbCache.has(trackId);
+            
+            if (hasCachedColor) {
+                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+            }
+            if (hasCachedSquare) {
+                applySquareThumb(squareThumbCache.get(trackId), track, sequenceId, thumbUrl);
+            }
+            if (hasCachedColor && hasCachedSquare) return;
+
+            const tempImg = new Image();
+            tempImg.fetchPriority = "low";
+            tempImg.crossOrigin = "Anonymous";
+            tempImg.onload = () => {
+                if (currentPlaybackSequence !== sequenceId) return;
+                
+                try {
+                    if (!hasCachedColor) {
+                        const color = getDominantColor(tempImg, trackId);
+                        document.documentElement.style.setProperty('--primary-color', color);
+                    }
+                    if (!hasCachedSquare) {
+                        const canvas = document.createElement('canvas');
+                        const size = Math.min(tempImg.width, tempImg.height);
+                        if (size > 0) {
+                            canvas.width = size;
+                            canvas.height = size;
+                            const ctx = canvas.getContext('2d');
+                            const xOffset = (tempImg.width - size) / 2;
+                            const yOffset = (tempImg.height - size) / 2;
+                            ctx.drawImage(tempImg, xOffset, yOffset, size, size, 0, 0, size, size);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            squareThumbCache.set(trackId, dataUrl);
+                            applySquareThumb(dataUrl, track, sequenceId, thumbUrl);
+                        } else {
+                            applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
+                        }
+                    }
+                } catch(e) {
+                    if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
+                }
+            };
+            tempImg.onerror = () => {
+                if (currentPlaybackSequence === sequenceId) {
+                    if (!hasCachedColor) document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                    if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
+                }
+            };
+            if (currentPlaybackSequence === sequenceId) {
+                tempImg.src = thumbUrl;
+            }
+        }
+
+        function applySquareThumb(srcUrl, track, sequenceId, originalUrl) {
+            if (currentPlaybackSequence !== sequenceId) return;
+            albumArt.src = srcUrl;
+            albumArt.style.display = 'block';
             if (hasMediaSession) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }]
+                    artwork: [{ src: srcUrl, sizes: '512x512', type: 'image/jpeg' }]
                 });
             }
-
-            fetch(thumbUrl, { mode: 'cors' })
-                .then(res => res.blob())
-                .then(blob => createImageBitmap(blob))
-                .then(bitmap => {
-                    // 1. Calculate Dominant Color
-                    if (currentPlaybackSequence === sequenceId) {
-                        try {
-                            // Use a tiny canvas to get average/dominant color quickly
-                            const colorCanvas = new OffscreenCanvas(1, 1);
-                            const cCtx = colorCanvas.getContext('2d');
-                            cCtx.drawImage(bitmap, 0, 0, 1, 1);
-                            const data = cCtx.getImageData(0, 0, 1, 1).data;
-                            const color = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
-                            document.documentElement.style.setProperty('--primary-color', color);
-                        } catch (e) {
-                            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                        }
-                    }
-
-                    // 2. Crop to 1:1 for MediaSession (bypassing background Image() throttling)
-                    if (hasMediaSession && currentPlaybackSequence === sequenceId) {
-                        try {
-                            const size = Math.min(bitmap.width, bitmap.height);
-                            const startX = (bitmap.width - size) / 2;
-                            const startY = (bitmap.height - size) / 2;
-                            
-                            const thumbCanvas = new OffscreenCanvas(512, 512);
-                            const tCtx = thumbCanvas.getContext('2d');
-                            tCtx.drawImage(bitmap, startX, startY, size, size, 0, 0, 512, 512);
-                            
-                            thumbCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 }).then(blob => {
-                                const reader = new FileReader();
-                                reader.onloadend = () => {
-                                    if (currentPlaybackSequence === sequenceId && hasMediaSession) {
-                                        navigator.mediaSession.metadata = new MediaMetadata({
-                                            title: track.title,
-                                            artist: track.channel,
-                                            artwork: [{ src: reader.result, sizes: '512x512', type: 'image/jpeg' }]
-                                        });
-                                    }
-                                };
-                                reader.readAsDataURL(blob);
-                            });
-                        } catch (e) {
-                            console.error("OffscreenCanvas crop failed", e);
-                        }
-                    }
-                    
-                    bitmap.close(); // Free memory
-                })
-                .catch(e => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    }
-                });
         }
+            // Provide thumbUrl natively to MediaSession.
+            // We CANNOT use a background Canvas to crop to 1:1 because Chrome on Android 
+            // strictly defers decoding of offscreen images when the tab is in the background,
+            // causing the lockscreen thumbnail to never load until the app is opened.
+            if (hasMediaSession) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [
+                        { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
+                    ]
+                });
+            }
+        }
+
+        // MediaSession metadata already updated at the top of executePlayback
         
         if (window.lyricsActive) {
             loadLyrics(track);
