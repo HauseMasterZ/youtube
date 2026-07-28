@@ -259,7 +259,7 @@
         if (hasMediaSession) {
             const thumbUrl = getThumbUrl(track);
             const artwork = thumbUrl
-                ? [{ src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }]
+                ? [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }]
                 : [];
             if (!navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata = new MediaMetadata({
