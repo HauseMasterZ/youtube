@@ -133,23 +133,13 @@
             this.inactive = oldAudio;
             
             if (!preventAutoplay) {
-                // Wait for the new audio to buffer before playing so it doesn't skip the first second
-                p = new Promise((resolve) => {
-                    const onCanPlay = () => {
-                        this.active.play().then(() => {
-                            this.isSwapping = false;
-                            resolve();
-                        }).catch(e => {
-                            this.isSwapping = false;
-                            console.error("Autoplay prevented:", e);
-                            resolve(); 
-                        });
-                    };
-                    
-                    this.active.addEventListener('canplay', onCanPlay, { once: true });
-                    this.active.addEventListener('error', onCanPlay, { once: true });
-                    this.active.src = url;
-                    this.active.load(); // Force reset state and flush previous song's buffer
+                this.active.src = url;
+                this.active.load();
+                p = this.active.play().then(() => {
+                    this.isSwapping = false;
+                }).catch(e => {
+                    this.isSwapping = false;
+                    console.error("Autoplay prevented:", e);
                 });
             } else {
                 this.active.src = url;
