@@ -257,20 +257,16 @@
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
         if (hasMediaSession) {
-            const thumbUrl = getThumbUrl(track);
-            const artwork = thumbUrl
-                ? [{ src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }]
-                : [];
             if (!navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: artwork
+                    artwork: []
                 });
             } else {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                navigator.mediaSession.metadata.artwork = artwork;
+                navigator.mediaSession.metadata.artwork = [];
             }
             navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
         }
@@ -282,7 +278,7 @@
             
             albumArt.src = thumbUrl;
             albumArt.style.display = 'block';
-            fetchDominantColor(track.id, thumbUrl, sequenceId, track);
+            fetchDominantColorAndThumbnail(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
@@ -293,47 +289,72 @@
         
         triggerPreloads();
 
-        function fetchDominantColor(trackId, thumbUrl, sequenceId, track) {
-            if (dominantColorCache.has(trackId)) {
-                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
-            } else {
-                const tempImg = new Image();
-                tempImg.fetchPriority = "low";
-                tempImg.crossOrigin = "Anonymous";
-                tempImg.onload = () => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        try {
-                            const color = getDominantColor(tempImg, trackId);
-                            document.documentElement.style.setProperty('--primary-color', color);
-                        } catch(e) {}
-                    }
-                };
-                tempImg.onerror = () => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    }
-                };
-                if (currentPlaybackSequence === sequenceId) {
-                    tempImg.src = thumbUrl;
-                }
-            }
-
-            // Provide thumbUrl natively to MediaSession.
-            // We CANNOT use a background Canvas to crop to 1:1 because Chrome on Android 
-            // strictly defers decoding of offscreen images when the tab is in the background,
-            // causing the lockscreen thumbnail to never load until the app is opened.
+        function fetchDominantColorAndThumbnail(trackId, thumbUrl, sequenceId, track) {
+            // First, update MediaSession with the original thumbnail instantly so it's never empty
             if (hasMediaSession) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: [
-                        { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
-                    ]
+                    artwork: [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }]
                 });
             }
-        }
 
-        // MediaSession metadata already updated at the top of executePlayback
+            fetch(thumbUrl, { mode: 'cors' })
+                .then(res => res.blob())
+                .then(blob => createImageBitmap(blob))
+                .then(bitmap => {
+                    // 1. Calculate Dominant Color
+                    if (currentPlaybackSequence === sequenceId) {
+                        try {
+                            // Use a tiny canvas to get average/dominant color quickly
+                            const colorCanvas = new OffscreenCanvas(1, 1);
+                            const cCtx = colorCanvas.getContext('2d');
+                            cCtx.drawImage(bitmap, 0, 0, 1, 1);
+                            const data = cCtx.getImageData(0, 0, 1, 1).data;
+                            const color = `rgb(${data[0]}, ${data[1]}, ${data[2]})`;
+                            document.documentElement.style.setProperty('--primary-color', color);
+                        } catch (e) {
+                            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                        }
+                    }
+
+                    // 2. Crop to 1:1 for MediaSession (bypassing background Image() throttling)
+                    if (hasMediaSession && currentPlaybackSequence === sequenceId) {
+                        try {
+                            const size = Math.min(bitmap.width, bitmap.height);
+                            const startX = (bitmap.width - size) / 2;
+                            const startY = (bitmap.height - size) / 2;
+                            
+                            const thumbCanvas = new OffscreenCanvas(512, 512);
+                            const tCtx = thumbCanvas.getContext('2d');
+                            tCtx.drawImage(bitmap, startX, startY, size, size, 0, 0, 512, 512);
+                            
+                            thumbCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 }).then(blob => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                    if (currentPlaybackSequence === sequenceId && hasMediaSession) {
+                                        navigator.mediaSession.metadata = new MediaMetadata({
+                                            title: track.title,
+                                            artist: track.channel,
+                                            artwork: [{ src: reader.result, sizes: '512x512', type: 'image/jpeg' }]
+                                        });
+                                    }
+                                };
+                                reader.readAsDataURL(blob);
+                            });
+                        } catch (e) {
+                            console.error("OffscreenCanvas crop failed", e);
+                        }
+                    }
+                    
+                    bitmap.close(); // Free memory
+                })
+                .catch(e => {
+                    if (currentPlaybackSequence === sequenceId) {
+                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                    }
+                });
+        }
         
         if (window.lyricsActive) {
             loadLyrics(track);
