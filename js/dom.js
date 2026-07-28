@@ -32,10 +32,26 @@
         bless() {
             if (this.blessed) return;
             this.blessed = true;
-            // Instantly play and pause to grab the Android user gesture token for both elements
-            this.audio1.play().catch(()=>{}); this.audio1.pause();
-            this.audio2.play().catch(()=>{}); this.audio2.pause();
-            this.silent.play().catch(()=>{}); this.silent.pause();
+            
+            // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
+            // We use a silent base64 string to guarantee instant resolution without waiting for network.
+            const silentSrc = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+            
+            const blessAud = (aud) => {
+                const oldSrc = aud.src;
+                aud.src = silentSrc;
+                aud.play().then(() => {
+                    aud.pause();
+                    if (oldSrc && !oldSrc.includes('data:audio/wav;base64')) {
+                        aud.src = oldSrc; 
+                    } else {
+                        aud.removeAttribute('src');
+                    }
+                }).catch(()=>{});
+            };
+            
+            blessAud(this.audio1);
+            blessAud(this.audio2);
         }
 
         get currentTime() { return this.active.currentTime; }
