@@ -275,13 +275,17 @@
             navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
         }
 
-        if (!thumbsDisabled && getThumbUrl(track)) {
+        if (getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
-            albumArt.removeAttribute('src'); // Instantly clear the old image src
-            albumArt.style.display = 'none'; // Instantly hide the old thumbnail
-            
-            albumArt.src = thumbUrl;
-            albumArt.style.display = 'block';
+            if (!thumbsDisabled) {
+                albumArt.removeAttribute('src'); // Instantly clear the old image src
+                albumArt.style.display = 'none'; // Instantly hide the old thumbnail
+                
+                albumArt.src = thumbUrl;
+                albumArt.style.display = 'block';
+            } else {
+                albumArt.style.display = 'none';
+            }
             fetchDominantColor(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.style.display = 'none';
@@ -293,43 +297,92 @@
         
         triggerPreloads();
 
-        function fetchDominantColor(trackId, thumbUrl, sequenceId, track) {
+        async function fetchDominantColor(trackId, thumbUrl, sequenceId, track) {
             if (dominantColorCache.has(trackId)) {
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+                if (hasMediaSession && squareArtworkCache.has(trackId)) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: track.title,
+                        artist: track.channel,
+                        artwork: [{ src: squareArtworkCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }]
+                    });
+                }
             } else {
-                const tempImg = new Image();
-                tempImg.fetchPriority = "low";
-                tempImg.crossOrigin = "Anonymous";
-                tempImg.onload = () => {
-                    if (currentPlaybackSequence === sequenceId) {
-                        try {
-                            const color = getDominantColor(tempImg, trackId);
-                            document.documentElement.style.setProperty('--primary-color', color);
-                        } catch(e) {}
+                try {
+                    const response = await fetch(thumbUrl, { mode: 'cors' });
+                    const blob = await response.blob();
+                    const imgBmp = await createImageBitmap(blob);
+                    
+                    const targetSize = 512;
+                    const size = Math.min(imgBmp.width, imgBmp.height);
+                    const startX = (imgBmp.width - size) / 2;
+                    const startY = (imgBmp.height - size) / 2;
+                    
+                    let sqBlobUrl = null;
+                    let r, g, b;
+                    
+                    if (window.OffscreenCanvas) {
+                        const offCanvas = new OffscreenCanvas(targetSize, targetSize);
+                        const ctx = offCanvas.getContext('2d');
+                        ctx.drawImage(imgBmp, startX, startY, size, size, 0, 0, targetSize, targetSize);
+                        const sqBlob = await offCanvas.convertToBlob({ type: 'image/jpeg', quality: 0.85 });
+                        sqBlobUrl = URL.createObjectURL(sqBlob);
+                        
+                        const offCanvas1x1 = new OffscreenCanvas(1, 1);
+                        const ctx1 = offCanvas1x1.getContext('2d', { willReadFrequently: true });
+                        ctx1.drawImage(imgBmp, 0, 0, 1, 1);
+                        const data = ctx1.getImageData(0, 0, 1, 1).data;
+                        r = data[0]; g = data[1]; b = data[2];
+                    } else {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = targetSize;
+                        canvas.height = targetSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(imgBmp, startX, startY, size, size, 0, 0, targetSize, targetSize);
+                        sqBlobUrl = canvas.toDataURL('image/jpeg', 0.85);
+                        
+                        const canvas1x1 = document.createElement('canvas');
+                        canvas1x1.width = 1; canvas1x1.height = 1;
+                        const ctx1 = canvas1x1.getContext('2d');
+                        ctx1.drawImage(imgBmp, 0, 0, 1, 1);
+                        const data = ctx1.getImageData(0, 0, 1, 1).data;
+                        r = data[0]; g = data[1]; b = data[2];
                     }
-                };
-                tempImg.onerror = () => {
+                    
+                    if (trackId && sqBlobUrl) squareArtworkCache.set(trackId, sqBlobUrl);
+                    
+                    let brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                    if (brightness < 120) {
+                        let factor = 120 / Math.max(brightness, 1);
+                        r = Math.min(255, Math.floor(r * factor));
+                        g = Math.min(255, Math.floor(g * factor));
+                        b = Math.min(255, Math.floor(b * factor));
+                    }
+                    const color = `rgb(${r}, ${g}, ${b})`;
+                    if (trackId) dominantColorCache.set(trackId, color);
+
+                    if (currentPlaybackSequence === sequenceId) {
+                        document.documentElement.style.setProperty('--primary-color', color);
+                        if (hasMediaSession && sqBlobUrl) {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: track.title,
+                                artist: track.channel,
+                                artwork: [{ src: sqBlobUrl, sizes: '512x512', type: 'image/jpeg' }]
+                            });
+                        }
+                    }
+                } catch(e) {
                     if (currentPlaybackSequence === sequenceId) {
                         document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                        if (hasMediaSession) {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: track.title,
+                                artist: track.channel,
+                                artwork: [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }]
+                            });
+                        }
                     }
-                };
-                if (currentPlaybackSequence === sequenceId) {
-                    tempImg.src = thumbUrl;
                 }
-            }
-
-            // Provide thumbUrl natively to MediaSession.
-            // We CANNOT use a background Canvas to crop to 1:1 because Chrome on Android 
-            // strictly defers decoding of offscreen images when the tab is in the background,
-            // causing the lockscreen thumbnail to never load until the app is opened.
-            if (hasMediaSession) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [
-                        { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
-                    ]
-                });
             }
         }
 

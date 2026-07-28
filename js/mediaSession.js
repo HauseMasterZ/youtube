@@ -23,6 +23,11 @@
             audioPlayer.play().then(() => {
                 if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             }).catch(e => {
+                if (e.name === 'AbortError' || e.name === 'NotAllowedError') {
+                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    return;
+                }
+                
                 // Audio Element Revival: Android suspends the decoder during long pauses.
                 // Re-set src to force a reload, then seek back to the saved position.
                 const track = currentPlaylistData[playQueue[queueIndex]];

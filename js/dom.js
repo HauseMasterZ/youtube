@@ -89,6 +89,12 @@
                 this.silentPlaying = false;
             }
             return new Promise(resolve => {
+                if (isMobileDevice) {
+                    this.active.pause();
+                    resolve();
+                    return;
+                }
+                
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
                 this.fadeInterval = setInterval(() => {
