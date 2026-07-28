@@ -130,16 +130,14 @@
                         });
                     };
                     
-                    if (this.active.readyState >= 3) { // HAVE_FUTURE_DATA
-                        onCanPlay();
-                    } else {
-                        this.active.addEventListener('canplay', onCanPlay, { once: true });
-                        this.active.addEventListener('error', onCanPlay, { once: true });
-                    }
-                    this.active.src = url; // SET SRC AFTER ADDING LISTENER
+                    this.active.addEventListener('canplay', onCanPlay, { once: true });
+                    this.active.addEventListener('error', onCanPlay, { once: true });
+                    this.active.src = url;
+                    this.active.load(); // Force reset state and flush previous song's buffer
                 });
             } else {
                 this.active.src = url;
+                this.active.load();
                 this.isSwapping = false;
                 p = Promise.resolve();
             }
