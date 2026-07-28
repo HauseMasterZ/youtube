@@ -68,6 +68,14 @@
         
         play() { 
             this.bless();
+
+            // Cancel any pending fade-out from a recent pause() call
+            if (this.fadeInterval) {
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null;
+                this.active.volume = 1.0;
+            }
+
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
@@ -96,12 +104,13 @@
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
-                const interval = setInterval(() => {
+                this.fadeInterval = setInterval(() => {
                     currentVol -= step;
                     if (currentVol > 0) {
                         this.active.volume = currentVol;
                     } else {
-                        clearInterval(interval);
+                        clearInterval(this.fadeInterval);
+                        this.fadeInterval = null;
                         this.active.pause();
                         this.active.volume = 1.0; 
                         resolve();
