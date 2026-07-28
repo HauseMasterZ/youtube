@@ -14,14 +14,14 @@
             
             this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
             this.silent.loop = true;
-            this.isSwapping = false;
             this.silentPlaying = false;
             this.blessed = false;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
-                if (this.isSwapping && e.type === 'pause') return;
-                this.dispatchEvent(new Event(e.type));
+                if (e.target === this.active) {
+                    this.dispatchEvent(new Event(e.type));
+                }
             };
             this.events.forEach(evt => {
                 this.audio1.addEventListener(evt, this.forwardEvent);
@@ -119,12 +119,13 @@
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
 
-            this.isSwapping = true;
-            
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
             
+            // Immediately silence the old track to prevent audio overlap, but KEEP it playing
+            // until the new track resolves so Android doesn't drop the MediaSession.
+            this.inactive.volume = 0;
             this.active.volume = 1.0;
             
             let p;
@@ -134,17 +135,17 @@
                 p = this.active.play().then(() => {
                     this.inactive.pause();
                     this.inactive.removeAttribute('src');
-                    this.isSwapping = false;
+                    this.inactive.volume = 1.0; // Restore for future swaps
                 }).catch(e => {
                     this.inactive.pause();
+                    this.inactive.volume = 1.0;
                     console.error("Autoplay failed on switch", e);
-                    this.isSwapping = false;
                     throw e;
                 });
             } else {
                 this.inactive.pause();
+                this.inactive.volume = 1.0;
                 this.active.src = url;
-                this.isSwapping = false;
                 p = Promise.resolve();
             }
             
