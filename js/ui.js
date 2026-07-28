@@ -131,17 +131,30 @@
             
             if (!thumbsDisabled && getThumbUrl(track)) {
                 const thumbUrl = getThumbUrl(track);
-                if (thumbImg.dataset.src !== thumbUrl) {
-                    thumbImg.dataset.src = thumbUrl;
-                    thumbImg.src = thumbUrl;
+                if (thumbImg.dataset.targetSrc !== thumbUrl) {
+                    thumbImg.dataset.targetSrc = thumbUrl;
+                    
+                    if (window.requestedThumbs && window.requestedThumbs.has(thumbUrl)) {
+                        thumbImg.src = thumbUrl;
+                    } else {
+                        // Clear the old image instantly, revealing the CSS background placeholder
+                        thumbImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+                        
+                        // Debounce the network fetch to prevent spamming while fast-scrolling
+                        setTimeout(() => {
+                            if (thumbImg.dataset.targetSrc === thumbUrl) {
+                                if (!window.requestedThumbs) window.requestedThumbs = new Set();
+                                window.requestedThumbs.add(thumbUrl);
+                                thumbImg.src = thumbUrl;
+                            }
+                        }, 150);
+                    }
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                if (thumbImg.hasAttribute("src")) {
-                    thumbImg.removeAttribute("src");
-                    delete thumbImg.dataset.src;
-                }
+                thumbImg.removeAttribute("src");
+                thumbImg.removeAttribute("data-target-src");
             }
             
             textSpan.textContent = text;
