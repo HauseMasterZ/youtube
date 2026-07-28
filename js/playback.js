@@ -315,37 +315,18 @@
                 }
             }
 
-            // Generate Square thumbnail for MediaSession to prevent pillarboxing
+            // Provide thumbUrl natively to MediaSession.
+            // We CANNOT use a background Canvas to crop to 1:1 because Chrome on Android 
+            // strictly defers decoding of offscreen images when the tab is in the background,
+            // causing the lockscreen thumbnail to never load until the app is opened.
             if (hasMediaSession) {
-                // We deliberately do NOT set the 16:9 metadata here to avoid a flashing 
-                // aspect ratio on the lockscreen before the 1:1 canvas crop finishes.
-                const squareImg = new Image();
-                squareImg.crossOrigin = "Anonymous";
-                squareImg.onload = () => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    try {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        canvas.width = 512;
-                        canvas.height = 512;
-                        const size = Math.min(squareImg.width, squareImg.height);
-                        const startX = (squareImg.width - size) / 2;
-                        const startY = (squareImg.height - size) / 2;
-                        ctx.drawImage(squareImg, startX, startY, size, size, 0, 0, 512, 512);
-                        
-                        // Update with square crop
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: track.title,
-                            artist: track.channel,
-                            artwork: [
-                                { src: canvas.toDataURL('image/jpeg', 0.9), sizes: '512x512', type: 'image/jpeg' }
-                            ]
-                        });
-                    } catch(e) {}
-                };
-                if (currentPlaybackSequence === sequenceId) {
-                    squareImg.src = thumbUrl;
-                }
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [
+                        { src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }
+                    ]
+                });
             }
         }
 
