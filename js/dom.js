@@ -74,10 +74,6 @@
                 this.fadeInterval = null;
                 this.active.volume = 1.0;
             }
-
-            if (hasMediaSession && !this.silentPlaying) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
-            }
             
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
