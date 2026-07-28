@@ -273,11 +273,13 @@
 
         if (!thumbsDisabled && getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
-            albumArt.removeAttribute('src'); // Instantly clear the old image src
-            albumArt.style.display = 'none'; // Instantly hide the old thumbnail
+            // Instantly show the original thumbnail in the DOM (CSS object-fit handles the 1:1 crop seamlessly)
+            albumArt.src = thumbUrl;
+            albumArt.style.display = 'block';
             
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
+            albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
@@ -300,7 +302,7 @@
             if (hasCachedColor && hasCachedSquare) return;
 
             const tempImg = new Image();
-            tempImg.fetchPriority = "low";
+            tempImg.fetchPriority = "high";
             tempImg.crossOrigin = "Anonymous";
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
@@ -344,8 +346,12 @@
 
         function applySquareThumb(srcUrl, track, sequenceId, originalUrl) {
             if (currentPlaybackSequence !== sequenceId) return;
+            
+            // Only update the DOM image if it's the processed DataURL (which is technically cleaner, though CSS object-fit handles both)
+            // But actually, we don't even need to update the DOM image because object-fit: cover already did it perfectly!
+            // However, setting it to the base64 dataUrl saves memory since we can GC the original large image.
             albumArt.src = srcUrl;
-            albumArt.style.display = 'block';
+            
             if (hasMediaSession) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
