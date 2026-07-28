@@ -67,29 +67,9 @@
         
         play() { 
             this.bless();
-
-            // Cancel any pending fade-out from a recent pause() call
-            if (this.fadeInterval) {
-                clearInterval(this.fadeInterval);
-                this.fadeInterval = null;
-                this.active.volume = 1.0;
-            }
-
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
-            
-            // If the audio is completely paused, the OS or Cloudflare may have instantly killed the TCP connection.
-            // We MUST synchronously recreate the audio stream BEFORE calling play().
-            // This guarantees a fresh socket and ensures the Android gesture token isn't lost during async error recovery.
-            if (this.active.paused && this.active.src && this.active.currentTime > 0) {
-                const savedTime = this.active.currentTime;
-                const src = this.active.src;
-                this.active.removeAttribute('src');
-                this.active.src = src;
-                this.active.currentTime = savedTime;
-            }
-            
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
@@ -101,13 +81,12 @@
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
-                this.fadeInterval = setInterval(() => {
+                const interval = setInterval(() => {
                     currentVol -= step;
                     if (currentVol > 0) {
                         this.active.volume = currentVol;
                     } else {
-                        clearInterval(this.fadeInterval);
-                        this.fadeInterval = null;
+                        clearInterval(interval);
                         this.active.pause();
                         this.active.volume = 1.0; 
                         resolve();
@@ -155,6 +134,7 @@
             
             if (!preventAutoplay) {
                 this.active.src = url;
+                this.active.load();
                 p = this.active.play().then(() => {
                     this.isSwapping = false;
                 }).catch(e => {
@@ -163,6 +143,7 @@
                 });
             } else {
                 this.active.src = url;
+                this.active.load();
                 this.isSwapping = false;
                 p = Promise.resolve();
             }
