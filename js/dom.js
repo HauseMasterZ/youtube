@@ -84,6 +84,13 @@
             newAudio.id = "audio-player";
             newAudio.preload = "auto";
             
+            // Append to DOM to ensure MediaSession stability and prevent GC
+            if (oldAudio.parentNode) {
+                oldAudio.parentNode.appendChild(newAudio);
+            } else {
+                document.body.appendChild(newAudio);
+            }
+            
             // Fade out then pause old audio to prevent abrupt cutoff
             let oldVol = oldAudio.volume;
             const step = oldVol / 10;
@@ -95,6 +102,7 @@
                     clearInterval(fadeInterval);
                     oldAudio.pause();
                     oldAudio.volume = 1.0;
+                    if (oldAudio.parentNode) oldAudio.parentNode.removeChild(oldAudio);
                 }
             }, 10);
             

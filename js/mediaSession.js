@@ -25,19 +25,15 @@
                 const track = currentPlaylistData[playQueue[queueIndex]];
                 if (!track) return;
                 
-                const onMeta = () => {
-                    audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().then(() => {
-                        if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-                    }).catch(() => {
-                        if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-                    });
-                    audioPlayer.removeEventListener("loadedmetadata", onMeta);
-                };
-                audioPlayer.addEventListener("loadedmetadata", onMeta);
                 audioPlayer.removeAttribute('src');
                 audioPlayer.load();
                 audioPlayer.src = getAudioUrl(track);
+                audioPlayer.currentTime = savedTime;
+                audioPlayer.play().then(() => {
+                    if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+                }).catch(() => {
+                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                });
             });
         });
         navigator.mediaSession.setActionHandler('pause', () => {
