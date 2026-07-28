@@ -257,17 +257,20 @@
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
         if (hasMediaSession) {
-            const base64Artwork = [{ src: 'data:image/png;base64,' + "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", sizes: '512x512', type: 'image/png' }];
+            const thumbUrl = getThumbUrl(track);
+            const artwork = thumbUrl
+                ? [{ src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }]
+                : [];
             if (!navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: base64Artwork
+                    artwork: artwork
                 });
             } else {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                navigator.mediaSession.metadata.artwork = base64Artwork;
+                navigator.mediaSession.metadata.artwork = artwork;
             }
             navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
         }
