@@ -17,7 +17,6 @@
             this.isSwapping = false;
             this.silentPlaying = false;
             this.blessed = false;
-            this.lastPauseTime = 0;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
@@ -80,16 +79,16 @@
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
             
-            // If the audio was paused for more than 10 seconds, the OS or Cloudflare likely killed the TCP connection.
-            // We must synchronously recreate the audio stream BEFORE calling play() so the Android gesture token isn't lost during async error recovery.
-            if (this.lastPauseTime > 0 && Date.now() - this.lastPauseTime > 10000 && this.active.src && this.active.currentTime > 0) {
+            // If the audio is completely paused, the OS or Cloudflare may have instantly killed the TCP connection.
+            // We MUST synchronously recreate the audio stream BEFORE calling play().
+            // This guarantees a fresh socket and ensures the Android gesture token isn't lost during async error recovery.
+            if (this.active.paused && this.active.src && this.active.currentTime > 0) {
                 const savedTime = this.active.currentTime;
                 const src = this.active.src;
                 this.active.removeAttribute('src');
                 this.active.load();
                 this.active.src = src;
                 this.active.currentTime = savedTime;
-                this.lastPauseTime = 0;
             }
             
             return this.active.play().catch(e => {
@@ -99,7 +98,6 @@
         }
         
         pause() { 
-            this.lastPauseTime = Date.now();
             if (this.active.paused) return Promise.resolve();
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
