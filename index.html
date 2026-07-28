@@ -51,8 +51,9 @@
         </div>
         <div id="lyrics-toggle-hint"><svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 12H5v-2h14v2zm0-4H5V9h14v2z"/></svg>Show lyrics</div>
         <div id="media-session-controls" style="display: none;"></div>
-        <!-- Single audio element for simplicity and robust MediaSession handling -->
+        <!-- Dual audio elements for gapless playback without creating unblessed nodes -->
         <audio id="audio-player-1" preload="auto"></audio>
+        <audio id="audio-player-2" preload="auto"></audio>
 
         <div class="progress-container">
             <span id="current-time" class="time-display">0:00</span>
@@ -99,16 +100,17 @@
     </div>
 </div>
 
-<div id="version-display" style="position:fixed; top:5px; left:5px; font-size:12px; color:white; z-index:9999; text-shadow: 1px 1px 2px black;">v14.29</div>
+<div id="version-display" style="position:fixed; top:5px; left:5px; font-size:12px; color:white; z-index:9999; text-shadow: 1px 1px 2px black;">v14.26</div>
 
-<script src="js/dom.js?v=14.29"></script>
-<script src="js/utils.js?v=14.29"></script>
-<script src="js/state.js?v=14.29"></script>
-<script src="js/ui.js?v=14.29"></script>
-<script src="js/mediaSession.js?v=14.29"></script>
-<script src="js/lyrics.js?v=14.29"></script>
-<script src="js/playback.js?v=14.29"></script>
-<script src="js/main.js?v=14.29"></script>
+
+<script src="js/dom.js?v=14.26"></script>
+<script src="js/utils.js?v=14.26"></script>
+<script src="js/state.js?v=14.26"></script>
+<script src="js/ui.js?v=14.26"></script>
+<script src="js/mediaSession.js?v=14.26"></script>
+<script src="js/lyrics.js?v=14.26"></script>
+<script src="js/playback.js?v=14.26"></script>
+<script src="js/main.js?v=14.26"></script>
 </body>
 
 

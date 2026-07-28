@@ -4,16 +4,56 @@
     const playlistMessage = document.getElementById("playlist-message");
     const trackList = document.getElementById("track-list");
 
-    class SimpleAudioPlayer extends EventTarget {
+    class DualAudioPingPong extends EventTarget {
         constructor() {
             super();
-            this.active = document.getElementById("audio-player-1");
+            this.audio1 = document.getElementById("audio-player-1");
+            this.audio2 = document.getElementById("audio-player-2");
+            this.active = this.audio1;
+            this.inactive = this.audio2;
+            
+            this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+            this.silent.loop = true;
+            this.silentPlaying = false;
+            this.blessed = false;
+
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
+            this.forwardEvent = (e) => {
+                if (e.target === this.active) {
+                    this.dispatchEvent(new Event(e.type));
+                }
+            };
             this.events.forEach(evt => {
-                this.active.addEventListener(evt, (e) => this.dispatchEvent(new Event(e.type)));
+                this.audio1.addEventListener(evt, this.forwardEvent);
+                this.audio2.addEventListener(evt, this.forwardEvent);
             });
         }
     
+        bless() {
+            if (this.blessed) return;
+            this.blessed = true;
+            
+            // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
+            // We use a silent base64 string to guarantee instant resolution without waiting for network.
+            const silentSrc = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+            
+            const blessAud = (aud) => {
+                const oldSrc = aud.src;
+                aud.src = silentSrc;
+                aud.play().then(() => {
+                    aud.pause();
+                    if (oldSrc && !oldSrc.includes('data:audio/wav;base64')) {
+                        aud.src = oldSrc; 
+                    } else {
+                        aud.removeAttribute('src');
+                    }
+                }).catch(()=>{});
+            };
+            
+            blessAud(this.audio1);
+            blessAud(this.audio2);
+        }
+
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
         get duration() { return this.active.duration; }
@@ -25,16 +65,45 @@
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
         
-        async play() { 
+        play() { 
+            this.bless();
+
+            // Cancel any pending fade-out from a recent pause() call
+            if (this.fadeInterval) {
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null;
+                this.active.volume = 1.0;
+            }
+            
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
             }); 
         }
         
-        async pause() { 
-            this.active.pause();
-            return Promise.resolve();
+        pause() { 
+            if (this.active.paused) return Promise.resolve();
+            // Stop the silent MediaSession-holder so Android Chrome sees ALL audio as stopped
+            if (this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
+            }
+            return new Promise(resolve => {
+                let currentVol = this.active.volume;
+                const step = currentVol / 10;
+                this.fadeInterval = setInterval(() => {
+                    currentVol -= step;
+                    if (currentVol > 0) {
+                        this.active.volume = currentVol;
+                    } else {
+                        clearInterval(this.fadeInterval);
+                        this.fadeInterval = null;
+                        this.active.pause();
+                        this.active.volume = 1.0; 
+                        resolve();
+                    }
+                }, 10);
+            });
         }
         
         load() { return this.active.load(); }
@@ -44,18 +113,46 @@
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
-        async switchTrack(url, preventAutoplay) {
-            this.active.src = url;
+        switchTrack(url, preventAutoplay) {
+            this.bless();
+            if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
+
+            const oldActive = this.active;
+            this.active = this.inactive;
+            this.inactive = oldActive;
+            
+            // Immediately silence the old track to prevent audio overlap, but KEEP it playing
+            // until the new track resolves so Android doesn't drop the MediaSession.
+            this.inactive.volume = 0;
+            this.active.volume = 1.0;
+            
+            let p;
+            
             if (!preventAutoplay) {
-                return this.active.play().catch(e => {
+                this.active.src = url;
+                p = this.active.play().then(() => {
+                    this.inactive.pause();
+                    this.inactive.removeAttribute('src');
+                    this.inactive.volume = 1.0; // Restore for future swaps
+                }).catch(e => {
+                    this.inactive.pause();
+                    this.inactive.volume = 1.0;
                     console.error("Autoplay failed on switch", e);
                     throw e;
                 });
+            } else {
+                this.inactive.pause();
+                this.inactive.volume = 1.0;
+                this.active.src = url;
+                p = Promise.resolve();
             }
-            return Promise.resolve();
+            
+            return p;
         }
     }
-    const audioPlayer = new SimpleAudioPlayer();
+    const audioPlayer = new DualAudioPingPong();
 
     const currentTitle = document.getElementById("current-title");
     const currentChannel = document.getElementById("current-channel");
