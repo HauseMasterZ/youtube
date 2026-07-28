@@ -20,20 +20,10 @@
                 return;
             }
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-            audioPlayer.play().catch(e => {
-                const savedTime = audioPlayer.currentTime;
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (!track) return;
-                
-                audioPlayer.removeAttribute('src');
-                audioPlayer.load();
-                audioPlayer.src = getAudioUrl(track);
-                audioPlayer.currentTime = savedTime;
-                audioPlayer.play().then(() => {
-                    if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-                }).catch(() => {
-                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-                });
+            audioPlayer.play().then(() => {
+                if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+            }).catch(e => {
+                if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
             });
         });
         navigator.mediaSession.setActionHandler('pause', () => {

@@ -134,27 +134,7 @@
         if (audioPlayer.paused) {
             setPlayUI(true);
             audioPlayer.play().catch(e => {
-                // Only revive if Android actually suspended the decoder/prevented autoplay
-                if (e.name !== 'NotAllowedError') {
-                    setPlayUI(false);
-                    return;
-                }
-                
-                const savedTime = audioPlayer.currentTime;
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (!track) return;
-                
-                // Mute briefly to mask buffer clip during revival
-                audioPlayer.muted = true;
-                
-                const onMeta = () => {
-                    audioPlayer.currentTime = savedTime;
-                    audioPlayer.play().catch(() => { setPlayUI(false); });
-                    setTimeout(() => audioPlayer.muted = false, 150);
-                    audioPlayer.removeEventListener("loadedmetadata", onMeta);
-                };
-                audioPlayer.addEventListener("loadedmetadata", onMeta);
-                audioPlayer.src = getAudioUrl(track);
+                setPlayUI(false);
             });
         } else {
             setPlayUI(false);
