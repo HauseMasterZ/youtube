@@ -79,29 +79,6 @@
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
             
-            // If the audio is completely paused, the OS or Cloudflare may have instantly killed the TCP connection.
-            // We use the two-element trick: buffer the fresh stream into the inactive element, play it, and then swap.
-            // This prevents Android Chrome from dropping the MediaSession or consuming the gesture token on a mutated active tag.
-            if (this.active.paused && this.active.src && this.active.currentTime > 0) {
-                const savedTime = this.active.currentTime;
-                const src = this.active.src;
-                
-                const oldActive = this.active;
-                this.active = this.inactive;
-                this.inactive = oldActive;
-                
-                this.active.volume = 1.0;
-                this.active.src = src;
-                this.active.currentTime = savedTime;
-                
-                return this.active.play().then(() => {
-                    this.inactive.removeAttribute('src');
-                }).catch(e => {
-                    console.error("Play error:", e);
-                    throw e;
-                });
-            }
-            
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
