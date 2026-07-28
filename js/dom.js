@@ -83,6 +83,11 @@
         
         pause() { 
             if (this.active.paused) return Promise.resolve();
+            // Stop the silent MediaSession-holder so Android Chrome sees ALL audio as stopped
+            if (this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
+            }
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;

@@ -23,7 +23,23 @@
             audioPlayer.play().then(() => {
                 if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             }).catch(e => {
-                if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                // Audio Element Revival: Android suspends the decoder during long pauses.
+                // Re-set src to force a reload, then seek back to the saved position.
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (!track) {
+                    if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    return;
+                }
+                const savedTime = audioPlayer.currentTime;
+                const onMeta = () => {
+                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                    audioPlayer.currentTime = savedTime;
+                    audioPlayer.play().catch(() => {
+                        if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+                    });
+                };
+                audioPlayer.addEventListener('loadedmetadata', onMeta);
+                audioPlayer.src = getAudioUrl(track);
             });
         });
         navigator.mediaSession.setActionHandler('pause', () => {
