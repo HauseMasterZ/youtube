@@ -277,22 +277,9 @@
             albumArt.removeAttribute('src'); // Instantly clear the old image src
             albumArt.style.display = 'none'; // Instantly hide the old thumbnail
             
-            // Wait for audio to successfully start playing before downloading art
-            // This strictly reserves 100% bandwidth for the music stream
-            const onPlayStart = () => {
-                if (currentPlaybackSequence === sequenceId) {
-                    albumArt.src = thumbUrl;
-                    albumArt.style.display = 'block';
-                    fetchDominantColor(track.id, thumbUrl, sequenceId, track);
-                }
-                audioPlayer.removeEventListener('playing', onPlayStart);
-            };
-            audioPlayer.addEventListener('playing', onPlayStart);
-            
-            // If the track is intentionally paused (uiOnly), load art immediately
-            if (uiOnly || preventAutoplay) {
-                onPlayStart();
-            }
+            albumArt.src = thumbUrl;
+            albumArt.style.display = 'block';
+            fetchDominantColor(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
@@ -308,6 +295,7 @@
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
             } else {
                 const tempImg = new Image();
+                tempImg.fetchPriority = "low";
                 tempImg.crossOrigin = "Anonymous";
                 tempImg.onload = () => {
                     if (currentPlaybackSequence === sequenceId) {

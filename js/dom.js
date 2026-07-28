@@ -4,14 +4,19 @@
     const playlistMessage = document.getElementById("playlist-message");
     const trackList = document.getElementById("track-list");
 
-    class SingleAudioWithHold extends EventTarget {
+    class DualAudioPingPong extends EventTarget {
         constructor() {
             super();
-            this.active = document.getElementById("audio-player");
+            this.audio1 = document.getElementById("audio-player-1");
+            this.audio2 = document.getElementById("audio-player-2");
+            this.active = this.audio1;
+            this.inactive = this.audio2;
+            
             this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
             this.silent.loop = true;
             this.isSwapping = false;
             this.silentPlaying = false;
+            this.blessed = false;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
@@ -19,10 +24,20 @@
                 this.dispatchEvent(new Event(e.type));
             };
             this.events.forEach(evt => {
-                this.active.addEventListener(evt, this.forwardEvent);
+                this.audio1.addEventListener(evt, this.forwardEvent);
+                this.audio2.addEventListener(evt, this.forwardEvent);
             });
         }
     
+        bless() {
+            if (this.blessed) return;
+            this.blessed = true;
+            // Instantly play and pause to grab the Android user gesture token for both elements
+            this.audio1.play().catch(()=>{}); this.audio1.pause();
+            this.audio2.play().catch(()=>{}); this.audio2.pause();
+            this.silent.play().catch(()=>{}); this.silent.pause();
+        }
+
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
         get duration() { return this.active.duration; }
@@ -35,15 +50,13 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
-            // Start the silent loop on first play and NEVER pause it. 
-            // This guarantees the Android audio session stays alive permanently,
-            // preventing the MediaSession controls from disappearing during pauses!
+            this.bless();
             if (hasMediaSession && !this.silentPlaying) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
-                throw e; // Must throw so mediaSession revive logic catches it
+                throw e;
             }); 
         }
         
@@ -59,7 +72,7 @@
                     } else {
                         clearInterval(interval);
                         this.active.pause();
-                        this.active.volume = 1.0; // Reset volume for next time
+                        this.active.volume = 1.0; 
                         resolve();
                     }
                 }, 10);
@@ -70,8 +83,11 @@
         removeAttribute(attr) { if (attr === 'src') { this.active.removeAttribute('src'); } }
         getAttribute(attr) { if (attr === 'src') { return this.active.getAttribute('src'); } return null; }
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
+        addEventListener(type, listener) { super.addEventListener(type, listener); }
+        removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
         switchTrack(url, preventAutoplay) {
+            this.bless();
             if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
                 this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
             }
@@ -80,16 +96,7 @@
             this.isSwapping = true;
             
             const oldAudio = this.active;
-            const newAudio = document.createElement("audio");
-            newAudio.id = "audio-player";
-            newAudio.preload = "auto";
-            
-            // Append to DOM to ensure MediaSession stability and prevent GC
-            if (oldAudio.parentNode) {
-                oldAudio.parentNode.appendChild(newAudio);
-            } else {
-                document.body.appendChild(newAudio);
-            }
+            const newAudio = this.inactive;
             
             // Fade out then pause old audio to prevent abrupt cutoff
             let oldVol = oldAudio.volume;
@@ -102,32 +109,18 @@
                     clearInterval(fadeInterval);
                     oldAudio.pause();
                     oldAudio.volume = 1.0;
-                    if (oldAudio.parentNode) oldAudio.parentNode.removeChild(oldAudio);
                 }
             }, 10);
             
-            this.events.forEach(evt => {
-                oldAudio.removeEventListener(evt, this.forwardEvent);
-                newAudio.addEventListener(evt, this.forwardEvent);
-            });
-            
-            oldAudio.parentNode.replaceChild(newAudio, oldAudio);
-            
+            // Swap active pointer
             this.active = newAudio;
-            this.active.src = url;
-            this.active.load(); // Fresh decoder buffer
+            this.inactive = oldAudio;
             
             if (!preventAutoplay) {
                 // Wait for the new audio to buffer before playing so it doesn't skip the first second
                 p = new Promise((resolve) => {
                     const onCanPlay = () => {
-                        // If this audio is no longer the active one (user clicked next again rapidly), abort
-                        if (this.active !== newAudio) {
-                            resolve();
-                            return;
-                        }
-                        
-                        newAudio.play().then(() => {
+                        this.active.play().then(() => {
                             this.isSwapping = false;
                             resolve();
                         }).catch(e => {
@@ -137,22 +130,23 @@
                         });
                     };
                     
-                    if (newAudio.readyState >= 3) { // HAVE_FUTURE_DATA
+                    if (this.active.readyState >= 3) { // HAVE_FUTURE_DATA
                         onCanPlay();
                     } else {
-                        newAudio.addEventListener('canplay', onCanPlay, { once: true });
-                        newAudio.addEventListener('error', onCanPlay, { once: true });
+                        this.active.addEventListener('canplay', onCanPlay, { once: true });
+                        this.active.addEventListener('error', onCanPlay, { once: true });
                     }
+                    this.active.src = url; // SET SRC AFTER ADDING LISTENER
                 });
             } else {
+                this.active.src = url;
                 this.isSwapping = false;
                 p = Promise.resolve();
             }
-            
             return p;
         }
     }
-    const audioPlayer = new SingleAudioWithHold();
+    const audioPlayer = new DualAudioPingPong();
 
     const currentTitle = document.getElementById("current-title");
     const currentChannel = document.getElementById("current-channel");

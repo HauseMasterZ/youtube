@@ -43,7 +43,9 @@
         try {
             const parts = track.file_path.split('/');
             const folder = parts[0];
-            const res = await fetch(lyricsUrl);
+            const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
+            
+            const res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             const text = await res.text();
             
