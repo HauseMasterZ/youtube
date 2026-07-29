@@ -295,33 +295,19 @@
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
         
         // Android Power Management / Network drop: Try to recover ONCE before skipping.
-        if (audioPlayer.currentTime > 0 && !audioPlayer.isRecovering) {
-            audioPlayer.isRecovering = true;
+        if (audioPlayer.currentTime > 0 && !isRecovering) {
+            isRecovering = true;
             const savedTime = audioPlayer.currentTime;
-            
-            // Get fresh URL in case it expired
             const track = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
-            const freshUrl = track ? getAudioUrl(track) : audioPlayer.getAttribute('src');
-            
-            // Use switchTrack to cleanly swap to the fresh audio element, bypassing bad state
-            audioPlayer.switchTrack(freshUrl, false);
-            
-            const attemptRestore = () => {
-                try {
-                    audioPlayer.currentTime = savedTime;
-                    audioPlayer.isRecovering = false;
-                } catch(e) {}
-            };
-            
-            try {
+            if (!track) { isRecovering = false; return; }
+
+            const onMeta = () => {
+                audioPlayer.removeEventListener('loadedmetadata', onMeta);
                 audioPlayer.currentTime = savedTime;
-                audioPlayer.isRecovering = false;
-            } catch(e) {
-                audioPlayer.addEventListener('loadedmetadata', function onMeta() {
-                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                    attemptRestore();
-                });
-            }
+                isRecovering = false;
+            };
+            audioPlayer.addEventListener('loadedmetadata', onMeta);
+            audioPlayer.switchTrack(getAudioUrl(track), false);
             return;
         }
 
@@ -329,14 +315,13 @@
         currentTitle.style.color = "#ff5555";
         setPlayUI(false);
         
-        // Keep MediaSession notification alive — do NOT clear src or call load()
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = "paused";
         }
         
         errorSkipTimer = setTimeout(() => {
             errorSkipTimer = null;
-            audioPlayer.isRecovering = false;
+            isRecovering = false;
             playNext();
         }, 3000);
     });

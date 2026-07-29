@@ -17,11 +17,10 @@
     let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 
     
     const dominantColorCache = new Map();
-    const squareThumbCache = new Map();
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
-    let prefetchedUrls = new Set();
+    let isRecovering = false;
     
     // Lyrics State
     window.lyricsActive = false;
@@ -39,7 +38,7 @@
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
     const preloadedBlobs = new Map(); // audioUrl -> blobUrl
-    let currentAbortController = null;
+
     
     // Android Chrome Lock-Screen Notification Teardown Bypass
 

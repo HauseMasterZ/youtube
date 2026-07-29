@@ -32,7 +32,6 @@
             
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
-            prefetchedUrls.clear();
             
             generateQueue(true); 
             
@@ -90,7 +89,6 @@
             filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlist, index: i }));
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
-            prefetchedUrls.clear();
             playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         }
         queueIndex = trackIndex;
@@ -265,27 +263,27 @@
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
         if (hasMediaSession) {
+            const thumbUrl = getThumbUrl(track);
+            const artwork = thumbUrl ? [{ src: thumbUrl, sizes: '1280x720', type: 'image/jpeg' }] : [];
             if (!navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: []
+                    artwork: artwork
                 });
             } else {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                navigator.mediaSession.metadata.artwork = [];
+                navigator.mediaSession.metadata.artwork = artwork;
             }
             navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
         }
 
         if (!thumbsDisabled && getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
-            // Instantly show the original thumbnail in the DOM (CSS object-fit handles the 1:1 crop seamlessly)
             albumArt.src = thumbUrl;
             albumArt.style.display = 'block';
-            
-            fetchVisuals(track.id, thumbUrl, sequenceId, track);
+            fetchDominantColor(track.id, thumbUrl, sequenceId);
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
@@ -297,77 +295,27 @@
         
         triggerPreloads();
 
-        function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
-            const hasCachedColor = dominantColorCache.has(trackId);
-            const hasCachedSquare = squareThumbCache.has(trackId);
-            
-            if (hasCachedColor) {
+        function fetchDominantColor(trackId, thumbUrl, sequenceId) {
+            if (dominantColorCache.has(trackId)) {
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+                return;
             }
-            if (hasCachedSquare) {
-                applySquareThumb(squareThumbCache.get(trackId), track, sequenceId, thumbUrl);
-            }
-            if (hasCachedColor && hasCachedSquare) return;
-
             const tempImg = new Image();
-            tempImg.fetchPriority = "high";
+            tempImg.fetchPriority = "low";
             tempImg.crossOrigin = "Anonymous";
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
-                
-                try {
-                    if (!hasCachedColor) {
-                        const color = getDominantColor(tempImg, trackId);
-                        document.documentElement.style.setProperty('--primary-color', color);
-                    }
-                    if (!hasCachedSquare) {
-                        const canvas = document.createElement('canvas');
-                        const size = Math.min(tempImg.width, tempImg.height);
-                        if (size > 0) {
-                            canvas.width = size;
-                            canvas.height = size;
-                            const ctx = canvas.getContext('2d');
-                            const xOffset = (tempImg.width - size) / 2;
-                            const yOffset = (tempImg.height - size) / 2;
-                            ctx.drawImage(tempImg, xOffset, yOffset, size, size, 0, 0, size, size);
-                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                            squareThumbCache.set(trackId, dataUrl);
-                            applySquareThumb(dataUrl, track, sequenceId, thumbUrl);
-                        } else {
-                            applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
-                        }
-                    }
-                } catch(e) {
-                    if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
-                }
+                const color = getDominantColor(tempImg, trackId);
+                document.documentElement.style.setProperty('--primary-color', color);
             };
             tempImg.onerror = () => {
                 if (currentPlaybackSequence === sequenceId) {
-                    if (!hasCachedColor) document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId, thumbUrl);
+                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
                 }
             };
-            if (currentPlaybackSequence === sequenceId) {
-                tempImg.src = thumbUrl;
-            }
+            tempImg.src = thumbUrl;
         }
 
-        function applySquareThumb(srcUrl, track, sequenceId, originalUrl) {
-            if (currentPlaybackSequence !== sequenceId) return;
-            
-            // Only update the DOM image if it's the processed DataURL (which is technically cleaner, though CSS object-fit handles both)
-            // But actually, we don't even need to update the DOM image because object-fit: cover already did it perfectly!
-            // However, setting it to the base64 dataUrl saves memory since we can GC the original large image.
-            albumArt.src = srcUrl;
-            
-            if (hasMediaSession) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [{ src: srcUrl, sizes: '512x512', type: 'image/jpeg' }]
-                });
-            }
-        }
         // MediaSession metadata already updated at the top of executePlayback
         
         if (window.lyricsActive) {
