@@ -295,13 +295,14 @@
         }
 
         .track-thumb {
-            width: 48px;
-            height: 36px;
-            margin-right: 12px;
+            width: 32px;
+            height: 32px;
             border-radius: 4px;
+            margin-right: 12px;
             object-fit: cover;
+            vertical-align: middle;
             flex-shrink: 0;
-            background-color: #333333;
+            background-color: #2a2a2a;
         }
 
         .control-btn.active-state { color: var(--primary-color); }
