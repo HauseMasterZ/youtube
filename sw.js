@@ -1,10 +1,11 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v15';
+const CACHE_NAME = 'yt-player-cache-v17';
 
 const CORE_ASSETS = [
     './index.html',
     './js/dom.js',
     './js/utils.js',
+    './js/smartBuffer.js',
     './js/state.js',
     './js/ui.js',
     './js/mediaSession.js',
@@ -43,15 +44,28 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-    // We act as a network-first proxy for the PWA core, falling back to cache
     if (event.request.method !== 'GET') return;
     
+    // Bypass service worker entirely for media requests since playback.js handles caching them manually
+    if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+        return; 
+    }
+
+    // Use Stale-While-Revalidate for everything else (JSON databases, CSS, JS, Fonts)
     event.respondWith(
-        fetch(event.request).catch(() => {
-            return caches.match(event.request).then(response => {
-                if (response) return response;
+        caches.match(event.request).then((cachedResponse) => {
+            const fetchPromise = fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    caches.open(CACHE_NAME).then((cache) => {
+                        cache.put(event.request, networkResponse.clone());
+                    });
+                }
+                return networkResponse;
+            }).catch(() => {
                 return new Response('Network error occurred', { status: 408, headers: { 'Content-Type': 'text/plain' } });
             });
+
+            return cachedResponse || fetchPromise;
         })
     );
 });

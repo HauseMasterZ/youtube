@@ -113,6 +113,24 @@
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
+        prepareSwap() {
+            this.bless();
+            if (hasMediaSession && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
+            const oldActive = this.active;
+            this.active = this.inactive;
+            this.inactive = oldActive;
+            
+            this.inactive.volume = 0;
+            this.active.volume = 1.0;
+            
+            // Do not call play() or set src yet; SmartBuffer will handle that.
+            this.inactive.pause();
+            this.inactive.removeAttribute('src');
+            this.inactive.volume = 1.0;
+        }
+
         switchTrack(url, preventAutoplay) {
             this.bless();
             if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
@@ -123,19 +141,17 @@
             this.active = this.inactive;
             this.inactive = oldActive;
             
-            // Immediately silence the old track to prevent audio overlap, but KEEP it playing
-            // until the new track resolves so Android doesn't drop the MediaSession.
             this.inactive.volume = 0;
             this.active.volume = 1.0;
             
             let p;
             
             if (!preventAutoplay) {
-                this.active.src = url;
+                if (url) this.active.src = url;
                 p = this.active.play().then(() => {
                     this.inactive.pause();
                     this.inactive.removeAttribute('src');
-                    this.inactive.volume = 1.0; // Restore for future swaps
+                    this.inactive.volume = 1.0; 
                 }).catch(e => {
                     this.inactive.pause();
                     this.inactive.volume = 1.0;
@@ -145,7 +161,7 @@
             } else {
                 this.inactive.pause();
                 this.inactive.volume = 1.0;
-                this.active.src = url;
+                if (url) this.active.src = url;
                 p = Promise.resolve();
             }
             

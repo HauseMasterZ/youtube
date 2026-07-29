@@ -307,7 +307,13 @@
                 isRecovering = false;
             };
             audioPlayer.addEventListener('loadedmetadata', onMeta);
-            audioPlayer.switchTrack(getAudioUrl(track), false);
+            
+            const cacheKey = `${baseUrl}/_cache/${track.id}`;
+            let recoveryUrl = getAudioUrl(track);
+            if (preloadedBlobs && preloadedBlobs.has(cacheKey)) {
+                recoveryUrl = preloadedBlobs.get(cacheKey);
+            }
+            audioPlayer.switchTrack(recoveryUrl, false);
             return;
         }
 
