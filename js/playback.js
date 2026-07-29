@@ -41,7 +41,7 @@
             playlistMessage.style.display = 'none';
             // Force first render
             lastStartIndex = -1;
-            window.scrollTo(0, 0);
+            playlistContainer.scrollTop = 0;
             renderVirtualTracks();
         } catch (error) {
             console.error(error);

@@ -134,18 +134,27 @@
                 if (thumbImg.dataset.targetSrc !== thumbUrl) {
                     thumbImg.dataset.targetSrc = thumbUrl;
                     
+                    // Immediately remove src to show the gray CSS background template
+                    thumbImg.removeAttribute("src");
+                    
                     if (window.requestedThumbs && window.requestedThumbs.has(thumbUrl)) {
+                        // If it's already requested and likely cached, we can just assign it
                         thumbImg.src = thumbUrl;
                     } else {
-                        // Clear the old image instantly, revealing the CSS background placeholder
-                        thumbImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                        
                         // Debounce the network fetch to prevent spamming while fast-scrolling
                         setTimeout(() => {
                             if (thumbImg.dataset.targetSrc === thumbUrl) {
                                 if (!window.requestedThumbs) window.requestedThumbs = new Set();
                                 window.requestedThumbs.add(thumbUrl);
-                                thumbImg.src = thumbUrl;
+                                
+                                // Only fill it in after it's fully downloaded to prevent old image lingering
+                                const tmp = new Image();
+                                tmp.onload = () => {
+                                    if (thumbImg.dataset.targetSrc === thumbUrl) {
+                                        thumbImg.src = thumbUrl;
+                                    }
+                                };
+                                tmp.src = thumbUrl;
                             }
                         }, 150);
                     }
