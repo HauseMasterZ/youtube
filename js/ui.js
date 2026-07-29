@@ -134,8 +134,8 @@
                 if (thumbImg.dataset.targetSrc !== thumbUrl) {
                     thumbImg.dataset.targetSrc = thumbUrl;
                     
-                    // Immediately remove src to show the gray CSS background template
-                    thumbImg.removeAttribute("src");
+                    // Set src to a transparent pixel to show the gray CSS background without a broken image icon
+                    thumbImg.src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
                     
                     if (window.requestedThumbs && window.requestedThumbs.has(thumbUrl)) {
                         // If it's already requested and likely cached, we can just assign it
@@ -162,8 +162,8 @@
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                thumbImg.removeAttribute("src");
-                thumbImg.removeAttribute("data-target-src");
+                thumbImg.src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+                delete thumbImg.dataset.targetSrc;
             }
             
             textSpan.textContent = text;
