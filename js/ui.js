@@ -111,8 +111,8 @@
             li.classList.remove("active", "search-highlight");
             if (i === selectedSearchIndex) {
                 li.classList.add("search-highlight");
-            } else if (isCurrentPlaylist && item.index === globalActiveOriginalIndex) {
-                li.classList.add("active");
+            } else if (item.playlist === globalActivePlaylist && item.index === globalActiveOriginalIndex) {
+                li.classList.add('active');
             }
             
             let text = `${track.title} - ${track.channel}`;

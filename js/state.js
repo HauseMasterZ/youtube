@@ -11,7 +11,7 @@
     let playQueue = [];     
     let queueIndex = -1;    
     let globalActiveOriginalIndex = -1; 
-    
+    let globalActivePlaylist = null;
     
     let shuffleMode = parseInt(localStorage.getItem('shuffleMode')) || 0;
     let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 

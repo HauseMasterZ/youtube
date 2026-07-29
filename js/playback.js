@@ -31,7 +31,6 @@
             filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
             
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-            globalActiveOriginalIndex = -1;
             poolInitialized = false;
             prefetchedUrls.clear();
             
@@ -41,8 +40,15 @@
             playlistMessage.style.display = 'none';
             // Force first render
             lastStartIndex = -1;
-            playlistContainer.scrollTop = 0;
-            renderVirtualTracks();
+            
+            if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
+                // Must render virtual tracks first so the elements exist in DOM before scrolling
+                renderVirtualTracks();
+                scrollToTrack(globalActiveOriginalIndex);
+            } else {
+                playlistContainer.scrollTop = 0;
+                renderVirtualTracks();
+            }
         } catch (error) {
             console.error(error);
             trackList.style.display = 'none';
@@ -226,6 +232,7 @@
         
         const originalIndex = playQueue[queueIndex];
         globalActiveOriginalIndex = originalIndex;
+        globalActivePlaylist = playlistSelect.value;
         
         const track = currentPlaylistData[originalIndex];
 
