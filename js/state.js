@@ -17,6 +17,7 @@
     let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 
     
     const dominantColorCache = new Map();
+    const squareThumbCache = new Map();
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
