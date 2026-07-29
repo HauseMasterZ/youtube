@@ -298,16 +298,30 @@
         if (audioPlayer.currentTime > 0 && !audioPlayer.isRecovering) {
             audioPlayer.isRecovering = true;
             const savedTime = audioPlayer.currentTime;
-            const currentSrc = audioPlayer.getAttribute('src');
-            audioPlayer.removeAttribute('src');
-            audioPlayer.load();
-            audioPlayer.src = currentSrc;
-            audioPlayer.currentTime = savedTime;
-            audioPlayer.play().then(() => {
+            
+            // Get fresh URL in case it expired
+            const track = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+            const freshUrl = track ? getAudioUrl(track) : audioPlayer.getAttribute('src');
+            
+            // Use switchTrack to cleanly swap to the fresh audio element, bypassing bad state
+            audioPlayer.switchTrack(freshUrl, false);
+            
+            const attemptRestore = () => {
+                try {
+                    audioPlayer.currentTime = savedTime;
+                    audioPlayer.isRecovering = false;
+                } catch(e) {}
+            };
+            
+            try {
+                audioPlayer.currentTime = savedTime;
                 audioPlayer.isRecovering = false;
-            }).catch(() => {
-                audioPlayer.isRecovering = false;
-            });
+            } catch(e) {
+                audioPlayer.addEventListener('loadedmetadata', function onMeta() {
+                    audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                    attemptRestore();
+                });
+            }
             return;
         }
 
