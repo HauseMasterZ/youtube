@@ -135,7 +135,7 @@
                     thumbImg.dataset.targetSrc = thumbUrl;
                     
                     // Set src to a transparent pixel to show the gray CSS background without a broken image icon
-                    thumbImg.src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+                    thumbImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
                     
                     if (window.requestedThumbs && window.requestedThumbs.has(thumbUrl)) {
                         // If it's already requested and likely cached, we can just assign it
@@ -162,7 +162,7 @@
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                thumbImg.src = "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+                thumbImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
                 delete thumbImg.dataset.targetSrc;
             }
             
