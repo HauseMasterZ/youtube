@@ -149,10 +149,8 @@
 
         #album-art-image {
             width: 100%;
-            height: 100%;
-            aspect-ratio: 1 / 1;
+            height: auto;
             border-radius: 8px;
-            object-fit: cover;
             display: none;
         }
 
@@ -490,20 +488,18 @@
             }
             
             .now-playing:not(.expanded) #album-art-container {
-                width: 44px;
+                width: auto;
                 height: 44px;
                 margin: 0;
-                border-radius: 50%;
+                border-radius: 4px;
                 overflow: hidden;
                 flex-shrink: 0;
             }
             
             .now-playing:not(.expanded) #album-art-image {
-                border-radius: 50%;
-                width: 100%;
+                border-radius: 4px;
+                width: auto;
                 height: 100%;
-                object-fit: cover;
-                aspect-ratio: 1 / 1;
             }
             
             .now-playing:not(.expanded) #thumb-toggle-hint { 
