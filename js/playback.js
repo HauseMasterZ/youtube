@@ -332,12 +332,10 @@
         if (!thumbsDisabled && getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
             albumArt.src = thumbUrl;
-            albumArt.classList.toggle('is-square', !!(track.channel && track.channel.endsWith(' - Topic')));
             albumArt.style.display = 'block';
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
-            albumArt.classList.remove('is-square');
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
