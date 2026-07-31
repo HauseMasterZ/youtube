@@ -332,10 +332,12 @@
         if (!thumbsDisabled && getThumbUrl(track)) {
             const thumbUrl = getThumbUrl(track);
             albumArt.src = thumbUrl;
+            albumArt.classList.toggle('is-square', !!(track.channel && track.channel.endsWith(' - Topic')));
             albumArt.style.display = 'block';
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
+            albumArt.classList.remove('is-square');
             albumArt.style.display = 'none';
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
@@ -400,10 +402,21 @@
                         document.documentElement.style.setProperty('--primary-color', color);
                     }
                     if (!hasCachedSquare) {
-                        squareThumbCache.set(trackId, thumbUrl);
-                        applySquareThumb(thumbUrl, track, sequenceId);
-                    } else if (squareThumbCache.has(trackId)) {
-                        const dataUrl = squareThumbCache.get(trackId);
+                        const canvas = document.createElement('canvas');
+                        const size = Math.min(tempImg.width, tempImg.height);
+                        if (size > 0) {
+                            canvas.width = size;
+                            canvas.height = size;
+                            const ctx = canvas.getContext('2d');
+                            const xOffset = (tempImg.width - size) / 2;
+                            const yOffset = (tempImg.height - size) / 2;
+                            ctx.drawImage(tempImg, xOffset, yOffset, size, size, 0, 0, size, size);
+                            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                            squareThumbCache.set(trackId, dataUrl);
+                            applySquareThumb(dataUrl, track, sequenceId);
+                        } else {
+                            applySquareThumb(thumbUrl, track, sequenceId);
+                        }
                     }
                 } catch(e) {
                     if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId);
