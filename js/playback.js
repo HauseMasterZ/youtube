@@ -376,58 +376,32 @@
             );
         }
 
-        function hasPillarboxing(img) {
-            if (!img.complete || img.naturalWidth === 0) return false;
-            if (Math.abs(img.naturalWidth - img.naturalHeight) < 5) return true;
-            try {
-                const canvas = document.createElement('canvas');
-                canvas.width = 64;
-                canvas.height = 36;
-                const ctx = canvas.getContext('2d', { willReadFrequently: true });
-                ctx.drawImage(img, 0, 0, 64, 36);
-                const data = ctx.getImageData(0, 0, 64, 36).data;
-                let diff = 0;
-                for (let y = 10; y < 26; y++) {
-                    for (let x = 2; x < 10; x++) {
-                        const idx1 = (y * 64 + x) * 4;
-                        const idx2 = (y * 64 + x + 1) * 4;
-                        diff += Math.abs(data[idx1] - data[idx2]) + 
-                                Math.abs(data[idx1+1] - data[idx2+1]) + 
-                                Math.abs(data[idx1+2] - data[idx2+2]);
-                    }
-                }
-                const avgDiff = diff / (16 * 8);
-                return avgDiff < 15;
-            } catch(e) { return false; }
-        }
-
         function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
             const hasCachedColor = dominantColorCache.has(trackId);
             const hasCachedSquare = squareThumbCache.has(trackId);
             
             if (hasCachedColor) {
-                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+                if (currentPlaybackSequence === sequenceId) {
+                    document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+                }
             }
             if (hasCachedSquare) {
                 applySquareThumb(squareThumbCache.get(trackId), track, sequenceId);
-                albumArt.classList.toggle('is-square', hasPillarboxCache.get(trackId) ?? false);
             }
             if (hasCachedColor && hasCachedSquare) return;
 
             const tempImg = new Image();
-            tempImg.fetchPriority = "low";
-            tempImg.crossOrigin = "Anonymous";
+            tempImg.crossOrigin = "anonymous";
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
                 
-                const isSquare = hasPillarboxing(tempImg);
-                hasPillarboxCache.set(trackId, isSquare);
-                albumArt.classList.toggle('is-square', isSquare);
-
                 try {
                     if (!hasCachedColor) {
                         const color = getDominantColor(tempImg, trackId);
-                        document.documentElement.style.setProperty('--primary-color', color);
+                        dominantColorCache.set(trackId, color);
+                        if (currentPlaybackSequence === sequenceId) {
+                            document.documentElement.style.setProperty('--primary-color', color);
+                        }
                     }
                     if (!hasCachedSquare) {
                         const canvas = document.createElement('canvas');
@@ -451,10 +425,7 @@
                 }
             };
             tempImg.onerror = () => {
-                if (currentPlaybackSequence === sequenceId) {
-                    if (!hasCachedColor) document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId);
-                }
+                if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId);
             };
             tempImg.src = thumbUrl;
         }
