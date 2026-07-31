@@ -964,7 +964,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (hasMediaSession && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
             navigator.mediaSession.setPositionState({
                 duration: audioPlayer.duration,
-                playbackRate: audioPlayer.paused ? 0 : audioPlayer.playbackRate,
+                playbackRate: audioPlayer.playbackRate || 1,
                 position: audioPlayer.currentTime
             });
         }
