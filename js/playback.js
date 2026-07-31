@@ -256,6 +256,28 @@
         
         const track = currentPlaylistData[originalIndex];
 
+        if (track.is_dead) {
+            currentTitle.textContent = "Skipping Dead Video...";
+            currentTitle.style.color = "#ff5555";
+            currentChannel.textContent = track.channel;
+            scrollToTrack(originalIndex);
+            
+            // Mark the visual list item immediately
+            Array.from(trackList.children).forEach(li => li.classList.remove('active'));
+            const activeLi = Array.from(trackList.children).find(li => li.dataset.originalIndex == originalIndex);
+            if (activeLi) {
+                activeLi.classList.add('active');
+            }
+
+            if (!uiOnly) {
+                // Instantly auto-skip to the next track if we are actively playing
+                errorSkipTimer = setTimeout(() => {
+                    playNext();
+                }, 1000);
+            }
+            return;
+        }
+
         currentTitle.textContent = track.title;
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
