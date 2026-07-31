@@ -400,84 +400,10 @@
                         document.documentElement.style.setProperty('--primary-color', color);
                     }
                     if (!hasCachedSquare) {
-                        // Dynamic aspect ratio detection using edge gradient analysis
-                        const scaleH = 64;
-                        const scaleW = Math.round((tempImg.width / tempImg.height) * scaleH);
-                        const analysisCanvas = document.createElement('canvas');
-                        analysisCanvas.width = scaleW; analysisCanvas.height = scaleH;
-                        const actx = analysisCanvas.getContext('2d', { willReadFrequently: true });
-                        actx.drawImage(tempImg, 0, 0, scaleW, scaleH);
-                        const imgData = actx.getImageData(0, 0, scaleW, scaleH).data;
-                        
-                        const colGradients = new Array(scaleW).fill(0);
-                        for (let x = 1; x < scaleW; x++) {
-                            let diff = 0;
-                            for (let y = 0; y < scaleH; y++) {
-                                const idx = (y * scaleW + x) * 4;
-                                const pIdx = (y * scaleW + (x - 1)) * 4;
-                                diff += Math.abs(imgData[idx] - imgData[pIdx]) + 
-                                        Math.abs(imgData[idx+1] - imgData[pIdx+1]) + 
-                                        Math.abs(imgData[idx+2] - imgData[pIdx+2]);
-                            }
-                            colGradients[x] = diff;
-                        }
-                        
-                        let leftEdge = 0, maxLeft = 0;
-                        for (let x = 2; x < scaleW/2; x++) {
-                            if (colGradients[x] > maxLeft) { maxLeft = colGradients[x]; leftEdge = x; }
-                        }
-                        
-                        let rightEdge = scaleW - 1, maxRight = 0;
-                        for (let x = scaleW - 3; x > scaleW/2; x--) {
-                            if (colGradients[x] > maxRight) { maxRight = colGradients[x]; rightEdge = x; }
-                        }
-                        
-                        const leftDist = leftEdge;
-                        const rightDist = scaleW - rightEdge;
-                        const isSymmetric = Math.abs(leftDist - rightDist) <= 3;
-                        const isSharp = maxLeft > 1000 && maxRight > 1000;
-                        
-                        let cropX = 0, cropY = 0, cropW = tempImg.width, cropH = tempImg.height;
-                        
-                        if (isSymmetric && isSharp && leftDist > 0) {
-                            const estCropX = Math.round((leftEdge / scaleW) * tempImg.width);
-                            const estCropW = Math.round(((rightEdge - leftEdge) / scaleW) * tempImg.width);
-                            const aspect = estCropW / tempImg.height;
-                            
-                            // If the detected inner region forms a 1:1 or 4:3 aspect ratio perfectly
-                            if (Math.abs(aspect - 1.0) < 0.05 || Math.abs(aspect - (4/3)) < 0.05) {
-                                cropX = estCropX;
-                                cropW = estCropW;
-                            }
-                        }
-                        
-                        const canvas = document.createElement('canvas');
-                        canvas.width = cropW;
-                        canvas.height = cropH;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(tempImg, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-                        
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                        squareThumbCache.set(trackId, dataUrl); // Cache the correctly cropped version
-                        applySquareThumb(dataUrl, track, sequenceId);
-                        
-                        // We ONLY apply the cropped version to the UI if it actually found a crop (i.e. aspect ratio changed)
-                        if (cropW !== tempImg.width && currentPlaybackSequence === sequenceId) {
-                            albumArt.src = dataUrl;
-                        }
+                        squareThumbCache.set(trackId, thumbUrl);
+                        applySquareThumb(thumbUrl, track, sequenceId);
                     } else if (squareThumbCache.has(trackId)) {
                         const dataUrl = squareThumbCache.get(trackId);
-                        
-                        // To know if we should apply it, we can create a quick image to check its aspect ratio
-                        if (currentPlaybackSequence === sequenceId) {
-                            const cachedImg = new Image();
-                            cachedImg.onload = () => {
-                                if (currentPlaybackSequence === sequenceId && Math.abs((cachedImg.width / cachedImg.height) - (tempImg.width / tempImg.height)) > 0.05) {
-                                    albumArt.src = dataUrl;
-                                }
-                            };
-                            cachedImg.src = dataUrl;
-                        }
                     }
                 } catch(e) {
                     if (!hasCachedSquare) applySquareThumb(thumbUrl, track, sequenceId);
