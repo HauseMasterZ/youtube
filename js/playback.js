@@ -259,9 +259,6 @@
         currentTitle.textContent = track.title;
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
-        
-        localStorage.setItem("lastPlaylist", playlistSelect.value);
-        localStorage.setItem("lastTrackId", track.id);
 
         scrollToTrack(originalIndex);
 

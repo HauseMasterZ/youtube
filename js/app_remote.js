@@ -588,9 +588,6 @@ document.addEventListener("DOMContentLoaded", () => {
         currentTitle.textContent = track.title;
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
-        
-        localStorage.setItem("lastPlaylist", playlistSelect.value);
-        localStorage.setItem("lastTrackId", track.id);
 
         scrollToTrack(originalIndex);
 
@@ -999,10 +996,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const ct = Math.floor(audioPlayer.currentTime);
             if (ct !== lastRenderTime) {
                 updateTimeUI(ct);
-                if (++localStorageCounter >= 5) {
-                    localStorageCounter = 0;
-                    localStorage.setItem("lastTime", audioPlayer.currentTime);
-                }
             }
         }
         syncRAFId = setTimeout(syncLoop, 1000);
@@ -1036,10 +1029,6 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPosition();
         if ('mediaSession' in navigator) {
             navigator.mediaSession.playbackState = 'paused';
-        }
-        // Flush position to localStorage immediately on pause
-        if (audioPlayer.currentTime > 0) {
-            localStorage.setItem("lastTime", audioPlayer.currentTime);
         }
     });
 
@@ -1289,37 +1278,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Initialize Fast-Boot
-    const lastPlaylist = localStorage.getItem("lastPlaylist") || playlistSelect.value;
-    if (ALL_PLAYLISTS.includes(lastPlaylist)) {
-        playlistSelect.value = lastPlaylist;
-    }
-    
     // Load the active playlist instantaneously, defer others to the background
     loadPlaylist(playlistSelect.value).then(() => {
         preloadAllPlaylists(playlistSelect.value); // Non-blocking background preload
-        
-        const lastTrackId = localStorage.getItem("lastTrackId");
-        if (lastTrackId) {
-            const targetOriginalIndex = currentPlaylistData.findIndex(t => t.id === lastTrackId);
-            if (targetOriginalIndex !== -1) {
-                queueIndex = playQueue.indexOf(targetOriginalIndex);
-                executePlayback(true); // true = preventAutoplay
-                
-                const savedTime = localStorage.getItem("lastTime");
-                if (savedTime) {
-                    localStorage.removeItem("lastTime"); // Clear immediately so it only applies once
-                    const restoreTime = () => {
-                        audioPlayer.removeEventListener("loadedmetadata", restoreTime);
-                        if (localStorage.getItem("lastTrackId") === lastTrackId) {
-                            audioPlayer.currentTime = parseFloat(savedTime);
-                            updateTimeUI(parseFloat(savedTime));
-                        }
-                    };
-                    audioPlayer.addEventListener("loadedmetadata", restoreTime);
-                }
-            }
-        }
     });
 });
     // --- Register Service Worker for PWA Installability ---

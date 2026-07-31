@@ -233,9 +233,6 @@
             navigator.mediaSession.playbackState = 'paused';
         }
         // Flush position to localStorage immediately on pause
-        if (audioPlayer.currentTime > 0) {
-            localStorage.setItem("lastTime", audioPlayer.currentTime);
-        }
     });
 
     document.addEventListener("visibilitychange", () => {
@@ -454,28 +451,9 @@
             console.error('ServiceWorker registration failed: ', error);
         });
     }
-    // Initialize Fast-Boot
-    const lastPlaylist = localStorage.getItem("lastPlaylist") || playlistSelect.value;
-    if (ALL_PLAYLISTS.includes(lastPlaylist)) {
-        playlistSelect.value = lastPlaylist;
-    }
-    
     // Load the active playlist instantaneously, defer others to the background
     loadPlaylist(playlistSelect.value).then(() => {
         preloadAllPlaylists(playlistSelect.value); // Non-blocking background preload
-        
-        const lastTrackId = localStorage.getItem("lastTrackId");
-        if (lastTrackId) {
-            const targetOriginalIndex = currentPlaylistData.findIndex(t => t.id === lastTrackId);
-            if (targetOriginalIndex !== -1) {
-                queueIndex = playQueue.indexOf(targetOriginalIndex);
-                if (shuffleMode === 1) {
-                    crossShuffleHistory = [{ playlist: playlistSelect.value, index: targetOriginalIndex }];
-                    crossShufflePos = 0;
-                }
-                executePlayback(true); // true = preventAutoplay
-            }
-        }
     });
     
     // Keyboard Shortcuts (Desktop Only)
