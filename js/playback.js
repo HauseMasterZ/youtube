@@ -411,7 +411,7 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: [{ src: srcUrl, sizes: '512x512', type: 'image/webp' }]
+                    artwork: [{ src: srcUrl, type: 'image/webp' }]
                 });
             }
         }
