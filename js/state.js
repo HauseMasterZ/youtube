@@ -18,6 +18,7 @@
     
     const dominantColorCache = new Map();
     const squareThumbCache = new Map();
+    const hasPillarboxCache = new Map();
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
