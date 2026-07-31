@@ -172,7 +172,6 @@
 
     btnShuffle.addEventListener("click", () => {
         shuffleMode = (shuffleMode + 1) % 3;
-        localStorage.setItem('shuffleMode', shuffleMode);
         applyShuffleUI();
 
         if (shuffleMode === 1) {
@@ -198,7 +197,6 @@
 
     btnRepeat.addEventListener("click", () => {
         repeatMode = (repeatMode + 1) % 3;
-        localStorage.setItem('repeatMode', repeatMode);
         applyRepeatUI();
     });
     audioPlayer.addEventListener("loadedmetadata", () => {

@@ -13,8 +13,8 @@
     let globalActiveOriginalIndex = -1; 
     let globalActivePlaylist = null;
     
-    let shuffleMode = parseInt(localStorage.getItem('shuffleMode')) || 0;
-    let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 
+    let shuffleMode = 0;
+    let repeatMode = 0; 
     
     const dominantColorCache = new Map();
     const squareThumbCache = new Map();
@@ -49,4 +49,4 @@
     let lastEndIndex = -1;
     let isRendering = false;
     let poolInitialized = false;
-    let localStorageCounter = 0;
+

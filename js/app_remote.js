@@ -52,8 +52,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let globalActiveOriginalIndex = -1; 
     
     
-    let shuffleMode = parseInt(localStorage.getItem('shuffleMode')) || 0;
-    let repeatMode = parseInt(localStorage.getItem('repeatMode')) || 0; 
+    let shuffleMode = 0;
+    let repeatMode = 0; 
 
     function applyShuffleUI() {
         btnShuffle.classList.remove("active-state");
@@ -97,8 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let syncRAFId = null;
     let searchDebounceTimer = null;
     let errorSkipTimer = null;
-    let storedThumbsDisabled = localStorage.getItem('thumbsDisabled');
-    let thumbsDisabled = storedThumbsDisabled === null ? true : storedThumbsDisabled === 'true';
+    let thumbsDisabled = true;
     
     let activeObjectURL = null;
     let requestedThumbs = new Set();
@@ -110,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let isRendering = false;
     let poolInitialized = false;
     const prefetchedUrls = new Set();
-    let localStorageCounter = 0;
+
 
     // --- Network Bootstrapping Optimization ---
     function preloadAllPlaylists(excludePl) {
@@ -933,7 +932,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnShuffle.addEventListener("click", () => {
         shuffleMode = (shuffleMode + 1) % 3;
-        localStorage.setItem('shuffleMode', shuffleMode);
         applyShuffleUI();
 
         if (shuffleMode === 1) {
@@ -959,7 +957,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnRepeat.addEventListener("click", () => {
         repeatMode = (repeatMode + 1) % 3;
-        localStorage.setItem('repeatMode', repeatMode);
         applyRepeatUI();
     });
 
@@ -1210,7 +1207,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const isMiddle = capturedX >= width * 0.33 && capturedX <= width * 0.66;
                 if (isMiddle) {
             thumbsDisabled = !thumbsDisabled;
-            localStorage.setItem('thumbsDisabled', thumbsDisabled);
             
             if (thumbsDisabled) {
                 albumArt.style.display = 'none';
