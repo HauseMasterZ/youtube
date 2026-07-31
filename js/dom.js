@@ -75,6 +75,8 @@
                 this.active.volume = 1.0;
             }
             
+            if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = false;
+
             return this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
@@ -82,6 +84,7 @@
         }
         
         pause() { 
+            if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = true;
             if (this.active.paused) return Promise.resolve();
             // Stop the silent MediaSession-holder so Android Chrome sees ALL audio as stopped
             if (this.silentPlaying) {
@@ -125,9 +128,10 @@
             this.inactive.volume = 0;
             this.active.volume = 1.0;
             
-            // Do not call play() or set src yet; SmartBuffer will handle that.
             this.inactive.pause();
+            this.inactive.src = "";
             this.inactive.removeAttribute('src');
+            this.inactive.load();
             this.inactive.volume = 1.0;
         }
 
@@ -150,16 +154,24 @@
                 if (url) this.active.src = url;
                 p = this.active.play().then(() => {
                     this.inactive.pause();
+                    this.inactive.src = "";
                     this.inactive.removeAttribute('src');
+                    this.inactive.load();
                     this.inactive.volume = 1.0; 
                 }).catch(e => {
                     this.inactive.pause();
+                    this.inactive.src = "";
+                    this.inactive.removeAttribute('src');
+                    this.inactive.load();
                     this.inactive.volume = 1.0;
                     console.error("Autoplay failed on switch", e);
                     throw e;
                 });
             } else {
                 this.inactive.pause();
+                this.inactive.src = "";
+                this.inactive.removeAttribute('src');
+                this.inactive.load();
                 this.inactive.volume = 1.0;
                 if (url) this.active.src = url;
                 p = Promise.resolve();

@@ -199,9 +199,15 @@
         if (isPlaying) {
             iconPlay.style.display = 'none';
             iconPause.style.display = 'block';
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
+            }
         } else {
             iconPlay.style.display = 'block';
             iconPause.style.display = 'none';
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
         }
     }
     function updateTimeUI(seconds) {

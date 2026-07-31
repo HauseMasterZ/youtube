@@ -119,7 +119,18 @@ document.addEventListener("DOMContentLoaded", () => {
                 fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
                     .then(res => res.json())
                     .then(data => {
-                        allDatabases[pl] = data;
+                        if (data.length > 0 && Array.isArray(data[0])) {
+                            allDatabases[pl] = data.map(item => ({
+                                id: item[0],
+                                title: item[1],
+                                channel: item[2],
+                                duration: item[3],
+                                file_path: `${pl}/${item[4]}.webm`,
+                                thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
+                            }));
+                        } else {
+                            allDatabases[pl] = data;
+                        }
                     }).catch(e => {});
             }
         });
@@ -135,7 +146,18 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!allDatabases[folderName]) {
                 const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
                 if (!res.ok) throw new Error();
-                const data = await res.json();
+                let data = await res.json();
+                
+                if (data.length > 0 && Array.isArray(data[0])) {
+                    data = data.map(item => ({
+                        id: item[0],
+                        title: item[1],
+                        channel: item[2],
+                        duration: item[3],
+                        file_path: `${folderName}/${item[4]}.webm`,
+                        thumbnail_path: `${folderName}/thumbnails/${item[4]}.webp`
+                    }));
+                }
                 
                 allDatabases[folderName] = data;
             }
@@ -642,15 +664,21 @@ document.addEventListener("DOMContentLoaded", () => {
     function parseLRC(text) {
         const lines = text.split(/\r?\n/);
         const lyrics = [];
-        let isAiGenerated = false;
+        let isUnsynced = false;
+        
+        let hasTimestamps = lines.some(line => /^\[\d{2,}:\d{2}(?:\.\d{2,3})?\]/.test(line));
+        if (!hasTimestamps) {
+            isUnsynced = true;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line) lyrics.push({ time: 0, text: line });
+            }
+            return { lyrics, isUnsynced };
+        }
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
-            
-            if (line.includes('[au:AI_GENERATED]')) {
-                isAiGenerated = true;
-                continue;
-            }
             
             // Matches [mm:ss.xx] or [mm:ss.xxx]
             const match = line.match(/^\[(\d{2,}):(\d{2})(?:\.(\d{2,3}))?\](.*)/);
@@ -667,7 +695,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         }
-        return { lyrics, isAiGenerated };
+        return { lyrics, isUnsynced };
     }
 
     async function loadLyrics(track) {
@@ -688,18 +716,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const text = await res.text();
             const parsed = parseLRC(text);
             currentLyrics = parsed.lyrics;
+            let currentLyricsIsUnsynced = parsed.isUnsynced;
             
             if (currentLyrics.length === 0) throw new Error();
             
-            lyricsContent.innerHTML = '';
-            lyricsContent.style.display = 'block'; // Remove inline flex styles
-            
-            if (parsed.isAiGenerated) {
-                const badge = document.createElement('div');
-                badge.className = 'ai-lyrics-badge';
-                badge.innerHTML = '<span>✨ AI Generated</span>';
-                lyricsContainer.appendChild(badge);
+            if (!currentLyricsIsUnsynced && currentLyrics[0].time > 0) {
+                currentLyrics.unshift({ time: 0, text: "..." });
             }
+            
+            lyricsContent.innerHTML = '';
+            lyricsContent.style.display = 'block'; 
             
             const lyricsInner = document.createElement('div');
             lyricsInner.id = 'lyrics-inner';
@@ -713,11 +739,13 @@ document.addEventListener("DOMContentLoaded", () => {
             
             currentLyrics.forEach((line) => {
                 const p = document.createElement('p');
-                p.textContent = `[${formatTime(line.time)}] ${line.text}`;
+                p.textContent = currentLyricsIsUnsynced ? line.text : `[${formatTime(line.time)}] ${line.text}`;
                 p.className = 'lyric-line';
-                p.addEventListener('click', () => {
-                    audioPlayer.currentTime = line.time;
-                });
+                if (!currentLyricsIsUnsynced) {
+                    p.addEventListener('click', () => {
+                        audioPlayer.currentTime = line.time;
+                    });
+                }
                 lyricsInner.appendChild(p);
             });
             
@@ -778,7 +806,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function updateLyricsUI(currentTime) {
-        if (!lyricsActive || currentLyrics.length === 0) return;
+        if (!lyricsActive || currentLyrics.length === 0 || typeof currentLyricsIsUnsynced !== 'undefined' && currentLyricsIsUnsynced) return;
         
         let newIndex = -1;
         for (let i = currentLyrics.length - 1; i >= 0; i--) {
@@ -888,8 +916,10 @@ document.addEventListener("DOMContentLoaded", () => {
     btnPlayPause.addEventListener("click", () => {
         if (!audioPlayer.src) return; 
         if (audioPlayer.paused) {
+            setPlayUI(true);
             audioPlayer.play();
         } else {
+            setPlayUI(false);
             audioPlayer.pause();
         }
     });
@@ -937,10 +967,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     function updateMediaSessionPosition() {
-        if ('mediaSession' in navigator && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
+        if (hasMediaSession && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
             navigator.mediaSession.setPositionState({
                 duration: audioPlayer.duration,
-                playbackRate: audioPlayer.playbackRate,
+                playbackRate: audioPlayer.paused ? 0 : audioPlayer.playbackRate,
                 position: audioPlayer.currentTime
             });
         }

@@ -26,7 +26,7 @@
     // Lyrics State
     window.lyricsActive = false;
     let currentLyrics = []; // Array of { time: float, text: string }
-    let currentLyricsIsAi = false;
+    let currentLyricsIsUnsynced = false;
     let fetchingLyrics = false;
     
     // UI Throttling

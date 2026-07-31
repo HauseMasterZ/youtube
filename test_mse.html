@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<body>
+<audio id="audio" controls></audio>
+<script>
+async function run() {
+    const url = "https://media-proxy.system-cache-node.workers.dev/Gym/Crazy%20Kiya%20Re%20-%20Sunidhi%20Chauhan%20-%20Topic.webm";
+    const audio = document.getElementById('audio');
+    
+    audio.addEventListener('error', (e) => {
+        console.error("Audio error:", audio.error.code, audio.error.message);
+    });
+    
+    const ms = new MediaSource();
+    audio.src = URL.createObjectURL(ms);
+    
+    audio.play().catch(e => console.error("Play error:", e));
+    
+    await new Promise(r => ms.addEventListener('sourceopen', r));
+    console.log("Source open");
+    
+    const sb = ms.addSourceBuffer('audio/webm; codecs="opus, vorbis"');
+    sb.addEventListener('error', e => console.error("SB error", e));
+    
+    const resp = await fetch(url, { headers: { "Range": "bytes=0-500000" }});
+    const data = await resp.arrayBuffer();
+    
+    sb.appendBuffer(data);
+    await new Promise(r => sb.addEventListener('updateend', r));
+    console.log("Append done. Audio duration:", audio.duration);
+    
+    audio.play().catch(e => console.error("Play error:", e));
+}
+run();
+</script>
+</body>
+</html>

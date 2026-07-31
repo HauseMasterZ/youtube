@@ -2,7 +2,7 @@
         if (hasMediaSession && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
             navigator.mediaSession.setPositionState({
                 duration: audioPlayer.duration,
-                playbackRate: audioPlayer.playbackRate,
+                playbackRate: audioPlayer.paused ? 0 : audioPlayer.playbackRate,
                 position: audioPlayer.currentTime
             });
         }

@@ -1,15 +1,21 @@
     function parseLRC(text) {
         const lines = text.split(/\r?\n/);
         const lyrics = [];
-        let isAiGenerated = false;
+        let isUnsynced = false;
+        
+        let hasTimestamps = lines.some(line => /^\[\d{2,}:\d{2}(?:\.\d{2,3})?\]/.test(line));
+        if (!hasTimestamps) {
+            isUnsynced = true;
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (line) lyrics.push({ time: 0, text: line });
+            }
+            return { lyrics, isUnsynced };
+        }
+        
         for (let i = 0; i < lines.length; i++) {
             const line = lines[i].trim();
             if (!line) continue;
-            
-            if (line.includes('[au:AI_GENERATED]')) {
-                isAiGenerated = true;
-                continue;
-            }
             
             // Matches [mm:ss.xx] or [mm:ss.xxx]
             const match = line.match(/^\[(\d{2,}):(\d{2})(?:\.(\d{2,3}))?\](.*)/);
@@ -26,7 +32,7 @@
                 }
             }
         }
-        return { lyrics, isAiGenerated };
+        return { lyrics, isUnsynced };
     }
 
     async function loadLyrics(track) {
@@ -37,7 +43,7 @@
         lyricsContent.innerHTML = '<p class="lyrics-placeholder" style="font-size: 32px; letter-spacing: 4px; font-weight: 800; color: var(--primary-color); opacity: 0.8; margin: auto;">...</p>';
         lyricsContent.style.display = 'flex';
         currentLyrics = [];
-        currentLyricsIsAi = false;
+        currentLyricsIsUnsynced = false;
         fetchingLyrics = true;
         
         try {
@@ -54,23 +60,16 @@
             
             const parsed = parseLRC(text);
             currentLyrics = parsed.lyrics;
-            currentLyricsIsAi = parsed.isAiGenerated;
+            currentLyricsIsUnsynced = parsed.isUnsynced;
             
             if (currentLyrics.length === 0) throw new Error();
             
-            if (currentLyrics[0].time > 0) {
+            if (!currentLyricsIsUnsynced && currentLyrics[0].time > 0) {
                 currentLyrics.unshift({ time: 0, text: "..." });
             }
             
             lyricsContent.innerHTML = '';
             lyricsContent.style.display = 'block'; // Remove inline flex styles
-            
-            if (parsed.isAiGenerated) {
-                const badge = document.createElement('div');
-                badge.className = 'ai-lyrics-badge';
-                badge.innerHTML = '<span>✨ AI Generated</span>';
-                lyricsContainer.appendChild(badge);
-            }
             
             const lyricsInner = document.createElement('div');
             lyricsInner.id = 'lyrics-inner';
@@ -84,9 +83,9 @@
             
             currentLyrics.forEach((line) => {
                 const p = document.createElement('p');
-                p.textContent = currentLyricsIsAi ? line.text : `[${formatTime(line.time)}] ${line.text}`;
+                p.textContent = currentLyricsIsUnsynced ? line.text : `[${formatTime(line.time)}] ${line.text}`;
                 p.className = 'lyric-line';
-                if (!currentLyricsIsAi) {
+                if (!currentLyricsIsUnsynced) {
                     p.addEventListener('click', () => {
                         audioPlayer.currentTime = line.time;
                     });
@@ -99,7 +98,7 @@
             // Build layout cache to prevent DOM layout thrashing
             requestAnimationFrame(() => {
                 buildLyricsCache();
-                if (window.lyricsActive && !currentLyricsIsAi) {
+                if (window.lyricsActive && !currentLyricsIsUnsynced) {
                     activeLyricIndex = -1;
                     updateLyricsUI(audioPlayer.currentTime);
                 }
@@ -158,7 +157,7 @@
     });
 
     function updateLyricsUI(currentTime) {
-        if (!window.lyricsActive || currentLyrics.length === 0 || currentLyricsIsAi) return;
+        if (!window.lyricsActive || currentLyrics.length === 0 || currentLyricsIsUnsynced) return;
         
         let newIndex = -1;
         for (let i = currentLyrics.length - 1; i >= 0; i--) {
@@ -190,7 +189,7 @@
     let lastLyricsRender = 0;
     
     function lyricsLoop(timestamp) {
-        if (!window.lyricsActive || audioPlayer.paused || currentLyricsIsAi) {
+        if (!window.lyricsActive || audioPlayer.paused || currentLyricsIsUnsynced) {
             lyricsRafId = null;
             return;
         }

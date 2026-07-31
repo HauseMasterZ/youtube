@@ -4,7 +4,18 @@
                 fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
                     .then(res => res.json())
                     .then(data => {
-                        allDatabases[pl] = data;
+                        if (data.length > 0 && Array.isArray(data[0])) {
+                            allDatabases[pl] = data.map(item => ({
+                                id: item[0],
+                                title: item[1],
+                                channel: item[2],
+                                duration: item[3],
+                                file_path: `${pl}/${item[4]}.webm`,
+                                thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
+                            }));
+                        } else {
+                            allDatabases[pl] = data;
+                        }
                     }).catch(e => {});
             }
         });
@@ -20,7 +31,18 @@
             if (!allDatabases[folderName]) {
                 const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
                 if (!res.ok) throw new Error();
-                const data = await res.json();
+                let data = await res.json();
+                
+                if (data.length > 0 && Array.isArray(data[0])) {
+                    data = data.map(item => ({
+                        id: item[0],
+                        title: item[1],
+                        channel: item[2],
+                        duration: item[3],
+                        file_path: `${folderName}/${item[4]}.webm`,
+                        thumbnail_path: `${folderName}/thumbnails/${item[4]}.webp`
+                    }));
+                }
                 
                 allDatabases[folderName] = data;
             }
@@ -311,20 +333,27 @@
                 track.duration, 
                 sequenceId, 
                 audioPlayer.active,
-                  (isBuffering, secondsLeft) => {
-                      if (currentPlaybackSequence !== sequenceId) return;
-                      if (isBuffering) {
-                          currentTitle.textContent = secondsLeft > 0 ? `Buffering... (${secondsLeft}s left)` : 'Buffering...';
-                          currentTitle.style.color = '#ffcc00';
-                          // Force playing UI state off
-                          setPlayUI(false);
-                      } else {
-                          currentTitle.textContent = track.title;
-                          currentTitle.style.color = '#ffffff';
-                          setPlayUI(true);
-                          triggerPreloads(); // Wait to trigger preload until current starts playing
-                      }
-                  }
+                (isBuffering, secondsLeft) => {
+                    if (currentPlaybackSequence !== sequenceId) return;
+                    const bufferingIndicator = document.getElementById("buffering-indicator");
+                    if (isBuffering) {
+                        if (bufferingIndicator) {
+                            bufferingIndicator.style.display = "block";
+                            window.currentBufferingSeconds = secondsLeft;
+                        }
+                        setPlayUI(false);
+                    } else {
+                        if (bufferingIndicator) {
+                            bufferingIndicator.style.display = "none";
+                            bufferingIndicator.textContent = "...";
+                            bufferingIndicator.style.letterSpacing = "2px";
+                            window.currentBufferingSeconds = -1;
+                        }
+                        setPlayUI(true);
+                        triggerPreloads();
+                    }
+                },
+                preventAutoplay || uiOnly
             );
         }
 
@@ -452,13 +481,14 @@
             }
         }
         
-        const nextUrl = nextTrack ? getAudioUrl(nextTrack) : null;
-        const prevUrl = prevTrack ? getAudioUrl(prevTrack) : null;
+        const nextCacheKey = nextTrack ? `${baseUrl}/_cache/${nextTrack.id}` : null;
+        const prevCacheKey = prevTrack ? `${baseUrl}/_cache/${prevTrack.id}` : null;
+        
         const currentTrack = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
-        const currentUrl = currentTrack ? getAudioUrl(currentTrack) : null;
+        const currentCacheKey = currentTrack ? `${baseUrl}/_cache/${currentTrack.id}` : null;
         
         for (const [url, blobUrl] of preloadedBlobs.entries()) {
-            if (url !== nextUrl && url !== prevUrl && url !== currentUrl) {
+            if (url !== nextCacheKey && url !== prevCacheKey && url !== currentCacheKey) {
                 URL.revokeObjectURL(blobUrl);
                 preloadedBlobs.delete(url);
                 preloadedFetches.delete(url);
