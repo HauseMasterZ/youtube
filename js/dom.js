@@ -58,13 +58,6 @@
             blessAud(this.audio2);
         }
 
-        pauseSilence() {
-            if (this.silentPlaying) {
-                this.silent.pause();
-                this.silentPlaying = false;
-            }
-        }
-
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
         get duration() { return this.active.duration; }
@@ -77,6 +70,8 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
+            
+
             // Cancel any pending fade-out from a recent pause() call
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
@@ -86,18 +81,13 @@
             
             if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = false;
 
-            const p = this.active.play().catch(e => {
+            return this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
             }); 
-            
-            // Bless MUST happen after active.play() to prevent the OS background 
-            // user gesture from getting scoped exclusively to the silent audio element!
-            this.bless();
-            return p;
         }
         
-        pause() { 
+        pause() { this.pauseSilence(); 
             if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = true;
             if (this.active.paused) return Promise.resolve();
             return new Promise(resolve => {

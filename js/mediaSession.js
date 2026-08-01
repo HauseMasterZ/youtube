@@ -19,13 +19,6 @@
                 }
                 return;
             }
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-            
-            // Release the MediaSession from the silent background loop BEFORE attempting 
-            // to resume the main audio, otherwise Android Chrome will throw a NotAllowedError 
-            // by scoping the background user gesture token exclusively to the silent element.
-            audioPlayer.pauseSilence();
-            
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
