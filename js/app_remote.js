@@ -599,7 +599,7 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: getThumbUrl(track) && !thumbsDisabled ? [{ src: getThumbUrl(track), sizes: '512x512', type: 'image/jpeg' }] : []
+                artwork: getThumbUrl(track) && !thumbsDisabled ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
         }
@@ -1123,36 +1123,116 @@ document.addEventListener("DOMContentLoaded", () => {
         albumArt.style.display = 'none';
     });
     
-    albumArtContainer.addEventListener("click", () => {
-        thumbsDisabled = !thumbsDisabled;
-        localStorage.setItem('thumbsDisabled', thumbsDisabled);
-        
-        if (thumbsDisabled) {
-            albumArt.style.display = 'none';
-            thumbToggleHint.style.display = 'block';
-            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-        } else {
-            thumbToggleHint.style.display = 'none';
-            if (queueIndex >= 0 && queueIndex < playQueue.length) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    albumArt.src = getThumbUrl(track);
-                    albumArt.style.display = 'block';
+    function getDominantColor(imgEl) {
+        if (imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
+        let canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return '#8c73ff';
+        canvas.width = 10; canvas.height = 10;
+        try {
+            ctx.drawImage(imgEl, 0, 0, 10, 10);
+            let data = ctx.getImageData(0, 0, 10, 10).data;
+            let r=0, g=0, b=0, count=0;
+            for (let i = 0; i < data.length; i += 4) {
+                let pr = data[i], pg = data[i+1], pb = data[i+2];
+                let max = Math.max(pr, pg, pb), min = Math.min(pr, pg, pb);
+                if (max > 40 && max < 250 && (max - min) > 15) { 
+                    r += pr; g += pg; b += pb; count++;
                 }
             }
+            if (count === 0) { 
+                for (let i = 0; i < data.length; i += 4) {
+                    r += data[i]; g += data[i+1]; b += data[i+2]; count++;
+                }
+            }
+            if (count === 0) return '#8c73ff';
+            r = Math.floor(r/count); g = Math.floor(g/count); b = Math.floor(b/count);
+            let brightness = (r * 299 + g * 587 + b * 114) / 1000;
+            if (brightness < 120) {
+                let factor = 120 / Math.max(brightness, 1);
+                r = Math.min(255, Math.floor(r * factor));
+                g = Math.min(255, Math.floor(g * factor));
+                b = Math.min(255, Math.floor(b * factor));
+            }
+            return `rgb(${r}, ${g}, ${b})`;
+        } catch(e) { return '#8c73ff'; }
+    }
+
+    albumArt.addEventListener("load", () => {
+        if (!thumbsDisabled && albumArt.src && !albumArt.src.startsWith('data:')) {
+            document.documentElement.style.setProperty('--primary-color', getDominantColor(albumArt));
         }
-        
-        // Re-render track list to show/hide track thumbs
-        lastStartIndex = -1;
-        renderVirtualTracks();
     });
-
-
 
     // Initialize thumb toggle hint visibility
     if (thumbsDisabled) {
         thumbToggleHint.style.display = 'block';
     }
+
+    let artClickTimer = null;
+    
+    albumArtContainer.addEventListener("pointerup", (e) => {
+        // In mobile mini-player mode, let click bubble up to expand player
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
+        e.stopPropagation();
+        
+        const rect = albumArtContainer.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const width = rect.width;
+        
+        if (artClickTimer) {
+            // Second click within 300ms — double click for seek
+            clearTimeout(artClickTimer);
+            artClickTimer = null;
+            const isLeft = clickX < width * 0.33;
+            const isRight = clickX > width * 0.66;
+            if (isLeft) {
+                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+                updateTimeUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                updateMediaSessionPosition();
+            } else if (isRight) {
+                let dur = audioPlayer.duration;
+                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
+                updateTimeUI(audioPlayer.currentTime);
+                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+                updateMediaSessionPosition();
+            }
+        } else {
+            // First click — wait 300ms to disambiguate single vs double click
+            const capturedX = clickX;
+            artClickTimer = setTimeout(() => {
+                artClickTimer = null;
+                const isMiddle = capturedX >= width * 0.33 && capturedX <= width * 0.66;
+                if (isMiddle) {
+            thumbsDisabled = !thumbsDisabled;
+            
+            if (thumbsDisabled) {
+                albumArt.style.display = 'none';
+                thumbToggleHint.style.display = 'block';
+                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+            } else {
+                thumbToggleHint.style.display = 'none';
+                if (queueIndex >= 0 && queueIndex < playQueue.length) {
+                    const track = currentPlaylistData[playQueue[queueIndex]];
+                    if (track && getThumbUrl(track)) {
+                        albumArt.src = getThumbUrl(track);
+                        albumArt.style.display = 'block';
+                        if (albumArt.complete && !albumArt.src.startsWith('data:')) {
+                            document.documentElement.style.setProperty('--primary-color', getDominantColor(albumArt));
+                        }
+                    }
+                }
+            }
+            
+            // Re-render track list to show/hide track thumbs
+            lastStartIndex = -1;
+            renderVirtualTracks();
+                }
+            }, 300);
+        }
+    });
 
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {

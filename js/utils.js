@@ -1,6 +1,6 @@
     const baseUrl = "https://media-proxy.system-cache-node.workers.dev";
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
-    function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}?v=2` : null; }
+    function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds === Infinity) return "0:00";
