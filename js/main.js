@@ -302,21 +302,23 @@
         }
     });
 
-    audioPlayer.addEventListener("error", () => {
-        if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
-        
-        // Android Power Management / Network drop: Try to recover ONCE before skipping.
-        if (audioPlayer.currentTime > 0 && !isRecovering) {
-            isRecovering = true;
-            const savedTime = audioPlayer.currentTime;
-            const track = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
-            if (!track) { isRecovering = false; return; }
-
-            const onMeta = () => {
-                audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                audioPlayer.currentTime = savedTime;
-                isRecovering = false;
-            };
+      audioPlayer.addEventListener("error", () => {
+          if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
+          
+          // Android Power Management / Network drop: Try to recover ONCE before skipping.
+          const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
+          if (ct > 0 && !isRecovering) {
+              isRecovering = true;
+              const savedTime = ct;
+              const track = currentPlaylistData[playQueue[queueIndex]] || 
+currentPlaylistData[globalActiveOriginalIndex];
+              if (!track) { isRecovering = false; return; }
+  
+              const onMeta = () => {
+                  audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                  audioPlayer.currentTime = savedTime;
+                  isRecovering = false;
+              };
             audioPlayer.addEventListener('loadedmetadata', onMeta);
             
             const cacheKey = `${baseUrl}/_cache/${track.id}`;

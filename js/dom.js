@@ -31,6 +31,9 @@
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
                 if (e.target === this.active) {
+                    if (e.type === 'timeupdate' && this.active.currentTime > 0) {
+                        this.lastKnownTime = this.active.currentTime;
+                    }
                     this.dispatchEvent(new Event(e.type));
                 }
             };
