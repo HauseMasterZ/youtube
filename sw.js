@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v6';
+const CACHE_NAME = 'yt-player-cache-v7';
 
 const CORE_ASSETS = [
     './index.html',
@@ -46,8 +46,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
-    // Bypass service worker entirely for media requests since playback.js handles caching them manually
-    if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+    // Bypass service worker entirely for media requests and blob URLs
+    if (event.request.url.startsWith('blob:') || event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
         return; 
     }
 
