@@ -12,8 +12,19 @@
             this.active = this.audio1;
             this.inactive = this.audio2;
             
-            this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
-            this.silent.loop = true;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                this.audioCtx = new AudioContext();
+                this.silentNode = this.audioCtx.createOscillator();
+                this.silentGain = this.audioCtx.createGain();
+                this.silentGain.gain.value = 0.00001; // nearly silent, prevents some optimizations
+                this.silentNode.connect(this.silentGain);
+                this.silentGain.connect(this.audioCtx.destination);
+                this.silentNode.start();
+            } else {
+                this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+                this.silent.loop = true;
+            }
             this.silentPlaying = false;
             this.blessed = false;
 
@@ -34,7 +45,14 @@
             this.blessed = true;
             
             if (hasMediaSession && !this.silentPlaying) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+                if (this.audioCtx) {
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume();
+                    }
+                    this.silentPlaying = true;
+                } else if (this.silent) {
+                    this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+                }
             }
             
             // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
@@ -58,6 +76,17 @@
             blessAud(this.audio2);
         }
 
+        pauseSilence() {
+            // DO NOT PAUSE! We keep the Web Audio API running indefinitely to ensure 
+            // the Android OS never tears down the MediaSession notification when paused.
+            // Since it is NOT an HTMLMediaElement, it will NOT steal MediaSession ownership,
+            // which guarantees the OS Play button will still work properly on all platforms.
+            if (this.silent && this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
+            }
+        }
+
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
         get duration() { return this.active.duration; }
@@ -70,8 +99,6 @@
         set muted(v) { this.active.muted = v; }
         
         play() { 
-            
-
             // Cancel any pending fade-out from a recent pause() call
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
@@ -81,10 +108,12 @@
             
             if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = false;
 
-            return this.active.play().catch(e => {
+            const p = this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
             }); 
+            this.bless();
+            return p;
         }
         
         pause() { this.pauseSilence(); 
