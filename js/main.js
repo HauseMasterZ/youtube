@@ -323,8 +323,11 @@ currentPlaylistData[globalActiveOriginalIndex];
             
             const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
+            // If the media pipeline crashed due to OS memory eviction of Blobs in the background, 
+            // the preloaded blob is likely dead too. Force a native fetch bypass.
             if (preloadedBlobs && preloadedBlobs.has(cacheKey)) {
-                recoveryUrl = preloadedBlobs.get(cacheKey);
+                URL.revokeObjectURL(preloadedBlobs.get(cacheKey));
+                preloadedBlobs.delete(cacheKey);
             }
             audioPlayer.switchTrack(recoveryUrl, false);
             return;
