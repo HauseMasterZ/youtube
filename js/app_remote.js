@@ -596,12 +596,22 @@ document.addEventListener("DOMContentLoaded", () => {
         // Do NOT halt here, let PingPongAudio handle gapless transition
         
         if ('mediaSession' in navigator) {
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: track.title,
-                artist: track.channel,
-                artwork: getThumbUrl(track) && !thumbsDisabled ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : []
-            });
+            const baseMeta = { title: track.title, artist: track.channel };
+            navigator.mediaSession.metadata = new MediaMetadata(baseMeta);
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
+            
+            if (!thumbsDisabled && getThumbUrl(track)) {
+                const targetTrack = track;
+                getSquareArtworkUrl(getThumbUrl(track)).then(croppedUrl => {
+                    // Ensure the track hasn't changed while we were cropping
+                    if (queueIndex >= 0 && currentPlaylistData[playQueue[queueIndex]] === targetTrack) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            ...baseMeta,
+                            artwork: [{ src: croppedUrl, sizes: '512x512', type: croppedUrl.startsWith('data:') ? 'image/webp' : 'image/jpeg' }]
+                        });
+                    }
+                });
+            }
         }
         
         if (window.previousObjectURL) {

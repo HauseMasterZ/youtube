@@ -408,10 +408,15 @@
         function applyMediaSessionArtwork(srcUrl, track, sequenceId) {
             if (currentPlaybackSequence !== sequenceId) return;
             if (hasMediaSession) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [{ src: srcUrl, sizes: '1280x720', type: 'image/jpeg' }]
+                const baseMeta = { title: track.title, artist: track.channel };
+                navigator.mediaSession.metadata = new MediaMetadata(baseMeta);
+                getSquareArtworkUrl(srcUrl).then(croppedUrl => {
+                    if (currentPlaybackSequence === sequenceId) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            ...baseMeta,
+                            artwork: [{ src: croppedUrl, sizes: '512x512', type: croppedUrl.startsWith('data:') ? 'image/webp' : 'image/jpeg' }]
+                        });
+                    }
                 });
             }
         }

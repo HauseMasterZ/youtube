@@ -2,6 +2,34 @@
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
     function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
+    
+    const canvasCropCache = new Map();
+    function getSquareArtworkUrl(url) {
+        if (canvasCropCache.has(url)) return Promise.resolve(canvasCropCache.get(url));
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                const size = Math.min(img.width, img.height);
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext("2d");
+                const startX = (img.width - size) / 2;
+                const startY = (img.height - size) / 2;
+                ctx.drawImage(img, startX, startY, size, size, 0, 0, size, size);
+                try {
+                    const dataUrl = canvas.toDataURL("image/webp", 0.9);
+                    canvasCropCache.set(url, dataUrl);
+                    resolve(dataUrl);
+                } catch (e) {
+                    resolve(url); // Fallback on tainted canvas
+                }
+            };
+            img.onerror = () => resolve(url);
+            img.src = url;
+        });
+    }
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds === Infinity) return "0:00";
         const mins = Math.floor(seconds / 60);
