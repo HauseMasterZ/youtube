@@ -33,6 +33,10 @@
             if (this.blessed) return;
             this.blessed = true;
             
+            if (hasMediaSession && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
+            }
+            
             // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
             // We use a silent base64 string to guarantee instant resolution without waiting for network.
             const silentSrc = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
@@ -86,11 +90,6 @@
         pause() { 
             if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = true;
             if (this.active.paused) return Promise.resolve();
-            // Stop the silent MediaSession-holder so Android Chrome sees ALL audio as stopped
-            if (this.silentPlaying) {
-                this.silent.pause();
-                this.silentPlaying = false;
-            }
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
@@ -118,61 +117,35 @@
     
         prepareSwap() {
             this.bless();
-            if (hasMediaSession && !this.silentPlaying) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
-            }
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            
-            this.inactive.volume = 0;
-            this.active.volume = 1.0;
             
             this.inactive.pause();
             this.inactive.src = "";
             this.inactive.removeAttribute('src');
             this.inactive.load();
-            this.inactive.volume = 1.0;
         }
 
         switchTrack(url, preventAutoplay) {
             this.bless();
-            if (hasMediaSession && !this.silentPlaying && !preventAutoplay) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
-            }
-
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
             
-            this.inactive.volume = 0;
-            this.active.volume = 1.0;
+            this.inactive.pause();
+            this.inactive.src = "";
+            this.inactive.removeAttribute('src');
+            this.inactive.load();
             
             let p;
-            
             if (!preventAutoplay) {
                 if (url) this.active.src = url;
-                p = this.active.play().then(() => {
-                    this.inactive.pause();
-                    this.inactive.src = "";
-                    this.inactive.removeAttribute('src');
-                    this.inactive.load();
-                    this.inactive.volume = 1.0; 
-                }).catch(e => {
-                    this.inactive.pause();
-                    this.inactive.src = "";
-                    this.inactive.removeAttribute('src');
-                    this.inactive.load();
-                    this.inactive.volume = 1.0;
+                p = this.active.play().catch(e => {
                     console.error("Autoplay failed on switch", e);
                     throw e;
                 });
             } else {
-                this.inactive.pause();
-                this.inactive.src = "";
-                this.inactive.removeAttribute('src');
-                this.inactive.load();
-                this.inactive.volume = 1.0;
                 if (url) this.active.src = url;
                 p = Promise.resolve();
             }

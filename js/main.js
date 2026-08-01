@@ -150,12 +150,10 @@
             return;
         }
         if (audioPlayer.paused) {
-            setPlayUI(true);
             audioPlayer.play().catch(e => {
-                setPlayUI(false);
+                console.warn("Play blocked:", e);
             });
         } else {
-            setPlayUI(false);
             audioPlayer.pause();
         }
     });
