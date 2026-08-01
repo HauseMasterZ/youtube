@@ -599,9 +599,33 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: getThumbUrl(track) && !thumbsDisabled ? [{ src: getThumbUrl(track), type: 'image/webp' }] : []
+                artwork: []
             });
             navigator.mediaSession.playbackState = preventAutoplay ? "none" : "playing";
+
+            if (getThumbUrl(track) && !thumbsDisabled) {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+                    let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+                    const imgRatio = img.width / img.height;
+                    if (imgRatio > 1) {
+                        sWidth = img.height;
+                        sx = (img.width - sWidth) / 2;
+                    }
+                    ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, 512, 512);
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: track.title,
+                        artist: track.channel,
+                        artwork: [{ src: canvas.toDataURL('image/jpeg', 0.9), sizes: '512x512', type: 'image/jpeg' }]
+                    });
+                };
+                img.src = getThumbUrl(track);
+            }
         }
         
         if (window.previousObjectURL) {
