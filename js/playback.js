@@ -525,7 +525,7 @@
                     return fetch(audioUrl, { priority: 'low', signal: controller.signal }).then(response => {
                         if (!response.ok) throw new Error();
                         const cloned = response.clone();
-                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned));
+                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned)).catch(e => {});
                         return response.blob();
                     });
                 }).then(blob => {
