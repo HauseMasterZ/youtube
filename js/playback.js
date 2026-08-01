@@ -382,10 +382,12 @@
             if (hasCachedColor) {
                 document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
             }
-            
-            applyMediaSessionArtwork(thumbUrl, track, sequenceId);
-            
-            if (hasCachedColor) return;
+
+            // If both color and square artwork are cached, apply artwork and skip the image load entirely
+            if (hasCachedColor && squareArtCache.has(trackId)) {
+                setMediaSessionArtwork(squareArtCache.get(trackId), track, sequenceId);
+                return;
+            }
 
             const tempImg = new Image();
             tempImg.fetchPriority = "low";
@@ -393,8 +395,34 @@
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
                 try {
-                    const color = getDominantColor(tempImg, trackId);
-                    document.documentElement.style.setProperty('--primary-color', color);
+                    if (!hasCachedColor) {
+                        const color = getDominantColor(tempImg, trackId);
+                        document.documentElement.style.setProperty('--primary-color', color);
+                    }
+                    // Center-crop to 1:1 square for MediaSession artwork
+                    if (!squareArtCache.has(trackId)) {
+                        const size = Math.min(tempImg.naturalWidth, tempImg.naturalHeight);
+                        if (size > 0) {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = size;
+                            canvas.height = size;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(
+                                tempImg,
+                                (tempImg.naturalWidth - size) / 2, (tempImg.naturalHeight - size) / 2,
+                                size, size,
+                                0, 0, size, size
+                            );
+                            canvas.toBlob(blob => {
+                                if (!blob || currentPlaybackSequence !== sequenceId) return;
+                                const blobUrl = URL.createObjectURL(blob);
+                                // Revoke any previously cached blob for a different track
+                                if (squareArtCache.has(trackId)) URL.revokeObjectURL(squareArtCache.get(trackId));
+                                squareArtCache.set(trackId, blobUrl);
+                                setMediaSessionArtwork(blobUrl, track, sequenceId);
+                            }, 'image/jpeg', 0.85);
+                        }
+                    }
                 } catch(e) { }
             };
             tempImg.onerror = () => {
@@ -405,14 +433,11 @@
             tempImg.src = thumbUrl;
         }
 
-        function applyMediaSessionArtwork(srcUrl, track, sequenceId) {
-            if (currentPlaybackSequence !== sequenceId) return;
-            if (hasMediaSession) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [{ src: srcUrl, sizes: '1280x720', type: 'image/jpeg' }]
-                });
+        function setMediaSessionArtwork(srcUrl, track, sequenceId) {
+            if (currentPlaybackSequence !== sequenceId || !hasMediaSession) return;
+            const meta = navigator.mediaSession.metadata;
+            if (meta) {
+                meta.artwork = [{ src: srcUrl, sizes: '512x512', type: 'image/jpeg' }];
             }
         }
 
