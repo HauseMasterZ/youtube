@@ -148,33 +148,27 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
         prepareSwap() {
+            
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
             
-            const el = this.inactive;
-            el.pause();
-            // Defer cleanup to prevent ERR_FILE_NOT_FOUND on active MediaSource tear-down
-            setTimeout(() => {
-                el.src = "";
-                el.removeAttribute('src');
-                el.load();
-            }, 500);
+            this.inactive.pause();
+            this.inactive.src = "";
+            this.inactive.removeAttribute('src');
+            this.inactive.load();
         }
-        
+
         switchTrack(url, preventAutoplay) {
             
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
             
-            const el = this.inactive;
-            el.pause();
-            setTimeout(() => {
-                el.src = "";
-                el.removeAttribute('src');
-                el.load();
-            }, 500);
+            this.inactive.pause();
+            this.inactive.src = "";
+            this.inactive.removeAttribute('src');
+            this.inactive.load();
             
             let p;
             if (!preventAutoplay) {
