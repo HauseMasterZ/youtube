@@ -20,28 +20,13 @@
                 return;
             }
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-            audioPlayer.play().catch(e => {
-                console.warn("MediaSession play error, attempting sync revival:", e);
-                // Synchronous revival to prevent losing the MediaSession user gesture token
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track) {
-                    const savedTime = audioPlayer.currentTime;
-                    audioPlayer.src = getAudioUrl(track);
-                    
-                    audioPlayer.play().catch(err => {
-                        console.error("Revival failed:", err);
-                        if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-                    });
-                    
-                    if (savedTime > 0) {
-                        const onMeta = () => {
-                            audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                            audioPlayer.currentTime = savedTime;
-                        };
-                        audioPlayer.addEventListener('loadedmetadata', onMeta);
-                    }
-                }
-            });
+            
+            // Release the MediaSession from the silent background loop BEFORE attempting 
+            // to resume the main audio, otherwise Android Chrome will throw a NotAllowedError 
+            // by scoping the background user gesture token exclusively to the silent element.
+            audioPlayer.pauseSilence();
+            
+            audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
             audioPlayer.pause();
