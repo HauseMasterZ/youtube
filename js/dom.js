@@ -11,10 +11,6 @@
             this.audio2 = document.getElementById("audio-player-2");
             this.active = this.audio1;
             this.inactive = this.audio2;
-
-            this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
-            this.silent.loop = true;
-            this.silentPlaying = false;
             
             this.blessed = false;
 
@@ -62,17 +58,6 @@
             
             blessAud(this.audio1);
             blessAud(this.audio2);
-
-            if ('mediaSession' in navigator && !this.silentPlaying) {
-                this.silent.play().then(() => { this.silentPlaying = true; }).catch(() => {});
-            }
-        }
-
-        pauseSilent() {
-            if (this.silent && this.silentPlaying) {
-                this.silent.pause();
-                this.silentPlaying = false;
-            }
         }
 
 
@@ -164,20 +149,14 @@
                 const onCanPlay = () => {
                     this.active.removeEventListener('canplay', onCanPlay);
                     this.active._pendingCanPlay = null;
-                    this.active.play().catch(e => {
+                    this.active.play().then(() => {
+                        this.cleanupInactive();
+                    }).catch(e => {
                         this.cleanupInactive();
                     });
                 };
                 this.active._pendingCanPlay = onCanPlay;
                 this.active.addEventListener('canplay', onCanPlay);
-
-                // Cleanup old element only after new one is confirmed playing
-                const newActive = this.active;
-                const onPlaying = () => {
-                    newActive.removeEventListener('playing', onPlaying);
-                    this.cleanupInactive();
-                };
-                newActive.addEventListener('playing', onPlaying, { once: true });
 
                 return Promise.resolve(); // don't block on the play promise
             } else {
