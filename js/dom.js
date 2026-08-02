@@ -123,7 +123,6 @@
                 this.fadeInterval = null;
             }
             this.active.muted = true;
-            this.active.pause();
         }
 
         cleanupInactive() {
