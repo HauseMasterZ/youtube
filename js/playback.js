@@ -23,6 +23,21 @@
                 }
                 
                 allDatabases[folderName] = data;
+
+                if (typeof shuffleMode !== 'undefined' && shuffleMode === 1) {
+                    const newTracks = [];
+                    for (let i = 0; i < data.length; i++) {
+                        newTracks.push({ playlist: folderName, index: i });
+                    }
+                    crossShuffleHistory.push(...newTracks);
+                    
+                    // Reshuffle the unplayed portion of the deck perfectly so the new tracks are instantly mixed in
+                    for (let i = crossShuffleHistory.length - 1; i > crossShufflePos + 1; i--) {
+                        const remaining = i - (crossShufflePos + 1) + 1;
+                        const j = (crossShufflePos + 1) + Math.floor(Math.random() * remaining);
+                        [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
+                    }
+                }
             }
             
             currentPlaylistData = allDatabases[folderName];
