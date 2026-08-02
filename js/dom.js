@@ -4,23 +4,28 @@
     const playlistMessage = document.getElementById("playlist-message");
     const trackList = document.getElementById("track-list");
 
-    class NativeAudioPlayer extends EventTarget {
+    class DualAudioPingPong extends EventTarget {
         constructor() {
             super();
-            // We only need one audio element now
-            this.active = document.getElementById("audio-player-1");
+            this.audio1 = document.getElementById("audio-player-1");
+            this.audio2 = document.getElementById("audio-player-2");
+            this.active = this.audio1;
+            this.inactive = this.audio2;
+            
             this.blessed = false;
 
-            // Forward relevant events so main.js/playback.js listeners still work
-            this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange', 'progress', 'waiting', 'canplay'];
+            this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
             this.forwardEvent = (e) => {
-                if (e.type === 'timeupdate' && this.active.currentTime > 0) {
-                    this.lastKnownTime = this.active.currentTime;
+                if (e.target === this.active) {
+                    if (e.type === 'timeupdate' && this.active.currentTime > 0) {
+                        this.lastKnownTime = this.active.currentTime;
+                    }
+                    this.dispatchEvent(new Event(e.type));
                 }
-                this.dispatchEvent(new Event(e.type));
             };
             this.events.forEach(evt => {
-                this.active.addEventListener(evt, this.forwardEvent);
+                this.audio1.addEventListener(evt, this.forwardEvent);
+                this.audio2.addEventListener(evt, this.forwardEvent);
             });
         }
     
@@ -28,21 +33,28 @@
             if (this.blessed) return;
             this.blessed = true;
             
-            // To ensure the audio element is permanently blessed by Android, it must successfully resolve a play() call.
+            // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
             // We use a silent base64 string to guarantee instant resolution without waiting for network.
             const silentSrc = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
             
-            const oldSrc = this.active.src;
-            this.active.src = silentSrc;
-            this.active.play().then(() => {
-                this.active.pause();
-                if (oldSrc && !oldSrc.includes('data:audio/wav;base64')) {
-                    this.active.src = oldSrc; 
-                } else {
-                    this.active.removeAttribute('src');
-                }
-            }).catch(()=>{});
+            const blessAud = (aud) => {
+                const oldSrc = aud.src;
+                aud.src = silentSrc;
+                aud.play().then(() => {
+                    aud.pause();
+                    if (oldSrc && !oldSrc.includes('data:audio/wav;base64')) {
+                        aud.src = oldSrc; 
+                    } else {
+                        aud.removeAttribute('src');
+                    }
+                }).catch(()=>{});
+            };
+            
+            blessAud(this.audio1);
+            blessAud(this.audio2);
         }
+
+
 
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
@@ -54,7 +66,6 @@
         set src(v) { this.active.src = v; }
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
-        get buffered() { return this.active.buffered; }
         
         play() { 
             // Cancel any pending fade-out from a recent pause() call
@@ -98,26 +109,83 @@
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
+    
+        cleanupInactive() {
+            this.inactive.pause();
+            this.inactive.removeAttribute('src');
+            this.inactive.load();
+            this.inactive.volume = 1.0;
+        }
 
         switchTrack(url, preventAutoplay) {
             this.bless();
+            const oldActive = this.active;
+            this.active = this.inactive;
+            this.inactive = oldActive;
+            this.inactive.volume = 0.01;
             this.active.volume = 1.0;
-            
-            if (url) {
-                this.active.src = url;
-            }
-            
+
             if (!preventAutoplay) {
-                return this.active.play().catch(e => {
-                    console.error("Autoplay failed on switch", e);
-                    throw e;
+                // Manually trigger a "waiting" event so the UI updates natively
+                this.dispatchEvent(new Event("waiting"));
+
+                if (url) {
+                    this.active.src = url;
+                    this.active.load(); // Start fetching
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const checkReady = () => {
+                        if (this.active.readyState >= 3) { // HAVE_FUTURE_DATA
+                            this.active.play().then(() => {
+                                this.cleanupInactive();
+                                resolve();
+                            }).catch(reject);
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    if (checkReady()) return;
+
+                    if (this.active._pendingCanPlay) {
+                        this.active.removeEventListener('canplay', this.active._pendingCanPlay);
+                        this.active.removeEventListener('error', this.active._pendingError);
+                    }
+
+                    const onCanPlay = () => {
+                        this.active.removeEventListener('canplay', onCanPlay);
+                        this.active.removeEventListener('error', onError);
+                        this.active._pendingCanPlay = null;
+                        this.active._pendingError = null;
+                        this.active.play().then(() => {
+                            this.cleanupInactive();
+                            resolve();
+                        }).catch(reject);
+                    };
+                    const onError = (e) => {
+                        this.active.removeEventListener('canplay', onCanPlay);
+                        this.active.removeEventListener('error', onError);
+                        this.active._pendingCanPlay = null;
+                        this.active._pendingError = null;
+                        this.cleanupInactive();
+                        reject(e);
+                    };
+                    
+                    this.active._pendingCanPlay = onCanPlay;
+                    this.active._pendingError = onError;
+
+                    this.active.addEventListener('canplay', onCanPlay);
+                    this.active.addEventListener('error', onError);
                 });
             } else {
+                this.cleanupInactive();
+                if (url) this.active.src = url;
                 return Promise.resolve();
             }
         }
     }
-    const audioPlayer = new NativeAudioPlayer();
+    const audioPlayer = new DualAudioPingPong();
 
     const currentTitle = document.getElementById("current-title");
     const currentChannel = document.getElementById("current-channel");
