@@ -12,20 +12,6 @@
             this.active = this.audio1;
             this.inactive = this.audio2;
             
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (AudioContext) {
-                this.audioCtx = new AudioContext();
-                this.silentNode = this.audioCtx.createOscillator();
-                this.silentGain = this.audioCtx.createGain();
-                this.silentGain.gain.value = 0.00001; // nearly silent, prevents some optimizations
-                this.silentNode.connect(this.silentGain);
-                this.silentGain.connect(this.audioCtx.destination);
-                this.silentNode.start();
-            } else {
-                this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
-                this.silent.loop = true;
-            }
-            this.silentPlaying = false;
             this.blessed = false;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
@@ -46,17 +32,6 @@
         bless() {
             if (this.blessed) return;
             this.blessed = true;
-            
-            if (hasMediaSession && !this.silentPlaying) {
-                if (this.audioCtx) {
-                    if (this.audioCtx.state === 'suspended') {
-                        this.audioCtx.resume();
-                    }
-                    this.silentPlaying = true;
-                } else if (this.silent) {
-                    this.silent.play().then(() => { this.silentPlaying = true; }).catch(e => {});
-                }
-            }
             
             // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
             // We use a silent base64 string to guarantee instant resolution without waiting for network.
@@ -79,16 +54,7 @@
             blessAud(this.audio2);
         }
 
-        pauseSilence() {
-            // DO NOT PAUSE! We keep the Web Audio API running indefinitely to ensure 
-            // the Android OS never tears down the MediaSession notification when paused.
-            // Since it is NOT an HTMLMediaElement, it will NOT steal MediaSession ownership,
-            // which guarantees the OS Play button will still work properly on all platforms.
-            if (this.silent && this.silentPlaying) {
-                this.silent.pause();
-                this.silentPlaying = false;
-            }
-        }
+
 
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
@@ -119,7 +85,7 @@
             return p;
         }
         
-        pause() { this.pauseSilence(); 
+        pause() { 
             if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = true;
             if (this.active.paused) return Promise.resolve();
             return new Promise(resolve => {
@@ -148,41 +114,43 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
         prepareSwap() {
-            
+            this.bless();
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            
+            this.inactive.volume = 0;
+            this.active.volume = 1.0;
+        }
+
+        cleanupInactive() {
             this.inactive.pause();
-            this.inactive.src = "";
             this.inactive.removeAttribute('src');
             this.inactive.load();
+            this.inactive.volume = 1.0;
         }
 
         switchTrack(url, preventAutoplay) {
-            
+            this.bless();
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            
-            this.inactive.pause();
-            this.inactive.src = "";
-            this.inactive.removeAttribute('src');
-            this.inactive.load();
-            
-            let p;
+            this.inactive.volume = 0;
+            this.active.volume = 1.0;
+
             if (!preventAutoplay) {
                 if (url) this.active.src = url;
-                p = this.active.play().catch(e => {
+                return this.active.play().then(() => {
+                    this.cleanupInactive();
+                }).catch(e => {
+                    this.cleanupInactive();
                     console.error("Autoplay failed on switch", e);
                     throw e;
                 });
             } else {
+                this.cleanupInactive();
                 if (url) this.active.src = url;
-                p = Promise.resolve();
+                return Promise.resolve();
             }
-            
-            return p;
         }
     }
     const audioPlayer = new DualAudioPingPong();

@@ -369,6 +369,7 @@
                             window.currentBufferingSeconds = -1;
                         }
                         setPlayUI(true);
+                        audioPlayer.cleanupInactive();
                         triggerPreloads();
                     }
                 },
