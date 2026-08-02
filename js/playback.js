@@ -275,6 +275,7 @@
         }
 
         currentTitle.textContent = track.title;
+        document.title = track.title.length > 20 ? track.title.substring(0, 20) + "..." : track.title;
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
 
