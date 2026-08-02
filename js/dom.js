@@ -122,17 +122,61 @@
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            this.inactive.volume = 0;
+            this.inactive.volume = 0.01;
             this.active.volume = 1.0;
 
             if (!preventAutoplay) {
-                if (url) this.active.src = url;
-                return this.active.play().then(() => {
-                    this.cleanupInactive();
-                }).catch(e => {
-                    this.cleanupInactive();
-                    console.error("Autoplay failed on switch", e);
-                    throw e;
+                // Manually trigger a "waiting" event so the UI updates natively
+                this.dispatchEvent(new Event("waiting"));
+
+                if (url) {
+                    this.active.src = url;
+                    this.active.load(); // Start fetching
+                }
+                
+                return new Promise((resolve, reject) => {
+                    const checkReady = () => {
+                        if (this.active.readyState >= 3) { // HAVE_FUTURE_DATA
+                            this.active.play().then(() => {
+                                this.cleanupInactive();
+                                resolve();
+                            }).catch(reject);
+                            return true;
+                        }
+                        return false;
+                    };
+
+                    if (checkReady()) return;
+
+                    if (this.active._pendingCanPlay) {
+                        this.active.removeEventListener('canplay', this.active._pendingCanPlay);
+                        this.active.removeEventListener('error', this.active._pendingError);
+                    }
+
+                    const onCanPlay = () => {
+                        this.active.removeEventListener('canplay', onCanPlay);
+                        this.active.removeEventListener('error', onError);
+                        this.active._pendingCanPlay = null;
+                        this.active._pendingError = null;
+                        this.active.play().then(() => {
+                            this.cleanupInactive();
+                            resolve();
+                        }).catch(reject);
+                    };
+                    const onError = (e) => {
+                        this.active.removeEventListener('canplay', onCanPlay);
+                        this.active.removeEventListener('error', onError);
+                        this.active._pendingCanPlay = null;
+                        this.active._pendingError = null;
+                        this.cleanupInactive();
+                        reject(e);
+                    };
+                    
+                    this.active._pendingCanPlay = onCanPlay;
+                    this.active._pendingError = onError;
+
+                    this.active.addEventListener('canplay', onCanPlay);
+                    this.active.addEventListener('error', onError);
                 });
             } else {
                 this.cleanupInactive();
