@@ -1,11 +1,10 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v7';
+const CACHE_NAME = 'yt-player-cache-v8';
 
 const CORE_ASSETS = [
     './index.html',
     './js/dom.js',
     './js/utils.js',
-    './js/smartBuffer.js',
     './js/state.js',
     './js/ui.js',
     './js/mediaSession.js',
@@ -46,27 +45,38 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
-    // Bypass service worker entirely for media requests and blob URLs
-    if (event.request.url.startsWith('blob:') || event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+    // Bypass service worker entirely for blob URLs
+    if (event.request.url.startsWith('blob:')) {
         return; 
     }
 
-    // Use Stale-While-Revalidate for everything else (JSON databases, CSS, JS, Fonts)
-    event.respondWith(
-        caches.match(event.request).then((cachedResponse) => {
-            const fetchPromise = fetch(event.request).then((networkResponse) => {
-                if (networkResponse && networkResponse.status === 200) {
-                    const responseToCache = networkResponse.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(event.request, responseToCache);
+    if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+        event.respondWith(
+            caches.open('yt-player-media').then(cache =>
+                cache.match(event.request).then(cached => {
+                    if (cached) return cached;
+                    return fetch(event.request).then(response => {
+                        if (response.ok) cache.put(event.request, response.clone());
+                        return response;
                     });
+                })
+            )
+        );
+        return;
+    }
+
+    // For JSON/CSS/JS: Cache-first, no background revalidation
+    event.respondWith(
+        caches.match(event.request).then(cached => {
+            return cached || fetch(event.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }
-                return networkResponse;
+                return response;
             }).catch(() => {
                 return new Response('Network error occurred', { status: 408, headers: { 'Content-Type': 'text/plain' } });
             });
-
-            return cachedResponse || fetchPromise;
         })
     );
 });

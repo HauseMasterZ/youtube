@@ -38,7 +38,7 @@
     let thumbsDisabled = true;
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
-    const preloadedBlobs = new Map(); // audioUrl -> blobUrl
+
 
     
     // Android Chrome Lock-Screen Notification Teardown Bypass

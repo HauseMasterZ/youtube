@@ -1,25 +1,3 @@
-    function preloadAllPlaylists(excludePl) {
-        ALL_PLAYLISTS.forEach(pl => {
-            if (pl !== excludePl && !allDatabases[pl]) {
-                fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.length > 0 && Array.isArray(data[0])) {
-                            allDatabases[pl] = data.map(item => ({
-                                id: item[0],
-                                title: item[1],
-                                channel: item[2],
-                                duration: item[3],
-                                file_path: `${pl}/${item[4]}.webm`,
-                                thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
-                            }));
-                        } else {
-                            allDatabases[pl] = data;
-                        }
-                    }).catch(e => {});
-            }
-        });
-    }
 
     async function loadPlaylist(folderName) {
         trackList.style.display = 'none';
@@ -303,12 +281,8 @@
         let audioUrl = getAudioUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
-        if (window.activeSmartBuffer) {
-            window.activeSmartBuffer.abort();
-            window.activeSmartBuffer = null;
-        }
 
-        if (preloadedFetches.has(cacheKey) && !preloadedBlobs.has(cacheKey)) {
+        if (preloadedFetches.has(cacheKey)) {
             const controller = preloadedFetches.get(cacheKey);
             if (controller && controller.abort) controller.abort();
             preloadedFetches.delete(cacheKey);
@@ -340,42 +314,7 @@
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
 
-        if (preloadedBlobs.has(cacheKey)) {
-            audioUrl = preloadedBlobs.get(cacheKey);
-            audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
-            triggerPreloads();
-        } else {
-            audioPlayer.prepareSwap();
-            window.activeSmartBuffer = new SmartBuffer(
-                audioUrl, 
-                cacheKey, 
-                track.duration, 
-                sequenceId, 
-                audioPlayer.active,
-                (isBuffering, secondsLeft) => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    const bufferingIndicator = document.getElementById("buffering-indicator");
-                    if (isBuffering) {
-                        if (bufferingIndicator) {
-                            bufferingIndicator.style.display = "block";
-                            window.currentBufferingSeconds = secondsLeft;
-                        }
-                        setPlayUI(false);
-                    } else {
-                        if (bufferingIndicator) {
-                            bufferingIndicator.style.display = "none";
-                            bufferingIndicator.textContent = "...";
-                            bufferingIndicator.style.letterSpacing = "2px";
-                            window.currentBufferingSeconds = -1;
-                        }
-                        setPlayUI(true);
-                        audioPlayer.cleanupInactive();
-                        triggerPreloads();
-                    }
-                },
-                preventAutoplay || uiOnly
-            );
-        }
+        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
 
         function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
             const hasCachedColor = dominantColorCache.has(trackId);
@@ -508,10 +447,8 @@
         const currentTrack = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
         const currentCacheKey = currentTrack ? `${baseUrl}/_cache/${currentTrack.id}` : null;
         
-        for (const [url, blobUrl] of preloadedBlobs.entries()) {
+        for (const url of preloadedFetches.keys()) {
             if (url !== nextCacheKey && url !== prevCacheKey && url !== currentCacheKey) {
-                URL.revokeObjectURL(blobUrl);
-                preloadedBlobs.delete(url);
                 preloadedFetches.delete(url);
             }
         }
@@ -519,7 +456,7 @@
         if (nextTrack) {
             const audioUrl = getAudioUrl(nextTrack);
             const cacheKey = `${baseUrl}/_cache/${nextTrack.id}`;
-            if (!preloadedBlobs.has(cacheKey) && !preloadedFetches.has(cacheKey)) {
+            if (!preloadedFetches.has(cacheKey)) {
                 const controller = new AbortController();
                 const fetchPromise = caches.match(cacheKey).then(cachedResponse => {
                     if (cachedResponse) return cachedResponse.blob();
@@ -529,11 +466,6 @@
                         caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned)).catch(e => {});
                         return response.blob();
                     });
-                }).then(blob => {
-                    if (!preloadedBlobs.has(cacheKey)) {
-                        preloadedBlobs.set(cacheKey, URL.createObjectURL(blob));
-                    }
-                    return blob;
                 });
                 fetchPromise.catch(e => {});
                 preloadedFetches.set(cacheKey, controller);

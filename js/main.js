@@ -210,6 +210,36 @@
 
     audioPlayer.addEventListener("seeked", updateMediaSessionPosition);
     audioPlayer.addEventListener("ratechange", updateMediaSessionPosition);
+    
+    audioPlayer.addEventListener("progress", () => {
+        if (!audioPlayer.duration || audioPlayer.duration === Infinity) return;
+        const buffered = audioPlayer.buffered;
+        if (buffered.length > 0 && buffered.end(buffered.length - 1) >= audioPlayer.duration - 0.5) {
+            // Current track fully buffered — safe to preload
+            if (typeof triggerPreloads === 'function') triggerPreloads();
+        }
+    });
+
+    audioPlayer.addEventListener("waiting", () => {
+        const bufferingIndicator = document.getElementById("buffering-indicator");
+        if (bufferingIndicator) {
+            bufferingIndicator.style.display = "block";
+            window.currentBufferingSeconds = -1; 
+        }
+        setPlayUI(false);
+    });
+
+    audioPlayer.addEventListener("playing", () => {
+        const bufferingIndicator = document.getElementById("buffering-indicator");
+        if (bufferingIndicator) {
+            bufferingIndicator.style.display = "none";
+            bufferingIndicator.textContent = "...";
+            bufferingIndicator.style.letterSpacing = "2px";
+            window.currentBufferingSeconds = -1;
+        }
+        // No setPlayUI(true) here because "play" event handles it
+    });
+    
     audioPlayer.addEventListener("play", () => {
         setPlayUI(true);
         startSync();
@@ -323,12 +353,6 @@ currentPlaylistData[globalActiveOriginalIndex];
             
             const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
-            // If the media pipeline crashed due to OS memory eviction of Blobs in the background, 
-            // the preloaded blob is likely dead too. Force a native fetch bypass.
-            if (preloadedBlobs && preloadedBlobs.has(cacheKey)) {
-                URL.revokeObjectURL(preloadedBlobs.get(cacheKey));
-                preloadedBlobs.delete(cacheKey);
-            }
             audioPlayer.switchTrack(recoveryUrl, false);
             return;
         }
@@ -452,10 +476,8 @@ currentPlaylistData[globalActiveOriginalIndex];
             console.error('ServiceWorker registration failed: ', error);
         });
     }
-    // Load the active playlist instantaneously, defer others to the background
-    loadPlaylist(playlistSelect.value).then(() => {
-        preloadAllPlaylists(playlistSelect.value); // Non-blocking background preload
-    });
+    // Load the active playlist instantaneously
+    loadPlaylist(playlistSelect.value);
     
     // Keyboard Shortcuts (Desktop Only)
     if (!isMobileDevice) {

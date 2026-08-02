@@ -75,8 +75,6 @@
                 this.active.volume = 1.0;
             }
             
-            if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = false;
-
             const p = this.active.play().catch(e => {
                 console.error("Play error:", e);
                 throw e;
@@ -86,7 +84,6 @@
         }
         
         pause() { 
-            if (window.activeSmartBuffer) window.activeSmartBuffer.preventAutoplay = true;
             if (this.active.paused) return Promise.resolve();
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
@@ -113,15 +110,6 @@
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
     
-        prepareSwap() {
-            this.bless();
-            const oldActive = this.active;
-            this.active = this.inactive;
-            this.inactive = oldActive;
-            this.inactive.volume = 0;
-            this.active.volume = 1.0;
-        }
-
         cleanupInactive() {
             this.inactive.pause();
             this.inactive.removeAttribute('src');
