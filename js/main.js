@@ -503,6 +503,10 @@ currentPlaylistData[globalActiveOriginalIndex];
                 if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
                 audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
             } else if (e.key === ' ') {
+                if (e.repeat) {
+                    e.preventDefault();
+                    return;
+                }
                 btnPlayPause.click();
                 e.preventDefault();
             } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {

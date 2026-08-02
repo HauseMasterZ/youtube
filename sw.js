@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v10';
+const CACHE_NAME = 'yt-player-cache-v11';
 
 const CORE_ASSETS = [
     './index.html',
@@ -33,7 +33,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media') {
+                    if (cacheName !== CACHE_NAME) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -45,24 +45,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
-    // Bypass service worker entirely for blob URLs
-    if (event.request.url.startsWith('blob:')) {
+    // Bypass service worker entirely for blob URLs and media to allow native Range requests
+    if (event.request.url.startsWith('blob:') || event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
         return; 
-    }
-
-    if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
-        event.respondWith(
-            caches.open('yt-player-media').then(cache =>
-                cache.match(event.request).then(cached => {
-                    if (cached) return cached;
-                    return fetch(event.request).then(response => {
-                        if (response.ok) cache.put(event.request, response.clone());
-                        return response;
-                    });
-                })
-            )
-        );
-        return;
     }
 
     // For JSON/CSS/JS: Cache-first, no background revalidation
