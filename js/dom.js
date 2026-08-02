@@ -137,7 +137,7 @@
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            this.inactive.volume = 0.01;
+            this.inactive.volume = 0.000001;
             this.active.volume = 1.0;
 
             if (!preventAutoplay) {
