@@ -9,12 +9,18 @@
             super();
             this.audio1 = document.getElementById("audio-player-1");
             this.audio2 = document.getElementById("audio-player-2");
+            this.audio1.preload = "none";
+            this.audio2.preload = "none";
             this.active = this.audio1;
             this.inactive = this.audio2;
+
+            this.silent = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==");
+            this.silent.loop = true;
+            this.silentPlaying = false;
             
             this.blessed = false;
 
-            this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange'];
+            this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange', 'progress', 'waiting', 'canplay'];
             this.forwardEvent = (e) => {
                 if (e.target === this.active) {
                     if (e.type === 'timeupdate' && this.active.currentTime > 0) {
@@ -52,6 +58,17 @@
             
             blessAud(this.audio1);
             blessAud(this.audio2);
+
+            if ('mediaSession' in navigator && !this.silentPlaying) {
+                this.silent.play().then(() => { this.silentPlaying = true; }).catch(() => {});
+            }
+        }
+
+        pauseSilent() {
+            if (this.silent && this.silentPlaying) {
+                this.silent.pause();
+                this.silentPlaying = false;
+            }
         }
 
 
@@ -66,6 +83,7 @@
         set src(v) { this.active.src = v; }
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
+        get buffered() { return this.active.buffered; }
         
         play() { 
             // Cancel any pending fade-out from a recent pause() call
@@ -119,6 +137,16 @@
 
         switchTrack(url, preventAutoplay) {
             this.bless();
+            // Cancel any pending canplay listener from a previous rapid skip
+            if (this.active._pendingCanPlay) {
+                this.active.removeEventListener('canplay', this.active._pendingCanPlay);
+                this.active._pendingCanPlay = null;
+            }
+            if (this.inactive._pendingCanPlay) {
+                this.inactive.removeEventListener('canplay', this.inactive._pendingCanPlay);
+                this.inactive._pendingCanPlay = null;
+            }
+
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
@@ -126,58 +154,27 @@
             this.active.volume = 1.0;
 
             if (!preventAutoplay) {
-                // Manually trigger a "waiting" event so the UI updates natively
-                this.dispatchEvent(new Event("waiting"));
+                if (url) this.active.src = url;
 
-                if (url) {
-                    this.active.src = url;
-                    this.active.load(); // Start fetching
-                }
-                
-                return new Promise((resolve, reject) => {
-                    const checkReady = () => {
-                        if (this.active.readyState >= 3) { // HAVE_FUTURE_DATA
-                            this.active.play().then(() => {
-                                this.cleanupInactive();
-                                resolve();
-                            }).catch(reject);
-                            return true;
-                        }
-                        return false;
-                    };
-
-                    if (checkReady()) return;
-
-                    if (this.active._pendingCanPlay) {
-                        this.active.removeEventListener('canplay', this.active._pendingCanPlay);
-                        this.active.removeEventListener('error', this.active._pendingError);
-                    }
-
-                    const onCanPlay = () => {
-                        this.active.removeEventListener('canplay', onCanPlay);
-                        this.active.removeEventListener('error', onError);
-                        this.active._pendingCanPlay = null;
-                        this.active._pendingError = null;
-                        this.active.play().then(() => {
-                            this.cleanupInactive();
-                            resolve();
-                        }).catch(reject);
-                    };
-                    const onError = (e) => {
-                        this.active.removeEventListener('canplay', onCanPlay);
-                        this.active.removeEventListener('error', onError);
-                        this.active._pendingCanPlay = null;
-                        this.active._pendingError = null;
+                const onCanPlay = () => {
+                    this.active.removeEventListener('canplay', onCanPlay);
+                    this.active._pendingCanPlay = null;
+                    this.active.play().catch(e => {
                         this.cleanupInactive();
-                        reject(e);
-                    };
-                    
-                    this.active._pendingCanPlay = onCanPlay;
-                    this.active._pendingError = onError;
+                    });
+                };
+                this.active._pendingCanPlay = onCanPlay;
+                this.active.addEventListener('canplay', onCanPlay);
 
-                    this.active.addEventListener('canplay', onCanPlay);
-                    this.active.addEventListener('error', onError);
-                });
+                // Cleanup old element only after new one is confirmed playing
+                const newActive = this.active;
+                const onPlaying = () => {
+                    newActive.removeEventListener('playing', onPlaying);
+                    this.cleanupInactive();
+                };
+                newActive.addEventListener('playing', onPlaying, { once: true });
+
+                return Promise.resolve(); // don't block on the play promise
             } else {
                 this.cleanupInactive();
                 if (url) this.active.src = url;

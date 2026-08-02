@@ -10,6 +10,7 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            if (typeof audioPlayer.pauseSilent === 'function') audioPlayer.pauseSilent();
             if (!audioPlayer.src) {
                 if (playQueue.length > 0 && queueIndex !== -1) {
                     executePlayback(false);
