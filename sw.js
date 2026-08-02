@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v19.7';
+const CACHE_NAME = 'yt-player-cache-v8';
 
 const CORE_ASSETS = [
     './index.html',
@@ -33,7 +33,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media-v19.7') {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media') {
                         return caches.delete(cacheName);
                     }
                 })
@@ -52,7 +52,7 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
         event.respondWith(
-            caches.open('yt-player-media-v19.7').then(cache =>
+            caches.open('yt-player-media').then(cache =>
                 cache.match(event.request).then(cached => {
                     if (cached) return cached;
                     return fetch(event.request).then(response => {
