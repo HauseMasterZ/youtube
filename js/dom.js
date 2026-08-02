@@ -31,6 +31,12 @@
                 this.audio1.addEventListener(evt, this.forwardEvent);
                 this.audio2.addEventListener(evt, this.forwardEvent);
             });
+
+            const onFirstInteraction = () => {
+                document.removeEventListener('click', onFirstInteraction, true);
+                this.bless();
+            };
+            document.addEventListener('click', onFirstInteraction, true);
         }
     
         bless() {
@@ -133,7 +139,6 @@
         }
 
         switchTrack(url, preventAutoplay) {
-            this.bless();
             // Cancel any pending canplay listener from a previous rapid skip
             if (this.active._pendingCanPlay) {
                 this.active.removeEventListener('canplay', this.active._pendingCanPlay);
