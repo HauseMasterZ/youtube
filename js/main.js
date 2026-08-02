@@ -159,6 +159,7 @@
     });
 
     document.addEventListener("keydown", (e) => {
+        if (e.repeat) return;
         if (e.code === "Space" && document.activeElement !== searchInput) {
             e.preventDefault();
             btnPlayPause.click();
@@ -322,7 +323,14 @@
         updateMediaSessionPosition();
     });
 
-    audioPlayer.addEventListener("ended", () => {
+      audioPlayer.addEventListener("timeupdate", () => {
+          if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity) {
+              const ct = Math.floor(audioPlayer.currentTime);
+              updateTimeUI(ct);
+          }
+      });
+
+      audioPlayer.addEventListener("ended", () => {
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
             updateTimeUI(0);

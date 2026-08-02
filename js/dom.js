@@ -90,7 +90,7 @@
         }
         
         pause() { 
-            if (this.active.paused) return Promise.resolve();
+            if (this.active.paused || this.fadeInterval) return Promise.resolve();
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
