@@ -177,11 +177,32 @@
             // Shuffle all: cross-playlist random
             generateQueue(false); // un-shuffle current playlist queue
             crossShuffleHistory = [];
-            crossShufflePos = -1;
-            // Seed history with current track if one is playing
+            
+            // Build a global deck of all tracks
+            for (const pl of ALL_PLAYLISTS) {
+                if (allDatabases[pl]) {
+                    for (let i = 0; i < allDatabases[pl].length; i++) {
+                        crossShuffleHistory.push({ playlist: pl, index: i });
+                    }
+                }
+            }
+            
+            // Fisher-Yates shuffle the global deck
+            for (let i = crossShuffleHistory.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
+            }
+            
+            // Move current track to front if one is playing
+            crossShufflePos = 0;
             if (queueIndex >= 0 && queueIndex < playQueue.length) {
-                crossShuffleHistory.push({ playlist: playlistSelect.value, index: playQueue[queueIndex] });
-                crossShufflePos = 0;
+                const currentOriginalIndex = playQueue[queueIndex];
+                const curPl = playlistSelect.value;
+                const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === curPl && t.index === currentOriginalIndex);
+                if (existingIdx !== -1) {
+                    const [currentTrack] = crossShuffleHistory.splice(existingIdx, 1);
+                    crossShuffleHistory.unshift(currentTrack);
+                }
             }
         } else if (shuffleMode === 2) {
             // Shuffle once: current playlist only

@@ -133,44 +133,24 @@
         }
     }
     function playNext() {
-        // Cross-playlist shuffle (mode 2)
+        // Cross-playlist shuffle (mode 1)
         if (shuffleMode === 1) {
             if (crossShufflePos < crossShuffleHistory.length - 1) {
-                // Navigating forward through existing history
+                // Navigating forward through existing history/deck
                 crossShufflePos++;
             } else {
-                // Pick random track from any loaded playlist uniformly
-                const loadedPls = ALL_PLAYLISTS.filter(pl => allDatabases[pl]);
-                if (loadedPls.length === 0) return;
-                
-                let totalTracks = 0;
-                const plOffsets = [];
-                for (const pl of loadedPls) {
-                    plOffsets.push({ playlist: pl, start: totalTracks, count: allDatabases[pl].length });
-                    totalTracks += allDatabases[pl].length;
+                // Reached the end of the global deck, reshuffle!
+                for (let i = crossShuffleHistory.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
                 }
-                
-                const randomBuffer = new Uint32Array(1);
-                window.crypto.getRandomValues(randomBuffer);
-                const randomGlobalIdx = randomBuffer[0] % totalTracks;
-                
-                let randomPl = loadedPls[0];
-                let randomIdx = 0;
-                for (const offset of plOffsets) {
-                    if (randomGlobalIdx >= offset.start && randomGlobalIdx < offset.start + offset.count) {
-                        randomPl = offset.playlist;
-                        randomIdx = randomGlobalIdx - offset.start;
-                        break;
-                    }
-                }
-                crossShuffleHistory.length = crossShufflePos + 1;
-                crossShuffleHistory.push({ playlist: randomPl, index: randomIdx });
-                crossShufflePos++;
+                crossShufflePos = 0;
             }
-            const entry = crossShuffleHistory[crossShufflePos];
-            playFromPlaylist(entry.playlist, entry.index);
+
+            const target = crossShuffleHistory[crossShufflePos];
+            playFromPlaylist(target.playlist, target.index);
             return;
-        }
+        }    
         
         if (playQueue.length === 0) return;
         

@@ -105,7 +105,7 @@
                         this.active.volume = 1.0; 
                         resolve();
                     }
-                }, 10);
+                }, 5);
             });
         }
         
