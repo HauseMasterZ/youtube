@@ -95,6 +95,29 @@
         executePlayback();
     }
 
+    window.playTrackSelection = playTrackSelection;
+
+    window.queuePlayNext = function(playlist, originalIndex) {
+        if (shuffleMode === 1) {
+            // Cross-playlist shuffle mode
+            crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist, index: originalIndex });
+        } else {
+            // Single playlist mode
+            if (playlist !== playlistSelect.value) return; 
+
+            const currentIdx = playQueue.indexOf(originalIndex);
+            if (currentIdx !== -1) {
+                playQueue.splice(currentIdx, 1);
+                if (currentIdx <= queueIndex && queueIndex > 0) {
+                    queueIndex--;
+                }
+            }
+            
+            const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
+            playQueue.splice(insertPos, 0, originalIndex);
+        }
+    };
+
     function playTrackSelection(targetPlaylist, targetOriginalIndex) {
         // Add to cross-shuffle history if in mode 2
         if (shuffleMode === 1) {

@@ -92,6 +92,20 @@
         
         playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index));
     });
+
+    trackList.addEventListener("contextmenu", (e) => {
+        const li = e.target.closest("li");
+        if (!li || !li.dataset.index || !li.dataset.playlist) return;
+        
+        e.preventDefault();
+        
+        queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
+        
+        // Visual flash feedback
+        const originalBg = li.style.backgroundColor;
+        li.style.backgroundColor = 'rgba(255, 255, 255, 0.2)';
+        setTimeout(() => { li.style.backgroundColor = originalBg; }, 200);
+    });
     window.addEventListener("popstate", (e) => {
         const view = e.state ? e.state.view : null;
         if (view !== 'lyrics' && window.lyricsActive) {
