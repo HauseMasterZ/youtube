@@ -139,6 +139,10 @@
             this.inactive = oldActive;
             this.inactive.volume = 0.000001;
             this.active.volume = 1.0;
+            
+            if (this.inactive.paused && this.inactive.getAttribute('src')) {
+                this.inactive.play().catch(() => {});
+            }
 
             if (!preventAutoplay) {
                 if (url) {
