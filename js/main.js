@@ -227,7 +227,6 @@
             bufferingIndicator.style.display = "block";
             window.currentBufferingSeconds = -1; 
         }
-        setPlayUI(false);
     });
 
     audioPlayer.addEventListener("playing", () => {
