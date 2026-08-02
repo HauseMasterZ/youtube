@@ -9,8 +9,6 @@
             super();
             this.audio1 = document.getElementById("audio-player-1");
             this.audio2 = document.getElementById("audio-player-2");
-            this.audio1.preload = "none";
-            this.audio2.preload = "none";
             this.active = this.audio1;
             this.inactive = this.audio2;
 
@@ -97,7 +95,6 @@
                 console.error("Play error:", e);
                 throw e;
             }); 
-            this.bless();
             return p;
         }
         
@@ -154,7 +151,10 @@
             this.active.volume = 1.0;
 
             if (!preventAutoplay) {
-                if (url) this.active.src = url;
+                if (url) {
+                    this.active.src = url;
+                    this.active.load(); // Force the browser to start fetching
+                }
 
                 const onCanPlay = () => {
                     this.active.removeEventListener('canplay', onCanPlay);
