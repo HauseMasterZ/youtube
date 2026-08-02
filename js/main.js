@@ -309,7 +309,12 @@
     }
     // ----------------------------------------
 
+    let wasPlayingBeforeSeek = false;
     seekBar.addEventListener("input", () => {
+        if (!isSeeking) {
+            wasPlayingBeforeSeek = !audioPlayer.paused;
+            audioPlayer.pause();
+        }
         isSeeking = true;
         currentTimeDisplay.textContent = formatTime(seekBar.value);
     });
@@ -320,6 +325,9 @@
         updateTimeUI(Number(e.target.value));
         if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
         updateMediaSessionPosition();
+        if (wasPlayingBeforeSeek) {
+            audioPlayer.play().catch(console.warn);
+        }
     });
 
       audioPlayer.addEventListener("timeupdate", () => {
