@@ -114,8 +114,16 @@
         getAttribute(attr) { if (attr === 'src') { return this.active.getAttribute('src'); } return null; }
         fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
         addEventListener(type, listener) { super.addEventListener(type, listener); }
-        removeEventListener(type, listener) { super.removeEventListener(type, listener); }
-    
+        removeEventListener(type, listener) { super.removeEventListener(type, listener);        }
+        
+        instantPause() {
+            if (this.fadeInterval) {
+                clearInterval(this.fadeInterval);
+                this.fadeInterval = null;
+            }
+            this.active.pause();
+        }
+
         cleanupInactive() {
             this.inactive.pause();
             this.inactive.removeAttribute('src');

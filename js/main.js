@@ -334,7 +334,7 @@
     seekBar.addEventListener("input", () => {
         if (!isSeeking) {
             wasPlayingBeforeSeek = !audioPlayer.paused;
-            audioPlayer.pause();
+            audioPlayer.instantPause();
         }
         isSeeking = true;
         currentTimeDisplay.textContent = formatTime(seekBar.value);
