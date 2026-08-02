@@ -47,24 +47,21 @@ export default {
     const url = new URL(request.url);
     const filePath = url.pathname.replace(/^\//, ''); // Removes the leading slash
 
-    // 4. Construct the proper GitHub REST API URL
-    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`;
-
-    // Forward the Range header if Chrome is seeking
-    const reqHeaders = {
-      "Authorization": `Bearer ${env.GITHUB_PAT}`,
-      "Accept": "application/vnd.github.v3.raw", // Tells GitHub to return the raw file instead of JSON metadata
-      "User-Agent": "Cloudflare-Worker-Proxy"
-    };
-    
-    const rangeHeader = request.headers.get("Range");
-    if (rangeHeader) {
-      reqHeaders["Range"] = rangeHeader;
-    }
+    // 4. Construct the proper GitHub RAW URL for extremely fast edge caching
+    const apiUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${filePath}`;
 
     // 5. Fetch from Private GitHub Repo using your Secret Token
-    const githubResponse = await fetch(apiUrl, {
-      headers: reqHeaders
+    // We clone the original request to preserve Range headers natively!
+    const newRequest = new Request(apiUrl, request);
+    newRequest.headers.set("Authorization", `Bearer ${env.GITHUB_PAT}`);
+    newRequest.headers.delete("Origin");
+    newRequest.headers.delete("Referer");
+
+    const githubResponse = await fetch(newRequest, {
+      cf: {
+        cacheTtl: 86400,
+        cacheEverything: true
+      }
     });
 
     // 6. Forward the media stream back to the user perfectly
