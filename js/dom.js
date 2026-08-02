@@ -81,6 +81,7 @@
                 this.fadeInterval = null;
                 this.active.volume = 1.0;
             }
+            this.active.muted = false;
             
             const p = this.active.play().catch(e => {
                 console.error("Play error:", e);
@@ -121,6 +122,7 @@
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
+            this.active.muted = true;
             this.active.pause();
         }
 
