@@ -448,7 +448,11 @@ currentPlaylistData[globalActiveOriginalIndex];
         errorSkipTimer = setTimeout(() => {
             errorSkipTimer = null;
             isRecovering = false;
-            playNext();
+            if (window.lastPlaybackDirection === -1) {
+                playPrev();
+            } else {
+                playNext();
+            }
         }, 3000);
     });
     // Initialize thumb toggle hint visibility

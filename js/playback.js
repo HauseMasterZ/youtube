@@ -160,7 +160,10 @@
             executePlayback();
         }
     }
+    window.lastPlaybackDirection = 1;
+
     function playNext() {
+        window.lastPlaybackDirection = 1;
         // Cross-playlist shuffle (mode 1)
         if (shuffleMode === 1) {
             if (crossShufflePos < crossShuffleHistory.length - 1) {
@@ -194,6 +197,7 @@
     }
 
     function playPrev() {
+        window.lastPlaybackDirection = -1;
         // Cross-playlist shuffle (mode 2)
         if (shuffleMode === 1) {
             if (crossShufflePos > 0) {
@@ -258,7 +262,11 @@
             if (!uiOnly) {
                 // Instantly auto-skip to the next track if we are actively playing
                 errorSkipTimer = setTimeout(() => {
-                    playNext();
+                    if (window.lastPlaybackDirection === -1) {
+                        playPrev();
+                    } else {
+                        playNext();
+                    }
                 }, 1000);
             }
             return;
