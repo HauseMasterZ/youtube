@@ -118,14 +118,6 @@
             // Single playlist mode
             if (playlist !== playlistSelect.value) return; 
 
-            const currentIdx = playQueue.indexOf(originalIndex);
-            if (currentIdx !== -1) {
-                playQueue.splice(currentIdx, 1);
-                if (currentIdx <= queueIndex && queueIndex > 0) {
-                    queueIndex--;
-                }
-            }
-            
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
             playQueue.splice(insertPos, 0, originalIndex);
         }
