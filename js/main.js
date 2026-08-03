@@ -271,7 +271,7 @@
             const current = audioPlayer.currentTime;
             
             if (duration > 0) {
-                window.currentBufferingSeconds = Math.floor(bufferedEnd - current);
+                window.currentBufferingSeconds = Math.max(0, Math.floor(duration - bufferedEnd));
             }
         }
     });
