@@ -394,7 +394,7 @@
             left: 0;
             width: 100%;
             height: 48px; /* Fixed height for virtual scrolling */
-            padding: 0 48px 0 16px; /* 48px right padding for the icon */
+            padding: 0 46px 0 16px; /* 46px right padding for the icon (icon is 32px + 12px right = 44px, gap = 2px) */
             box-sizing: border-box;
             cursor: pointer;
             display: block;
