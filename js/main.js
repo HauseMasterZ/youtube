@@ -264,6 +264,18 @@
         }
     });
 
+    audioPlayer.addEventListener("progress", () => {
+        if (audioPlayer.buffered.length > 0) {
+            const bufferedEnd = audioPlayer.buffered.end(audioPlayer.buffered.length - 1);
+            const duration = audioPlayer.duration || 0;
+            const current = audioPlayer.currentTime;
+            
+            if (duration > 0) {
+                window.currentBufferingSeconds = Math.floor(bufferedEnd - current);
+            }
+        }
+    });
+
     audioPlayer.addEventListener("playing", () => {
         const bufferingIndicator = document.getElementById("buffering-indicator");
         if (bufferingIndicator) {
