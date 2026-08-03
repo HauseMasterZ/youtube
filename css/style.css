@@ -507,14 +507,16 @@
             .now-playing:not(.expanded) #thumb-toggle-hint { 
                 font-size: 0;
                 padding: 0;
+                width: 100%;
                 height: 100%;
-                line-height: 50px;
+                display: flex !important;
+                justify-content: center;
+                align-items: center;
             }
             .now-playing:not(.expanded) #thumb-toggle-hint svg {
                 margin: 0;
                 width: 24px;
                 height: 24px;
-                vertical-align: middle;
             }
             
             .now-playing:not(.expanded) #buffering-indicator {
