@@ -71,7 +71,6 @@
             textSpan.style.whiteSpace = "nowrap";
             textSpan.style.overflow = "hidden";
             textSpan.style.textOverflow = "ellipsis";
-            textSpan.style.paddingRight = "40px";
             
             const linkA = document.createElement("a");
             linkA.target = "_blank";
