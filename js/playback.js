@@ -83,9 +83,7 @@
             }
             if (!resetPlayback && queueIndex !== -1) {
                 const currentOriginalIndex = playQueue[queueIndex];
-                indices = indices.filter(i => i !== currentOriginalIndex);
-                indices.unshift(currentOriginalIndex);
-                queueIndex = 0;
+                queueIndex = indices.indexOf(currentOriginalIndex);
             }
         } else if (!resetPlayback && queueIndex !== -1) {
             const currentOriginalIndex = playQueue[queueIndex];

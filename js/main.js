@@ -207,16 +207,18 @@
                 [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
             }
             
-            // Move current track to front if one is playing
-            crossShufflePos = 0;
+            // Do not move current track to front, just update position marker
             if (queueIndex >= 0 && queueIndex < playQueue.length) {
                 const currentOriginalIndex = playQueue[queueIndex];
                 const curPl = playlistSelect.value;
-                const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === curPl && t.index === currentOriginalIndex);
-                if (existingIdx !== -1) {
-                    const [currentTrack] = crossShuffleHistory.splice(existingIdx, 1);
-                    crossShuffleHistory.unshift(currentTrack);
+                const newIdx = crossShuffleHistory.findIndex(t => t.playlist === curPl && t.index === currentOriginalIndex);
+                if (newIdx !== -1) {
+                    crossShufflePos = newIdx;
+                } else {
+                    crossShufflePos = 0;
                 }
+            } else {
+                crossShufflePos = 0;
             }
         } else if (shuffleMode === 2) {
             // Shuffle once: current playlist only
