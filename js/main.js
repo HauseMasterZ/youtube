@@ -135,6 +135,22 @@
     document.getElementById('btn-close-lyrics').addEventListener('click', () => {
         if (window.lyricsActive) history.back();
     });
+
+    let lyricsTouchStartY = 0;
+    lyricsContainer.addEventListener("touchstart", (e) => {
+        lyricsTouchStartY = e.changedTouches[0].screenY;
+    }, {passive: true});
+
+    lyricsContainer.addEventListener("touchend", (e) => {
+        if (window.innerWidth > 800) return;
+        let touchEndY = e.changedTouches[0].screenY;
+        const lyricsContent = document.getElementById('lyrics-content');
+        
+        // Only allow swipe down to dismiss if we are at the top of the scrollable lyrics
+        if (window.lyricsActive && touchEndY > lyricsTouchStartY + 50 && lyricsContent.scrollTop <= 0) {
+            history.back();
+        }
+    }, {passive: true});
     const bufferingIndicator = document.getElementById("buffering-indicator");
     window.currentBufferingSeconds = -1;
     let bufferingTimeout = null;
