@@ -460,11 +460,11 @@
             }
         }
         
-        const nextCacheKey = nextTrack ? `${baseUrl}/_cache/${nextTrack.id}` : null;
-        const prevCacheKey = prevTrack ? `${baseUrl}/_cache/${prevTrack.id}` : null;
+        const nextCacheKey = nextTrack ? getAudioUrl(nextTrack) : null;
+        const prevCacheKey = prevTrack ? getAudioUrl(prevTrack) : null;
         
         const currentTrack = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
-        const currentCacheKey = currentTrack ? `${baseUrl}/_cache/${currentTrack.id}` : null;
+        const currentCacheKey = currentTrack ? getAudioUrl(currentTrack) : null;
         
         for (const url of preloadedFetches.keys()) {
             if (url !== nextCacheKey && url !== prevCacheKey && url !== currentCacheKey) {
@@ -474,39 +474,37 @@
         
         if (currentTrack) {
             const audioUrl = getAudioUrl(currentTrack);
-            const cacheKey = `${baseUrl}/_cache/${currentTrack.id}`;
-            if (!preloadedFetches.has(cacheKey)) {
+            if (!preloadedFetches.has(audioUrl)) {
                 const controller = new AbortController();
-                const fetchPromise = caches.match(cacheKey).then(cachedResponse => {
+                const fetchPromise = caches.match(audioUrl).then(cachedResponse => {
                     if (cachedResponse) return cachedResponse.blob();
                     return fetch(audioUrl, { priority: 'low', signal: controller.signal }).then(response => {
                         if (!response.ok) throw new Error();
                         const cloned = response.clone();
-                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned)).catch(e => {});
+                        caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned)).catch(e => {});
                         return response.blob();
                     });
                 });
                 fetchPromise.catch(e => {});
-                preloadedFetches.set(cacheKey, controller);
+                preloadedFetches.set(audioUrl, controller);
             }
         }
         
         if (nextTrack) {
             const audioUrl = getAudioUrl(nextTrack);
-            const cacheKey = `${baseUrl}/_cache/${nextTrack.id}`;
-            if (!preloadedFetches.has(cacheKey)) {
+            if (!preloadedFetches.has(audioUrl)) {
                 const controller = new AbortController();
-                const fetchPromise = caches.match(cacheKey).then(cachedResponse => {
+                const fetchPromise = caches.match(audioUrl).then(cachedResponse => {
                     if (cachedResponse) return cachedResponse.blob();
                     return fetch(audioUrl, { priority: 'low', signal: controller.signal }).then(response => {
                         if (!response.ok) throw new Error();
                         const cloned = response.clone();
-                        caches.open('yt-player-media').then(cache => cache.put(cacheKey, cloned)).catch(e => {});
+                        caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned)).catch(e => {});
                         return response.blob();
                     });
                 });
                 fetchPromise.catch(e => {});
-                preloadedFetches.set(cacheKey, controller);
+                preloadedFetches.set(audioUrl, controller);
             }
         }
     }
