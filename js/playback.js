@@ -312,12 +312,12 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
-                    artwork: []
+                    artwork: [{ src: 'assets/icon-512.png', sizes: '512x512', type: 'image/png' }]
                 });
             } else {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                navigator.mediaSession.metadata.artwork = [];
+                navigator.mediaSession.metadata.artwork = (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '1280x720', type: 'image/jpeg' }] : [{ src: 'assets/icon-512.png', sizes: '512x512', type: 'image/png' }];
             }
             navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
         }

@@ -122,7 +122,8 @@
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
-            this.active.muted = true;
+            this.active.pause();
+            this.active.volume = 1.0;
         }
 
         cleanupInactive() {
