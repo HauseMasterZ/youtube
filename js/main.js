@@ -581,6 +581,53 @@ currentPlaylistData[globalActiveOriginalIndex];
                 searchInput.focus();
             }
         });
+
+        // Auto-download all playlists on desktop
+        async function autoDownloadAllMedia() {
+            try {
+                const cache = await caches.open('yt-player-media');
+                for (const pl of ALL_PLAYLISTS) {
+                    if (!allDatabases[pl]) {
+                        try {
+                            const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json`);
+                            if (res.ok) {
+                                let data = await res.json();
+                                if (data.length > 0 && Array.isArray(data[0])) {
+                                    data = data.map(item => ({
+                                        id: item[0],
+                                        title: item[1],
+                                        channel: item[2],
+                                        duration: item[3],
+                                        file_path: `${pl}/${item[4]}.webm`,
+                                        thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
+                                    }));
+                                }
+                                allDatabases[pl] = data;
+                            }
+                        } catch(e) {}
+                    }
+                    
+                    if (allDatabases[pl]) {
+                        for (const track of allDatabases[pl]) {
+                            if (track.is_dead) continue;
+                            const audioUrl = getAudioUrl(track);
+                            
+                            const cached = await cache.match(audioUrl);
+                            if (!cached) {
+                                try {
+                                    await cache.add(audioUrl);
+                                } catch(e) {}
+                                await new Promise(r => setTimeout(r, 1500)); // 1.5s delay to be polite
+                            }
+                        }
+                    }
+                }
+            } catch(e) {
+                console.error("Auto-download failed:", e);
+            }
+        }
+        // Start background download after 5 seconds to let the app initialize
+        setTimeout(autoDownloadAllMedia, 5000);
     }
 
     // PWA Install Button Logic
