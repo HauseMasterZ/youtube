@@ -199,20 +199,10 @@
             // Shuffle all: cross-playlist random
             generateQueue(false); // un-shuffle current playlist queue
             crossShuffleHistory = [];
+            crossShufflePos = -1; // Reset position so rebuildCrossShuffleDeck shuffles the entire deck
             
-            // Build a global deck of all tracks
-            for (const pl of ALL_PLAYLISTS) {
-                if (allDatabases[pl]) {
-                    for (let i = 0; i < allDatabases[pl].length; i++) {
-                        crossShuffleHistory.push({ playlist: pl, index: i });
-                    }
-                }
-            }
-            
-            // Fisher-Yates shuffle the global deck
-            for (let i = crossShuffleHistory.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
+            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                window.rebuildCrossShuffleDeck();
             }
             
             // Do not move current track to front, just update position marker
@@ -603,6 +593,9 @@ currentPlaylistData[globalActiveOriginalIndex];
                                     }));
                                 }
                                 allDatabases[pl] = data;
+                                if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                                    window.rebuildCrossShuffleDeck();
+                                }
                             }
                         } catch(e) {}
                     }

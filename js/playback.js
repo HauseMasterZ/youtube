@@ -24,19 +24,8 @@
                 
                 allDatabases[folderName] = data;
 
-                if (typeof shuffleMode !== 'undefined' && shuffleMode === 1) {
-                    const newTracks = [];
-                    for (let i = 0; i < data.length; i++) {
-                        newTracks.push({ playlist: folderName, index: i });
-                    }
-                    crossShuffleHistory.push(...newTracks);
-                    
-                    // Reshuffle the unplayed portion of the deck perfectly so the new tracks are instantly mixed in
-                    for (let i = crossShuffleHistory.length - 1; i > crossShufflePos + 1; i--) {
-                        const remaining = i - (crossShufflePos + 1) + 1;
-                        const j = (crossShufflePos + 1) + Math.floor(Math.random() * remaining);
-                        [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
-                    }
+                if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                    window.rebuildCrossShuffleDeck();
                 }
             }
             
@@ -430,32 +419,6 @@
             if (crossShufflePos < crossShuffleHistory.length - 1) {
                 const entry = crossShuffleHistory[crossShufflePos + 1];
                 if (allDatabases[entry.playlist]) nextTrack = allDatabases[entry.playlist][entry.index];
-            } else {
-                const loadedPls = ALL_PLAYLISTS.filter(pl => allDatabases[pl]);
-                if (loadedPls.length > 0) {
-                    let totalTracks = 0;
-                    const plOffsets = [];
-                    for (const pl of loadedPls) {
-                        plOffsets.push({ playlist: pl, start: totalTracks, count: allDatabases[pl].length });
-                        totalTracks += allDatabases[pl].length;
-                    }
-                    const randomBuffer = new Uint32Array(1);
-                    window.crypto.getRandomValues(randomBuffer);
-                    const randomGlobalIdx = randomBuffer[0] % totalTracks;
-                    
-                    let randomPl = loadedPls[0];
-                    let randomIdx = 0;
-                    for (const offset of plOffsets) {
-                        if (randomGlobalIdx >= offset.start && randomGlobalIdx < offset.start + offset.count) {
-                            randomPl = offset.playlist;
-                            randomIdx = randomGlobalIdx - offset.start;
-                            break;
-                        }
-                    }
-                    // Generate ahead of time
-                    crossShuffleHistory.push({ playlist: randomPl, index: randomIdx });
-                    nextTrack = allDatabases[randomPl][randomIdx];
-                }
             }
             if (crossShufflePos > 0) {
                 const prevEntry = crossShuffleHistory[crossShufflePos - 1];

@@ -50,3 +50,33 @@
     let isRendering = false;
     let poolInitialized = false;
 
+    window.rebuildCrossShuffleDeck = function() {
+        if (shuffleMode !== 1) return;
+        
+        const existingMap = new Set();
+        for (const item of crossShuffleHistory) {
+            existingMap.add(item.playlist + ":" + item.index);
+        }
+        
+        const newTracks = [];
+        for (const pl of ALL_PLAYLISTS) {
+            if (allDatabases[pl]) {
+                for (let i = 0; i < allDatabases[pl].length; i++) {
+                    if (!existingMap.has(pl + ":" + i)) {
+                        newTracks.push({ playlist: pl, index: i });
+                    }
+                }
+            }
+        }
+        
+        if (newTracks.length > 0) {
+            crossShuffleHistory.push(...newTracks);
+            // Reshuffle the unplayed portion of the deck
+            for (let i = crossShuffleHistory.length - 1; i > crossShufflePos + 1; i--) {
+                const remaining = i - (crossShufflePos + 1) + 1;
+                const j = (crossShufflePos + 1) + Math.floor(Math.random() * remaining);
+                [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
+            }
+        }
+    };
+
