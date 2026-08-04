@@ -119,7 +119,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     .then(res => res.json())
                     .then(data => {
                         if (data.length > 0 && Array.isArray(data[0])) {
-                            allDatabases[pl] = data.map(item => ({
+                            allDatabases[pl] = data.filter(item => {
+                                const title = String(item[1]);
+                                return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                            }).map(item => ({
                                 id: item[0],
                                 title: item[1],
                                 channel: item[2],
@@ -148,7 +151,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 let data = await res.json();
                 
                 if (data.length > 0 && Array.isArray(data[0])) {
-                    data = data.map(item => ({
+                    data = data.filter(item => {
+                        const title = String(item[1]);
+                        return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                    }).map(item => ({
                         id: item[0],
                         title: item[1],
                         channel: item[2],
