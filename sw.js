@@ -46,9 +46,16 @@ self.addEventListener('fetch', (event) => {
     
     // Handle Media (WebM/MP4) with Range Request Support
     if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+        // If the browser was redirected here to bypass the SW, let it handle the request natively
+        if (event.request.url.includes('bypass=true')) return;
+
         event.respondWith(
             caches.open('yt-player-media').then(cache => {
-                return cache.match(event.request.url).then(cachedResponse => {
+                // Remove bypass query param if checking cache just in case
+                const cacheKeyUrl = new URL(event.request.url);
+                cacheKeyUrl.searchParams.delete('bypass');
+                
+                return cache.match(cacheKeyUrl.href).then(cachedResponse => {
                     if (cachedResponse) {
                         const rangeHeader = event.request.headers.get('range');
                         if (!rangeHeader) return cachedResponse;
@@ -73,13 +80,23 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
                     
-                    // If not in cache, fetch it. ONLY cache 200 OK responses (not 206 Partial)
-                    return fetch(event.request).then(response => {
-                        if (response.status === 200 && !event.request.headers.has('range')) {
-                            cache.put(event.request.url, response.clone());
-                        }
-                        return response;
-                    });
+                    // If it's the background prefetcher (empty destination), let it fetch and cache normally
+                    if (event.request.destination !== 'audio' && event.request.destination !== 'video') {
+                        return fetch(event.request).then(response => {
+                            if (response.status === 200 && !event.request.headers.has('range')) {
+                                cache.put(cacheKeyUrl.href, response.clone());
+                            }
+                            return response;
+                        });
+                    }
+                    
+                    // If it IS the audio tag, REDIRECT to a bypass URL.
+                    // This forces Chrome's native media stack to handle the network request directly.
+                    // If we proxy it through fetch(event.request), Chrome loses native seeking/buffering
+                    // and will dump the entire TCP buffer every time the user pauses and resumes!
+                    const bypassUrl = new URL(event.request.url);
+                    bypassUrl.searchParams.append('bypass', 'true');
+                    return Response.redirect(bypassUrl.href, 302);
                 });
             })
         );
