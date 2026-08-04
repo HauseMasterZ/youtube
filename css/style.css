@@ -509,7 +509,7 @@
                 padding: 0;
                 width: 100%;
                 height: 100%;
-                display: flex !important;
+                display: flex;
                 justify-content: center;
                 align-items: center;
             }
@@ -528,6 +528,7 @@
                 padding: 40% 0 0 0;
                 height: 100%;
                 box-sizing: border-box;
+                flex-direction: column;
             }
             .now-playing.expanded #thumb-toggle-hint svg {
                 width: 32px;

@@ -1166,7 +1166,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Initialize thumb toggle hint visibility
     if (thumbsDisabled) {
-        thumbToggleHint.style.display = 'block';
+        thumbToggleHint.style.display = 'flex';
     }
 
     let artClickTimer = null;
@@ -1210,7 +1210,7 @@ document.addEventListener("DOMContentLoaded", () => {
             
             if (thumbsDisabled) {
                 albumArt.style.display = 'none';
-                thumbToggleHint.style.display = 'block';
+                thumbToggleHint.style.display = 'flex';
                 document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             } else {
                 thumbToggleHint.style.display = 'none';
