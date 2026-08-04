@@ -188,14 +188,6 @@
         }
     });
 
-    document.addEventListener("keydown", (e) => {
-        if (e.repeat) return;
-        if (e.code === "Space" && document.activeElement !== searchInput) {
-            e.preventDefault();
-            btnPlayPause.click();
-        }
-    });
-
     btnNext.addEventListener("click", playNext);
     btnPrev.addEventListener("click", playPrev);
 
