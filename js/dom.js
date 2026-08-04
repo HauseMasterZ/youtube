@@ -150,10 +150,20 @@
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
-            this.inactive.volume = 0.000001;
+            
+            // On mobile (iOS/Android), the .volume property is ignored and tied to hardware buttons.
+            // To keep the background process awake while buffering without the user hearing the old track,
+            // we must use .muted = true instead of setting volume to 0.000001.
+            this.inactive.muted = true;
+            this.active.muted = false;
             this.active.volume = 1.0;
             
             if (this.inactive.paused && this.inactive.getAttribute('src')) {
+                // If the track ended naturally, playing it again will instantly fire 'ended' and cause the OS
+                // to drop the media controls UI. Seek to 0 so it plays silently from the start to keep the app awake.
+                if (this.inactive.currentTime >= this.inactive.duration - 0.5) {
+                    this.inactive.currentTime = 0;
+                }
                 this.inactive.play().catch(() => {});
             }
 
