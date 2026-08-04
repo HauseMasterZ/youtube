@@ -75,6 +75,7 @@
         get buffered() { return this.active.buffered; }
         
         play() { 
+            window.wasPausedByUser = false;
             // Cancel any pending fade-out from a recent pause() call
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
@@ -91,6 +92,7 @@
         }
         
         pause() { 
+            window.wasPausedByUser = true;
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
@@ -118,6 +120,7 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener);        }
         
         instantPause() {
+            window.wasPausedByUser = true;
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;

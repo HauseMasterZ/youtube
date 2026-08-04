@@ -50,6 +50,8 @@
     let isRendering = false;
     let poolInitialized = false;
 
+    window.wasPausedByUser = true;
+
     window.rebuildCrossShuffleDeck = function() {
         if (shuffleMode !== 1) return;
         

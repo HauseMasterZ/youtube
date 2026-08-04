@@ -315,6 +315,9 @@
             if (!audioPlayer.paused) {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
                 startSync();
+            } else if (window.wasPausedByUser === false) {
+                // OS paused the audio while in the background (e.g. another media app took focus)
+                audioPlayer.play().catch(e => console.warn("Auto-resume failed:", e));
             }
         }
     });
