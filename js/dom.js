@@ -106,16 +106,6 @@
                         this.fadeInterval = null;
                         this.active.pause();
                         this.active.volume = 1.0; 
-                        
-                        // Drop the src to immediately sever the backend TCP streaming connection
-                        // This stops Chrome from needlessly buffering MBs of data while paused
-                        const url = this.active.src;
-                        this.active.removeAttribute('src');
-                        this.active.load();
-                        setTimeout(() => {
-                            if (url) this.active.src = url;
-                        }, 50);
-                        
                         resolve();
                     }
                 }, 5);
@@ -137,13 +127,6 @@
             }
             this.active.pause();
             this.active.volume = 1.0;
-            
-            const url = this.active.src;
-            this.active.removeAttribute('src');
-            this.active.load();
-            setTimeout(() => {
-                if (url) this.active.src = url;
-            }, 50);
         }
 
         cleanupInactive() {
