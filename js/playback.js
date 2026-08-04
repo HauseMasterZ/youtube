@@ -247,7 +247,7 @@
         const track = currentPlaylistData[originalIndex];
 
         if (track.is_dead) {
-            currentTitle.textContent = "Skipping Dead Video...";
+            currentTitle.textContent = "err " + track.title + " skipping...";
             currentTitle.style.color = "#ff5555";
             currentChannel.textContent = track.channel;
             scrollToTrack(originalIndex);
@@ -257,6 +257,21 @@
             const activeLi = Array.from(trackList.children).find(li => li.dataset.originalIndex == originalIndex);
             if (activeLi) {
                 activeLi.classList.add('active');
+            }
+
+            if (hasMediaSession) {
+                if (!navigator.mediaSession.metadata) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: "err " + track.title + " skipping...",
+                        artist: track.channel,
+                        artwork: (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '512x512', type: 'image/jpeg' }] : [{ src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', sizes: '512x512', type: 'image/png' }]
+                    });
+                } else {
+                    navigator.mediaSession.metadata.title = "err " + track.title + " skipping...";
+                    navigator.mediaSession.metadata.artist = track.channel;
+                    navigator.mediaSession.metadata.artwork = (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '512x512', type: 'image/jpeg' }] : [{ src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', sizes: '512x512', type: 'image/png' }];
+                }
+                navigator.mediaSession.playbackState = "playing";
             }
 
             if (!uiOnly) {
