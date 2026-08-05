@@ -387,7 +387,12 @@
           }
       });
 
-      audioPlayer.addEventListener("ended", () => {
+      let lastEndedTime = 0;
+    audioPlayer.addEventListener("ended", () => {
+        const now = Date.now();
+        if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
+        lastEndedTime = now;
+
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
             updateTimeUI(0);
