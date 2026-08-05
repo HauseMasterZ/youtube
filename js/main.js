@@ -426,7 +426,7 @@ currentPlaylistData[globalActiveOriginalIndex];
             
             const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
-            audioPlayer.switchTrack(recoveryUrl, false);
+            audioPlayer.recoverTrack(recoveryUrl);
             return;
         }
 

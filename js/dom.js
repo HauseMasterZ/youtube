@@ -91,6 +91,12 @@
             return p;
         }
         
+        recoverTrack(url) {
+            this.active.src = url;
+            this.active.load();
+            this.active.play().catch(() => {});
+        }
+
         pause() { 
             window.wasPausedByUser = true;
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
@@ -147,6 +153,7 @@
                 this.inactive._pendingCanPlay = null;
             }
 
+            this.lastKnownTime = 0;
             const oldActive = this.active;
             this.active = this.inactive;
             this.inactive = oldActive;
@@ -158,12 +165,10 @@
             this.active.muted = false;
             this.active.volume = 1.0;
             
-            if (this.inactive.paused && this.inactive.getAttribute('src')) {
+            if (this.inactive.paused && this.inactive.getAttribute('src') && !this.inactive.error) {
                 // If the track ended naturally, playing it again will instantly fire 'ended' and cause the OS
                 // to drop the media controls UI. Seek to 0 so it plays silently from the start to keep the app awake.
-                if (this.inactive.currentTime >= this.inactive.duration - 0.5) {
-                    this.inactive.currentTime = 0;
-                }
+                this.inactive.currentTime = 0;
                 this.inactive.play().catch(() => {});
             }
 
