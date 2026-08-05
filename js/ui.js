@@ -65,6 +65,11 @@
             thumbImg.decoding = "async";
             thumbImg.fetchPriority = "low";
             thumbImg.alt = "";
+            thumbImg.onerror = function() {
+                if (this.src !== "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=") {
+                    this.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                }
+            };
             
             const textSpan = document.createElement("span");
             textSpan.style.flex = "1";
