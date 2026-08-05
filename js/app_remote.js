@@ -462,10 +462,14 @@ document.addEventListener("DOMContentLoaded", () => {
         const targetPlaylist = li.dataset.playlist;
         const targetOriginalIndex = parseInt(li.dataset.index);
         
-        // Add to cross-shuffle history if in mode 2
+        // Add to cross-shuffle history if in mode 1
         if (shuffleMode === 1) {
-            crossShuffleHistory.length = crossShufflePos + 1;
-            crossShuffleHistory.push({ playlist: targetPlaylist, index: targetOriginalIndex });
+            const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === targetPlaylist && t.index === targetOriginalIndex);
+            if (existingIdx !== -1) {
+                crossShuffleHistory.splice(existingIdx, 1);
+                if (existingIdx <= crossShufflePos) crossShufflePos--;
+            }
+            crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist: targetPlaylist, index: targetOriginalIndex });
             crossShufflePos++;
         }
         
@@ -524,7 +528,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         break;
                     }
                 }
-                crossShuffleHistory.length = crossShufflePos + 1;
                 crossShuffleHistory.push({ playlist: randomPl, index: randomIdx });
                 crossShufflePos++;
             }

@@ -205,13 +205,16 @@
                 window.rebuildCrossShuffleDeck();
             }
             
-            // Do not move current track to front, just update position marker
             if (queueIndex >= 0 && queueIndex < playQueue.length) {
                 const currentOriginalIndex = playQueue[queueIndex];
                 const curPl = playlistSelect.value;
                 const newIdx = crossShuffleHistory.findIndex(t => t.playlist === curPl && t.index === currentOriginalIndex);
                 if (newIdx !== -1) {
-                    crossShufflePos = newIdx;
+                    // Swap it to the front so we don't throw away any tracks before it
+                    const temp = crossShuffleHistory[0];
+                    crossShuffleHistory[0] = crossShuffleHistory[newIdx];
+                    crossShuffleHistory[newIdx] = temp;
+                    crossShufflePos = 0;
                 } else {
                     crossShufflePos = 0;
                 }

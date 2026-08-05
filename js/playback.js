@@ -105,6 +105,11 @@
     window.queuePlayNext = function(playlist, originalIndex) {
         if (shuffleMode === 1) {
             // Cross-playlist shuffle mode
+            const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === playlist && t.index === originalIndex);
+            if (existingIdx !== -1) {
+                crossShuffleHistory.splice(existingIdx, 1);
+                if (existingIdx <= crossShufflePos) crossShufflePos--;
+            }
             crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist, index: originalIndex });
         } else {
             // Single playlist mode
@@ -116,10 +121,15 @@
     };
 
     function playTrackSelection(targetPlaylist, targetOriginalIndex) {
-        // Add to cross-shuffle history if in mode 2
+        // Add to cross-shuffle history if in mode 1
         if (shuffleMode === 1) {
-            crossShuffleHistory.length = crossShufflePos + 1;
-            crossShuffleHistory.push({ playlist: targetPlaylist, index: targetOriginalIndex });
+            // Remove the track from anywhere else in the history to prevent duplicates
+            const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === targetPlaylist && t.index === targetOriginalIndex);
+            if (existingIdx !== -1) {
+                crossShuffleHistory.splice(existingIdx, 1);
+                if (existingIdx <= crossShufflePos) crossShufflePos--;
+            }
+            crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist: targetPlaylist, index: targetOriginalIndex });
             crossShufflePos++;
         }
         
