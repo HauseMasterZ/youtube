@@ -94,6 +94,14 @@ self.addEventListener('fetch', (event) => {
                     // This forces Chrome's native media stack to handle the network request directly.
                     // If we proxy it through fetch(event.request), Chrome loses native seeking/buffering
                     // and will dump the entire TCP buffer every time the user pauses and resumes!
+                    const ua = event.request.headers.get('User-Agent') || '';
+                    const isSafari = ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Chromium');
+                    if (isSafari) {
+                        // Safari/iOS rejects 302 redirects for media byte-range requests, throwing an abort error.
+                        // It also handles SW proxying perfectly natively without the Chrome TCP dump issue, so proxy it.
+                        return fetch(event.request);
+                    }
+                    
                     const bypassUrl = new URL(event.request.url);
                     bypassUrl.searchParams.append('bypass', 'true');
                     return Response.redirect(bypassUrl.href, 302);
