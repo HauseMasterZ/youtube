@@ -410,7 +410,7 @@
           
           // Android Power Management / Network drop: Try to recover ONCE before skipping.
           const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
-          if (ct > 0 && !isRecovering) {
+          if (ct > 0 && !isRecovering && audioPlayer.readyState > 0) {
               isRecovering = true;
               const savedTime = ct;
               const track = currentPlaylistData[playQueue[queueIndex]] || 

@@ -64,6 +64,7 @@
 
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) { this.active.currentTime = v; }
+        get readyState() { return this.active.readyState; }
         get duration() { return this.active.duration; }
         get paused() { return this.active.paused; }
         get playbackRate() { return this.active.playbackRate; }
@@ -175,6 +176,7 @@
             if (!preventAutoplay) {
                 if (url) {
                     this.active.src = url;
+                    try { this.active.currentTime = 0; } catch (e) {}
                     this.active.load(); // Force the browser to start fetching
                 }
 
@@ -193,7 +195,11 @@
                 return Promise.resolve(); // don't block on the play promise
             } else {
                 this.cleanupInactive();
-                if (url) this.active.src = url;
+                if (url) {
+                    this.active.src = url;
+                    try { this.active.currentTime = 0; } catch (e) {}
+                    this.active.load();
+                }
                 return Promise.resolve();
             }
         }
