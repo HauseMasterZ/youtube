@@ -147,7 +147,19 @@
                 }
                 
                 loadPlaylist(targetPlaylist).then(() => {
-                    queueIndex = playQueue.indexOf(targetOriginalIndex);
+                    if (shuffleMode === 2) {
+                        let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
+                        const randomBuffer = new Uint32Array(1);
+                        for (let i = rest.length - 1; i > 0; i--) {
+                            window.crypto.getRandomValues(randomBuffer);
+                            const j = randomBuffer[0] % (i + 1);
+                            [rest[i], rest[j]] = [rest[j], rest[i]];
+                        }
+                        playQueue = [targetOriginalIndex, ...rest];
+                        queueIndex = 0;
+                    } else {
+                        queueIndex = playQueue.indexOf(targetOriginalIndex);
+                    }
                     executePlayback();
                 });
             }
@@ -158,7 +170,19 @@
                 filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlistSelect.value, index: i }));
                 trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             }
-            queueIndex = playQueue.indexOf(targetOriginalIndex);
+            if (shuffleMode === 2) {
+                let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
+                const randomBuffer = new Uint32Array(1);
+                for (let i = rest.length - 1; i > 0; i--) {
+                    window.crypto.getRandomValues(randomBuffer);
+                    const j = randomBuffer[0] % (i + 1);
+                    [rest[i], rest[j]] = [rest[j], rest[i]];
+                }
+                playQueue = [targetOriginalIndex, ...rest];
+                queueIndex = 0;
+            } else {
+                queueIndex = playQueue.indexOf(targetOriginalIndex);
+            }
             executePlayback();
         }
     }
