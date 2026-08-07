@@ -22,7 +22,7 @@
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
-            audioPlayer.pause();
+            audioPlayer.instantPause();
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());

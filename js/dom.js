@@ -101,6 +101,11 @@
         pause() { 
             window.wasPausedByUser = true;
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
+            if (document.hidden) {
+                this.active.pause();
+                this.active.volume = 1.0;
+                return Promise.resolve();
+            }
             return new Promise(resolve => {
                 let currentVol = this.active.volume;
                 const step = currentVol / 10;
