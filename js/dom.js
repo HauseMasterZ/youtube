@@ -153,6 +153,9 @@
 
         switchTrack(url, preventAutoplay) {
             this.switching = true;
+            
+            const isRapidSkip = !!this.active._pendingCanPlay;
+
             // Cancel any pending canplay listener from a previous rapid skip
             if (this.active._pendingCanPlay) {
                 this.active.removeEventListener('canplay', this.active._pendingCanPlay);
@@ -166,18 +169,21 @@
             }
 
             this.lastKnownTime = 0;
-            const oldActive = this.active;
-            this.active = this.inactive;
-            this.inactive = oldActive;
+            
+            if (!isRapidSkip) {
+                const oldActive = this.active;
+                this.active = this.inactive;
+                this.inactive = oldActive;
+                
+                this.inactive.muted = true;
+                if (this.inactive.getAttribute('src') && !this.inactive.error) {
+                    try { this.inactive.currentTime = 0; } catch(e) {}
+                    this.inactive.play().catch(() => {});
+                }
+            }
             
             this.active.volume = 1.0;
             this.active.muted = false;
-            this.inactive.muted = true;
-            
-            if (this.inactive.getAttribute('src') && !this.inactive.error) {
-                try { this.inactive.currentTime = 0; } catch(e) {}
-                this.inactive.play().catch(() => {});
-            }
             if ('mediaSession' in navigator) {
                 navigator.mediaSession.playbackState = 'playing';
             }
