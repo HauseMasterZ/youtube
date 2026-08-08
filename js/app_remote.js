@@ -1273,7 +1273,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if ('mediaSession' in navigator) {
         navigator.mediaSession.setActionHandler('play', () => audioPlayer.play());
-        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.pause());
+        navigator.mediaSession.setActionHandler('pause', () => audioPlayer.instantPause());
         navigator.mediaSession.setActionHandler('previoustrack', playPrev);
         navigator.mediaSession.setActionHandler('nexttrack', playNext);
         navigator.mediaSession.setActionHandler('seekto', (details) => {
