@@ -77,33 +77,11 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
 
-                    // NOT CACHED: fetch FULL file from origin (strip Range header so CDN returns 200)
+                    // NOT CACHED: fetch FULL file, cache clone, stream original to Chrome
                     const fullRequest = new Request(cacheKeyUrl.href, { mode: 'cors' });
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
-                        // Cache the full 200 response
                         cache.put(cacheKeyUrl.href, response.clone());
-
-                        // If Chrome asked for a range, serve it from the full response
-                        const rangeHeader = event.request.headers.get('range');
-                        if (rangeHeader) {
-                            return response.arrayBuffer().then(buffer => {
-                                const total = buffer.byteLength;
-                                const parts = rangeHeader.replace(/bytes=/, "").split("-");
-                                const start = parseInt(parts[0], 10);
-                                const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-                                return new Response(buffer.slice(start, end + 1), {
-                                    status: 206,
-                                    statusText: 'Partial Content',
-                                    headers: {
-                                        'Content-Range': `bytes ${start}-${end}/${total}`,
-                                        'Accept-Ranges': 'bytes',
-                                        'Content-Length': end - start + 1,
-                                        'Content-Type': response.headers.get('Content-Type') || 'audio/webm'
-                                    }
-                                });
-                            });
-                        }
                         return response;
                     });
                 });
