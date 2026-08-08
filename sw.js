@@ -32,7 +32,7 @@ self.addEventListener('activate', (event) => {
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME) {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media') {
                         return caches.delete(cacheName);
                     }
                 })
@@ -77,8 +77,13 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
 
-                    // NOT CACHED: fetch FULL file, cache clone, stream original to Chrome
-                    const fullRequest = new Request(cacheKeyUrl.href, { mode: 'cors' });
+                    // NOT CACHED: forward original headers (for Origin/CORS), strip only Range
+                    const headers = new Headers(event.request.headers);
+                    headers.delete('Range');
+                    const fullRequest = new Request(cacheKeyUrl.href, {
+                        headers: headers,
+                        mode: event.request.mode
+                    });
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
                         cache.put(cacheKeyUrl.href, response.clone());
