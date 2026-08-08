@@ -13,10 +13,11 @@
             this.inactive = this.audio2;
             
             this.blessed = false;
+            this.switching = false;
 
             this.events = ['play', 'playing', 'pause', 'ended', 'error', 'loadedmetadata', 'timeupdate', 'seeked', 'ratechange', 'progress', 'waiting', 'canplay'];
             this.forwardEvent = (e) => {
-                if (e.target === this.active) {
+                if (e.target === this.active && !this.switching) {
                     if (e.type === 'timeupdate' && this.active.currentTime > 0) {
                         this.lastKnownTime = this.active.currentTime;
                     }
@@ -38,6 +39,7 @@
         bless() {
             if (this.blessed) return;
             this.blessed = true;
+            this.switching = true;
             
             // To ensure BOTH audio elements are permanently blessed by Android, they must successfully resolve a play() call.
             // We use a silent base64 string to guarantee instant resolution without waiting for network.
@@ -46,7 +48,7 @@
             const blessAud = (aud) => {
                 const oldSrc = aud.src;
                 aud.src = silentSrc;
-                aud.play().then(() => {
+                return aud.play().then(() => {
                     aud.pause();
                     if (oldSrc && !oldSrc.includes('data:audio/wav;base64')) {
                         aud.src = oldSrc; 
@@ -56,8 +58,9 @@
                 }).catch(()=>{});
             };
             
-            blessAud(this.audio1);
-            blessAud(this.audio2);
+            Promise.allSettled([blessAud(this.audio1), blessAud(this.audio2)]).then(() => {
+                this.switching = false;
+            });
         }
 
 
@@ -149,13 +152,16 @@
         }
 
         switchTrack(url, preventAutoplay) {
+            this.switching = true;
             // Cancel any pending canplay listener from a previous rapid skip
             if (this.active._pendingCanPlay) {
                 this.active.removeEventListener('canplay', this.active._pendingCanPlay);
+                clearTimeout(this.active._pendingCanPlayTimeout);
                 this.active._pendingCanPlay = null;
             }
             if (this.inactive._pendingCanPlay) {
                 this.inactive.removeEventListener('canplay', this.inactive._pendingCanPlay);
+                clearTimeout(this.inactive._pendingCanPlayTimeout);
                 this.inactive._pendingCanPlay = null;
             }
 
@@ -164,37 +170,37 @@
             this.active = this.inactive;
             this.inactive = oldActive;
             
-            // On mobile (iOS/Android), the .volume property is ignored and tied to hardware buttons.
-            // To keep the background process awake while buffering without the user hearing the old track,
-            // we must use .muted = true instead of setting volume to 0.000001.
-            this.inactive.muted = true;
-            this.active.muted = false;
             this.active.volume = 1.0;
-            
-            if (this.inactive.paused && this.inactive.getAttribute('src') && !this.inactive.error) {
-                // If the track ended naturally, playing it again will instantly fire 'ended' and cause the OS
-                // to drop the media controls UI. Seek to 0 so it plays silently from the start to keep the app awake.
-                this.inactive.currentTime = 0;
-                this.inactive.play().catch(() => {});
-            }
+            this.active.muted = false;
 
             if (!preventAutoplay) {
                 if (url) {
                     this.active.src = url;
-                    try { this.active.currentTime = 0; } catch (e) {}
                     this.active.load(); // Force the browser to start fetching
                 }
 
                 const onCanPlay = () => {
                     this.active.removeEventListener('canplay', onCanPlay);
+                    clearTimeout(this.active._pendingCanPlayTimeout);
                     this.active._pendingCanPlay = null;
+                    this.active.currentTime = 0;
                     this.active.play().then(() => {
+                        this.switching = false;
+                        this.dispatchEvent(new Event('play'));
                         this.cleanupInactive();
                     }).catch(e => {
+                        this.switching = false;
                         this.cleanupInactive();
                     });
                 };
                 this.active._pendingCanPlay = onCanPlay;
+                this.active._pendingCanPlayTimeout = setTimeout(() => {
+                    if (this.active._pendingCanPlay) {
+                        this.active.removeEventListener('canplay', onCanPlay);
+                        this.active._pendingCanPlay = null;
+                        this.switching = false;
+                    }
+                }, 10000);
                 this.active.addEventListener('canplay', onCanPlay);
 
                 return Promise.resolve(); // don't block on the play promise
@@ -202,9 +208,9 @@
                 this.cleanupInactive();
                 if (url) {
                     this.active.src = url;
-                    try { this.active.currentTime = 0; } catch (e) {}
                     this.active.load();
                 }
+                this.switching = false;
                 return Promise.resolve();
             }
         }

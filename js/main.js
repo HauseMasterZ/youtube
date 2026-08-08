@@ -296,6 +296,13 @@
         updateMediaSessionPosition();
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
+            // Force Android to rebuild notification if it was torn down
+            const track = currentPlaylistData[playQueue[queueIndex]] 
+                       || currentPlaylistData[globalActiveOriginalIndex];
+            if (track && navigator.mediaSession.metadata) {
+                navigator.mediaSession.metadata.title = track.title;
+                navigator.mediaSession.metadata.artist = track.channel;
+            }
         }
         if (window.lyricsActive && !lyricsRafId && !currentLyricsIsUnsynced) {
             lyricsRafId = requestAnimationFrame(lyricsLoop);
