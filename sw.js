@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v34';
+const CACHE_NAME = 'yt-player-cache-v35';
 
 const CORE_ASSETS = [
     './index.html',
@@ -77,11 +77,32 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
 
-                    // NOT CACHED: fetch from origin, cache the clone, return original
-                    return fetch(event.request).then(response => {
-                        if (response.status === 200 && !event.request.headers.get('range')) {
-                            // Only cache full (non-Range) responses
-                            cache.put(cacheKeyUrl.href, response.clone());
+                    // NOT CACHED: fetch FULL file from origin (strip Range header so CDN returns 200)
+                    const fullRequest = new Request(cacheKeyUrl.href, { mode: 'cors' });
+                    return fetch(fullRequest).then(response => {
+                        if (!response.ok) return response;
+                        // Cache the full 200 response
+                        cache.put(cacheKeyUrl.href, response.clone());
+
+                        // If Chrome asked for a range, serve it from the full response
+                        const rangeHeader = event.request.headers.get('range');
+                        if (rangeHeader) {
+                            return response.arrayBuffer().then(buffer => {
+                                const total = buffer.byteLength;
+                                const parts = rangeHeader.replace(/bytes=/, "").split("-");
+                                const start = parseInt(parts[0], 10);
+                                const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
+                                return new Response(buffer.slice(start, end + 1), {
+                                    status: 206,
+                                    statusText: 'Partial Content',
+                                    headers: {
+                                        'Content-Range': `bytes ${start}-${end}/${total}`,
+                                        'Accept-Ranges': 'bytes',
+                                        'Content-Length': end - start + 1,
+                                        'Content-Type': response.headers.get('Content-Type') || 'audio/webm'
+                                    }
+                                });
+                            });
                         }
                         return response;
                     });
