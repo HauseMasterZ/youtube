@@ -174,9 +174,12 @@
             this.active.muted = false;
             this.inactive.muted = true;
             
-            if (this.inactive.paused && this.inactive.getAttribute('src') && !this.inactive.error) {
-                this.inactive.currentTime = 0;
+            if (this.inactive.getAttribute('src') && !this.inactive.error) {
+                try { this.inactive.currentTime = 0; } catch(e) {}
                 this.inactive.play().catch(() => {});
+            }
+            if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
             }
 
             if (!preventAutoplay) {
