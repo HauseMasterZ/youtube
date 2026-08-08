@@ -592,33 +592,12 @@ currentPlaylistData[globalActiveOriginalIndex];
 
         // Auto-download all playlists on desktop
         if (!isMobileDevice) {
-            function isCurrentTrackBuffered() {
-                try {
-                    const dur = audioPlayer.duration;
-                    if (!dur || isNaN(dur) || dur === Infinity) return false;
-                    const buf = audioPlayer.buffered;
-                    return buf.length > 0 && buf.end(buf.length - 1) >= dur - 0.5;
-                } catch(e) { return false; }
-            }
-
-            function waitForCurrentTrackBuffered() {
-                return new Promise(resolve => {
-                    if (isCurrentTrackBuffered() || audioPlayer.paused) { resolve(); return; }
-                    const onProgress = () => {
-                        if (isCurrentTrackBuffered() || audioPlayer.paused) {
-                            audioPlayer.removeEventListener('progress', onProgress);
-                            resolve();
-                        }
-                    };
-                    audioPlayer.addEventListener('progress', onProgress);
-                });
-            }
-
             async function autoDownloadAllMedia() {
                 try {
                     const cache = await caches.open('yt-player-media');
                     
-                    for (const pl of ALL_PLAYLISTS) {
+                    // Process all playlists concurrently so they don't block each other
+                    ALL_PLAYLISTS.forEach(async (pl) => {
                         if (!allDatabases[pl]) {
                             try {
                                 const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json`);
@@ -652,8 +631,6 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 
                                 const cached = await cache.match(audioUrl);
                                 if (!cached) {
-                                    // Wait for current track to finish buffering before downloading
-                                    await waitForCurrentTrackBuffered();
                                     try {
                                         await cache.add(audioUrl);
                                     } catch(e) {}
@@ -661,17 +638,13 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 }
                             }
                         }
-                    }
+                    });
                 } catch(e) {
                     console.error("Auto-download failed:", e);
                 }
             }
-            // Start only after the first track is fully buffered
-            const startAutoDownload = () => {
-                audioPlayer.removeEventListener('progress', startAutoDownload);
-                if (isCurrentTrackBuffered()) autoDownloadAllMedia();
-            };
-            audioPlayer.addEventListener('progress', startAutoDownload);
+            // Start background download after 5 seconds to let the app initialize
+            setTimeout(autoDownloadAllMedia, 5000);
         }
     }
 

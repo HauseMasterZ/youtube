@@ -172,6 +172,7 @@
             
             this.active.volume = 1.0;
             this.active.muted = false;
+            this.inactive.pause();
 
             if (!preventAutoplay) {
                 if (url) {
