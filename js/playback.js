@@ -485,24 +485,6 @@
             }
         }
         
-        if (currentTrack) {
-            const audioUrl = getAudioUrl(currentTrack);
-            if (!preloadedFetches.has(audioUrl)) {
-                const controller = new AbortController();
-                const fetchPromise = caches.match(audioUrl).then(cachedResponse => {
-                    if (cachedResponse) return cachedResponse.blob();
-                    return fetch(audioUrl, { priority: 'low', signal: controller.signal }).then(response => {
-                        if (!response.ok) throw new Error();
-                        const cloned = response.clone();
-                        caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned)).catch(e => {});
-                        return response.blob();
-                    });
-                });
-                fetchPromise.catch(e => {});
-                preloadedFetches.set(audioUrl, controller);
-            }
-        }
-        
         if (nextTrack) {
             const audioUrl = getAudioUrl(nextTrack);
             if (!preloadedFetches.has(audioUrl)) {

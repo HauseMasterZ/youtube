@@ -44,28 +44,25 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
-    // Handle Media (WebM/MP4) with Range Request Support
     if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
-        // If the browser was redirected here to bypass the SW, let it handle the request natively
         if (event.request.url.includes('bypass=true')) return;
 
         event.respondWith(
             caches.open('yt-player-media').then(cache => {
-                // Remove bypass query param if checking cache just in case
                 const cacheKeyUrl = new URL(event.request.url);
                 cacheKeyUrl.searchParams.delete('bypass');
-                
+
                 return cache.match(cacheKeyUrl.href).then(cachedResponse => {
                     if (cachedResponse) {
+                        // CACHED: serve with Range support
                         const rangeHeader = event.request.headers.get('range');
                         if (!rangeHeader) return cachedResponse;
-                        
+
                         return cachedResponse.arrayBuffer().then(buffer => {
                             const total = buffer.byteLength;
                             const parts = rangeHeader.replace(/bytes=/, "").split("-");
                             const start = parseInt(parts[0], 10);
                             const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
-                            
                             const sliced = buffer.slice(start, end + 1);
                             return new Response(sliced, {
                                 status: 206,
@@ -79,33 +76,15 @@ self.addEventListener('fetch', (event) => {
                             });
                         });
                     }
-                    
-                    // If it's the background prefetcher (empty destination), let it fetch and cache normally
-                    if (event.request.destination !== 'audio' && event.request.destination !== 'video') {
-                        return fetch(event.request).then(response => {
-                            if (response.status === 200 && !event.request.headers.has('range')) {
-                                cache.put(cacheKeyUrl.href, response.clone());
-                            }
-                            return response;
-                        });
-                    }
-                    
-                    // If it IS the audio tag, REDIRECT to a bypass URL.
-                    // This forces Chrome's native media stack to handle the network request directly.
-                    // If we proxy it through fetch(event.request), Chrome loses native seeking/buffering
-                    // and will dump the entire TCP buffer every time the user pauses and resumes!
-                    const ua = event.request.headers.get('User-Agent') || '';
-                    const isIOS = /iPhone|iPad|iPod/.test(ua);
-                    const isMacSafari = ua.includes('Mac') && ua.includes('Safari') && !ua.includes('Chrome') && !ua.includes('Chromium');
-                    if (isIOS || isMacSafari) {
-                        // Safari/iOS rejects 302 redirects for media byte-range requests, throwing an abort error.
-                        // It also handles SW proxying perfectly natively without the Chrome TCP dump issue, so proxy it.
-                        return fetch(event.request);
-                    }
-                    
-                    const bypassUrl = new URL(event.request.url);
-                    bypassUrl.searchParams.append('bypass', 'true');
-                    return Response.redirect(bypassUrl.href, 302);
+
+                    // NOT CACHED: fetch from origin, cache the clone, return original
+                    return fetch(event.request).then(response => {
+                        if (response.status === 200 && !event.request.headers.get('range')) {
+                            // Only cache full (non-Range) responses
+                            cache.put(cacheKeyUrl.href, response.clone());
+                        }
+                        return response;
+                    });
                 });
             })
         );
