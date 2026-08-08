@@ -173,6 +173,11 @@
             this.active.volume = 1.0;
             this.active.muted = false;
             this.inactive.muted = true;
+            
+            if (this.inactive.paused && this.inactive.getAttribute('src') && !this.inactive.error) {
+                this.inactive.currentTime = 0;
+                this.inactive.play().catch(() => {});
+            }
 
             if (!preventAutoplay) {
                 if (url) {
