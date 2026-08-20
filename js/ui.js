@@ -277,9 +277,7 @@
     // Removed duplicate albumArtContainer, already in dom.js
     const thumbToggleHint = document.getElementById('thumb-toggle-hint');
 
-    albumArt.addEventListener("error", () => {
-        albumArt.style.display = 'none';
-    });
+    // albumArt error handling is managed in playback.js
     
     function getDominantColor(imgEl, trackId) {
         if (trackId && dominantColorCache.has(trackId)) return dominantColorCache.get(trackId);
