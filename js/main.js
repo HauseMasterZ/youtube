@@ -438,7 +438,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
             updateTimeUI(0);
-            audioPlayer.play();
+            if (window.lyricsActive && typeof updateLyricsUI === 'function') {
+                updateLyricsUI(0);
+            }
+            audioPlayer.play().catch(e => console.warn("Repeat play error:", e));
         } else {
             playNext();
         }

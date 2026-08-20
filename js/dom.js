@@ -26,6 +26,9 @@
                     if (e.type === 'timeupdate') {
                         const ct = this.active.currentTime;
                         const dur = this.active.duration;
+                        if (dur > 0 && ct < dur - 1.0) {
+                            this._endedFired = false;
+                        }
                         if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= dur - 0.25) {
                                 this._endedFired = true;
@@ -150,6 +153,9 @@
             try {
                 this.active.currentTime = v;
                 this.lastKnownTime = v;
+                if (v < (this.active.duration || Infinity) - 0.5) {
+                    this._endedFired = false;
+                }
             } catch (e) {
                 this._pendingSeek = v;
             }
@@ -167,6 +173,9 @@
 
         play() {
             window.wasPausedByUser = false;
+            if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
+                this._endedFired = false;
+            }
             this._initAudioGraph();
             if (this._audioCtx && this._audioCtx.state === 'suspended') {
                 this._audioCtx.resume();
