@@ -26,6 +26,8 @@
 
     const GRAY_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23222226'/%3E%3C/svg%3E";
     const loadedThumbSet = new Set();
+    let isScrollingFast = false;
+    let scrollSettleTimer = null;
 
     applyShuffleUI();
     applyRepeatUI();
@@ -136,8 +138,9 @@
                     
                     if (loadedThumbSet.has(thumbUrl)) {
                         thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                    } else {
+                    } else if (!isScrollingFast) {
                         const loader = new Image();
+                        loader.fetchPriority = "low";
                         loader.onload = () => {
                             loadedThumbSet.add(thumbUrl);
                             if (thumbDiv.dataset.targetSrc === thumbUrl) {
@@ -151,6 +154,22 @@
                         };
                         loader.src = thumbUrl;
                     }
+                } else if (!isScrollingFast && thumbDiv.style.backgroundImage === 'none' && !loadedThumbSet.has(thumbUrl)) {
+                    // Deferred fetch after scrolling settles
+                    const loader = new Image();
+                    loader.fetchPriority = "low";
+                    loader.onload = () => {
+                        loadedThumbSet.add(thumbUrl);
+                        if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                            thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
+                        }
+                    };
+                    loader.onerror = () => {
+                        if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                            thumbDiv.style.backgroundImage = 'none';
+                        }
+                    };
+                    loader.src = thumbUrl;
                 }
                 thumbDiv.style.display = "block";
             } else {
