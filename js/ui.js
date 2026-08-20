@@ -37,9 +37,9 @@
         const scrollTop = playlistContainer.scrollTop;
         const containerHeight = playlistContainer.clientHeight || 400;
 
-        // Render buffer (10 items above and below viewport for thumbnail pre-loading)
-        const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 10);
-        const endIndex = Math.min(filteredIndices.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 10);
+        // Render buffer (3 items above and below viewport for smooth scrolling without over-fetching)
+        const startIndex = Math.max(0, Math.floor(scrollTop / ITEM_HEIGHT) - 3);
+        const endIndex = Math.min(filteredIndices.length - 1, Math.ceil((scrollTop + containerHeight) / ITEM_HEIGHT) + 3);
 
         // Only redraw DOM if the index window actually shifted
         if (lastStartIndex === startIndex && lastEndIndex === endIndex) {
@@ -57,19 +57,14 @@
         while (trackList.children.length < requiredNodes) {
             const li = document.createElement("li");
             li.className = "track-item";
-            li.style.display = "flex";
-            li.style.alignItems = "center";
             
             const thumbImg = document.createElement("img");
             thumbImg.className = "track-thumb";
             thumbImg.decoding = "async";
             thumbImg.loading = "lazy";
-            thumbImg.fetchPriority = "low";
             thumbImg.alt = "";
             thumbImg.onerror = function() {
-                if (this.src !== "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=") {
-                    this.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-                }
+                this.removeAttribute('src');
             };
             
             const textSpan = document.createElement("span");
