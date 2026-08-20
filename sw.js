@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v66';
+const CACHE_NAME = 'yt-player-cache-v67';
 
 const CORE_ASSETS = [
     './index.html',
@@ -78,16 +78,18 @@ self.addEventListener('fetch', (event) => {
                         });
                     }
 
-                    // NOT CACHED: forward original headers (for Origin/CORS), strip only Range
+                    // NOT CACHED: forward original headers (preserving Range for targeted seeking)
                     const headers = new Headers(event.request.headers);
-                    headers.delete('Range');
                     const fullRequest = new Request(cacheKeyUrl.href, {
                         headers: headers,
                         mode: event.request.mode
                     });
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
-                        cache.put(cacheKeyUrl.href, response.clone());
+                        // Only cache full 200 responses, avoid corrupting media cache with 206 slices
+                        if (response.status === 200) {
+                            cache.put(cacheKeyUrl.href, response.clone());
+                        }
                         return response;
                     });
                 });
