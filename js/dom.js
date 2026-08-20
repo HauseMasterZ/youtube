@@ -145,133 +145,13 @@
             });
         }
 
-        _isTimeBuffered(time) {
-            if (!this._sourceBuffer) return false;
-            try {
-                const b = this._sourceBuffer.buffered;
-                for (let i = 0; i < b.length; i++) {
-                    if (time >= b.start(i) && time <= b.end(i) - 0.5) {
-                        return true;
-                    }
-                }
-            } catch (e) {}
-            return false;
-        }
-
-        async _seekToTargetOffset(targetTime) {
-            if (!this._currentUrl || !this._mseEnabled || !this._sourceBuffer) return;
-
-            const url = this._currentUrl;
-            const duration = this.active.duration || 180;
-            const totalBytes = this._totalContentLength || 3500000;
-
-            // 1. Break active background stream
-            if (this._streamAbortController) {
-                try { this._streamAbortController.abort(); } catch (e) {}
-            }
-            this._streamAbortController = new AbortController();
-            const currentAbortSignal = this._streamAbortController.signal;
-
-            this._streamId = (this._streamId || 0) + 1;
-            const activeStreamId = this._streamId;
-
-            // 2. Calculate approximate byte offset with 32KB lookback padding
-            const ratio = Math.max(0, Math.min(1, targetTime / duration));
-            const targetByte = Math.max(0, Math.floor(ratio * totalBytes) - 32768);
-
-            try {
-                // 3. Fetch targeted byte range from server
-                const rangeRes = await fetch(url, {
-                    headers: { 'Range': `bytes=${targetByte}-` },
-                    signal: currentAbortSignal
-                });
-
-                if (!rangeRes.ok && rangeRes.status !== 206) throw new Error(`Range status: ${rangeRes.status}`);
-                if (!rangeRes.body) throw new Error("No response body");
-
-                const reader = rangeRes.body.getReader();
-                const { value: firstRangeChunk, done: firstRangeDone } = await reader.read();
-
-                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                    try { reader.cancel(); } catch (e) {}
-                    return;
-                }
-
-                if (firstRangeChunk && firstRangeChunk.length > 0) {
-                    await this._appendToSourceBuffer(firstRangeChunk);
-                }
-
-                try {
-                    this.active.currentTime = targetTime;
-                } catch (e) {}
-
-                if (!this.active.paused) {
-                    this.active.play().catch(() => {});
-                }
-
-                // 4. Continue piping chunks from target offset to end of song
-                (async () => {
-                    try {
-                        if (firstRangeDone) {
-                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                try { this._mediaSource.endOfStream(); } catch (e) {}
-                            }
-                            return;
-                        }
-
-                        while (true) {
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                try { reader.cancel(); } catch (e) {}
-                                break;
-                            }
-
-                            const { value: nextChunk, done } = await reader.read();
-
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                try { reader.cancel(); } catch (e) {}
-                                break;
-                            }
-
-                            if (done) {
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
-                                }
-                                break;
-                            }
-
-                            if (nextChunk && nextChunk.length > 0) {
-                                await this._appendToSourceBuffer(nextChunk);
-                            }
-                        }
-                    } catch (err) {
-                        if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                            console.warn("Background target range pipe note:", err);
-                        }
-                    }
-                })();
-
-            } catch (err) {
-                if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                    console.warn("Target range seek fallback:", err);
-                    try { this.active.currentTime = targetTime; } catch (e) {}
-                }
-            }
-        }
-
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) {
-            const targetTime = Math.max(0, v);
-            this.lastKnownTime = targetTime;
-
-            if (this._isTimeBuffered(targetTime) || !this._mseEnabled || !this._currentUrl) {
-                try {
-                    this.active.currentTime = targetTime;
-                } catch (e) {
-                    this._pendingSeek = targetTime;
-                }
-            } else {
-                // Target is in unbuffered region: break sequential stream and buffer directly from target range!
-                this._seekToTargetOffset(targetTime);
+            try {
+                this.active.currentTime = v;
+                this.lastKnownTime = v;
+            } catch (e) {
+                this._pendingSeek = v;
             }
         }
         get readyState() { return this.active.readyState; }
@@ -413,8 +293,6 @@
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
                     if (!response.body) throw new Error("ReadableStream not supported");
-
-                    this._totalContentLength = parseInt(response.headers.get('Content-Length') || 0, 10);
 
                     const reader = response.body.getReader();
 
