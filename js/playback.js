@@ -375,20 +375,24 @@
         }
 
         if (!thumbsDisabled && getThumbUrl(track)) {
-            const thumbUrl = getThumbUrl(track);
-            albumArt.src = thumbUrl;
+            const rawThumbUrl = getThumbUrl(track);
+            const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawThumbUrl) : null;
+            const initialThumb = (cached && cached.status === 'loaded' && cached.resolvedUrl) ? cached.resolvedUrl : rawThumbUrl;
+
             albumArt.style.display = 'block';
             albumArt.onerror = function() {
                 if (track.id && !this.src.includes('ytimg.com')) {
                     const fallback = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
                     this.src = fallback;
+                    this.style.display = 'block';
                     fetchVisuals(track.id, fallback, sequenceId, track);
                 } else {
                     this.removeAttribute('src');
                     this.style.display = 'none';
                 }
             };
-            fetchVisuals(track.id, thumbUrl, sequenceId, track);
+            albumArt.src = initialThumb;
+            fetchVisuals(track.id, initialThumb, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
@@ -411,7 +415,9 @@
 
             const tempImg = new Image();
             tempImg.fetchPriority = "low";
-            tempImg.crossOrigin = "Anonymous";
+            if (!thumbUrl.includes("ytimg.com")) {
+                tempImg.crossOrigin = "Anonymous";
+            }
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
                 try {
