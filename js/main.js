@@ -84,6 +84,14 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     playlistContainer.addEventListener("scroll", () => {
+        isScrollingFast = true;
+        clearTimeout(scrollSettleTimer);
+        scrollSettleTimer = setTimeout(() => {
+            isScrollingFast = false;
+            lastStartIndex = -1;
+            renderVirtualTracks();
+        }, 120);
+
         if (!isRendering) {
             window.requestAnimationFrame(renderVirtualTracks);
         }
