@@ -40,7 +40,10 @@
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
             
-            generateQueue(true); 
+            // Only generate a new queue if there is no active playback in progress
+            if (!globalActivePlaylist || queueIndex === -1) {
+                generateQueue(true, folderName);
+            }
             
             trackList.style.display = 'block';
             playlistMessage.style.display = 'none';
@@ -63,8 +66,13 @@
             playlistMessage.style.color = '#ff5555';
         }
     }
-    function generateQueue(resetPlayback = false) {
-        let indices = Array.from({length: currentPlaylistData.length}, (_, i) => i);
+
+    function generateQueue(resetPlayback = false, targetPlaylist = null) {
+        const pl = targetPlaylist || globalActivePlaylist || playlistSelect.value;
+        const data = allDatabases[pl] || currentPlaylistData;
+        if (!data || data.length === 0) return;
+
+        let indices = Array.from({length: data.length}, (_, i) => i);
         
         if (shuffleMode === 2) {
             const randomBuffer = new Uint32Array(1);
@@ -74,17 +82,18 @@
                 [indices[i], indices[j]] = [indices[j], indices[i]];
             }
             if (!resetPlayback && queueIndex !== -1) {
-                const currentOriginalIndex = playQueue[queueIndex];
+                const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
                 queueIndex = indices.indexOf(currentOriginalIndex);
             }
         } else if (!resetPlayback && queueIndex !== -1) {
-            const currentOriginalIndex = playQueue[queueIndex];
+            const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
             queueIndex = currentOriginalIndex;
         }
         
         playQueue = indices;
         if (resetPlayback) queueIndex = -1;
     }
+
     // Helper for cross-playlist shuffle: switch playlist context and play a specific track
     function playFromPlaylist(playlist, trackIndex) {
         if (playlist !== playlistSelect.value) {
@@ -96,6 +105,8 @@
             poolInitialized = false;
             playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         }
+        globalActivePlaylist = playlist;
+        globalActiveOriginalIndex = trackIndex;
         queueIndex = trackIndex;
         executePlayback();
     }
@@ -114,7 +125,8 @@
         } else {
             // Single playlist mode
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
-            const itemToQueue = (playlist === playlistSelect.value) ? originalIndex : { playlist, index: originalIndex };
+            const curPl = globalActivePlaylist || playlistSelect.value;
+            const itemToQueue = (playlist === curPl) ? originalIndex : { playlist, index: originalIndex };
             playQueue.splice(insertPos, 0, itemToQueue);
         }
     };
@@ -131,59 +143,38 @@
             crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist: targetPlaylist, index: targetOriginalIndex });
             crossShufflePos++;
         }
+
+        globalActivePlaylist = targetPlaylist;
+        globalActiveOriginalIndex = targetOriginalIndex;
         
-        if (targetPlaylist !== playlistSelect.value) {
-            if (shuffleMode === 1) {
-                // In shuffle-all mode, use lightweight playlist switch
-                playFromPlaylist(targetPlaylist, targetOriginalIndex);
-            } else {
-                // Cross-playlist jump with full reload
-                playlistSelect.value = targetPlaylist;
-                
-                // Clear search before loading new playlist so filteredIndices syncs properly
-                if (searchInput.value.trim() !== "") {
-                    searchInput.value = "";
-                }
-                
-                loadPlaylist(targetPlaylist).then(() => {
-                    if (shuffleMode === 2) {
-                        let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
-                        const randomBuffer = new Uint32Array(1);
-                        for (let i = rest.length - 1; i > 0; i--) {
-                            window.crypto.getRandomValues(randomBuffer);
-                            const j = randomBuffer[0] % (i + 1);
-                            [rest[i], rest[j]] = [rest[j], rest[i]];
-                        }
-                        playQueue = [targetOriginalIndex, ...rest];
-                        queueIndex = 0;
-                    } else {
-                        queueIndex = playQueue.indexOf(targetOriginalIndex);
-                    }
-                    executePlayback();
-                });
-            }
-        } else {
-            // If we are playing from a search, clear the search instantly
-            if (searchInput.value.trim() !== "") {
-                searchInput.value = "";
+        // If we are playing from a search, clear the search instantly
+        if (searchInput.value.trim() !== "") {
+            searchInput.value = "";
+            if (currentPlaylistData) {
                 filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlistSelect.value, index: i }));
                 trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             }
-            if (shuffleMode === 2) {
-                let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
-                const randomBuffer = new Uint32Array(1);
-                for (let i = rest.length - 1; i > 0; i--) {
-                    window.crypto.getRandomValues(randomBuffer);
-                    const j = randomBuffer[0] % (i + 1);
-                    [rest[i], rest[j]] = [rest[j], rest[i]];
-                }
-                playQueue = [targetOriginalIndex, ...rest];
-                queueIndex = 0;
-            } else {
-                queueIndex = playQueue.indexOf(targetOriginalIndex);
-            }
-            executePlayback();
         }
+
+        const data = allDatabases[targetPlaylist] || currentPlaylistData;
+        const totalTracks = data ? data.length : 0;
+
+        if (shuffleMode === 2 && totalTracks > 0) {
+            let rest = Array.from({length: totalTracks}, (_, i) => i).filter(i => i !== targetOriginalIndex);
+            const randomBuffer = new Uint32Array(1);
+            for (let i = rest.length - 1; i > 0; i--) {
+                window.crypto.getRandomValues(randomBuffer);
+                const j = randomBuffer[0] % (i + 1);
+                [rest[i], rest[j]] = [rest[j], rest[i]];
+            }
+            playQueue = [targetOriginalIndex, ...rest];
+            queueIndex = 0;
+        } else if (totalTracks > 0) {
+            playQueue = Array.from({length: totalTracks}, (_, i) => i);
+            queueIndex = targetOriginalIndex;
+        }
+
+        executePlayback();
     }
     window.lastPlaybackDirection = 1;
 
@@ -272,12 +263,12 @@
         if (typeof rawQueueItem === 'object' && rawQueueItem !== null) {
             originalIndex = rawQueueItem.index;
             targetPlaylist = rawQueueItem.playlist;
-            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]) 
-                 || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
+            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]);
         } else {
             originalIndex = rawQueueItem;
-            targetPlaylist = playlistSelect.value;
-            track = currentPlaylistData ? currentPlaylistData[originalIndex] : null;
+            targetPlaylist = globalActivePlaylist || playlistSelect.value;
+            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]) 
+                 || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
         }
 
         if (!track) return;
