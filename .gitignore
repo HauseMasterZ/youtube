@@ -1,0 +1,11 @@
+.env
+*.env
+*.log
+*.txt
+*.old
+*.good
+*.ps1
+archive/
+.DS_Store
+.vscode/
+worker.js

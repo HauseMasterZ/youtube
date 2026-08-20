@@ -1,0 +1,54 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+      - 'js/**'
+      - 'css/**'
+      - 'style.css'
+      - 'index.html'
+      - 'sw.js'
+      - 'manifest.json'
+      - '*.png'
+      - '*.svg'
+      - 'fonts/**'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for 30 seconds to batch commits
+        run: sleep 30
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Inject API Gateway URL
+        env:
+          GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
+        run: |
+          if [ -n "$GATEWAY_URL" ]; then
+            sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" js/utils.js
+          fi
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
