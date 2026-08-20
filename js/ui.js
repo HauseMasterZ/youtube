@@ -24,6 +24,9 @@
         }
     }
 
+    const GRAY_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23222226'/%3E%3C/svg%3E";
+    const loadedThumbSet = new Set();
+
     applyShuffleUI();
     applyRepeatUI();
     function renderVirtualTracks() {
@@ -63,8 +66,9 @@
             thumbImg.decoding = "async";
             thumbImg.loading = "lazy";
             thumbImg.alt = "";
+            thumbImg.src = GRAY_PLACEHOLDER;
             thumbImg.onerror = function() {
-                this.removeAttribute('src');
+                this.src = GRAY_PLACEHOLDER;
             };
             
             const textSpan = document.createElement("span");
@@ -133,12 +137,31 @@
                 const thumbUrl = getThumbUrl(track);
                 if (thumbImg.dataset.targetSrc !== thumbUrl) {
                     thumbImg.dataset.targetSrc = thumbUrl;
-                    thumbImg.src = thumbUrl;
+                    if (loadedThumbSet.has(thumbUrl)) {
+                        thumbImg.src = thumbUrl;
+                    } else {
+                        // Instantly wipe old recycled track image with clean gray placeholder
+                        thumbImg.src = GRAY_PLACEHOLDER;
+                        const loader = new Image();
+                        loader.decoding = "async";
+                        loader.onload = () => {
+                            loadedThumbSet.add(thumbUrl);
+                            if (thumbImg.dataset.targetSrc === thumbUrl) {
+                                thumbImg.src = thumbUrl;
+                            }
+                        };
+                        loader.onerror = () => {
+                            if (thumbImg.dataset.targetSrc === thumbUrl) {
+                                thumbImg.src = GRAY_PLACEHOLDER;
+                            }
+                        };
+                        loader.src = thumbUrl;
+                    }
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                thumbImg.removeAttribute('src');
+                thumbImg.src = GRAY_PLACEHOLDER;
                 delete thumbImg.dataset.targetSrc;
             }
             
