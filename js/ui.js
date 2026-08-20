@@ -148,7 +148,24 @@
                             }
                         };
                         loader.onerror = () => {
-                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                            if (track.id && !thumbUrl.includes("ytimg.com")) {
+                                const fallbackUrl = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                                const fbLoader = new Image();
+                                fbLoader.fetchPriority = "low";
+                                fbLoader.onload = () => {
+                                    loadedThumbSet.add(thumbUrl);
+                                    loadedThumbSet.add(fallbackUrl);
+                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                        thumbDiv.style.backgroundImage = `url("${fallbackUrl}")`;
+                                    }
+                                };
+                                fbLoader.onerror = () => {
+                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                        thumbDiv.style.backgroundImage = 'none';
+                                    }
+                                };
+                                fbLoader.src = fallbackUrl;
+                            } else if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                 thumbDiv.style.backgroundImage = 'none';
                             }
                         };
@@ -165,7 +182,24 @@
                         }
                     };
                     loader.onerror = () => {
-                        if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                        if (track.id && !thumbUrl.includes("ytimg.com")) {
+                            const fallbackUrl = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                            const fbLoader = new Image();
+                            fbLoader.fetchPriority = "low";
+                            fbLoader.onload = () => {
+                                loadedThumbSet.add(thumbUrl);
+                                loadedThumbSet.add(fallbackUrl);
+                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                    thumbDiv.style.backgroundImage = `url("${fallbackUrl}")`;
+                                }
+                            };
+                            fbLoader.onerror = () => {
+                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                    thumbDiv.style.backgroundImage = 'none';
+                                }
+                            };
+                            fbLoader.src = fallbackUrl;
+                        } else if (thumbDiv.dataset.targetSrc === thumbUrl) {
                             thumbDiv.style.backgroundImage = 'none';
                         }
                     };
