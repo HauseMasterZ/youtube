@@ -31,12 +31,20 @@ jobs:
           ref: main
           path: site-root
 
-      - name: Checkout dev (Dev Subpath)
+      - name: Checkout dev (Dev Staging)
         uses: actions/checkout@v4
         with:
           ref: dev
-          path: site-root/dev
+          path: dev-src
         continue-on-error: true
+
+      - name: Merge Dev Subdirectory
+        run: |
+          if [ -d "dev-src" ]; then
+            mkdir -p site-root/dev
+            cp -rf dev-src/* site-root/dev/
+            rm -rf site-root/dev/.git site-root/dev/.github
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
