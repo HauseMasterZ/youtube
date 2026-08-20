@@ -175,6 +175,7 @@
             height: auto;
             border-radius: 8px;
             display: none;
+            background-color: #222226;
         }
 
         #thumb-toggle-hint {
