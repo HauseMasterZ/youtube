@@ -29,29 +29,13 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Inject Obfuscated Gateway & HMAC Seed
+      - name: Inject API Gateway URL
         env:
           GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
-          APP_SECRET_SEED: ${{ secrets.APP_SECRET_SEED || vars.APP_SECRET_SEED || 'yt_secure_hmac_default_2026' }}
         run: |
-          node -e '
-            const fs = require("fs");
-            const gw = process.env.GATEWAY_URL || "";
-            const seed = process.env.APP_SECRET_SEED || "yt_secure_hmac_default_2026";
-            const xorEnc = (s, k=0x5A) => Buffer.from(s.split("").map(c => String.fromCharCode(c.charCodeAt(0) ^ k)).join(""), "binary").toString("base64");
-            const encGw = xorEnc(gw);
-            const encSeed = xorEnc(seed);
-
-            ["js/utils.js", "sw.js"].forEach(file => {
-              if (fs.existsSync(file)) {
-                let content = fs.readFileSync(file, "utf8");
-                content = content.replace(/__ENC_API_GATEWAY__/g, encGw);
-                content = content.replace(/__ENC_HMAC_SEED__/g, encSeed);
-                content = content.replace(/__API_GATEWAY_URL__/g, gw);
-                fs.writeFileSync(file, content, "utf8");
-              }
-            });
-          '
+          if [ -n "$GATEWAY_URL" ]; then
+            sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" js/utils.js
+          fi
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
