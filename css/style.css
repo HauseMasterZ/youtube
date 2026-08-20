@@ -510,12 +510,12 @@
             min-height: 36px;
             border-radius: 6px;
             margin-right: 12px;
-            object-fit: cover;
-            flex-shrink: 0;
             background-color: #222226;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            flex-shrink: 0;
             display: block;
-            color: transparent;
-            vertical-align: middle;
         }
 
         .yt-link-icon {

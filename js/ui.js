@@ -61,15 +61,8 @@
             const li = document.createElement("li");
             li.className = "track-item";
             
-            const thumbImg = document.createElement("img");
-            thumbImg.className = "track-thumb";
-            thumbImg.decoding = "async";
-            thumbImg.loading = "lazy";
-            thumbImg.alt = "";
-            thumbImg.src = GRAY_PLACEHOLDER;
-            thumbImg.onerror = function() {
-                this.src = GRAY_PLACEHOLDER;
-            };
+            const thumbDiv = document.createElement("div");
+            thumbDiv.className = "track-thumb";
             
             const textSpan = document.createElement("span");
             textSpan.style.flex = "1";
@@ -84,7 +77,7 @@
             linkA.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>';
             linkA.addEventListener("click", (e) => e.stopPropagation());
             
-            li.appendChild(thumbImg);
+            li.appendChild(thumbDiv);
             li.appendChild(textSpan);
             li.appendChild(linkA);
             trackList.appendChild(li);
@@ -101,7 +94,7 @@
             const item = filteredIndices[i];
             const track = allDatabases[item.playlist][item.index];
             const li = trackList.children[childIdx++];
-            const thumbImg = li.childNodes[0];
+            const thumbDiv = li.childNodes[0];
             const textSpan = li.childNodes[1];
             const linkA = li.childNodes[2];
             
@@ -135,34 +128,35 @@
             
             if (!thumbsDisabled && getThumbUrl(track)) {
                 const thumbUrl = getThumbUrl(track);
-                if (thumbImg.dataset.targetSrc !== thumbUrl) {
-                    thumbImg.dataset.targetSrc = thumbUrl;
+                if (thumbDiv.dataset.targetSrc !== thumbUrl) {
+                    thumbDiv.dataset.targetSrc = thumbUrl;
+                    
+                    // Immediately wipe to clean #222226 gray background
+                    thumbDiv.style.backgroundImage = 'none';
+                    
                     if (loadedThumbSet.has(thumbUrl)) {
-                        thumbImg.src = thumbUrl;
+                        thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
                     } else {
-                        // Instantly wipe old recycled track image with clean gray placeholder
-                        thumbImg.src = GRAY_PLACEHOLDER;
                         const loader = new Image();
-                        loader.decoding = "async";
                         loader.onload = () => {
                             loadedThumbSet.add(thumbUrl);
-                            if (thumbImg.dataset.targetSrc === thumbUrl) {
-                                thumbImg.src = thumbUrl;
+                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
                             }
                         };
                         loader.onerror = () => {
-                            if (thumbImg.dataset.targetSrc === thumbUrl) {
-                                thumbImg.src = GRAY_PLACEHOLDER;
+                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                thumbDiv.style.backgroundImage = 'none';
                             }
                         };
                         loader.src = thumbUrl;
                     }
                 }
-                thumbImg.style.display = "block";
+                thumbDiv.style.display = "block";
             } else {
-                thumbImg.style.display = "none";
-                thumbImg.src = GRAY_PLACEHOLDER;
-                delete thumbImg.dataset.targetSrc;
+                thumbDiv.style.display = "none";
+                thumbDiv.style.backgroundImage = 'none';
+                delete thumbDiv.dataset.targetSrc;
             }
             
             textSpan.textContent = text;
