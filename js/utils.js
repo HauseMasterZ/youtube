@@ -29,6 +29,17 @@
     // Dynamic resolution in memory
     const baseUrl = _ENC_GW.startsWith("__") ? "__API_GATEWAY_URL__" : _d(_ENC_GW);
 
+    async function secureFetch(url, options = {}) {
+        try {
+            const token = await getRollingToken();
+            const headers = new Headers(options.headers || {});
+            if (token) headers.set('X-App-Token', token);
+            return fetch(url, { ...options, headers });
+        } catch (e) {
+            return fetch(url, options);
+        }
+    }
+
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
     function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
