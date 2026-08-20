@@ -7,7 +7,7 @@
         
         try {
             if (!allDatabases[folderName]) {
-                const res = await (typeof secureFetch === 'function' ? secureFetch(`${baseUrl}/${folderName}/_Playlist_Database.json`) : fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`));
+                const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
                 if (!res.ok) throw new Error();
                 let data = await res.json();
                 
