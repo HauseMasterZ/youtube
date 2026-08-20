@@ -601,7 +601,7 @@ currentPlaylistData[globalActiveOriginalIndex];
         for (const pl of ALL_PLAYLISTS) {
             if (allDatabases[pl]) {
                 try {
-                    const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?v=${ts}`);
+                    const res = await (typeof secureFetch === 'function' ? secureFetch(`${baseUrl}/${pl}/_Playlist_Database.json?v=${ts}`) : fetch(`${baseUrl}/${pl}/_Playlist_Database.json?v=${ts}`));
                     if (res.ok) {
                         let freshData = await res.json();
                         if (freshData.length > 0 && Array.isArray(freshData[0])) {
@@ -647,7 +647,7 @@ currentPlaylistData[globalActiveOriginalIndex];
             isSyncPolling = true;
 
             try {
-                await fetch(syncEndpoint, { method: "POST" });
+                await (typeof secureFetch === 'function' ? secureFetch(syncEndpoint, { method: "POST" }) : fetch(syncEndpoint, { method: "POST" }));
             } catch (err) {
                 console.warn("Sync trigger:", err);
             }
@@ -659,7 +659,7 @@ currentPlaylistData[globalActiveOriginalIndex];
             const pollInterval = setInterval(async () => {
                 pollAttempts++;
                 try {
-                    const statusRes = await fetch(statusEndpoint);
+                    const statusRes = await (typeof secureFetch === 'function' ? secureFetch(statusEndpoint) : fetch(statusEndpoint));
                     if (statusRes.ok) {
                         const data = await statusRes.json();
                         if (data.status === "idle" || pollAttempts >= maxAttempts) {
@@ -695,7 +695,8 @@ currentPlaylistData[globalActiveOriginalIndex];
             if (pl === playlistSelect.value) {
                 return loadPlaylist(pl);
             } else {
-                return fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+                const fetchFn = typeof secureFetch === 'function' ? secureFetch : fetch;
+                return fetchFn(`${baseUrl}/${pl}/_Playlist_Database.json`)
                     .then(r => r.ok ? r.json() : [])
                     .then(data => {
                         if (data.length > 0 && Array.isArray(data[0])) {
