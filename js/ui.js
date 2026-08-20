@@ -63,6 +63,7 @@
             const thumbImg = document.createElement("img");
             thumbImg.className = "track-thumb";
             thumbImg.decoding = "async";
+            thumbImg.loading = "lazy";
             thumbImg.fetchPriority = "low";
             thumbImg.alt = "";
             thumbImg.onerror = function() {
@@ -137,36 +138,12 @@
                 const thumbUrl = getThumbUrl(track);
                 if (thumbImg.dataset.targetSrc !== thumbUrl) {
                     thumbImg.dataset.targetSrc = thumbUrl;
-                    
-                    // Set src to a transparent pixel to show the gray CSS background without a broken image icon
-                    thumbImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-                    
-                    if (window.requestedThumbs && window.requestedThumbs.has(thumbUrl)) {
-                        // If it's already requested and likely cached, we can just assign it
-                        thumbImg.src = thumbUrl;
-                    } else {
-                        // Debounce the network fetch to prevent spamming while fast-scrolling
-                        setTimeout(() => {
-                            if (thumbImg.dataset.targetSrc === thumbUrl) {
-                                if (!window.requestedThumbs) window.requestedThumbs = new Set();
-                                window.requestedThumbs.add(thumbUrl);
-                                
-                                // Only fill it in after it's fully downloaded to prevent old image lingering
-                                const tmp = new Image();
-                                tmp.onload = () => {
-                                    if (thumbImg.dataset.targetSrc === thumbUrl) {
-                                        thumbImg.src = thumbUrl;
-                                    }
-                                };
-                                tmp.src = thumbUrl;
-                            }
-                        }, 150);
-                    }
+                    thumbImg.src = thumbUrl;
                 }
                 thumbImg.style.display = "block";
             } else {
                 thumbImg.style.display = "none";
-                thumbImg.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+                thumbImg.removeAttribute('src');
                 delete thumbImg.dataset.targetSrc;
             }
             
@@ -209,15 +186,13 @@
         }
     }
     function updateSeekBarProgress() {
-        const dur = (audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) 
-                    ? audioPlayer.duration 
-                    : (parseFloat(seekBar.max) || 0);
-        if (dur <= 0) {
+        const max = parseFloat(seekBar.max) || 0;
+        if (max <= 0) {
             if (playedBar) playedBar.style.width = '0%';
             return;
         }
-        const ct = parseFloat(seekBar.value) || 0;
-        const playedPercent = Math.min(100, Math.max(0, (ct / dur) * 100));
+        const val = parseFloat(seekBar.value) || 0;
+        const playedPercent = Math.min(100, Math.max(0, (val / max) * 100));
         if (playedBar) playedBar.style.width = `${playedPercent.toFixed(2)}%`;
     }
     window.updateSeekBarProgress = updateSeekBarProgress;
@@ -228,17 +203,15 @@
             bufferBar.style.width = '0%';
             return;
         }
-        const dur = (audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) 
-                    ? audioPlayer.duration 
-                    : (parseFloat(seekBar.max) || 0);
-        if (dur <= 0) {
+        const max = parseFloat(seekBar.max) || 0;
+        if (max <= 0) {
             bufferBar.style.width = '0%';
             return;
         }
         const buffered = audioPlayer.buffered;
         if (buffered && buffered.length > 0) {
             const bufferedEnd = buffered.end(buffered.length - 1);
-            const bufferPercent = Math.min(100, Math.max(0, (bufferedEnd / dur) * 100));
+            const bufferPercent = Math.min(100, Math.max(0, (bufferedEnd / max) * 100));
             bufferBar.style.width = `${bufferPercent.toFixed(2)}%`;
         } else {
             bufferBar.style.width = '0%';
@@ -247,6 +220,14 @@
     window.updateBufferProgress = updateBufferProgress;
 
     function updateTimeUI(seconds) {
+        const max = parseFloat(seekBar.max) || 0;
+        if (seconds > max && audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) {
+            const trueDur = Math.floor(audioPlayer.duration);
+            if (trueDur > max) {
+                seekBar.max = trueDur;
+                totalTimeDisplay.textContent = formatTime(trueDur);
+            }
+        }
         seekBar.value = seconds;
         const roundedSec = Math.floor(seconds);
         if (roundedSec !== lastRenderTime) {

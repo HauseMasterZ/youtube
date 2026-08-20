@@ -19,7 +19,7 @@
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
-                           'waiting', 'canplay', 'ended'];
+                           'waiting', 'canplay', 'ended', 'durationchange'];
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
@@ -57,7 +57,7 @@
         }
 
         _initAudioGraph() {
-            if (this._audioCtx) return;
+            if (this._audioCtx || (typeof isMobileDevice !== 'undefined' && isMobileDevice)) return;
             try {
                 const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
                 if (AudioCtxClass) {
@@ -151,11 +151,22 @@
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) {
             try {
-                this.active.currentTime = v;
                 this.lastKnownTime = v;
                 if (v < (this.active.duration || Infinity) - 0.5) {
                     this._endedFired = false;
                 }
+
+                // If target seek time is beyond currently buffered range in MSE
+                if (this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                    const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                    if (v > buffEnd + 0.5) {
+                        this._pendingSeek = v;
+                        return;
+                    }
+                }
+
+                this._pendingSeek = null;
+                this.active.currentTime = v;
             } catch (e) {
                 this._pendingSeek = v;
             }
@@ -287,7 +298,7 @@
                     navigator.mediaSession.playbackState = "playing";
                 }
 
-                // Abort any previous in-flight chunk stream
+                // Abort previous in-flight stream if switching to a new track
                 if (this._streamAbortController) {
                     try { this._streamAbortController.abort(); } catch (e) {}
                 }
@@ -296,16 +307,16 @@
 
                 this._streamId = (this._streamId || 0) + 1;
                 const activeStreamId = this._streamId;
+                this._pendingSeek = null;
 
                 try {
-                    // Start progressive stream fetch
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
                     if (!response.body) throw new Error("ReadableStream not supported");
 
                     const reader = response.body.getReader();
 
-                    // Read first chunk (~128KB - 256KB) containing WebM header + first audio cluster
+                    // Read first chunk (~256KB - 384KB) containing WebM header + first audio cluster
                     const { value: firstChunk, done: firstDone } = await reader.read();
 
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
@@ -316,7 +327,6 @@
 
                     if (!firstChunk || firstChunk.length === 0) throw new Error("Empty first audio chunk");
 
-                    // Clear old buffer and append the first chunk
                     await this._clearSourceBuffer();
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                         try { reader.cancel(); } catch (e) {}
@@ -348,7 +358,7 @@
                     this.dispatchEvent(new Event('play'));
                     this.dispatchEvent(new Event('playing'));
 
-                    // Asynchronously pipe remaining chunks in the background while playing
+                    // Continuous Background Ingestion Loop (Streams till end of song without stopping)
                     (async () => {
                         try {
                             if (firstDone) {
@@ -380,6 +390,17 @@
 
                                 if (nextChunk && nextChunk.length > 0) {
                                     await this._appendToSourceBuffer(nextChunk);
+
+                                    // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is buffered
+                                    if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                        const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                        if (buffEnd >= this._pendingSeek) {
+                                            const seekTarget = this._pendingSeek;
+                                            this._pendingSeek = null;
+                                            this.active.currentTime = seekTarget;
+                                            this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                        }
+                                    }
                                 }
                             }
                         } catch (streamErr) {

@@ -270,18 +270,22 @@ document.addEventListener("DOMContentLoaded", () => {
         repeatMode = (repeatMode + 1) % 3;
         applyRepeatUI();
     });
-    audioPlayer.addEventListener("loadedmetadata", () => {
-        const duration = Math.floor(audioPlayer.duration);
-        if (!isNaN(duration) && duration !== Infinity) {
-            seekBar.max = duration;
-            totalTimeDisplay.textContent = formatTime(duration);
-            updateMediaSessionPosition();
-        } else if (seekBar.max > 0) {
-            updateMediaSessionPosition();
+    function syncDuration() {
+        const dur = audioPlayer.duration;
+        if (!isNaN(dur) && dur > 0 && dur !== Infinity) {
+            const roundedDur = Math.floor(dur);
+            if (parseFloat(seekBar.max) !== roundedDur) {
+                seekBar.max = roundedDur;
+                totalTimeDisplay.textContent = formatTime(roundedDur);
+                if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
+                if (typeof updateBufferProgress === 'function') updateBufferProgress();
+                updateMediaSessionPosition();
+            }
         }
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
-        if (typeof updateBufferProgress === 'function') updateBufferProgress();
-    });
+    }
+    audioPlayer.addEventListener("durationchange", syncDuration);
+    audioPlayer.addEventListener("loadedmetadata", syncDuration);
+    audioPlayer.addEventListener("canplay", syncDuration);
 
     audioPlayer.addEventListener("seeked", () => {
         updateMediaSessionPosition();
@@ -298,7 +302,34 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     
+    let focusResumeCheckInterval = null;
+    function startInterruptionWatchdog() {
+        if (focusResumeCheckInterval) clearInterval(focusResumeCheckInterval);
+        let attempts = 0;
+        focusResumeCheckInterval = setInterval(() => {
+            attempts++;
+            if (!window.wasInterrupted || window.wasPausedByUser || !audioPlayer.paused || attempts > 45) {
+                clearInterval(focusResumeCheckInterval);
+                focusResumeCheckInterval = null;
+                return;
+            }
+            audioPlayer.play().then(() => {
+                window.wasInterrupted = false;
+                clearInterval(focusResumeCheckInterval);
+                focusResumeCheckInterval = null;
+            }).catch(() => {
+                // Still blocked by external audio session
+            });
+        }, 2000);
+    }
+
     audioPlayer.addEventListener("play", () => {
+        window.wasPausedByUser = false;
+        window.wasInterrupted = false;
+        if (focusResumeCheckInterval) {
+            clearInterval(focusResumeCheckInterval);
+            focusResumeCheckInterval = null;
+        }
         setPlayUI(true);
         updateMediaSessionPosition();
         if (hasMediaSession) {
@@ -324,11 +355,16 @@ document.addEventListener("DOMContentLoaded", () => {
             lyricsRafId = requestAnimationFrame(lyricsLoop);
         }
     });
+
     audioPlayer.addEventListener("pause", () => {
         setPlayUI(false);
         updateMediaSessionPosition();
         if (hasMediaSession && window.wasPausedByUser) {
             navigator.mediaSession.playbackState = 'paused';
+        }
+        if (!window.wasPausedByUser && !audioPlayer.switching && audioPlayer.src) {
+            window.wasInterrupted = true;
+            startInterruptionWatchdog();
         }
     });
 
@@ -336,9 +372,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
-            } else if (window.wasPausedByUser === false) {
+            } else if (window.wasPausedByUser === false && (window.wasInterrupted || audioPlayer.src)) {
+                window.wasInterrupted = false;
                 audioPlayer.play().catch(e => console.warn("Auto-resume failed:", e));
             }
+        }
+    });
+
+    window.addEventListener("focus", () => {
+        if (window.wasPausedByUser === false && window.wasInterrupted && audioPlayer.src && audioPlayer.paused) {
+            window.wasInterrupted = false;
+            audioPlayer.play().catch(e => console.warn("Focus auto-resume failed:", e));
         }
     });
 
