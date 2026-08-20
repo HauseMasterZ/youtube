@@ -280,7 +280,7 @@
 
                 try {
                     // Fetch new track bytes
-                    const response = await fetch(url);
+                    const response = await (typeof secureFetch === 'function' ? secureFetch(url) : fetch(url));
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
                     const data = await response.arrayBuffer();
 
