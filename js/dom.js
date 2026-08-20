@@ -278,46 +278,59 @@
                     navigator.mediaSession.playbackState = "playing";
                 }
 
-                try {
-                    // Fetch new track bytes
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    const data = await response.arrayBuffer();
+                // Abort any previous in-flight chunk stream
+                if (this._streamAbortController) {
+                    try { this._streamAbortController.abort(); } catch (e) {}
+                }
+                this._streamAbortController = new AbortController();
+                const currentAbortSignal = this._streamAbortController.signal;
 
-                    if (this._currentUrl !== url) {
+                this._streamId = (this._streamId || 0) + 1;
+                const activeStreamId = this._streamId;
+
+                try {
+                    // Start progressive stream fetch
+                    const response = await fetch(url, { signal: currentAbortSignal });
+                    if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
+                    if (!response.body) throw new Error("ReadableStream not supported");
+
+                    const reader = response.body.getReader();
+
+                    // Read first chunk (~128KB - 256KB) containing WebM header + first audio cluster
+                    const { value: firstChunk, done: firstDone } = await reader.read();
+
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
-                    // Clear old buffer and immediately append new data
+                    if (!firstChunk || firstChunk.length === 0) throw new Error("Empty first audio chunk");
+
+                    // Clear old buffer and append the first chunk
                     await this._clearSourceBuffer();
-                    if (this._currentUrl !== url) {
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
                     this._sourceBuffer.timestampOffset = 0;
-                    await this._appendToSourceBuffer(data);
-                    if (this._currentUrl !== url) {
+                    await this._appendToSourceBuffer(firstChunk);
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
+                    // Fast-Start: Instantly start playing on first chunk
                     this.active.currentTime = 0;
                     if (this._gainNode) {
                         this._gainNode.gain.value = 1.0;
                     }
 
-                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                        try {
-                            this._mediaSource.endOfStream();
-                        } catch (e) {
-                            console.warn("MSE endOfStream note:", e);
-                        }
-                    }
-
                     if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE play error:", e));
+                        this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
                     }
 
                     this.switching = false;
@@ -325,8 +338,53 @@
                     this.dispatchEvent(new Event('canplay'));
                     this.dispatchEvent(new Event('play'));
                     this.dispatchEvent(new Event('playing'));
+
+                    // Asynchronously pipe remaining chunks in the background while playing
+                    (async () => {
+                        try {
+                            if (firstDone) {
+                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                }
+                                return;
+                            }
+
+                            while (true) {
+                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                    try { reader.cancel(); } catch (e) {}
+                                    break;
+                                }
+
+                                const { value: nextChunk, done } = await reader.read();
+
+                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                    try { reader.cancel(); } catch (e) {}
+                                    break;
+                                }
+
+                                if (done) {
+                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                        try { this._mediaSource.endOfStream(); } catch (e) {}
+                                    }
+                                    break;
+                                }
+
+                                if (nextChunk && nextChunk.length > 0) {
+                                    await this._appendToSourceBuffer(nextChunk);
+                                }
+                            }
+                        } catch (streamErr) {
+                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
+                                console.warn("Background MSE stream pipe error:", streamErr);
+                            }
+                        }
+                    })();
                 } catch (e) {
-                    console.warn("MSE track switch error, falling back to direct src:", e);
+                    if (currentAbortSignal.aborted || this._streamId !== activeStreamId) {
+                        this.switching = false;
+                        return Promise.resolve();
+                    }
+                    console.warn("MSE progressive switch error, falling back to direct src:", e);
                     this._mseEnabled = false;
                     this.active.src = url;
                     if (this._gainNode) this._gainNode.gain.value = 1.0;
