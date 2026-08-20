@@ -347,9 +347,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (track && navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                const squareArt = artworkSquareCache.get(track.id);
                 const rawArt = getThumbUrl(track);
-                const artworkSrc = squareArt || rawArt;
+                const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawArt) : null;
+                const resolvedArt = (cached && cached.status === 'loaded' && cached.resolvedUrl) 
+                    ? cached.resolvedUrl 
+                    : (track.id ? `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg` : rawArt);
+                const squareArt = artworkSquareCache.get(track.id);
+                const artworkSrc = squareArt || resolvedArt;
                 const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                     ? getPurpleNoteArtwork() 
                     : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
