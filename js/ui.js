@@ -25,7 +25,7 @@
     }
 
     const GRAY_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23222226'/%3E%3C/svg%3E";
-    const loadedThumbSet = new Set();
+    const thumbCache = new Map();
     let isScrollingFast = false;
     let scrollSettleTimer = null;
 
@@ -130,19 +130,22 @@
             
             if (!thumbsDisabled && getThumbUrl(track)) {
                 const thumbUrl = getThumbUrl(track);
-                if (thumbDiv.dataset.targetSrc !== thumbUrl) {
-                    thumbDiv.dataset.targetSrc = thumbUrl;
-                    
-                    // Immediately wipe to clean #222226 gray background
+                thumbDiv.dataset.targetSrc = thumbUrl;
+                
+                const cached = thumbCache.get(thumbUrl);
+                if (cached && cached.status === 'loaded') {
+                    thumbDiv.style.backgroundImage = `url("${cached.resolvedUrl}")`;
+                } else {
+                    // Instantly clean background for uncached / loading / failed
                     thumbDiv.style.backgroundImage = 'none';
-                    
-                    if (loadedThumbSet.has(thumbUrl)) {
-                        thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                    } else if (!isScrollingFast) {
+
+                    if (!cached && !isScrollingFast) {
+                        thumbCache.set(thumbUrl, { status: 'loading' });
+                        
                         const loader = new Image();
                         loader.fetchPriority = "low";
                         loader.onload = () => {
-                            loadedThumbSet.add(thumbUrl);
+                            thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
                             if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                 thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
                             }
@@ -153,57 +156,27 @@
                                 const fbLoader = new Image();
                                 fbLoader.fetchPriority = "low";
                                 fbLoader.onload = () => {
-                                    loadedThumbSet.add(thumbUrl);
-                                    loadedThumbSet.add(fallbackUrl);
+                                    thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: fallbackUrl });
                                     if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                         thumbDiv.style.backgroundImage = `url("${fallbackUrl}")`;
                                     }
                                 };
                                 fbLoader.onerror = () => {
+                                    thumbCache.set(thumbUrl, { status: 'failed' });
                                     if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                         thumbDiv.style.backgroundImage = 'none';
                                     }
                                 };
                                 fbLoader.src = fallbackUrl;
-                            } else if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                thumbDiv.style.backgroundImage = 'none';
+                            } else {
+                                thumbCache.set(thumbUrl, { status: 'failed' });
+                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                    thumbDiv.style.backgroundImage = 'none';
+                                }
                             }
                         };
                         loader.src = thumbUrl;
                     }
-                } else if (!isScrollingFast && thumbDiv.style.backgroundImage === 'none' && !loadedThumbSet.has(thumbUrl)) {
-                    // Deferred fetch after scrolling settles
-                    const loader = new Image();
-                    loader.fetchPriority = "low";
-                    loader.onload = () => {
-                        loadedThumbSet.add(thumbUrl);
-                        if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                            thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                        }
-                    };
-                    loader.onerror = () => {
-                        if (track.id && !thumbUrl.includes("ytimg.com")) {
-                            const fallbackUrl = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                            const fbLoader = new Image();
-                            fbLoader.fetchPriority = "low";
-                            fbLoader.onload = () => {
-                                loadedThumbSet.add(thumbUrl);
-                                loadedThumbSet.add(fallbackUrl);
-                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                    thumbDiv.style.backgroundImage = `url("${fallbackUrl}")`;
-                                }
-                            };
-                            fbLoader.onerror = () => {
-                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                    thumbDiv.style.backgroundImage = 'none';
-                                }
-                            };
-                            fbLoader.src = fallbackUrl;
-                        } else if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                            thumbDiv.style.backgroundImage = 'none';
-                        }
-                    };
-                    loader.src = thumbUrl;
                 }
                 thumbDiv.style.display = "block";
             } else {
