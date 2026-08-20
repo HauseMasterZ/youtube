@@ -579,19 +579,34 @@ currentPlaylistData[globalActiveOriginalIndex];
                 if (queueIndex >= 0 && queueIndex < playQueue.length) {
                     const track = currentPlaylistData[playQueue[queueIndex]];
                     if (track && getThumbUrl(track)) {
-                        albumArt.src = getThumbUrl(track);
+                        const rawThumbUrl = getThumbUrl(track);
+                        const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawThumbUrl) : null;
+                        const initialThumb = (cached && cached.status === 'loaded' && cached.resolvedUrl) ? cached.resolvedUrl : rawThumbUrl;
+
                         albumArt.style.display = 'block';
+                        albumArt.onerror = function() {
+                            if (track.id && !this.src.includes('ytimg.com')) {
+                                this.src = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                                this.style.display = 'block';
+                            } else {
+                                this.removeAttribute('src');
+                                this.style.display = 'none';
+                            }
+                        };
+                        albumArt.src = initialThumb;
                         
                         if (dominantColorCache.has(track.id)) {
                             document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
                         } else {
                             const tempImg = new Image();
-                            tempImg.crossOrigin = "Anonymous";
+                            if (!initialThumb.includes('ytimg.com')) {
+                                tempImg.crossOrigin = "Anonymous";
+                            }
                             tempImg.onload = () => {
                                 const color = getDominantColor(tempImg, track.id);
                                 document.documentElement.style.setProperty('--primary-color', color);
                             };
-                            tempImg.src = getThumbUrl(track);
+                            tempImg.src = initialThumb;
                         }
                     } else {
                         albumArt.style.display = 'none';
