@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v65';
+const CACHE_NAME = 'yt-player-cache-v66';
 
 const CORE_ASSETS = [
     './index.html',
@@ -102,7 +102,7 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {
-                if (response.ok) {
+                if (response.ok && !event.request.url.includes('/sync') && !event.request.url.includes('/status')) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }
