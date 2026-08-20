@@ -378,6 +378,16 @@
             const thumbUrl = getThumbUrl(track);
             albumArt.src = thumbUrl;
             albumArt.style.display = 'block';
+            albumArt.onerror = function() {
+                if (track.id && !this.src.includes('ytimg.com')) {
+                    const fallback = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
+                    this.src = fallback;
+                    fetchVisuals(track.id, fallback, sequenceId, track);
+                } else {
+                    this.removeAttribute('src');
+                    this.style.display = 'none';
+                }
+            };
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
