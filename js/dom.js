@@ -180,8 +180,6 @@
                 this._gainNode.gain.value = 0;
             }
 
-            this.active.pause();
-
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
@@ -197,15 +195,25 @@
                 return Promise.resolve();
             }
 
-            if (this._gainNode) this._gainNode.gain.value = 1.0;
             this.active.src = url;
 
             if (!preventAutoplay) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
-                this.active.play().catch(e => console.warn("switchTrack play:", e));
+                const playPromise = this.active.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        if (this._gainNode) this._gainNode.gain.value = 1.0;
+                    }).catch(e => {
+                        console.warn("switchTrack play error:", e);
+                        if (this._gainNode) this._gainNode.gain.value = 1.0;
+                    });
+                } else {
+                    if (this._gainNode) this._gainNode.gain.value = 1.0;
+                }
             } else {
+                if (this._gainNode) this._gainNode.gain.value = 1.0;
                 this.active.load();
             }
             this.switching = false;
