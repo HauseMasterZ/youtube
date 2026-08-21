@@ -379,7 +379,8 @@
         if (hasMediaSession) {
             let squareArt = artworkSquareCache.get(track.id);
             if (!squareArt && !thumbsDisabled && typeof getSquareCroppedArtwork === 'function') {
-                const cachedImg = typeof thumbCache !== 'undefined' ? thumbCache.get(track.id) : null;
+                const cachedEntry = typeof thumbCache !== 'undefined' ? (thumbCache.get(thumbUrl) || thumbCache.get(track.id)) : null;
+                const cachedImg = cachedEntry ? (cachedEntry.img || (cachedEntry instanceof HTMLImageElement ? cachedEntry : null)) : null;
                 if (cachedImg && (cachedImg.naturalWidth || cachedImg.width)) {
                     squareArt = getSquareCroppedArtwork(cachedImg, track.id);
                 } else if (albumArt && albumArt.src === thumbUrl && albumArt.complete && (albumArt.naturalWidth || albumArt.width)) {
@@ -471,6 +472,7 @@
 
                 const blobUrl = URL.createObjectURL(blob);
                 const offscreenImg = new Image();
+                offscreenImg.crossOrigin = "anonymous";
                 offscreenImg.onload = () => {
                     try {
                         let color = dominantColorCache.get(trackId);
