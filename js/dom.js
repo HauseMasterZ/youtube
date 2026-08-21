@@ -382,12 +382,11 @@
                     // Single continuous background ingestion stream
                     (async () => {
                         try {
-                            if (firstDone) {
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
-                                }
-                                return;
-                            }
+                            if (firstDone) return;
+
+                            let pendingBuffer = [];
+                            let pendingLength = 0;
+                            const FLUSH_THRESHOLD = 256 * 1024; // 256KB batching to avoid micro-stalls
 
                             while (true) {
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
@@ -395,36 +394,46 @@
                                     break;
                                 }
 
-                                const { value: nextChunk, done } = await reader.read();
+                                const { value: chunk, done } = await reader.read();
 
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                     try { reader.cancel(); } catch (e) {}
                                     break;
                                 }
 
-                                if (done) {
-                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                        try { this._mediaSource.endOfStream(); } catch (e) {}
-                                    }
-                                    break;
+                                if (chunk && chunk.length > 0) {
+                                    pendingBuffer.push(chunk);
+                                    pendingLength += chunk.length;
                                 }
 
-                                if (nextChunk && nextChunk.length > 0) {
-                                    await this._appendToSourceBuffer(nextChunk);
-                                    this.dispatchEvent(new Event('progress'));
+                                if (done || pendingLength >= FLUSH_THRESHOLD) {
+                                    if (pendingLength > 0) {
+                                        const merged = new Uint8Array(pendingLength);
+                                        let offset = 0;
+                                        for (const b of pendingBuffer) {
+                                            merged.set(b, offset);
+                                            offset += b.length;
+                                        }
+                                        pendingBuffer = [];
+                                        pendingLength = 0;
 
-                                    // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is buffered
-                                    if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                                        const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                        if (buffEnd >= this._pendingSeek) {
-                                            const seekTarget = this._pendingSeek;
-                                            this._pendingSeek = null;
-                                            this.active.currentTime = seekTarget;
-                                            this.active.play().catch(e => console.warn("Catch-up seek play:", e));
-                                            this.dispatchEvent(new Event('seeked'));
-                                            this.dispatchEvent(new Event('timeupdate'));
+                                        await this._appendToSourceBuffer(merged);
+                                        this.dispatchEvent(new Event('progress'));
+
+                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is buffered
+                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                            if (buffEnd >= this._pendingSeek) {
+                                                const seekTarget = this._pendingSeek;
+                                                this._pendingSeek = null;
+                                                this.active.currentTime = seekTarget;
+                                                this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                                this.dispatchEvent(new Event('seeked'));
+                                                this.dispatchEvent(new Event('timeupdate'));
+                                            }
                                         }
                                     }
+                                    if (done) break;
                                 }
                             }
                         } catch (streamErr) {
