@@ -758,14 +758,14 @@ currentPlaylistData[globalActiveOriginalIndex];
                 console.warn("Sync trigger:", err);
             }
 
-            // Poll /status every 3 seconds until idle
+            // Poll /status every 10 seconds until idle
             let pollAttempts = 0;
-            const maxAttempts = 40; // 2 minutes max
+            const maxAttempts = 30; // 5 minutes max
             
             const pollInterval = setInterval(async () => {
                 pollAttempts++;
                 try {
-                    const statusRes = await fetch(statusEndpoint);
+                    const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
                     if (statusRes.ok) {
                         const data = await statusRes.json();
                         if (data.status === "idle" || pollAttempts >= maxAttempts) {
@@ -783,7 +783,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                         await refreshUpdatedPlaylists();
                     }
                 }
-            }, 3000);
+            }, 10000);
         });
     }
 
