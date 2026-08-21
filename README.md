@@ -29,8 +29,8 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │                                                       ▼                                │
 │   MediaSession (mediaSession.js) ◄───── DualAudioPingPong Engine (dom.js)              │
 │                                                       │                                │
-│                                                       ├──► MediaSource (MSE Object URL)│
-│                                                       │       └──► SourceBuffer (Opus) │
+│                                                       ├──► MediaSource (Permanent URL) │
+│                                                       │       └──► SourceBuffer (MSE)  │
 │                                                       │                                │
 │                                                       └──► AudioContext (Web Audio)    │
 │                                                               └──► GainNode (0 Leak)   │
@@ -43,9 +43,11 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │                                                                                        │
 │   Service Worker (sw.js):                                                              │
 │       ├── App Shell Cache (yt-player-cache-vXX) ──► HTML, JS, CSS, Assets              │
-│       └── Media Chunk Cache (yt-player-media) ─────► Progressive WebM/Opus Chunks      │
+│       └── Media Cache (yt-player-media) ───────────► WebM/Opus Audio & WebP Artwork    │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Why MSE is Used**: Media Source Extensions (MSE) are used **specifically to keep the Android Lock Screen Media Controls UI alive**. On Android Chromium, changing `audio.src = url` sends `OnPlayerDestroyed` IPC to the OS and deallocates the native `AudioTrack`, destroying the media notification when the screen is locked. A permanent `MediaSource` object URL ensures `audio.src` is never touched, keeping the Android media notification pinned 100% of the time across track changes. Continuous buffering is an implementation detail; **Media Controls UI survival is the core driving requirement**.
 
 ---
 

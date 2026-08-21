@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - prox
       - dev
 
 permissions:
@@ -23,8 +22,29 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Wait for 10 seconds to batch commits
+        run: sleep 10
+
+      - name: Checkout main (Root Site)
         uses: actions/checkout@v4
+        with:
+          ref: main
+          path: site-root
+
+      - name: Checkout dev (Dev Staging)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
+        continue-on-error: true
+
+      - name: Merge Dev Subdirectory
+        run: |
+          if [ -d "dev-src" ]; then
+            mkdir -p site-root/dev
+            cp -rf dev-src/* site-root/dev/
+            rm -rf site-root/dev/.git site-root/dev/.github
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -34,12 +54,19 @@ jobs:
           GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
-            sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" js/utils.js
+            if [ -f site-root/js/utils.js ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/js/utils.js
+            fi
+            if [ -f site-root/dev/js/utils.js ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
+            fi
           fi
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.'
+          path: site-root
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

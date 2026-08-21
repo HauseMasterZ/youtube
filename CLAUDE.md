@@ -6,25 +6,11 @@ This document serves as the comprehensive, authoritative technical memory for AI
 
 ## 2. Core Audio Engine: Media Source Extensions (MSE) + Web Audio
 
+> **PRIMARY ARCHITECTURAL REASON FOR MSE**:
+> Media Source Extensions (MSE) are used **specifically to prevent Android from dismantling the Lock Screen Media Notification / Media Controls UI**. It is **NOT** chosen merely for non-fragmented/continuous buffering. On Android Chromium, reassigning `audio.src = url` sends `OnPlayerDestroyed` IPC to the OS and deallocates the `AudioTrack` when `document.hidden = true`. Binding `audio.src` permanently to a single `MediaSource` object URL is the **only known web standard mechanism that keeps the Android Media Notification continuously alive** across track changes. Continuous buffering is an implementation detail; Media UI retention is the driving requirement.
+
 ### The Problem: Android Lock Screen Notification Teardown
 On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the native `emptied` and `pause` events. While the phone is locked (`document.hidden = true`), this deallocates the native `AudioTrack`, destroys the underlying `player_id`, and causes Android SystemUI to immediately dismiss the lock screen media notification.
-
-### The Exhaustive List of Failed Approaches & Why They Failed
-
-| # | Approach | What Broke on Android | Why It Failed (Chromium Internals) |
-|---|---|---|---|
-| 1 | **Single `<audio.src = url>` Direct Mutation** | Notification destroyed on skip | `src` mutation triggers `emptied` → Chromium deallocates `AudioTrack` and resets `readyState = 0`. |
-| 2 | **Dual `<audio>` Elements + `old.pause()`** | Notification destroyed on skip | Pausing the inactive element sends `OnPlayerPaused` IPC, killing the primary `player_id` notification. |
-| 3 | **Dual `<audio>` Elements + `removeAttribute('src')`** | Notification destroyed on skip | Triggers `OnPlayerDestroyed` IPC in Chromium C++ media pipeline. |
-| 4 | **Dual `<audio>` Elements + `old.volume = 0`** | Old track audible during skip | `audio.volume` is **read-only** on mobile web engines (iOS/Android) to protect hardware volume. |
-| 5 | **Dual `<audio>` Elements + `old.muted = true`** | Notification destroyed on skip | In `MediaSessionImpl.java`: `if (player.isMuted()) hideNotification()` explicitly hides notification. |
-| 6 | **Dual `<audio>` Elements + Never-Cleanup (Looping)** | Notification drops intermittently | Concurrent background audio players cause Android `AudioFocus` competition and power termination. |
-| 7 | **Web Audio `MediaStreamDestination` (`srcObject`)** | Notification never appears | Chromium Android explicitly suppresses `MediaSession` notifications for `MediaStream` objects. |
-| 8 | **Setting `playbackState = "paused"` on Skip** | Notification destroyed on skip | Transitioning to `"paused"` while `document.hidden = true` tells Android to terminate the background service. |
-| 9 | **`setPositionState({ playbackRate: 0 })`** | Seekbar stuck on old song | W3C MediaSession spec §4.2.1 throws `TypeError` if `playbackRate <= 0`. Android never received position update. |
-| 10 | **`setPositionState({ playbackRate: 0.0001 })`** | Functional workaround | Mathematical trick ($5\text{s} \times 0.0001 = 0.0005\text{s}$), but non-canonical. |
-
----
 
 ### The Production Solution: The 4 Invariants ([`js/dom.js`](js/dom.js))
 
@@ -34,7 +20,7 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - Track switching occurs entirely inside the `SourceBuffer`:
   ```javascript
   await this._clearSourceBuffer(); // removes old buffer
-  await this._appendToSourceBuffer(arrayBuffer); // appends new WebM/Opus track
+  await this._appendToSourceBuffer(firstChunk); // appends new WebM/Opus track
   ```
 - **Zero `emptied` events, zero `AudioTrack` deallocations, and zero player ID resets.**
 
@@ -44,21 +30,35 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - When Next/Prev is clicked:
   - `gainNode.gain.value = 0` provides **100% true digital silence** (zero audio leak).
   - `<audio>.muted` **remains `false`**, preventing Chromium's `hideNotification()` trigger.
-  - When buffering completes, `gainNode.gain.value = 1.0` restores volume instantly.
+  - When playback begins, `gainNode.gain.value = 1.0` restores volume instantly.
 
-#### Invariant 3: Canonical W3C Position Lifecycle ([`js/mediaSession.js`](js/mediaSession.js))
-- **During Buffering / Transition**:
-  - `navigator.mediaSession.playbackState = "playing"` (keeps background notification alive).
-  - **`navigator.mediaSession.setPositionState(null)`** (W3C standard method to clear position tracking during loading).
-  - Android SystemUI immediately clears previous seekbar timers without running speculative extrapolation.
+#### Invariant 3: Progressive Fragmented MSE Ingestion & Catch-Up Seeking ([`js/dom.js`](js/dom.js))
+- **Initial Safety Cushion**: Ingests ~768KB (~40s of Opus audio) upfront as a combined contiguous buffer before `this.active.play()` begins. This guarantees the WebM header and initial clusters are 100% complete with **zero mid-stream decoder packet dropouts**.
+- **Progressive Background Ingestion**: The remaining chunks stream continuously in the background, firing `'progress'` events on each chunk to dynamically populate the fragmented buffer bar.
+- **Start-to-Target Catch-Up Seeking**: When seeking into unbuffered audio (`target > buffEnd`), `this._pendingSeek` holds physical playback while the thumb sits at the target timestamp. As soon as background ingestion reaches the target timestamp, playback auto-resumes smoothly from the target.
+- **In-Memory Scrubbing**: Seeking within already-buffered ranges is **100% instant 0ms local playback**.
+
+#### Invariant 4: Canonical W3C Position Lifecycle & Zero-Bleed Rules ([`js/mediaSession.js`](js/mediaSession.js) & [`js/playback.js`](js/playback.js))
+- **Quirk: Position Bleed on Track Transition**:
+  - When switching tracks or setting new `MediaMetadata`, `audioPlayer.currentTime` still holds the end timestamp of the *previous* track (e.g. `3:25`).
+  - Calling `updateMediaSessionPosition()` without arguments before `switchTrack()` has reset the audio element will broadcast `{ duration: 205, position: 205 }` under the *new* track's metadata to Android SystemUI, causing the OS seekbar to jump to the end and continue counting into negative space!
+  - **Strict Rule**: In `executePlayback()`, immediately invoke **`navigator.mediaSession.setPositionState(null)`** when `new MediaMetadata` is created.
+- **Quirk: Mandatory Underlying `<audio>` Playhead Pause**:
+  - Inside `switchTrack()`, **`this.active.pause()` and `this.active.currentTime = 0` MUST be called**.
+  - Failing to pause the underlying element allows Chromium's hardware clock to advance past the end of the previous buffer while the new track's first chunk is fetched.
+- **Quirk: Auto-Advance Watchdog Physical Time Requirement**:
+  - In `forwardEvent`, the near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime` (which may report `_pendingSeek`).
+- **Quirk: Non-User Pause Instant Auto-Resume vs 2s Polling**:
+  - When Android OS finishes its initial AudioFocus/Notification handshake on cold start, Chromium may dispatch a transient native `pause` event.
+  - **Strict Rule**: In `main.js` `pause` handler, if `window.wasPausedByUser === false`, immediately call `audioPlayer.play()`. If AudioFocus is free, it resumes in <5ms without audible interruption or UI flip. Only fall back to `startInterruptionWatchdog()` (2s polling) if `play()` is rejected by an external audio session (phone call / alarm).
+- **Quirk: MSE Intermediate Speculative Duration Shifts**:
+  - When the initial ~768KB buffer is appended to `MediaSource` before `endOfStream()`, Chromium's `ChunkDemuxer` computes a wild speculative guess for `MediaSource.duration` based on partial WebM cluster headers (e.g. jumping from `3:55` to `4:41`).
+  - **Strict Rule**: In `executePlayback()`, pass `parsedDuration` to `switchTrack()`. `switchTrack()` explicitly sets `this._mediaSource.duration = expectedDuration`.
+  - `DualAudioPingPong.duration` returns `_expectedDuration` while `mediaSource.readyState === 'open'`.
+  - `syncDuration()` guards against intermediate speculative shifts until the stream is finalized with `mediaSource.endOfStream()`.
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.
-
-#### Invariant 4: `mediaSource.endOfStream()` & Near-End Watchdog
-- In MSE, if `mediaSource.endOfStream()` is not called after appending, `mediaSource.readyState` stays `'open'`. The browser assumes more audio is coming and will never dispatch the native `'ended'` event.
-- In `switchTrack()`, `mediaSource.endOfStream()` is called immediately after appending the complete buffer.
-- In `forwardEvent`, a debounced watchdog (`ct >= dur - 0.25`) ensures auto-advance executes reliably even under background CPU timer throttling.
 
 ---
 
@@ -68,8 +68,15 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - Handles playlists with thousands of tracks using a DOM recycling virtual scroller.
 - **Strict Invariant**: Track rows are fixed at `48px` (`ITEM_HEIGHT`). Do not alter vertical margins/padding without updating `ITEM_HEIGHT`.
 
-### Dynamic Canvas Color Extraction ([`js/playback.js`](js/playback.js) & [`js/utils.js`](js/utils.js))
-- Extracts the dominant color from album artwork via an off-screen `<canvas>` and injects it into `--primary-color`.
+### Dynamic Canvas Color & Artwork Extraction ([`js/playback.js`](js/playback.js) & [`js/ui.js`](js/ui.js))
+- **CORS-Safe Blob Ingestion**: Thumbnails are fetched via `fetch(thumbUrl)` as local Blobs (`URL.createObjectURL(blob)`). Drawing locally-generated same-origin blob URLs into `<canvas>` guarantees **zero canvas tainting / `SecurityError` DOMExceptions**.
+- **Center-Weighted Vibrant Color Quantization**: Downsamples center 70% of artwork into a 32x32 canvas, converting RGB to HSL and scoring pixels by saturation and contrast against a pure black (`#000000`) background. Avoids dark/black letterbox borders.
+- **Visual Preload Isolation Rule**: When `triggerPreloads()` pre-caches next-track visuals into `artworkSquareCache` and `dominantColorCache`, `isPreload = true` MUST be passed. `fetchVisuals()` must NEVER mutate `navigator.mediaSession.metadata.artwork` or `--primary-color` unless the track is the active playing track.
+- **Artwork Resolution Cascade**:
+  1. `squareArt`: 1:1 center-cropped square JPEG from in-memory cache.
+  2. `rawArt`: Direct WebP thumbnail URL from `getThumbUrl(track)`.
+  3. `fallbackIcon`: Inlined SVG purple music note data URI (used ONLY when thumbnails are disabled or image is missing).
+- **Rule**: When initializing `MediaMetadata`, ALWAYS use `squareArt || rawArt || fallbackIcon`. Never initialize with `fallbackIcon` when a valid `rawArt` thumbnail URL exists, as background power management on Android can delay canvas cropping and lock the notification on the fallback icon.
 - Results are stored in an in-memory `dominantColorCache` and `artworkSquareCache` (LRU) to eliminate redundant Canvas processing.
 
 ### Throttled Lyrics Engine ([`js/lyrics.js`](js/lyrics.js))

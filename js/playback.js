@@ -11,19 +11,26 @@
                 if (!res.ok) throw new Error();
                 let data = await res.json();
                 
-                if (data.length > 0 && Array.isArray(data[0])) {
-                    data = data.filter(item => {
-                        const title = String(item[1]);
-                        return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-                    }).map(item => ({
-                        id: item[0],
-                        title: item[1],
-                        channel: item[2],
-                        duration: item[3],
-                        file_path: `${folderName}/${item[4]}.webm`,
-                        thumbnail_path: `${folderName}/thumbnails/${item[4]}.webp`
-                    }));
-                }
+                data = data.filter(item => {
+                    const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+                    return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                }).map(item => {
+                    if (Array.isArray(item)) {
+                        return {
+                            id: item[0],
+                            title: item[1],
+                            channel: item[2],
+                            duration: item[3],
+                            file_path: `${folderName}/${item[0]}.webm`,
+                            thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
+                        };
+                    }
+                    return {
+                        ...item,
+                        file_path: `${folderName}/${item.id}.webm`,
+                        thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
+                    };
+                });
                 
                 allDatabases[folderName] = data;
 
@@ -40,7 +47,10 @@
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
             
-            generateQueue(true); 
+            // Only generate a new queue if there is no active playback in progress
+            if (!globalActivePlaylist || queueIndex === -1) {
+                generateQueue(true, folderName);
+            }
             
             trackList.style.display = 'block';
             playlistMessage.style.display = 'none';
@@ -63,8 +73,13 @@
             playlistMessage.style.color = '#ff5555';
         }
     }
-    function generateQueue(resetPlayback = false) {
-        let indices = Array.from({length: currentPlaylistData.length}, (_, i) => i);
+
+    function generateQueue(resetPlayback = false, targetPlaylist = null) {
+        const pl = targetPlaylist || globalActivePlaylist || playlistSelect.value;
+        const data = allDatabases[pl] || currentPlaylistData;
+        if (!data || data.length === 0) return;
+
+        let indices = Array.from({length: data.length}, (_, i) => i);
         
         if (shuffleMode === 2) {
             const randomBuffer = new Uint32Array(1);
@@ -74,17 +89,18 @@
                 [indices[i], indices[j]] = [indices[j], indices[i]];
             }
             if (!resetPlayback && queueIndex !== -1) {
-                const currentOriginalIndex = playQueue[queueIndex];
+                const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
                 queueIndex = indices.indexOf(currentOriginalIndex);
             }
         } else if (!resetPlayback && queueIndex !== -1) {
-            const currentOriginalIndex = playQueue[queueIndex];
+            const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
             queueIndex = currentOriginalIndex;
         }
         
         playQueue = indices;
         if (resetPlayback) queueIndex = -1;
     }
+
     // Helper for cross-playlist shuffle: switch playlist context and play a specific track
     function playFromPlaylist(playlist, trackIndex) {
         if (playlist !== playlistSelect.value) {
@@ -96,6 +112,8 @@
             poolInitialized = false;
             playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         }
+        globalActivePlaylist = playlist;
+        globalActiveOriginalIndex = trackIndex;
         queueIndex = trackIndex;
         executePlayback();
     }
@@ -114,7 +132,8 @@
         } else {
             // Single playlist mode
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
-            const itemToQueue = (playlist === playlistSelect.value) ? originalIndex : { playlist, index: originalIndex };
+            const curPl = globalActivePlaylist || playlistSelect.value;
+            const itemToQueue = (playlist === curPl) ? originalIndex : { playlist, index: originalIndex };
             playQueue.splice(insertPos, 0, itemToQueue);
         }
     };
@@ -131,59 +150,55 @@
             crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist: targetPlaylist, index: targetOriginalIndex });
             crossShufflePos++;
         }
+
+        globalActivePlaylist = targetPlaylist;
+        globalActiveOriginalIndex = targetOriginalIndex;
         
-        if (targetPlaylist !== playlistSelect.value) {
-            if (shuffleMode === 1) {
-                // In shuffle-all mode, use lightweight playlist switch
-                playFromPlaylist(targetPlaylist, targetOriginalIndex);
-            } else {
-                // Cross-playlist jump with full reload
-                playlistSelect.value = targetPlaylist;
-                
-                // Clear search before loading new playlist so filteredIndices syncs properly
-                if (searchInput.value.trim() !== "") {
-                    searchInput.value = "";
-                }
-                
-                loadPlaylist(targetPlaylist).then(() => {
-                    if (shuffleMode === 2) {
-                        let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
-                        const randomBuffer = new Uint32Array(1);
-                        for (let i = rest.length - 1; i > 0; i--) {
-                            window.crypto.getRandomValues(randomBuffer);
-                            const j = randomBuffer[0] % (i + 1);
-                            [rest[i], rest[j]] = [rest[j], rest[i]];
-                        }
-                        playQueue = [targetOriginalIndex, ...rest];
-                        queueIndex = 0;
-                    } else {
-                        queueIndex = playQueue.indexOf(targetOriginalIndex);
-                    }
-                    executePlayback();
-                });
-            }
-        } else {
-            // If we are playing from a search, clear the search instantly
-            if (searchInput.value.trim() !== "") {
-                searchInput.value = "";
-                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlistSelect.value, index: i }));
-                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-            }
-            if (shuffleMode === 2) {
-                let rest = Array.from({length: currentPlaylistData.length}, (_, i) => i).filter(i => i !== targetOriginalIndex);
-                const randomBuffer = new Uint32Array(1);
-                for (let i = rest.length - 1; i > 0; i--) {
-                    window.crypto.getRandomValues(randomBuffer);
-                    const j = randomBuffer[0] % (i + 1);
-                    [rest[i], rest[j]] = [rest[j], rest[i]];
-                }
-                playQueue = [targetOriginalIndex, ...rest];
-                queueIndex = 0;
-            } else {
-                queueIndex = playQueue.indexOf(targetOriginalIndex);
-            }
-            executePlayback();
+        // Auto-switch playlist dropdown and active dataset to the target playlist
+        if (playlistSelect.value !== targetPlaylist) {
+            playlistSelect.value = targetPlaylist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = targetPlaylist;
         }
+
+        if (allDatabases[targetPlaylist]) {
+            currentPlaylistData = allDatabases[targetPlaylist];
+        } else if (typeof loadPlaylist === 'function') {
+            loadPlaylist(targetPlaylist).catch(() => {});
+        }
+
+        // If we are playing from a search, clear the search instantly and display target playlist
+        if (searchInput.value.trim() !== "") {
+            searchInput.value = "";
+        }
+        
+        if (currentPlaylistData && allDatabases[targetPlaylist]) {
+            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: targetPlaylist, index: i }));
+            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+            trackList.style.display = 'block';
+            playlistMessage.style.display = 'none';
+            lastStartIndex = -1;
+            renderVirtualTracks();
+        }
+
+        const data = currentPlaylistData;
+        const totalTracks = data ? data.length : 0;
+
+        if (shuffleMode === 2 && totalTracks > 0) {
+            let rest = Array.from({length: totalTracks}, (_, i) => i).filter(i => i !== targetOriginalIndex);
+            const randomBuffer = new Uint32Array(1);
+            for (let i = rest.length - 1; i > 0; i--) {
+                window.crypto.getRandomValues(randomBuffer);
+                const j = randomBuffer[0] % (i + 1);
+                [rest[i], rest[j]] = [rest[j], rest[i]];
+            }
+            playQueue = [targetOriginalIndex, ...rest];
+            queueIndex = 0;
+        } else if (totalTracks > 0) {
+            playQueue = Array.from({length: totalTracks}, (_, i) => i);
+            queueIndex = targetOriginalIndex;
+        }
+
+        executePlayback();
     }
     window.lastPlaybackDirection = 1;
 
@@ -272,12 +287,12 @@
         if (typeof rawQueueItem === 'object' && rawQueueItem !== null) {
             originalIndex = rawQueueItem.index;
             targetPlaylist = rawQueueItem.playlist;
-            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]) 
-                 || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
+            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]);
         } else {
             originalIndex = rawQueueItem;
-            targetPlaylist = playlistSelect.value;
-            track = currentPlaylistData ? currentPlaylistData[originalIndex] : null;
+            targetPlaylist = globalActivePlaylist || playlistSelect.value;
+            track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]) 
+                 || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
         }
 
         if (!track) return;
@@ -353,8 +368,14 @@
         if (typeof bufferBar !== 'undefined' && bufferBar) bufferBar.style.width = '0%';
 
         let audioUrl = getAudioUrl(track);
+        const thumbUrl = getThumbUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
+        if (dominantColorCache.has(track.id)) {
+            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+        } else if (thumbsDisabled) {
+            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+        }
 
         if (preloadedFetches.has(cacheKey)) {
             const controller = preloadedFetches.get(cacheKey);
@@ -363,83 +384,143 @@
         }
         
         if (hasMediaSession) {
-            const squareArt = artworkSquareCache.get(track.id);
-            const rawArt = getThumbUrl(track);
-            const artworkSrc = squareArt || rawArt;
+            let squareArt = artworkSquareCache.get(track.id);
+            if (!squareArt && !thumbsDisabled && typeof getSquareCroppedArtwork === 'function') {
+                const cachedEntry = typeof thumbCache !== 'undefined' ? (thumbCache.get(thumbUrl) || thumbCache.get(track.id)) : null;
+                const cachedImg = cachedEntry ? (cachedEntry.img || (cachedEntry instanceof HTMLImageElement ? cachedEntry : null)) : null;
+                if (cachedImg && (cachedImg.naturalWidth || cachedImg.width)) {
+                    squareArt = getSquareCroppedArtwork(cachedImg, track.id);
+                } else if (albumArt && albumArt.src === thumbUrl && albumArt.complete && (albumArt.naturalWidth || albumArt.width)) {
+                    squareArt = getSquareCroppedArtwork(albumArt, track.id);
+                }
+            }
+
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
-            const artworkList = (!thumbsDisabled && artworkSrc) 
-                ? [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }] 
-                : [{ src: fallbackIcon, sizes: '512x512', type: 'image/png' }];
+            
+            // STRICT 1:1 RULE: NEVER pass raw 16:9 thumbnail (thumbUrl) to MediaMetadata.
+            // Only pass pre-cropped 1:1 square JPEG or 1:1 square fallback icon.
+            const artworkSrc = (!thumbsDisabled && squareArt) ? squareArt : fallbackIcon;
+            const artworkList = [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }];
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
                 artwork: artworkList
             });
-            navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
             // Clear position state during buffering (W3C standard method)
-            updateMediaSessionPosition();
+            if ('setPositionState' in navigator.mediaSession) {
+                try {
+                    navigator.mediaSession.setPositionState(null);
+                } catch(e) {}
+            }
         }
 
-        if (!thumbsDisabled && getThumbUrl(track)) {
-            const thumbUrl = getThumbUrl(track);
-            albumArt.src = thumbUrl;
+        if (!thumbsDisabled && thumbUrl) {
+            if (thumbToggleHint) thumbToggleHint.style.display = 'none';
             albumArt.style.display = 'block';
+            albumArt.onerror = function() {
+                this.removeAttribute('src');
+                this.style.display = 'none';
+                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+            };
+            albumArt.src = thumbUrl;
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
+            if (thumbsDisabled && thumbToggleHint) {
+                thumbToggleHint.style.display = 'inline-flex';
+                thumbToggleHint.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5-5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>Show thumbnails';
+            }
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
 
-        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
+        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly, parsedDuration);
 
-        function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
-            const hasCachedColor = dominantColorCache.has(trackId);
-            const hasCachedSquare = artworkSquareCache.has(trackId);
-            
-            if (hasCachedColor) {
-                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
-            }
-
-            if (hasCachedColor && hasCachedSquare) {
-                return;
-            }
-
-            const tempImg = new Image();
-            tempImg.fetchPriority = "low";
-            tempImg.crossOrigin = "Anonymous";
-            tempImg.onload = () => {
-                if (currentPlaybackSequence !== sequenceId) return;
-                try {
-                    if (!hasCachedColor) {
-                        const color = getDominantColor(tempImg, trackId);
-                        document.documentElement.style.setProperty('--primary-color', color);
-                    }
-                    if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
-                        const squareData = getSquareCroppedArtwork(tempImg, trackId);
-                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                        }
-                    }
-                } catch(e) { }
-            };
-            tempImg.onerror = () => {
-                if (currentPlaybackSequence === sequenceId && !hasCachedColor) {
-                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                }
-            };
-            tempImg.src = thumbUrl;
-        }
-
-        // MediaSession metadata already updated at the top of executePlayback
-        
         if (window.lyricsActive) {
             loadLyrics(track);
         }
     }
+
+    function fetchVisuals(trackId, thumbUrl, sequenceId, track, isPreload = false) {
+        if (!thumbUrl) return;
+        const hasCachedColor = dominantColorCache.has(trackId);
+        const hasCachedSquare = artworkSquareCache.has(trackId);
+        
+        const isCurrentActive = () => {
+            const cur = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+            return cur && cur.id === trackId;
+        };
+
+        if (!isPreload && isCurrentActive()) {
+            if (hasCachedColor) {
+                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+            }
+
+            if (hasCachedSquare && hasMediaSession && !thumbsDisabled && track) {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }]
+                });
+            }
+        }
+
+        if (hasCachedColor && hasCachedSquare) return;
+
+        (async () => {
+            try {
+                const res = await fetch(thumbUrl);
+                if (!res.ok) throw new Error("Thumb fetch error");
+                const blob = await res.blob();
+                if (!isPreload && currentPlaybackSequence !== sequenceId) return;
+
+                const blobUrl = URL.createObjectURL(blob);
+                const offscreenImg = new Image();
+                offscreenImg.crossOrigin = "anonymous";
+                offscreenImg.onload = () => {
+                    try {
+                        let color = dominantColorCache.get(trackId);
+                        if (!color) {
+                            color = getDominantColor(offscreenImg, trackId);
+                        }
+                        let squareData = artworkSquareCache.get(trackId);
+                        if (!squareData && typeof getSquareCroppedArtwork === 'function') {
+                            squareData = getSquareCroppedArtwork(offscreenImg, trackId);
+                        }
+
+                        if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId) {
+                            if (color && !thumbsDisabled) {
+                                document.documentElement.style.setProperty('--primary-color', color);
+                            }
+                            if (squareData && hasMediaSession && !thumbsDisabled && track) {
+                                navigator.mediaSession.metadata = new MediaMetadata({
+                                    title: track.title,
+                                    artist: track.channel,
+                                    artwork: [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }]
+                                });
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Visual extraction error:", err);
+                    } finally {
+                        URL.revokeObjectURL(blobUrl);
+                    }
+                };
+                offscreenImg.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                };
+                offscreenImg.src = blobUrl;
+            } catch (e) {
+                if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
+                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                }
+            }
+        })();
+    }
+    window.fetchVisuals = fetchVisuals;
 
     // Removed old Blob preloadTrack, SmartBuffer handles it natively
 
@@ -486,6 +567,10 @@
                 });
                 fetchPromise.catch(e => {});
                 preloadedFetches.set(audioUrl, controller);
+            }
+
+            if (!thumbsDisabled && getThumbUrl(nextTrack)) {
+                fetchVisuals(nextTrack.id, getThumbUrl(nextTrack), currentPlaybackSequence, nextTrack, true);
             }
         }
     }
