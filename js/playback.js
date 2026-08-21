@@ -410,17 +410,24 @@
         }
     }
 
-    function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
+    function fetchVisuals(trackId, thumbUrl, sequenceId, track, isPreload = false) {
         if (!thumbUrl) return;
         const hasCachedColor = dominantColorCache.has(trackId);
         const hasCachedSquare = artworkSquareCache.has(trackId);
         
-        if (hasCachedColor) {
-            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
-        }
+        const isCurrentActive = () => {
+            const cur = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+            return cur && cur.id === trackId;
+        };
 
-        if (hasCachedSquare && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-            navigator.mediaSession.metadata.artwork = [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }];
+        if (!isPreload && isCurrentActive()) {
+            if (hasCachedColor) {
+                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+            }
+
+            if (hasCachedSquare && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                navigator.mediaSession.metadata.artwork = [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }];
+            }
         }
 
         if (hasCachedColor && hasCachedSquare) return;
@@ -430,24 +437,27 @@
                 const res = await fetch(thumbUrl);
                 if (!res.ok) throw new Error("Thumb fetch error");
                 const blob = await res.blob();
-                if (currentPlaybackSequence !== sequenceId) return;
+                if (!isPreload && currentPlaybackSequence !== sequenceId) return;
 
                 const blobUrl = URL.createObjectURL(blob);
                 const offscreenImg = new Image();
                 offscreenImg.onload = () => {
                     try {
-                        if (currentPlaybackSequence === sequenceId) {
-                            if (!dominantColorCache.has(trackId)) {
-                                const color = getDominantColor(offscreenImg, trackId);
-                                if (!thumbsDisabled) {
-                                    document.documentElement.style.setProperty('--primary-color', color);
-                                }
+                        let color = dominantColorCache.get(trackId);
+                        if (!color) {
+                            color = getDominantColor(offscreenImg, trackId);
+                        }
+                        let squareData = artworkSquareCache.get(trackId);
+                        if (!squareData && typeof getSquareCroppedArtwork === 'function') {
+                            squareData = getSquareCroppedArtwork(offscreenImg, trackId);
+                        }
+
+                        if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId) {
+                            if (color && !thumbsDisabled) {
+                                document.documentElement.style.setProperty('--primary-color', color);
                             }
-                            if (!artworkSquareCache.has(trackId) && typeof getSquareCroppedArtwork === 'function') {
-                                const squareData = getSquareCroppedArtwork(offscreenImg, trackId);
-                                if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                                    navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                                }
+                            if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                                navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
                             }
                         }
                     } catch (err) {
@@ -461,7 +471,7 @@
                 };
                 offscreenImg.src = blobUrl;
             } catch (e) {
-                if (currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
+                if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
                     document.documentElement.style.setProperty('--primary-color', '#8c73ff');
                 }
             }
@@ -517,7 +527,7 @@
             }
 
             if (!thumbsDisabled && getThumbUrl(nextTrack)) {
-                fetchVisuals(nextTrack.id, getThumbUrl(nextTrack), currentPlaybackSequence, nextTrack);
+                fetchVisuals(nextTrack.id, getThumbUrl(nextTrack), currentPlaybackSequence, nextTrack, true);
             }
         }
     }
