@@ -135,11 +135,12 @@
                 const cached = thumbCache.get(thumbUrl);
                 if (cached && cached.status === 'loaded') {
                     thumbDiv.style.backgroundImage = `url("${cached.resolvedUrl}")`;
+                } else if (cached && cached.status === 'failed') {
+                    thumbDiv.style.backgroundImage = 'none';
                 } else {
-                    // Instantly clean background for uncached / loading / failed
                     thumbDiv.style.backgroundImage = 'none';
 
-                    if (!cached && !isScrollingFast) {
+                    if (!cached) {
                         thumbCache.set(thumbUrl, { status: 'loading' });
                         
                         const loader = new Image();

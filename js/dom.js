@@ -53,7 +53,6 @@
                 this.active.addEventListener(evt, this.forwardEvent);
             });
 
-            this._initMSE();
         }
 
         _initAudioGraph() {
@@ -73,81 +72,6 @@
             }
         }
 
-        _initMSE() {
-            const mime = 'audio/webm; codecs="opus"';
-            if ('MediaSource' in window && MediaSource.isTypeSupported(mime)) {
-                try {
-                    this._mediaSource = new MediaSource();
-                    this._sourceBuffer = null;
-                    this._mseReady = new Promise(resolve => {
-                        this._mediaSource.addEventListener('sourceopen', () => {
-                            try {
-                                if (!this._sourceBuffer) {
-                                    this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
-                                    this._sourceBuffer.mode = 'segments';
-                                }
-                                this._mseEnabled = true;
-                                resolve();
-                            } catch (e) {
-                                console.warn("MSE addSourceBuffer error:", e);
-                                this._mseEnabled = false;
-                                resolve();
-                            }
-                        }, { once: true });
-                    });
-                    this.active.src = URL.createObjectURL(this._mediaSource);
-                } catch (e) {
-                    console.warn("MSE init failed, falling back to standard src:", e);
-                    this._mseEnabled = false;
-                }
-            }
-        }
-
-        _waitForUpdate() {
-            if (!this._sourceBuffer || !this._sourceBuffer.updating) return Promise.resolve();
-            return new Promise(resolve => {
-                this._sourceBuffer.addEventListener('updateend', resolve, { once: true });
-            });
-        }
-
-        async _clearSourceBuffer() {
-            if (!this._sourceBuffer) return;
-            await this._waitForUpdate();
-            if (this._sourceBuffer.buffered.length > 0) {
-                try {
-                    const end = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                    this._sourceBuffer.remove(0, end + 10);
-                    await this._waitForUpdate();
-                } catch (e) {
-                    console.warn("MSE clear error:", e);
-                }
-            }
-        }
-
-        async _appendToSourceBuffer(arrayBuffer) {
-            if (!this._sourceBuffer) return;
-            await this._waitForUpdate();
-            return new Promise((resolve, reject) => {
-                const onUpdateEnd = () => {
-                    this._sourceBuffer.removeEventListener('updateend', onUpdateEnd);
-                    this._sourceBuffer.removeEventListener('error', onError);
-                    resolve();
-                };
-                const onError = (e) => {
-                    this._sourceBuffer.removeEventListener('updateend', onUpdateEnd);
-                    this._sourceBuffer.removeEventListener('error', onError);
-                    reject(e);
-                };
-                this._sourceBuffer.addEventListener('updateend', onUpdateEnd);
-                this._sourceBuffer.addEventListener('error', onError);
-                try {
-                    this._sourceBuffer.appendBuffer(arrayBuffer);
-                } catch (e) {
-                    onError(e);
-                }
-            });
-        }
-
         get currentTime() { return this.active.currentTime; }
         set currentTime(v) {
             try {
@@ -155,20 +79,9 @@
                 if (v < (this.active.duration || Infinity) - 0.5) {
                     this._endedFired = false;
                 }
-
-                // If target seek time is beyond currently buffered range in MSE
-                if (this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                    const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                    if (v > buffEnd + 0.5) {
-                        this._pendingSeek = v;
-                        return;
-                    }
-                }
-
-                this._pendingSeek = null;
                 this.active.currentTime = v;
             } catch (e) {
-                this._pendingSeek = v;
+                console.warn("currentTime set error:", e);
             }
         }
         get readyState() { return this.active.readyState; }
@@ -264,16 +177,12 @@
                 this._audioCtx.resume();
             }
 
-            // Instantly silence audio output via GainNode (zero audio leak) without setting active.muted = true
-            // (Keeping active.muted = false prevents Chromium Android from hiding the lock screen notification)
             if (this._gainNode) {
                 this._gainNode.gain.value = 0;
             }
 
-            // Immediately pause the underlying <audio> element so its playhead stops advancing
             this.active.pause();
 
-            // Immediately reset the underlying <audio> element's playhead to 0:00
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
@@ -289,155 +198,18 @@
                 return Promise.resolve();
             }
 
-            if (this._mseReady) {
-                await this._mseReady;
-            }
+            if (this._gainNode) this._gainNode.gain.value = 1.0;
+            this.active.src = url;
 
-            if (this._mseEnabled && this._sourceBuffer) {
-                if (!preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+            if (!preventAutoplay) {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
-
-                // Abort previous in-flight stream if switching to a new track
-                if (this._streamAbortController) {
-                    try { this._streamAbortController.abort(); } catch (e) {}
-                }
-                this._streamAbortController = new AbortController();
-                const currentAbortSignal = this._streamAbortController.signal;
-
-                this._streamId = (this._streamId || 0) + 1;
-                const activeStreamId = this._streamId;
-                this._pendingSeek = null;
-
-                try {
-                    const response = await fetch(url, { signal: currentAbortSignal });
-                    if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    if (!response.body) throw new Error("ReadableStream not supported");
-
-                    const reader = response.body.getReader();
-
-                    // Read first chunk (~256KB - 384KB) containing WebM header + first audio cluster
-                    const { value: firstChunk, done: firstDone } = await reader.read();
-
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-
-                    if (!firstChunk || firstChunk.length === 0) throw new Error("Empty first audio chunk");
-
-                    await this._clearSourceBuffer();
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-
-                    this._sourceBuffer.timestampOffset = 0;
-                    await this._appendToSourceBuffer(firstChunk);
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-
-                    // Fast-Start: Instantly start playing on first chunk
-                    this.active.currentTime = 0;
-                    if (this._gainNode) {
-                        this._gainNode.gain.value = 1.0;
-                    }
-
-                    if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
-                    }
-
-                    this.switching = false;
-                    this.dispatchEvent(new Event('loadedmetadata'));
-                    this.dispatchEvent(new Event('canplay'));
-                    this.dispatchEvent(new Event('play'));
-                    this.dispatchEvent(new Event('playing'));
-
-                    // Continuous Background Ingestion Loop (Streams till end of song without stopping)
-                    (async () => {
-                        try {
-                            if (firstDone) {
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
-                                }
-                                return;
-                            }
-
-                            while (true) {
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                const { value: nextChunk, done } = await reader.read();
-
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                if (done) {
-                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                        try { this._mediaSource.endOfStream(); } catch (e) {}
-                                    }
-                                    break;
-                                }
-
-                                if (nextChunk && nextChunk.length > 0) {
-                                    await this._appendToSourceBuffer(nextChunk);
-
-                                    // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is buffered
-                                    if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                                        const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                        if (buffEnd >= this._pendingSeek) {
-                                            const seekTarget = this._pendingSeek;
-                                            this._pendingSeek = null;
-                                            this.active.currentTime = seekTarget;
-                                            this.active.play().catch(e => console.warn("Catch-up seek play:", e));
-                                        }
-                                    }
-                                }
-                            }
-                        } catch (streamErr) {
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                                console.warn("Background MSE stream pipe error:", streamErr);
-                            }
-                        }
-                    })();
-                } catch (e) {
-                    if (currentAbortSignal.aborted || this._streamId !== activeStreamId) {
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-                    console.warn("MSE progressive switch error, falling back to direct src:", e);
-                    this._mseEnabled = false;
-                    this.active.src = url;
-                    if (this._gainNode) this._gainNode.gain.value = 1.0;
-                    if (!preventAutoplay) {
-                        this.active.play().catch(() => {});
-                    }
-                    this.switching = false;
-                }
+                this.active.play().catch(e => console.warn("switchTrack play:", e));
             } else {
-                if (this._gainNode) this._gainNode.gain.value = 1.0;
-                if (!preventAutoplay) {
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = "playing";
-                    }
-                    this.active.src = url;
-                    this.active.play().catch(e => console.warn("switchTrack play:", e));
-                } else {
-                    this.active.src = url;
-                    this.active.load();
-                }
-                this.switching = false;
+                this.active.load();
             }
-
+            this.switching = false;
             return Promise.resolve();
         }
     }

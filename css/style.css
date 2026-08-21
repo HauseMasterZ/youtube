@@ -179,19 +179,34 @@
         }
 
         #thumb-toggle-hint {
-            display: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             color: var(--text-secondary);
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: 500;
             text-align: center;
-            padding: 8px 0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s ease;
+        }
+
+        #thumb-toggle-hint:hover {
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         #thumb-toggle-hint svg {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             fill: currentColor;
             vertical-align: middle;
-            margin-right: 4px;
+            margin-right: 6px;
         }
 
         #current-title {
