@@ -104,7 +104,7 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.open(THUMBS_CACHE).then(cache => {
                 return cache.match(event.request).then(cached => {
-                    if (cached) return cached;
+                    if (cached && (event.request.mode !== 'cors' || cached.type !== 'opaque')) return cached;
                     return fetch(event.request).then(response => {
                         if (response.ok || response.type === 'opaque') {
                             cache.put(event.request, response.clone());
