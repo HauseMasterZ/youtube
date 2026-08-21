@@ -314,34 +314,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
     
-    let focusResumeCheckInterval = null;
-    function startInterruptionWatchdog() {
-        if (focusResumeCheckInterval) clearInterval(focusResumeCheckInterval);
-        let attempts = 0;
-        focusResumeCheckInterval = setInterval(() => {
-            attempts++;
-            if (!window.wasInterrupted || window.wasPausedByUser || !audioPlayer.paused || attempts > 45) {
-                clearInterval(focusResumeCheckInterval);
-                focusResumeCheckInterval = null;
-                return;
-            }
-            audioPlayer.play().then(() => {
-                window.wasInterrupted = false;
-                clearInterval(focusResumeCheckInterval);
-                focusResumeCheckInterval = null;
-            }).catch(() => {
-                // Still blocked by external audio session
-            });
-        }, 2000);
-    }
-
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
         window.wasInterrupted = false;
-        if (focusResumeCheckInterval) {
-            clearInterval(focusResumeCheckInterval);
-            focusResumeCheckInterval = null;
-        }
         setPlayUI(true);
         updateMediaSessionPosition();
         if (hasMediaSession) {
@@ -368,46 +343,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching) return;
-        if (window.wasPausedByUser) {
-            setPlayUI(false);
-            updateMediaSessionPosition();
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
-            return;
-        }
-
-        // Non-user pause (Transient OS handshake, decoder sync, or external interruption)
-        if (audioPlayer.src) {
-            window.wasInterrupted = true;
-            // Instantly attempt auto-resume to eliminate transient 0.5s - 1s stalls
-            audioPlayer.play().then(() => {
-                window.wasInterrupted = false;
-                setPlayUI(true);
-            }).catch(() => {
-                // Blocked by external audio focus (e.g. phone call / alarm)
-                setPlayUI(false);
-                updateMediaSessionPosition();
-                startInterruptionWatchdog();
-            });
+        setPlayUI(false);
+        updateMediaSessionPosition();
+        if (hasMediaSession) {
+            navigator.mediaSession.playbackState = 'paused';
         }
     });
 
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) {
-            if (!audioPlayer.paused) {
-                updateTimeUI(Math.floor(audioPlayer.currentTime));
-            } else if (window.wasPausedByUser === false && (window.wasInterrupted || audioPlayer.src)) {
-                window.wasInterrupted = false;
-                audioPlayer.play().catch(e => console.warn("Auto-resume failed:", e));
-            }
-        }
-    });
-
-    window.addEventListener("focus", () => {
-        if (window.wasPausedByUser === false && window.wasInterrupted && audioPlayer.src && audioPlayer.paused) {
-            window.wasInterrupted = false;
-            audioPlayer.play().catch(e => console.warn("Focus auto-resume failed:", e));
+        if (!document.hidden && !audioPlayer.paused) {
+            updateTimeUI(Math.floor(audioPlayer.currentTime));
         }
     });
 
