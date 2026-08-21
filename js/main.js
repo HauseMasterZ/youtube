@@ -680,6 +680,38 @@ currentPlaylistData[globalActiveOriginalIndex];
             playlistSelect.value = lastValidPlaylist;
             return;
         }
+
+        if (e.target.value === "HARD_RELOAD") {
+            playlistSelect.value = lastValidPlaylist;
+            
+            // 1. Clear all Service Worker / Cache API caches
+            if ('caches' in window) {
+                try {
+                    const keys = await caches.keys();
+                    await Promise.all(keys.map(k => caches.delete(k)));
+                } catch (err) {
+                    console.warn("Error clearing cache:", err);
+                }
+            }
+            
+            // 2. Unregister any active service workers
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registrations = await navigator.serviceWorker.getRegistrations();
+                    await Promise.all(registrations.map(r => r.unregister()));
+                } catch (err) {
+                    console.warn("Error unregistering SW:", err);
+                }
+            }
+            
+            // 3. Clear session storage
+            try { sessionStorage.clear(); } catch(err) {}
+
+            // 4. Force hard reload with timestamp cache-busting
+            const cleanUrl = window.location.origin + window.location.pathname + '?reload=' + Date.now();
+            window.location.replace(cleanUrl);
+            return;
+        }
         
         lastValidPlaylist = e.target.value;
         if (shuffleMode !== 1) {
