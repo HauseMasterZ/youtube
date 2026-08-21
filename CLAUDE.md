@@ -32,10 +32,11 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - `<audio>.muted` **remains `false`**, preventing Chromium's `hideNotification()` trigger.
   - When playback begins, `gainNode.gain.value = 1.0` restores volume instantly.
 
-#### Invariant 3: Single Continuous Progressive Ingestion & 0ms Seeking
-- Single HTTP GET stream per track: fast-starts playback within **<100ms** on the first chunk (~256KB), while piping remaining chunks into `SourceBuffer` in the background until `endOfStream()`.
-- **In-Memory Scrubbing**: Seeking backwards or within already-buffered audio is **100% instant 0ms local playback**.
-- **Catch-up Seeking**: When seeking ahead into unbuffered audio, the playhead holds at the target timestamp without snapback and auto-resumes playback as soon as the buffer reaches that position.
+#### Invariant 3: Clean Full Track MSE Ingestion & 0ms Seeking
+- Single clean `fetch(url)` -> `response.arrayBuffer()` -> `_appendToSourceBuffer(arrayBuffer)` -> `mediaSource.endOfStream()`.
+- **Zero Splicing Dropouts**: Eliminates mid-stream `appendBuffer` calls that split WebM SimpleBlocks across arbitrary TCP packet boundaries while audio is playing (which caused ~0.5s–1s speaker audio dropout while the playhead kept advancing).
+- **In-Memory Scrubbing**: Seeking anywhere in the track is **100% instant 0ms local playback** from RAM.
+- **Fast Response**: Standard 2.5MB Opus track fetches in ~200-300ms on first play, and <10ms when cached in Service Worker.
 
 #### Invariant 4: Canonical W3C Position Lifecycle & Zero-Bleed Rules ([`js/mediaSession.js`](js/mediaSession.js) & [`js/playback.js`](js/playback.js))
 - **Quirk: Position Bleed on Track Transition**:
@@ -47,9 +48,6 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - Failing to pause the underlying element allows Chromium's hardware clock to advance past the end of the previous buffer while the new track's first chunk is fetched.
 - **Quirk: Auto-Advance Watchdog Physical Time Requirement**:
   - In `forwardEvent`, the near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime` (which may report `_pendingSeek`).
-- **Quirk: First-Play Network Underrun Stall & Minimum Buffer Requirement**:
-  - On first play after hard reload, the Service Worker cache is empty. If playback starts immediately on chunk 1 (~256KB), only ~2-4s of decoded Opus audio is buffered. Network latency for chunk 2 causes `readyState` to drop to `HAVE_CURRENT_DATA`, producing an audible ~0.5s pause/stall on mobile (where no Web Audio GainNode masks the stall).
-  - **Strict Rule**: In `switchTrack()`, read chunks until **`buffered.end(0) >= 5` seconds** (or stream EOF) BEFORE invoking `this.active.play()`. Subsequent cached tracks resolve this loop in <10ms, while first-play over network completes in ~200-400ms with zero stall.
 - **Quirk: Non-User Pause Instant Auto-Resume vs 2s Polling**:
   - When Android OS finishes its initial AudioFocus/Notification handshake on cold start, Chromium may dispatch a transient native `pause` event.
   - **Strict Rule**: In `main.js` `pause` handler, if `window.wasPausedByUser === false`, immediately call `audioPlayer.play()`. If AudioFocus is free, it resumes in <5ms without audible interruption or UI flip. Only fall back to `startInterruptionWatchdog()` (2s polling) if `play()` is rejected by an external audio session (phone call / alarm).
