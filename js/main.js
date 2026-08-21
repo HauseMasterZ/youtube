@@ -349,11 +349,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 navigator.mediaSession.metadata.artist = track.channel;
                 const rawArt = getThumbUrl(track);
                 const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawArt) : null;
-                const resolvedArt = (cached && cached.status === 'loaded' && cached.resolvedUrl) 
-                    ? cached.resolvedUrl 
-                    : (track.id ? `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg` : rawArt);
+                const isFailed = cached && cached.status === 'failed';
                 const squareArt = artworkSquareCache.get(track.id);
-                const artworkSrc = squareArt || resolvedArt;
+                const artworkSrc = squareArt || (!isFailed ? rawArt : null);
                 const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                     ? getPurpleNoteArtwork() 
                     : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
@@ -583,34 +581,24 @@ currentPlaylistData[globalActiveOriginalIndex];
                 if (queueIndex >= 0 && queueIndex < playQueue.length) {
                     const track = currentPlaylistData[playQueue[queueIndex]];
                     if (track && getThumbUrl(track)) {
-                        const rawThumbUrl = getThumbUrl(track);
-                        const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawThumbUrl) : null;
-                        const initialThumb = (cached && cached.status === 'loaded' && cached.resolvedUrl) ? cached.resolvedUrl : rawThumbUrl;
-
+                        const thumbUrl = getThumbUrl(track);
                         albumArt.style.display = 'block';
                         albumArt.onerror = function() {
-                            if (track.id && !this.src.includes('ytimg.com')) {
-                                this.src = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                                this.style.display = 'block';
-                            } else {
-                                this.removeAttribute('src');
-                                this.style.display = 'none';
-                            }
+                            this.removeAttribute('src');
+                            this.style.display = 'none';
                         };
-                        albumArt.src = initialThumb;
+                        albumArt.src = thumbUrl;
                         
                         if (dominantColorCache.has(track.id)) {
                             document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
                         } else {
                             const tempImg = new Image();
-                            if (!initialThumb.includes('ytimg.com')) {
-                                tempImg.crossOrigin = "Anonymous";
-                            }
+                            tempImg.crossOrigin = "Anonymous";
                             tempImg.onload = () => {
                                 const color = getDominantColor(tempImg, track.id);
                                 document.documentElement.style.setProperty('--primary-color', color);
                             };
-                            tempImg.src = initialThumb;
+                            tempImg.src = thumbUrl;
                         }
                     } else {
                         albumArt.style.display = 'none';
@@ -688,7 +676,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 channel: item[2],
                                 duration: item[3],
                                 file_path: `${pl}/${item[4]}.webm`,
-                                thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
+                                thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
                             }));
                         }
                         
@@ -782,7 +770,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 channel: item[2],
                                 duration: item[3],
                                 file_path: `${pl}/${item[4]}.webm`,
-                                thumbnail_path: `${pl}/thumbnails/${item[4]}.webp`
+                                thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
                             }));
                         }
                         allDatabases[pl] = data;

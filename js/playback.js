@@ -21,7 +21,7 @@
                         channel: item[2],
                         duration: item[3],
                         file_path: `${folderName}/${item[4]}.webm`,
-                        thumbnail_path: `${folderName}/thumbnails/${item[4]}.webp`
+                        thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
                     }));
                 }
                 
@@ -356,11 +356,9 @@
         if (hasMediaSession) {
             const rawArt = getThumbUrl(track);
             const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawArt) : null;
-            const resolvedArt = (cached && cached.status === 'loaded' && cached.resolvedUrl) 
-                ? cached.resolvedUrl 
-                : (track.id ? `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg` : rawArt);
+            const isFailed = cached && cached.status === 'failed';
             const squareArt = artworkSquareCache.get(track.id);
-            const artworkSrc = squareArt || resolvedArt;
+            const artworkSrc = squareArt || (!isFailed ? rawArt : null);
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
@@ -379,24 +377,15 @@
         }
 
         if (!thumbsDisabled && getThumbUrl(track)) {
-            const rawThumbUrl = getThumbUrl(track);
-            const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawThumbUrl) : null;
-            const initialThumb = (cached && cached.status === 'loaded' && cached.resolvedUrl) ? cached.resolvedUrl : rawThumbUrl;
-
+            const thumbUrl = getThumbUrl(track);
             albumArt.style.display = 'block';
             albumArt.onerror = function() {
-                if (track.id && !this.src.includes('ytimg.com')) {
-                    const fallback = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                    this.src = fallback;
-                    this.style.display = 'block';
-                    fetchVisuals(track.id, fallback, sequenceId, track);
-                } else {
-                    this.removeAttribute('src');
-                    this.style.display = 'none';
-                }
+                this.removeAttribute('src');
+                this.style.display = 'none';
+                document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             };
-            albumArt.src = initialThumb;
-            fetchVisuals(track.id, initialThumb, sequenceId, track);
+            albumArt.src = thumbUrl;
+            fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
@@ -419,9 +408,7 @@
 
             const tempImg = new Image();
             tempImg.fetchPriority = "low";
-            if (!thumbUrl.includes("ytimg.com")) {
-                tempImg.crossOrigin = "Anonymous";
-            }
+            tempImg.crossOrigin = "Anonymous";
             tempImg.onload = () => {
                 if (currentPlaybackSequence !== sequenceId) return;
                 try {
@@ -429,13 +416,11 @@
                         const color = getDominantColor(tempImg, trackId);
                         document.documentElement.style.setProperty('--primary-color', color);
                     }
-                    let squareData = null;
                     if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
-                        squareData = getSquareCroppedArtwork(tempImg, trackId);
-                    }
-                    const bestArt = squareData || thumbUrl;
-                    if (hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled && bestArt) {
-                        navigator.mediaSession.metadata.artwork = [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }];
+                        const squareData = getSquareCroppedArtwork(tempImg, trackId);
+                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                        }
                     }
                 } catch(e) { }
             };
