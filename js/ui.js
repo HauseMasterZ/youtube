@@ -268,26 +268,110 @@
     function getDominantColor(imgEl, trackId) {
         if (trackId && dominantColorCache.has(trackId)) return dominantColorCache.get(trackId);
         if (imgEl.dataset && imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
-        let canvas = document.createElement('canvas');
-        let ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) return '#8c73ff';
-        canvas.width = 1; canvas.height = 1;
+        
         try {
-            ctx.drawImage(imgEl, 0, 0, 1, 1);
-            let data = ctx.getImageData(0, 0, 1, 1).data;
-            let r = data[0], g = data[1], b = data[2];
-            
-            let brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            if (brightness < 120) {
-                let factor = 120 / Math.max(brightness, 1);
-                r = Math.min(255, Math.floor(r * factor));
-                g = Math.min(255, Math.floor(g * factor));
-                b = Math.min(255, Math.floor(b * factor));
+            const width = imgEl.naturalWidth || imgEl.width || 320;
+            const height = imgEl.naturalHeight || imgEl.height || 240;
+            if (!width || !height) return '#8c73ff';
+
+            const canvas = document.createElement('canvas');
+            const sampleSize = 32;
+            canvas.width = sampleSize;
+            canvas.height = sampleSize;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            if (!ctx) return '#8c73ff';
+
+            // Sample the center 70% to avoid YouTube letterbox bars
+            const cropX = width * 0.15;
+            const cropY = height * 0.15;
+            const cropW = width * 0.70;
+            const cropH = height * 0.70;
+
+            ctx.drawImage(imgEl, cropX, cropY, cropW, cropH, 0, 0, sampleSize, sampleSize);
+            const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+
+            let bestColor = null;
+            let maxScore = -Infinity;
+            let avgR = 0, avgG = 0, avgB = 0, validPixelCount = 0;
+
+            for (let i = 0; i < imgData.length; i += 4) {
+                const r = imgData[i];
+                const g = imgData[i + 1];
+                const b = imgData[i + 2];
+                const a = imgData[i + 3];
+
+                if (a < 128) continue; // Ignore transparent pixels
+
+                avgR += r;
+                avgG += g;
+                avgB += b;
+                validPixelCount++;
+
+                // Convert RGB to HSL
+                const rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
+                const max = Math.max(rNorm, gNorm, bNorm), min = Math.min(rNorm, gNorm, bNorm);
+                let h = 0, s = 0, l = (max + min) / 2;
+
+                if (max !== min) {
+                    const d = max - min;
+                    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                    switch (max) {
+                        case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
+                        case gNorm: h = (bNorm - rNorm) / d + 2; break;
+                        case bNorm: h = (rNorm - gNorm) / d + 4; break;
+                    }
+                    h /= 6;
+                }
+
+                // Filter out extreme darks (<15%), extreme lights (>88%), or pure grays (s < 0.18)
+                if (l < 0.15 || l > 0.88 || s < 0.18) continue;
+
+                // Score: prioritize high saturation and target luminance around 0.55 - 0.65 for high visibility on black
+                const targetL = 0.60;
+                const lightnessScore = 1 - Math.abs(l - targetL) * 2;
+                const score = s * 2.0 + lightnessScore * 1.5;
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestColor = { r, g, b, l, s };
+                }
             }
-            const finalColor = `rgb(${r}, ${g}, ${b})`;
+
+            let finalR, finalG, finalB;
+
+            if (bestColor) {
+                finalR = bestColor.r;
+                finalG = bestColor.g;
+                finalB = bestColor.b;
+                // Ensure sufficient luminance for black background
+                if (bestColor.l < 0.40) {
+                    const boost = 0.45 / Math.max(bestColor.l, 0.01);
+                    finalR = Math.min(255, Math.floor(finalR * boost));
+                    finalG = Math.min(255, Math.floor(finalG * boost));
+                    finalB = Math.min(255, Math.floor(finalB * boost));
+                }
+            } else if (validPixelCount > 0) {
+                // Fallback to average color with brightness floor
+                finalR = Math.floor(avgR / validPixelCount);
+                finalG = Math.floor(avgG / validPixelCount);
+                finalB = Math.floor(avgB / validPixelCount);
+                const brightness = (finalR * 299 + finalG * 587 + finalB * 114) / 1000;
+                if (brightness < 130) {
+                    const factor = 130 / Math.max(brightness, 1);
+                    finalR = Math.min(255, Math.floor(finalR * factor));
+                    finalG = Math.min(255, Math.floor(finalG * factor));
+                    finalB = Math.min(255, Math.floor(finalB * factor));
+                }
+            } else {
+                return '#8c73ff';
+            }
+
+            const finalColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
             if (trackId) dominantColorCache.set(trackId, finalColor);
             return finalColor;
-        } catch(e) { return '#8c73ff'; }
+        } catch (e) {
+            return '#8c73ff';
+        }
     }
 
     function getSquareCroppedArtwork(imgEl, trackId) {
