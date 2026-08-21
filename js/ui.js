@@ -94,7 +94,9 @@
         let childIdx = 0;
         for (let i = startIndex; i <= endIndex; i++) {
             const item = filteredIndices[i];
-            const track = allDatabases[item.playlist][item.index];
+            const plData = allDatabases[item.playlist];
+            if (!plData || !plData[item.index]) continue;
+            const track = plData[item.index];
             const li = trackList.children[childIdx++];
             const thumbDiv = li.childNodes[0];
             const textSpan = li.childNodes[1];

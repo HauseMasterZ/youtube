@@ -155,6 +155,8 @@
 
         if (allDatabases[targetPlaylist]) {
             currentPlaylistData = allDatabases[targetPlaylist];
+        } else if (typeof loadPlaylist === 'function') {
+            loadPlaylist(targetPlaylist).catch(() => {});
         }
 
         // If we are playing from a search, clear the search instantly and display target playlist
@@ -162,7 +164,7 @@
             searchInput.value = "";
         }
         
-        if (currentPlaylistData) {
+        if (currentPlaylistData && allDatabases[targetPlaylist]) {
             filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: targetPlaylist, index: i }));
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             trackList.style.display = 'block';
