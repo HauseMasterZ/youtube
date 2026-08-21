@@ -110,3 +110,12 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 | [`js/utils.js`](js/utils.js) | Utilities | ISO-8601 duration parser, color quantization, time formatters. |
 | [`sw.js`](sw.js) | Service Worker | App shell cache manager (`yt-player-cache-vXX`) and media cache (`yt-player-media`). |
 
+---
+
+## 6. Code Hygiene & Anti-Bloat Directives
+
+- **Zero Dead Code**: Never leave temporary experiments, superseded workaround loops, or dead branches in the codebase once a root cause is resolved.
+- **Minimalist Architecture**: Prefer direct, standard W3C mechanisms over multi-layer wrapper abstractions.
+- **Git Status Discipline**: Run `git status` **strictly once** at the beginning of an investigation cycle to verify the base state; avoid redundant terminal status polling.
+- **Cache Versioning Discipline**: Only bump `sw.js` and `index.html` cache versions when preparing code for actual push/deployment, preventing unnecessary version churn during active local iteration.
+
