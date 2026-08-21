@@ -413,7 +413,9 @@
             if (hasCachedColor && hasCachedSquare) return;
 
             // Fetch image via fetch/blob for clean, untainted canvas extraction across all browsers
-            fetch(thumbUrl, { priority: 'low' })
+            const corsThumbUrl = thumbUrl.includes('?') ? `${thumbUrl}&cors=1` : `${thumbUrl}?cors=1`;
+
+            fetch(corsThumbUrl, { mode: 'cors', priority: 'low' })
                 .then(res => {
                     if (!res.ok) throw new Error("Thumb fetch error");
                     return res.blob();
@@ -456,12 +458,7 @@
                             }
                         } catch(e) { }
                     };
-                    tempImg.onerror = () => {
-                        if (currentPlaybackSequence === sequenceId && !hasCachedColor) {
-                            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                        }
-                    };
-                    tempImg.src = thumbUrl;
+                    tempImg.src = corsThumbUrl;
                 });
         }
 
