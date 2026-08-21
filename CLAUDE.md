@@ -32,11 +32,11 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - `<audio>.muted` **remains `false`**, preventing Chromium's `hideNotification()` trigger.
   - When playback begins, `gainNode.gain.value = 1.0` restores volume instantly.
 
-#### Invariant 3: Clean Full Track MSE Ingestion & 0ms Seeking
-- Single clean `fetch(url)` -> `response.arrayBuffer()` -> `_appendToSourceBuffer(arrayBuffer)` -> `mediaSource.endOfStream()`.
-- **Zero Splicing Dropouts**: Eliminates mid-stream `appendBuffer` calls that split WebM SimpleBlocks across arbitrary TCP packet boundaries while audio is playing (which caused ~0.5s–1s speaker audio dropout while the playhead kept advancing).
-- **In-Memory Scrubbing**: Seeking anywhere in the track is **100% instant 0ms local playback** from RAM.
-- **Fast Response**: Standard 2.5MB Opus track fetches in ~200-300ms on first play, and <10ms when cached in Service Worker.
+#### Invariant 3: Progressive Fragmented MSE Ingestion & Catch-Up Seeking ([`js/dom.js`](js/dom.js))
+- **Initial Safety Cushion**: Ingests ~768KB (~40s of Opus audio) upfront as a combined contiguous buffer before `this.active.play()` begins. This guarantees the WebM header and initial clusters are 100% complete with **zero mid-stream decoder packet dropouts**.
+- **Progressive Background Ingestion**: The remaining chunks stream continuously in the background, firing `'progress'` events on each chunk to dynamically populate the fragmented buffer bar.
+- **Start-to-Target Catch-Up Seeking**: When seeking into unbuffered audio (`target > buffEnd`), `this._pendingSeek` holds physical playback while the thumb sits at the target timestamp. As soon as background ingestion reaches the target timestamp, playback auto-resumes smoothly from the target.
+- **In-Memory Scrubbing**: Seeking within already-buffered ranges is **100% instant 0ms local playback**.
 
 #### Invariant 4: Canonical W3C Position Lifecycle & Zero-Bleed Rules ([`js/mediaSession.js`](js/mediaSession.js) & [`js/playback.js`](js/playback.js))
 - **Quirk: Position Bleed on Track Transition**:
