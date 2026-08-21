@@ -228,14 +228,23 @@
             bufferBar.style.width = '0%';
             return;
         }
-        const buffered = audioPlayer.buffered;
+        const ct = (audioPlayer && !isNaN(audioPlayer.currentTime)) ? audioPlayer.currentTime : 0;
+        const buffered = audioPlayer ? audioPlayer.buffered : null;
+        let activeBufferedEnd = ct;
+
         if (buffered && buffered.length > 0) {
-            const bufferedEnd = buffered.end(buffered.length - 1);
-            const bufferPercent = Math.min(100, Math.max(0, (bufferedEnd / max) * 100));
-            bufferBar.style.width = `${bufferPercent.toFixed(2)}%`;
-        } else {
-            bufferBar.style.width = '0%';
+            for (let i = 0; i < buffered.length; i++) {
+                if (ct >= buffered.start(i) - 1.0 && ct <= buffered.end(i) + 1.0) {
+                    activeBufferedEnd = Math.max(activeBufferedEnd, buffered.end(i));
+                }
+            }
+            if (activeBufferedEnd === ct && buffered.start(0) <= 1.0) {
+                activeBufferedEnd = Math.max(activeBufferedEnd, buffered.end(0));
+            }
         }
+
+        const bufferPercent = Math.min(100, Math.max(0, (activeBufferedEnd / max) * 100));
+        bufferBar.style.width = `${bufferPercent.toFixed(2)}%`;
     }
     window.updateBufferProgress = updateBufferProgress;
 
