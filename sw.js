@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v106';
+const CACHE_NAME = 'yt-player-cache-v107';
 
 const CORE_ASSETS = [
     './index.html',
@@ -103,12 +103,14 @@ self.addEventListener('fetch', (event) => {
     if (event.request.url.includes('/thumbnails/') || event.request.url.includes('.webp')) {
         event.respondWith(
             caches.open(THUMBS_CACHE).then(async (cache) => {
-                const cached = await cache.match(event.request.url);
-                if (cached) return cached;
+                const cached = await cache.match(event.request);
+                if (cached && (event.request.mode === 'no-cors' || cached.type !== 'opaque')) {
+                    return cached;
+                }
                 try {
                     const response = await fetch(event.request);
                     if (response.ok || response.type === 'opaque') {
-                        cache.put(event.request.url, response.clone());
+                        cache.put(event.request, response.clone());
                     }
                     return response;
                 } catch (err) {
