@@ -11,19 +11,26 @@
                 if (!res.ok) throw new Error();
                 let data = await res.json();
                 
-                if (data.length > 0 && Array.isArray(data[0])) {
-                    data = data.filter(item => {
-                        const title = String(item[1]);
-                        return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-                    }).map(item => ({
-                        id: item[0],
-                        title: item[1],
-                        channel: item[2],
-                        duration: item[3],
-                        file_path: `${folderName}/${item[0]}.webm`,
-                        thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
-                    }));
-                }
+                data = data.filter(item => {
+                    const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+                    return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                }).map(item => {
+                    if (Array.isArray(item)) {
+                        return {
+                            id: item[0],
+                            title: item[1],
+                            channel: item[2],
+                            duration: item[3],
+                            file_path: `${folderName}/${item[0]}.webm`,
+                            thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
+                        };
+                    }
+                    return {
+                        ...item,
+                        file_path: `${folderName}/${item.id}.webm`,
+                        thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
+                    };
+                });
                 
                 allDatabases[folderName] = data;
 
