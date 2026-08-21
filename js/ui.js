@@ -151,28 +151,9 @@
                             }
                         };
                         loader.onerror = () => {
-                            if (track.id && !thumbUrl.includes("ytimg.com")) {
-                                const fallbackUrl = `https://i.ytimg.com/vi/${track.id}/hqdefault.jpg`;
-                                const fbLoader = new Image();
-                                fbLoader.fetchPriority = "low";
-                                fbLoader.onload = () => {
-                                    thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: fallbackUrl });
-                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                        thumbDiv.style.backgroundImage = `url("${fallbackUrl}")`;
-                                    }
-                                };
-                                fbLoader.onerror = () => {
-                                    thumbCache.set(thumbUrl, { status: 'failed' });
-                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                        thumbDiv.style.backgroundImage = 'none';
-                                    }
-                                };
-                                fbLoader.src = fallbackUrl;
-                            } else {
-                                thumbCache.set(thumbUrl, { status: 'failed' });
-                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                    thumbDiv.style.backgroundImage = 'none';
-                                }
+                            thumbCache.set(thumbUrl, { status: 'failed' });
+                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                thumbDiv.style.backgroundImage = 'none';
                             }
                         };
                         loader.src = thumbUrl;
