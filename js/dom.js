@@ -27,7 +27,7 @@
             this.forwardEvent = (e) => {
                 if (!this.switching) {
                     if (e.type === 'timeupdate') {
-                        const ct = this.currentTime;
+                        const ct = this.active.currentTime;
                         const dur = this.active.duration;
                         if (dur > 0 && ct < dur - 1.0) {
                             this._endedFired = false;
@@ -286,9 +286,15 @@
                 this._gainNode.gain.value = 0;
             }
 
+            this.active.pause();
+
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
+
+            if (typeof updateMediaSessionPosition === 'function') {
+                updateMediaSessionPosition();
+            }
 
             if (typeof updateBufferProgress === 'function') updateBufferProgress();
             else {
