@@ -118,6 +118,9 @@
         async _clearSourceBuffer() {
             if (!this._sourceBuffer) return;
             await this._waitForUpdate();
+            try {
+                this._sourceBuffer.abort();
+            } catch (e) {}
             if (this._sourceBuffer.buffered.length > 0) {
                 try {
                     const end = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
@@ -127,6 +130,9 @@
                     console.warn("MSE clear error:", e);
                 }
             }
+            try {
+                this._sourceBuffer.abort();
+            } catch (e) {}
         }
 
         async _appendToSourceBuffer(arrayBuffer) {
@@ -393,7 +399,10 @@
                         return Promise.resolve();
                     }
 
-                    this._sourceBuffer.timestampOffset = 0;
+                    try {
+                        this._sourceBuffer.abort();
+                        this._sourceBuffer.timestampOffset = 0;
+                    } catch (e) {}
                     await this._appendToSourceBuffer(initialCombined.buffer);
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                         try { reader.cancel(); } catch (e) {}
