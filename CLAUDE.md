@@ -51,6 +51,11 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - **Quirk: Non-User Pause Instant Auto-Resume vs 2s Polling**:
   - When Android OS finishes its initial AudioFocus/Notification handshake on cold start, Chromium may dispatch a transient native `pause` event.
   - **Strict Rule**: In `main.js` `pause` handler, if `window.wasPausedByUser === false`, immediately call `audioPlayer.play()`. If AudioFocus is free, it resumes in <5ms without audible interruption or UI flip. Only fall back to `startInterruptionWatchdog()` (2s polling) if `play()` is rejected by an external audio session (phone call / alarm).
+- **Quirk: MSE Intermediate Speculative Duration Shifts**:
+  - When the initial ~768KB buffer is appended to `MediaSource` before `endOfStream()`, Chromium's `ChunkDemuxer` computes a wild speculative guess for `MediaSource.duration` based on partial WebM cluster headers (e.g. jumping from `3:55` to `4:41`).
+  - **Strict Rule**: In `executePlayback()`, pass `parsedDuration` to `switchTrack()`. `switchTrack()` explicitly sets `this._mediaSource.duration = expectedDuration`.
+  - `DualAudioPingPong.duration` returns `_expectedDuration` while `mediaSource.readyState === 'open'`.
+  - `syncDuration()` guards against intermediate speculative shifts until the stream is finalized with `mediaSource.endOfStream()`.
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.

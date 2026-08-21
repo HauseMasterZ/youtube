@@ -282,12 +282,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const dur = audioPlayer.duration;
         if (!isNaN(dur) && dur > 0 && dur !== Infinity) {
             const roundedDur = Math.floor(dur);
-            if (parseFloat(seekBar.max) !== roundedDur) {
-                seekBar.max = roundedDur;
-                totalTimeDisplay.textContent = formatTime(roundedDur);
-                if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
-                if (typeof updateBufferProgress === 'function') updateBufferProgress();
-                updateMediaSessionPosition();
+            const currentMax = parseFloat(seekBar.max) || 0;
+            const isSettled = !audioPlayer._mediaSource || audioPlayer._mediaSource.readyState === 'ended';
+            if (currentMax === 0 || isSettled || Math.abs(currentMax - roundedDur) <= 2) {
+                if (currentMax !== roundedDur) {
+                    seekBar.max = roundedDur;
+                    totalTimeDisplay.textContent = formatTime(roundedDur);
+                    if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
+                    if (typeof updateBufferProgress === 'function') updateBufferProgress();
+                    updateMediaSessionPosition();
+                }
             }
         }
     }

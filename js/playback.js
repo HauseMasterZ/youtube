@@ -401,7 +401,7 @@
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         }
 
-        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
+        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly, parsedDuration);
 
         fetchVisuals(track.id, thumbUrl, sequenceId, track);
 
