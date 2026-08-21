@@ -28,6 +28,7 @@
             this.forwardEvent = (e) => {
                 if (!this.switching) {
                     if (e.type === 'timeupdate') {
+                        if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
                         const dur = this.active.duration;
                         if (dur > 0 && ct < dur - 1.0) {
@@ -164,7 +165,14 @@
                     this._endedFired = false;
                 }
 
-                if (this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                if (this._mseEnabled) {
+                    if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
+                        this._pendingSeek = v;
+                        this.active.pause();
+                        this.dispatchEvent(new Event('timeupdate'));
+                        return;
+                    }
+
                     const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                     if (v > buffEnd + 0.5) {
                         this._pendingSeek = v;
@@ -393,20 +401,38 @@
                         return Promise.resolve();
                     }
 
-                    this.active.currentTime = 0;
                     if (this._gainNode) {
                         this._gainNode.gain.value = 1.0;
                     }
 
-                    if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE play error:", e));
+                    if (this._pendingSeek !== null) {
+                        const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
+                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
+                            : 0;
+                        if (buffEnd >= this._pendingSeek) {
+                            const seekTarget = this._pendingSeek;
+                            this._pendingSeek = null;
+                            this.active.currentTime = seekTarget;
+                            if (!preventAutoplay) {
+                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                            }
+                        } else {
+                            this.active.pause();
+                        }
+                    } else {
+                        this.active.currentTime = 0;
+                        if (!preventAutoplay) {
+                            this.active.play().catch(e => console.warn("MSE play error:", e));
+                        }
                     }
 
                     this.switching = false;
                     this.dispatchEvent(new Event('loadedmetadata'));
                     this.dispatchEvent(new Event('canplay'));
-                    this.dispatchEvent(new Event('play'));
-                    this.dispatchEvent(new Event('playing'));
+                    if (this._pendingSeek === null) {
+                        this.dispatchEvent(new Event('play'));
+                        this.dispatchEvent(new Event('playing'));
+                    }
                     this.dispatchEvent(new Event('progress'));
 
                     // Single continuous background ingestion stream for remaining chunks
@@ -450,7 +476,11 @@
                                             const seekTarget = this._pendingSeek;
                                             this._pendingSeek = null;
                                             this.active.currentTime = seekTarget;
-                                            this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                            if (!preventAutoplay) {
+                                                this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                                this.dispatchEvent(new Event('play'));
+                                                this.dispatchEvent(new Event('playing'));
+                                            }
                                             this.dispatchEvent(new Event('seeked'));
                                             this.dispatchEvent(new Event('timeupdate'));
                                         }
