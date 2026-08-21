@@ -20,7 +20,7 @@
                         title: item[1],
                         channel: item[2],
                         duration: item[3],
-                        file_path: `${folderName}/${item[4]}.webm`,
+                        file_path: `${folderName}/${item[0]}.webm`,
                         thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
                     }));
                 }

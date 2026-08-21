@@ -712,7 +712,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 title: item[1],
                                 channel: item[2],
                                 duration: item[3],
-                                file_path: `${pl}/${item[4]}.webm`,
+                                file_path: `${pl}/${item[0]}.webm`,
                                 thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
                             }));
                         }
@@ -806,7 +806,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                                 title: item[1],
                                 channel: item[2],
                                 duration: item[3],
-                                file_path: `${pl}/${item[4]}.webm`,
+                                file_path: `${pl}/${item[0]}.webm`,
                                 thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
                             }));
                         }
