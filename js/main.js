@@ -347,18 +347,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (track && navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                const rawArt = getThumbUrl(track);
-                const cached = (typeof thumbCache !== 'undefined') ? thumbCache.get(rawArt) : null;
-                const isFailed = cached && cached.status === 'failed';
                 const squareArt = artworkSquareCache.get(track.id);
-                const artworkSrc = squareArt || (!isFailed ? rawArt : null);
-                const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
-                    ? getPurpleNoteArtwork() 
-                    : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
-                const artworkList = (!thumbsDisabled && artworkSrc) 
-                    ? [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }] 
-                    : [{ src: fallbackIcon, sizes: '512x512', type: 'image/png' }];
-                navigator.mediaSession.metadata.artwork = artworkList;
+                if (squareArt && !thumbsDisabled) {
+                    navigator.mediaSession.metadata.artwork = [{ src: squareArt, sizes: '512x512', type: 'image/jpeg' }];
+                }
             }
         }
         if (window.lyricsActive && !lyricsRafId && !currentLyricsIsUnsynced) {
