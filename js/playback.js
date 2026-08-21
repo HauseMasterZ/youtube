@@ -403,67 +403,71 @@
 
         audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly);
 
-        function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
-            const hasCachedColor = dominantColorCache.has(trackId);
-            const hasCachedSquare = artworkSquareCache.has(trackId);
-            
-            if (hasCachedColor) {
-                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
-            }
+        fetchVisuals(track.id, thumbUrl, sequenceId, track);
 
-            if (hasCachedSquare && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                navigator.mediaSession.metadata.artwork = [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }];
-            }
-
-            if (hasCachedColor && hasCachedSquare) return;
-
-            (async () => {
-                try {
-                    const res = await fetch(thumbUrl);
-                    if (!res.ok) throw new Error("Thumb fetch error");
-                    const blob = await res.blob();
-                    if (currentPlaybackSequence !== sequenceId) return;
-
-                    const blobUrl = URL.createObjectURL(blob);
-                    const offscreenImg = new Image();
-                    offscreenImg.onload = () => {
-                        try {
-                            if (currentPlaybackSequence === sequenceId) {
-                                if (!dominantColorCache.has(trackId)) {
-                                    const color = getDominantColor(offscreenImg, trackId);
-                                    document.documentElement.style.setProperty('--primary-color', color);
-                                }
-                                if (!artworkSquareCache.has(trackId) && typeof getSquareCroppedArtwork === 'function') {
-                                    const squareData = getSquareCroppedArtwork(offscreenImg, trackId);
-                                    if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                                        navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                                    }
-                                }
-                            }
-                        } catch (err) {
-                            console.warn("Visual extraction error:", err);
-                        } finally {
-                            URL.revokeObjectURL(blobUrl);
-                        }
-                    };
-                    offscreenImg.onerror = () => {
-                        URL.revokeObjectURL(blobUrl);
-                    };
-                    offscreenImg.src = blobUrl;
-                } catch (e) {
-                    if (currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
-                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                    }
-                }
-            })();
-        }
-
-        // MediaSession metadata already updated at the top of executePlayback
-        
         if (window.lyricsActive) {
             loadLyrics(track);
         }
     }
+
+    function fetchVisuals(trackId, thumbUrl, sequenceId, track) {
+        if (!thumbUrl) return;
+        const hasCachedColor = dominantColorCache.has(trackId);
+        const hasCachedSquare = artworkSquareCache.has(trackId);
+        
+        if (hasCachedColor) {
+            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
+        }
+
+        if (hasCachedSquare && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+            navigator.mediaSession.metadata.artwork = [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }];
+        }
+
+        if (hasCachedColor && hasCachedSquare) return;
+
+        (async () => {
+            try {
+                const res = await fetch(thumbUrl);
+                if (!res.ok) throw new Error("Thumb fetch error");
+                const blob = await res.blob();
+                if (currentPlaybackSequence !== sequenceId) return;
+
+                const blobUrl = URL.createObjectURL(blob);
+                const offscreenImg = new Image();
+                offscreenImg.onload = () => {
+                    try {
+                        if (currentPlaybackSequence === sequenceId) {
+                            if (!dominantColorCache.has(trackId)) {
+                                const color = getDominantColor(offscreenImg, trackId);
+                                if (!thumbsDisabled) {
+                                    document.documentElement.style.setProperty('--primary-color', color);
+                                }
+                            }
+                            if (!artworkSquareCache.has(trackId) && typeof getSquareCroppedArtwork === 'function') {
+                                const squareData = getSquareCroppedArtwork(offscreenImg, trackId);
+                                if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                                    navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Visual extraction error:", err);
+                    } finally {
+                        URL.revokeObjectURL(blobUrl);
+                    }
+                };
+                offscreenImg.onerror = () => {
+                    URL.revokeObjectURL(blobUrl);
+                };
+                offscreenImg.src = blobUrl;
+            } catch (e) {
+                if (currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
+                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                }
+            }
+        })();
+    }
+    window.fetchVisuals = fetchVisuals;
 
     // Removed old Blob preloadTrack, SmartBuffer handles it natively
 
