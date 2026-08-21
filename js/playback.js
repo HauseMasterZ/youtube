@@ -368,9 +368,12 @@
                 artist: track.channel,
                 artwork: artworkList
             });
-            navigator.mediaSession.playbackState = preventAutoplay ? "paused" : "playing";
             // Clear position state during buffering (W3C standard method)
-            updateMediaSessionPosition();
+            if ('setPositionState' in navigator.mediaSession) {
+                try {
+                    navigator.mediaSession.setPositionState(null);
+                } catch(e) {}
+            }
         }
 
         if (!thumbsDisabled && getThumbUrl(track)) {
