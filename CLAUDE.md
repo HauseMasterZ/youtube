@@ -42,9 +42,9 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - When switching tracks or setting new `MediaMetadata`, `audioPlayer.currentTime` still holds the end timestamp of the *previous* track (e.g. `3:25`).
   - Calling `updateMediaSessionPosition()` without arguments before `switchTrack()` has reset the audio element will broadcast `{ duration: 205, position: 205 }` under the *new* track's metadata to Android SystemUI, causing the OS seekbar to jump to the end and continue counting into negative space!
   - **Strict Rule**: In `executePlayback()`, immediately invoke **`navigator.mediaSession.setPositionState(null)`** when `new MediaMetadata` is created.
-- **Quirk: Synchronous Android AudioFocus Priming on Gesture**:
-  - In Mobile Chrome / Android PWA, calling `audio.play()` *after* asynchronous `await fetch()` or `await appendBuffer()` causes the synchronous user gesture token to expire. Android OS then pauses output for ~300ms–500ms while negotiating AudioFocus and binding the hardware audio sink on first launch.
-  - **Strict Rule**: In `switchTrack()`, synchronously invoke `this.active.play().catch(() => {})` inside the user gesture call stack before any asynchronous `await` operations. This establishes the hardware AudioFocus binder immediately, preventing the first-play 0.5s pause/stutter.
+- **Quirk: Mandatory Underlying `<audio>` Playhead Pause**:
+  - Inside `switchTrack()`, **`this.active.pause()` and `this.active.currentTime = 0` MUST be called**.
+  - Failing to pause the underlying element allows Chromium's hardware clock to advance past the end of the previous buffer while the new track's first chunk is fetched.
 - **Quirk: Auto-Advance Watchdog Physical Time Requirement**:
   - In `forwardEvent`, the near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime` (which may report `_pendingSeek`).
 - **On Actual Playback (`'playing'` event)**:
@@ -109,13 +109,4 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 | [`js/state.js`](js/state.js) | State Store | Global state registry (`allDatabases`, `playQueue`, `queueIndex`, `repeatMode`, `shuffleMode`). |
 | [`js/utils.js`](js/utils.js) | Utilities | ISO-8601 duration parser, color quantization, time formatters. |
 | [`sw.js`](sw.js) | Service Worker | App shell cache manager (`yt-player-cache-vXX`) and media cache (`yt-player-media`). |
-
----
-
-## 6. Code Hygiene & Anti-Bloat Directives
-
-- **Zero Dead Code**: Never leave temporary experiments, superseded workaround loops, or dead branches in the codebase once a root cause is resolved.
-- **Minimalist Architecture**: Prefer direct, standard W3C mechanisms over multi-layer wrapper abstractions.
-- **Git Status Discipline**: Run `git status` **strictly once** at the beginning of an investigation cycle to verify the base state; avoid redundant terminal status polling.
-- **Cache Versioning Discipline**: Only bump `sw.js` and `index.html` cache versions when preparing code for actual push/deployment, preventing unnecessary version churn during active local iteration.
 

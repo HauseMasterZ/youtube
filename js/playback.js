@@ -384,6 +384,21 @@
                 this.style.display = 'none';
                 document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             };
+            albumArt.onload = function() {
+                if (currentPlaybackSequence !== sequenceId) return;
+                try {
+                    if (!dominantColorCache.has(track.id)) {
+                        const color = getDominantColor(this, track.id);
+                        document.documentElement.style.setProperty('--primary-color', color);
+                    }
+                    if (!artworkSquareCache.has(track.id) && typeof getSquareCroppedArtwork === 'function') {
+                        const squareData = getSquareCroppedArtwork(this, track.id);
+                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                        }
+                    }
+                } catch (e) { }
+            };
             albumArt.src = thumbUrl;
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
@@ -412,54 +427,30 @@
 
             if (hasCachedColor && hasCachedSquare) return;
 
-            // Fetch image via fetch/blob for clean, untainted canvas extraction across all browsers
-            const corsThumbUrl = thumbUrl.includes('?') ? `${thumbUrl}&cors=1` : `${thumbUrl}?cors=1`;
-
-            fetch(corsThumbUrl, { mode: 'cors', priority: 'low' })
-                .then(res => {
-                    if (!res.ok) throw new Error("Thumb fetch error");
-                    return res.blob();
-                })
-                .then(blob => createImageBitmap(blob))
-                .then(bitmap => {
-                    if (currentPlaybackSequence !== sequenceId) return;
-                    try {
-                        if (!hasCachedColor) {
-                            const color = getDominantColor(bitmap, trackId);
-                            document.documentElement.style.setProperty('--primary-color', color);
-                        }
-                        if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
-                            const squareData = getSquareCroppedArtwork(bitmap, trackId);
-                            if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                                navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                            }
-                        }
-                    } catch (e) {
-                        console.warn("Bitmap visual processing error:", e);
+            const tempImg = new Image();
+            tempImg.fetchPriority = "low";
+            tempImg.crossOrigin = "Anonymous";
+            tempImg.onload = () => {
+                if (currentPlaybackSequence !== sequenceId) return;
+                try {
+                    if (!hasCachedColor) {
+                        const color = getDominantColor(tempImg, trackId);
+                        document.documentElement.style.setProperty('--primary-color', color);
                     }
-                })
-                .catch(() => {
-                    // Fallback to temp Image element
-                    const tempImg = new Image();
-                    tempImg.fetchPriority = "low";
-                    tempImg.crossOrigin = "Anonymous";
-                    tempImg.onload = () => {
-                        if (currentPlaybackSequence !== sequenceId) return;
-                        try {
-                            if (!hasCachedColor) {
-                                const color = getDominantColor(tempImg, trackId);
-                                document.documentElement.style.setProperty('--primary-color', color);
-                            }
-                            if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
-                                const squareData = getSquareCroppedArtwork(tempImg, trackId);
-                                if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                                    navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                                }
-                            }
-                        } catch(e) { }
-                    };
-                    tempImg.src = corsThumbUrl;
-                });
+                    if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
+                        const squareData = getSquareCroppedArtwork(tempImg, trackId);
+                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                        }
+                    }
+                } catch(e) { }
+            };
+            tempImg.onerror = () => {
+                if (currentPlaybackSequence === sequenceId && !hasCachedColor) {
+                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                }
+            };
+            tempImg.src = thumbUrl;
         }
 
         // MediaSession metadata already updated at the top of executePlayback
