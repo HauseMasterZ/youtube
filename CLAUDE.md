@@ -37,11 +37,16 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - **In-Memory Scrubbing**: Seeking backwards or within already-buffered audio is **100% instant 0ms local playback**.
 - **Catch-up Seeking**: When seeking ahead into unbuffered audio, the playhead holds at the target timestamp without snapback and auto-resumes playback as soon as the buffer reaches that position.
 
-#### Invariant 4: Canonical W3C Position Lifecycle ([`js/mediaSession.js`](js/mediaSession.js))
-- **During Buffering / Transition**:
-  - `navigator.mediaSession.playbackState = "playing"` (keeps background notification alive).
-  - **`navigator.mediaSession.setPositionState(null)`** (W3C standard method to clear position tracking during loading).
-  - Android SystemUI immediately clears previous seekbar timers without running speculative extrapolation.
+#### Invariant 4: Canonical W3C Position Lifecycle & Zero-Bleed Rules ([`js/mediaSession.js`](js/mediaSession.js) & [`js/playback.js`](js/playback.js))
+- **Quirk: Position Bleed on Track Transition**:
+  - When switching tracks or setting new `MediaMetadata`, `audioPlayer.currentTime` still holds the end timestamp of the *previous* track (e.g. `3:25`).
+  - Calling `updateMediaSessionPosition()` without arguments before `switchTrack()` has reset the audio element will broadcast `{ duration: 205, position: 205 }` under the *new* track's metadata to Android SystemUI, causing the OS seekbar to jump to the end and continue counting into negative space!
+  - **Strict Rule**: In `executePlayback()`, immediately invoke **`navigator.mediaSession.setPositionState(null)`** when `new MediaMetadata` is created.
+- **Quirk: Mandatory Underlying `<audio>` Playhead Pause**:
+  - Inside `switchTrack()`, **`this.active.pause()` and `this.active.currentTime = 0` MUST be called**.
+  - Failing to pause the underlying element allows Chromium's hardware clock to advance past the end of the previous buffer while the new track's first chunk is fetched.
+- **Quirk: Auto-Advance Watchdog Physical Time Requirement**:
+  - In `forwardEvent`, the near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime` (which may report `_pendingSeek`).
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.
@@ -54,8 +59,12 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - Handles playlists with thousands of tracks using a DOM recycling virtual scroller.
 - **Strict Invariant**: Track rows are fixed at `48px` (`ITEM_HEIGHT`). Do not alter vertical margins/padding without updating `ITEM_HEIGHT`.
 
-### Dynamic Canvas Color Extraction ([`js/playback.js`](js/playback.js) & [`js/utils.js`](js/utils.js))
-- Extracts the dominant color from album artwork via an off-screen `<canvas>` and injects it into `--primary-color`.
+### Dynamic Canvas Color & Artwork Extraction ([`js/playback.js`](js/playback.js) & [`js/utils.js`](js/utils.js))
+- **Artwork Resolution Cascade**:
+  1. `squareArt`: 1:1 center-cropped square JPEG from in-memory cache.
+  2. `rawArt`: Direct WebP thumbnail URL from `getThumbUrl(track)`.
+  3. `fallbackIcon`: Inlined SVG purple music note data URI (used ONLY when thumbnails are disabled or image is missing).
+- **Rule**: When initializing `MediaMetadata`, ALWAYS use `squareArt || rawArt || fallbackIcon`. Never initialize with `fallbackIcon` when a valid `rawArt` thumbnail URL exists, as background power management on Android can delay canvas cropping and lock the notification on the fallback icon.
 - Results are stored in an in-memory `dominantColorCache` and `artworkSquareCache` (LRU) to eliminate redundant Canvas processing.
 
 ### Throttled Lyrics Engine ([`js/lyrics.js`](js/lyrics.js))
