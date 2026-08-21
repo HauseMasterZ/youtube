@@ -71,6 +71,7 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 ### Dynamic Canvas Color & Artwork Extraction ([`js/playback.js`](js/playback.js) & [`js/ui.js`](js/ui.js))
 - **CORS-Safe Blob Ingestion**: Thumbnails are fetched via `fetch(thumbUrl)` as local Blobs (`URL.createObjectURL(blob)`). Drawing locally-generated same-origin blob URLs into `<canvas>` guarantees **zero canvas tainting / `SecurityError` DOMExceptions**.
 - **Center-Weighted Vibrant Color Quantization**: Downsamples center 70% of artwork into a 32x32 canvas, converting RGB to HSL and scoring pixels by saturation and contrast against a pure black (`#000000`) background. Avoids dark/black letterbox borders.
+- **Visual Preload Isolation Rule**: When `triggerPreloads()` pre-caches next-track visuals into `artworkSquareCache` and `dominantColorCache`, `isPreload = true` MUST be passed. `fetchVisuals()` must NEVER mutate `navigator.mediaSession.metadata.artwork` or `--primary-color` unless the track is the active playing track.
 - **Artwork Resolution Cascade**:
   1. `squareArt`: 1:1 center-cropped square JPEG from in-memory cache.
   2. `rawArt`: Direct WebP thumbnail URL from `getThumbUrl(track)`.
