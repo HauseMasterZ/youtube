@@ -63,7 +63,9 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - Handles playlists with thousands of tracks using a DOM recycling virtual scroller.
 - **Strict Invariant**: Track rows are fixed at `48px` (`ITEM_HEIGHT`). Do not alter vertical margins/padding without updating `ITEM_HEIGHT`.
 
-### Dynamic Canvas Color & Artwork Extraction ([`js/playback.js`](js/playback.js) & [`js/utils.js`](js/utils.js))
+### Dynamic Canvas Color & Artwork Extraction ([`js/playback.js`](js/playback.js) & [`js/ui.js`](js/ui.js))
+- **CORS-Safe Blob Ingestion**: Thumbnails are fetched via `fetch(thumbUrl)` as local Blobs (`URL.createObjectURL(blob)`). Drawing locally-generated same-origin blob URLs into `<canvas>` guarantees **zero canvas tainting / `SecurityError` DOMExceptions**.
+- **Center-Weighted Vibrant Color Quantization**: Downsamples center 70% of artwork into a 32x32 canvas, converting RGB to HSL and scoring pixels by saturation and contrast against a pure black (`#000000`) background. Avoids dark/black letterbox borders.
 - **Artwork Resolution Cascade**:
   1. `squareArt`: 1:1 center-cropped square JPEG from in-memory cache.
   2. `rawArt`: Direct WebP thumbnail URL from `getThumbUrl(track)`.

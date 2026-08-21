@@ -346,6 +346,11 @@
         let audioUrl = getAudioUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
+        if (dominantColorCache.has(track.id)) {
+            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+        } else if (thumbsDisabled) {
+            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+        }
 
         if (preloadedFetches.has(cacheKey)) {
             const controller = preloadedFetches.get(cacheKey);
@@ -384,21 +389,6 @@
                 this.style.display = 'none';
                 document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             };
-            albumArt.onload = function() {
-                if (currentPlaybackSequence !== sequenceId) return;
-                try {
-                    if (!dominantColorCache.has(track.id)) {
-                        const color = getDominantColor(this, track.id);
-                        document.documentElement.style.setProperty('--primary-color', color);
-                    }
-                    if (!artworkSquareCache.has(track.id) && typeof getSquareCroppedArtwork === 'function') {
-                        const squareData = getSquareCroppedArtwork(this, track.id);
-                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
-                        }
-                    }
-                } catch (e) { }
-            };
             albumArt.src = thumbUrl;
             fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
@@ -427,30 +417,45 @@
 
             if (hasCachedColor && hasCachedSquare) return;
 
-            const tempImg = new Image();
-            tempImg.fetchPriority = "low";
-            tempImg.crossOrigin = "Anonymous";
-            tempImg.onload = () => {
-                if (currentPlaybackSequence !== sequenceId) return;
+            (async () => {
                 try {
-                    if (!hasCachedColor) {
-                        const color = getDominantColor(tempImg, trackId);
-                        document.documentElement.style.setProperty('--primary-color', color);
-                    }
-                    if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
-                        const squareData = getSquareCroppedArtwork(tempImg, trackId);
-                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
-                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                    const res = await fetch(thumbUrl);
+                    if (!res.ok) throw new Error("Thumb fetch error");
+                    const blob = await res.blob();
+                    if (currentPlaybackSequence !== sequenceId) return;
+
+                    const blobUrl = URL.createObjectURL(blob);
+                    const offscreenImg = new Image();
+                    offscreenImg.onload = () => {
+                        try {
+                            if (currentPlaybackSequence === sequenceId) {
+                                if (!dominantColorCache.has(trackId)) {
+                                    const color = getDominantColor(offscreenImg, trackId);
+                                    document.documentElement.style.setProperty('--primary-color', color);
+                                }
+                                if (!artworkSquareCache.has(trackId) && typeof getSquareCroppedArtwork === 'function') {
+                                    const squareData = getSquareCroppedArtwork(offscreenImg, trackId);
+                                    if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                                        navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                                    }
+                                }
+                            }
+                        } catch (err) {
+                            console.warn("Visual extraction error:", err);
+                        } finally {
+                            URL.revokeObjectURL(blobUrl);
                         }
+                    };
+                    offscreenImg.onerror = () => {
+                        URL.revokeObjectURL(blobUrl);
+                    };
+                    offscreenImg.src = blobUrl;
+                } catch (e) {
+                    if (currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
+                        document.documentElement.style.setProperty('--primary-color', '#8c73ff');
                     }
-                } catch(e) { }
-            };
-            tempImg.onerror = () => {
-                if (currentPlaybackSequence === sequenceId && !hasCachedColor) {
-                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
                 }
-            };
-            tempImg.src = thumbUrl;
+            })();
         }
 
         // MediaSession metadata already updated at the top of executePlayback
