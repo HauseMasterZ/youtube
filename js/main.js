@@ -347,9 +347,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (track && navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
-                const squareArt = artworkSquareCache.get(track.id);
-                if (squareArt && !thumbsDisabled) {
-                    navigator.mediaSession.metadata.artwork = [{ src: squareArt, sizes: '512x512', type: 'image/jpeg' }];
+                if (!thumbsDisabled) {
+                    const squareArt = artworkSquareCache.get(track.id);
+                    const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
+                    const art = squareArt || rawArt;
+                    if (art) {
+                        navigator.mediaSession.metadata.artwork = [{ src: art, sizes: '512x512', type: 'image/jpeg' }];
+                    }
                 }
             }
         }
