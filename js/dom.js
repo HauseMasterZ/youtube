@@ -359,52 +359,59 @@
                         return Promise.resolve();
                     }
 
-                    // Fast-Start: Play instantly on first chunk
+                    // Fast-Start: Buffer enough audio before playing to avoid
+                    // first-play stall on uncached tracks.
+                    // Read additional chunks until >= 5s buffered or stream ends.
+                    let streamDone = firstDone;
+                    const MIN_BUFFER_BEFORE_PLAY = 5; // seconds
+
+                    while (!streamDone) {
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                            try { reader.cancel(); } catch (e) {}
+                            this.switching = false;
+                            return Promise.resolve();
+                        }
+
+                        // Check if we have enough buffered
+                        if (this._sourceBuffer.buffered.length > 0) {
+                            const buffEnd = this._sourceBuffer.buffered.end(0);
+                            if (buffEnd >= MIN_BUFFER_BEFORE_PLAY) break;
+                        }
+
+                        const { value: extraChunk, done } = await reader.read();
+                        if (done) { streamDone = true; break; }
+                        if (extraChunk && extraChunk.length > 0) {
+                            await this._appendToSourceBuffer(extraChunk);
+                        }
+
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                            try { reader.cancel(); } catch (e) {}
+                            this.switching = false;
+                            return Promise.resolve();
+                        }
+                    }
+
+                    // Now play — we have >= 5s of buffered audio (or the entire track)
                     this.active.currentTime = 0;
                     if (this._gainNode) {
                         this._gainNode.gain.value = 1.0;
                     }
 
+                    if (!preventAutoplay) {
+                        this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
+                    }
+
+                    this.switching = false;
                     this.dispatchEvent(new Event('loadedmetadata'));
                     this.dispatchEvent(new Event('canplay'));
-
-                    if (!preventAutoplay) {
-                        // Wait for the native 'playing' event before unlocking
-                        // event forwarding. This absorbs the first-play decoder
-                        // cold-start stall (which emits a spurious native 'pause')
-                        // while switching=true, so it never reaches main.js.
-                        const unlockSwitching = () => {
-                            this.active.removeEventListener('playing', unlockSwitching);
-                            clearTimeout(switchSafetyTimeout);
-                            this.switching = false;
-                            this.dispatchEvent(new Event('play'));
-                            this.dispatchEvent(new Event('playing'));
-                            this.dispatchEvent(new Event('progress'));
-                        };
-                        this.active.addEventListener('playing', unlockSwitching, { once: true });
-
-                        // Safety: if 'playing' never fires (error), unlock after 5s
-                        const switchSafetyTimeout = setTimeout(() => {
-                            this.active.removeEventListener('playing', unlockSwitching);
-                            this.switching = false;
-                            this.dispatchEvent(new Event('play'));
-                            this.dispatchEvent(new Event('progress'));
-                        }, 5000);
-
-                        this.active.play().catch(e => {
-                            console.warn("MSE fast-start play error:", e);
-                            this.active.removeEventListener('playing', unlockSwitching);
-                            clearTimeout(switchSafetyTimeout);
-                            this.switching = false;
-                        });
-                    } else {
-                        this.switching = false;
-                    }
+                    this.dispatchEvent(new Event('play'));
+                    this.dispatchEvent(new Event('playing'));
+                    this.dispatchEvent(new Event('progress'));
 
                     // Single continuous background ingestion stream
                     (async () => {
                         try {
-                            if (firstDone) {
+                            if (streamDone) {
                                 if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                     try { this._mediaSource.endOfStream(); } catch (e) {}
                                 }
