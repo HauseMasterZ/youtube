@@ -17,6 +17,7 @@
             this._gainNode = null;
             this._mediaElementSource = null;
             this._pendingSeek = null;
+            this._expectedDuration = 0;
             this._streamAbortController = null;
             this._streamId = 0;
 
@@ -181,7 +182,12 @@
         }
 
         get readyState() { return this.active.readyState; }
-        get duration() { return this.active.duration; }
+        get duration() {
+            if (this._mseEnabled && this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
+                return this._expectedDuration;
+            }
+            return this.active.duration || this._expectedDuration || 0;
+        }
         get paused() {
             if (this._pendingSeek !== null) return false;
             return this.active.paused;
@@ -222,7 +228,7 @@
         }
 
         recoverTrack(url) {
-            this.switchTrack(url, false);
+            this.switchTrack(url, false, this._expectedDuration);
         }
 
         pause() {
@@ -271,11 +277,12 @@
             this.active.volume = 1.0;
         }
 
-        async switchTrack(url, preventAutoplay) {
+        async switchTrack(url, preventAutoplay, expectedDuration = 0) {
             this.switching = true;
             this._endedFired = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
+            this._expectedDuration = expectedDuration || 0;
 
             this._initAudioGraph();
             if (this._audioCtx && this._audioCtx.state === 'suspended') {
@@ -312,6 +319,10 @@
             }
 
             if (this._mseEnabled && this._sourceBuffer) {
+                if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
+                    try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                }
+
                 if (!preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
