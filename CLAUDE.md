@@ -50,6 +50,9 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - **Quirk: First-Play Network Underrun Stall & Minimum Buffer Requirement**:
   - On first play after hard reload, the Service Worker cache is empty. If playback starts immediately on chunk 1 (~256KB), only ~2-4s of decoded Opus audio is buffered. Network latency for chunk 2 causes `readyState` to drop to `HAVE_CURRENT_DATA`, producing an audible ~0.5s pause/stall on mobile (where no Web Audio GainNode masks the stall).
   - **Strict Rule**: In `switchTrack()`, read chunks until **`buffered.end(0) >= 5` seconds** (or stream EOF) BEFORE invoking `this.active.play()`. Subsequent cached tracks resolve this loop in <10ms, while first-play over network completes in ~200-400ms with zero stall.
+- **Quirk: Non-User Pause Instant Auto-Resume vs 2s Polling**:
+  - When Android OS finishes its initial AudioFocus/Notification handshake on cold start, Chromium may dispatch a transient native `pause` event.
+  - **Strict Rule**: In `main.js` `pause` handler, if `window.wasPausedByUser === false`, immediately call `audioPlayer.play()`. If AudioFocus is free, it resumes in <5ms without audible interruption or UI flip. Only fall back to `startInterruptionWatchdog()` (2s polling) if `play()` is rejected by an external audio session (phone call / alarm).
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.
