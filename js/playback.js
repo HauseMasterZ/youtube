@@ -422,6 +422,33 @@
             if (hasCachedSquare && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
                 navigator.mediaSession.metadata.artwork = [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }];
             }
+
+            if (hasCachedColor && hasCachedSquare) return;
+
+            const tempImg = new Image();
+            tempImg.fetchPriority = "low";
+            tempImg.crossOrigin = "Anonymous";
+            tempImg.onload = () => {
+                if (currentPlaybackSequence !== sequenceId) return;
+                try {
+                    if (!hasCachedColor) {
+                        const color = getDominantColor(tempImg, trackId);
+                        document.documentElement.style.setProperty('--primary-color', color);
+                    }
+                    if (!hasCachedSquare && typeof getSquareCroppedArtwork === 'function') {
+                        const squareData = getSquareCroppedArtwork(tempImg, trackId);
+                        if (squareData && hasMediaSession && navigator.mediaSession.metadata && !thumbsDisabled) {
+                            navigator.mediaSession.metadata.artwork = [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }];
+                        }
+                    }
+                } catch(e) { }
+            };
+            tempImg.onerror = () => {
+                if (currentPlaybackSequence === sequenceId && !hasCachedColor) {
+                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
+                }
+            };
+            tempImg.src = thumbUrl;
         }
 
         // MediaSession metadata already updated at the top of executePlayback
