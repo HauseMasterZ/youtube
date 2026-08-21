@@ -329,30 +329,57 @@
                 try {
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    const arrayBuffer = await response.arrayBuffer();
+                    if (!response.body) throw new Error("ReadableStream not supported");
 
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        this.switching = false;
-                        return Promise.resolve();
+                    const reader = response.body.getReader();
+
+                    // Accumulate initial safety cushion (~768KB / ~40s of audio)
+                    // before playback starts to guarantee 0 audio dropouts.
+                    const initialChunks = [];
+                    let initialBytes = 0;
+                    let streamDone = false;
+                    const INITIAL_TARGET_BYTES = 786432; // 768KB (~40s Opus)
+
+                    while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
+                        const { value: chunk, done } = await reader.read();
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                            try { reader.cancel(); } catch (e) {}
+                            this.switching = false;
+                            return Promise.resolve();
+                        }
+                        if (done) {
+                            streamDone = true;
+                            break;
+                        }
+                        if (chunk && chunk.length > 0) {
+                            initialChunks.push(chunk);
+                            initialBytes += chunk.length;
+                        }
                     }
 
-                    if (!arrayBuffer || arrayBuffer.byteLength === 0) throw new Error("Empty audio buffer");
+                    if (initialChunks.length === 0) throw new Error("Empty audio stream");
+
+                    // Combine initial chunks into a single contiguous Uint8Array to prevent partial block slicing
+                    const initialCombined = new Uint8Array(initialBytes);
+                    let offset = 0;
+                    for (const c of initialChunks) {
+                        initialCombined.set(c, offset);
+                        offset += c.length;
+                    }
 
                     await this._clearSourceBuffer();
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
                     this._sourceBuffer.timestampOffset = 0;
-                    await this._appendToSourceBuffer(arrayBuffer);
+                    await this._appendToSourceBuffer(initialCombined.buffer);
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
-                    }
-
-                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                        try { this._mediaSource.endOfStream(); } catch (e) {}
                     }
 
                     this.active.currentTime = 0;
@@ -370,6 +397,61 @@
                     this.dispatchEvent(new Event('play'));
                     this.dispatchEvent(new Event('playing'));
                     this.dispatchEvent(new Event('progress'));
+
+                    // Single continuous background ingestion stream for remaining chunks
+                    (async () => {
+                        try {
+                            if (streamDone) {
+                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                }
+                                return;
+                            }
+
+                            while (true) {
+                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                    try { reader.cancel(); } catch (e) {}
+                                    break;
+                                }
+
+                                const { value: nextChunk, done } = await reader.read();
+
+                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                    try { reader.cancel(); } catch (e) {}
+                                    break;
+                                }
+
+                                if (done) {
+                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                        try { this._mediaSource.endOfStream(); } catch (e) {}
+                                    }
+                                    break;
+                                }
+
+                                if (nextChunk && nextChunk.length > 0) {
+                                    await this._appendToSourceBuffer(nextChunk);
+                                    this.dispatchEvent(new Event('progress'));
+
+                                    // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
+                                    if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                        const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                        if (buffEnd >= this._pendingSeek) {
+                                            const seekTarget = this._pendingSeek;
+                                            this._pendingSeek = null;
+                                            this.active.currentTime = seekTarget;
+                                            this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                            this.dispatchEvent(new Event('seeked'));
+                                            this.dispatchEvent(new Event('timeupdate'));
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (streamErr) {
+                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
+                                console.warn("Background MSE stream error:", streamErr);
+                            }
+                        }
+                    })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
