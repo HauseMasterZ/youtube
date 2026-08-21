@@ -147,16 +147,31 @@
         globalActivePlaylist = targetPlaylist;
         globalActiveOriginalIndex = targetOriginalIndex;
         
-        // If we are playing from a search, clear the search instantly
-        if (searchInput.value.trim() !== "") {
-            searchInput.value = "";
-            if (currentPlaylistData) {
-                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlistSelect.value, index: i }));
-                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-            }
+        // Auto-switch playlist dropdown and active dataset to the target playlist
+        if (playlistSelect.value !== targetPlaylist) {
+            playlistSelect.value = targetPlaylist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = targetPlaylist;
         }
 
-        const data = allDatabases[targetPlaylist] || currentPlaylistData;
+        if (allDatabases[targetPlaylist]) {
+            currentPlaylistData = allDatabases[targetPlaylist];
+        }
+
+        // If we are playing from a search, clear the search instantly and display target playlist
+        if (searchInput.value.trim() !== "") {
+            searchInput.value = "";
+        }
+        
+        if (currentPlaylistData) {
+            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: targetPlaylist, index: i }));
+            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+            trackList.style.display = 'block';
+            playlistMessage.style.display = 'none';
+            lastStartIndex = -1;
+            renderVirtualTracks();
+        }
+
+        const data = currentPlaylistData;
         const totalTracks = data ? data.length : 0;
 
         if (shuffleMode === 2 && totalTracks > 0) {
