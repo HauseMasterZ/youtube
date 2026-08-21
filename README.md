@@ -2,7 +2,7 @@
 
 > High-performance, offline-capable Progressive Web App for music playlists with persistent Android lock screen media notifications, zero-latency caching, and seamless background playback.
 > 
-> **Target Environment**: Chromium on Android (Chrome PWA, Samsung Internet, Android SystemUI MediaNotification).
+> [Stable link](https://hausemasterz.github.io/youtube/), [Dev link](https://hausemasterz.github.io/youtube/dev)
 
 ---
 
