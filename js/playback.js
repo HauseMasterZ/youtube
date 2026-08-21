@@ -515,6 +515,10 @@
                 fetchPromise.catch(e => {});
                 preloadedFetches.set(audioUrl, controller);
             }
+
+            if (!thumbsDisabled && getThumbUrl(nextTrack)) {
+                fetchVisuals(nextTrack.id, getThumbUrl(nextTrack), currentPlaybackSequence, nextTrack);
+            }
         }
     }
 
