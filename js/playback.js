@@ -138,10 +138,23 @@
         }
     };
 
-    function playTrackSelection(targetPlaylist, targetOriginalIndex) {
-        // Add to cross-shuffle history if in mode 1
+    async function playTrackSelection(targetPlaylist, targetOriginalIndex) {
+        if (!allDatabases[targetPlaylist] && typeof loadPlaylist === 'function') {
+            await loadPlaylist(targetPlaylist);
+        }
+
+        globalActivePlaylist = targetPlaylist;
+        globalActiveOriginalIndex = targetOriginalIndex;
+        currentPlaylistData = allDatabases[targetPlaylist] || currentPlaylistData;
+
+        // Auto-switch playlist dropdown and active dataset to the target playlist
+        if (playlistSelect.value !== targetPlaylist) {
+            playlistSelect.value = targetPlaylist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = targetPlaylist;
+        }
+
+        // If in cross-shuffle mode (mode 1), manage history deck
         if (shuffleMode === 1) {
-            // Remove the track from anywhere else in the history to prevent duplicates
             const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === targetPlaylist && t.index === targetOriginalIndex);
             if (existingIdx !== -1) {
                 crossShuffleHistory.splice(existingIdx, 1);
@@ -151,27 +164,12 @@
             crossShufflePos++;
         }
 
-        globalActivePlaylist = targetPlaylist;
-        globalActiveOriginalIndex = targetOriginalIndex;
-        
-        // Auto-switch playlist dropdown and active dataset to the target playlist
-        if (playlistSelect.value !== targetPlaylist) {
-            playlistSelect.value = targetPlaylist;
-            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = targetPlaylist;
-        }
-
-        if (allDatabases[targetPlaylist]) {
-            currentPlaylistData = allDatabases[targetPlaylist];
-        } else if (typeof loadPlaylist === 'function') {
-            loadPlaylist(targetPlaylist).catch(() => {});
-        }
-
-        // If we are playing from a search, clear the search instantly and display target playlist
+        // If we are playing from a search, clear search input and reset list view
         if (searchInput.value.trim() !== "") {
             searchInput.value = "";
         }
         
-        if (currentPlaylistData && allDatabases[targetPlaylist]) {
+        if (currentPlaylistData) {
             filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: targetPlaylist, index: i }));
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             trackList.style.display = 'block';
@@ -180,8 +178,7 @@
             renderVirtualTracks();
         }
 
-        const data = currentPlaylistData;
-        const totalTracks = data ? data.length : 0;
+        const totalTracks = currentPlaylistData ? currentPlaylistData.length : 0;
 
         if (shuffleMode === 2 && totalTracks > 0) {
             let rest = Array.from({length: totalTracks}, (_, i) => i).filter(i => i !== targetOriginalIndex);
@@ -450,7 +447,8 @@
         const hasCachedSquare = artworkSquareCache.has(trackId);
         
         const isCurrentActive = () => {
-            const cur = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+            const cur = (allDatabases[globalActivePlaylist] && allDatabases[globalActivePlaylist][globalActiveOriginalIndex])
+                     || (currentPlaylistData && (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]));
             return cur && cur.id === trackId;
         };
 
@@ -479,7 +477,6 @@
 
                 const blobUrl = URL.createObjectURL(blob);
                 const offscreenImg = new Image();
-                offscreenImg.crossOrigin = "anonymous";
                 offscreenImg.onload = () => {
                     try {
                         let color = dominantColorCache.get(trackId);
