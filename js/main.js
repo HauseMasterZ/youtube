@@ -359,6 +359,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
+        if (audioPlayer.switching) return;
         setPlayUI(false);
         updateMediaSessionPosition();
         if (hasMediaSession && window.wasPausedByUser) {
