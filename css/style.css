@@ -100,11 +100,11 @@
             appearance: auto;
         }
 
-        select:focus { border: 1px solid var(--primary-color); }
+        select:focus { border: none; outline: none; }
         
         .sync-btn {
             background-color: #000000;
-            border: 1px solid var(--border-color);
+            border: none;
             border-radius: 6px;
             color: var(--text-secondary);
             width: 40px;
@@ -116,12 +116,12 @@
             flex-shrink: 0;
             outline: none !important;
             -webkit-tap-highlight-color: transparent;
-            transition: color 0.2s ease, border-color 0.2s ease;
+            transition: color 0.2s ease;
         }
 
         .sync-btn:hover {
             color: var(--primary-color);
-            border-color: var(--primary-color);
+            border: none;
         }
 
         .sync-btn.spinning svg {
@@ -146,7 +146,7 @@
             box-sizing: border-box;
         }
 
-        #search-input:focus { border: 1px solid var(--primary-color); }
+        #search-input:focus { border: none; outline: none; }
 
         .now-playing {
             padding: 22px 20px 16px 20px;
@@ -610,7 +610,7 @@
                 flex-direction: row;
                 align-items: center;
                 gap: 10px;
-                border: 1px solid var(--border-color);
+                border: none;
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 overflow: hidden;
                 cursor: pointer;
@@ -898,7 +898,7 @@
 }
 
 
-#track-list li.search-highlight { background-color: var(--hover-color); outline: 2px solid var(--primary-color); outline-offset: -2px; border-radius: 8px; }
+#track-list li.search-highlight { background-color: var(--hover-color); border: none; outline: none; border-radius: 8px; }
 
 button:focus { outline: none !important; }
 .control-btn:focus { outline: none !important; }
