@@ -4,16 +4,25 @@ This document serves as the comprehensive, authoritative technical memory for AI
 
 ---
 
-## 2. Core Audio Engine: Native HTML5 Audio + Range Buffering + Web Audio
+## 2. Core Audio Engine: Media Source Extensions (MSE) + Web Audio
 
-### The Architecture: Native HTML5 Range Seeking
-The player uses native HTML5 `<audio>` elements (`audio.src = url`) paired with HTTP 206 Partial Content Range requests supported by the Cloudflare Worker media proxy and Hugging Face storage.
+> **PRIMARY ARCHITECTURAL REASON FOR MSE**:
+> Media Source Extensions (MSE) are used **specifically to prevent Android from dismantling the Lock Screen Media Notification / Media Controls UI**. It is **NOT** chosen merely for non-fragmented/continuous buffering. On Android Chromium, reassigning `audio.src = url` sends `OnPlayerDestroyed` IPC to the OS and deallocates the `AudioTrack` when `document.hidden = true`. Binding `audio.src` permanently to a single `MediaSource` object URL is the **only known web standard mechanism that keeps the Android Media Notification continuously alive** across track changes. Continuous buffering is an implementation detail; Media UI retention is the driving requirement.
 
-### The Production Solution: Core Invariants ([`js/dom.js`](js/dom.js))
+### The Problem: Android Lock Screen Notification Teardown
+On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the native `emptied` and `pause` events. While the phone is locked (`document.hidden = true`), this deallocates the native `AudioTrack`, destroys the underlying `player_id`, and causes Android SystemUI to immediately dismiss the lock screen media notification.
 
-#### Invariant 1: Native HTTP 206 Range Buffering
-- When seeking to any timestamp, the native browser C++ engine directly calculates the byte offset from the WebM header cues and issues an HTTP 206 Range request (`Range: bytes=X-`).
-- Instant playback resumption with ~50ms latency across both buffered and unbuffered regions without custom JS stream piping.
+### The Production Solution: The 4 Invariants ([`js/dom.js`](js/dom.js))
+
+#### Invariant 1: Permanent MediaSource Object URL
+- `<audio id="audio-player-1">.src` is attached **once on startup** to `URL.createObjectURL(mediaSource)`.
+- **`audio.src` is NEVER reassigned, deleted, or reloaded.**
+- Track switching occurs entirely inside the `SourceBuffer`:
+  ```javascript
+  await this._clearSourceBuffer(); // removes old buffer
+  await this._appendToSourceBuffer(firstChunk); // appends new WebM/Opus track
+  ```
+- **Zero `emptied` events, zero `AudioTrack` deallocations, and zero player ID resets.**
 
 #### Invariant 2: Web Audio `GainNode` Output Routing
 - Audio from `<audio id="audio-player-1">` is routed through:
@@ -21,9 +30,14 @@ The player uses native HTML5 `<audio>` elements (`audio.src = url`) paired with 
 - When Next/Prev is clicked:
   - `gainNode.gain.value = 0` provides **100% true digital silence** (zero audio leak).
   - `<audio>.muted` **remains `false`**, preventing Chromium's `hideNotification()` trigger.
-  - When playback resumes, `gainNode.gain.value = 1.0` restores volume instantly.
+  - When playback begins, `gainNode.gain.value = 1.0` restores volume instantly.
 
-#### Invariant 3: Canonical W3C Position Lifecycle ([`js/mediaSession.js`](js/mediaSession.js))
+#### Invariant 3: Single Continuous Progressive Ingestion & 0ms Seeking
+- Single HTTP GET stream per track: fast-starts playback within **<100ms** on the first chunk (~256KB), while piping remaining chunks into `SourceBuffer` in the background until `endOfStream()`.
+- **In-Memory Scrubbing**: Seeking backwards or within already-buffered audio is **100% instant 0ms local playback**.
+- **Catch-up Seeking**: When seeking ahead into unbuffered audio, the playhead holds at the target timestamp without snapback and auto-resumes playback as soon as the buffer reaches that position.
+
+#### Invariant 4: Canonical W3C Position Lifecycle ([`js/mediaSession.js`](js/mediaSession.js))
 - **During Buffering / Transition**:
   - `navigator.mediaSession.playbackState = "playing"` (keeps background notification alive).
   - **`navigator.mediaSession.setPositionState(null)`** (W3C standard method to clear position tracking during loading).
@@ -31,9 +45,6 @@ The player uses native HTML5 `<audio>` elements (`audio.src = url`) paired with 
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.
-
-#### Invariant 4: Near-End Watchdog & Auto-Advance
-- In `forwardEvent`, a debounced watchdog (`ct >= dur - 0.25`) ensures auto-advance executes reliably even under background CPU timer throttling on mobile devices.
 
 ---
 

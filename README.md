@@ -29,8 +29,8 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │                                                       ▼                                │
 │   MediaSession (mediaSession.js) ◄───── DualAudioPingPong Engine (dom.js)              │
 │                                                       │                                │
-│                                                       ├──► Native HTML5 <audio>        │
-│                                                       │       └──► HTTP 206 Range      │
+│                                                       ├──► MediaSource (Permanent URL) │
+│                                                       │       └──► SourceBuffer (MSE)  │
 │                                                       │                                │
 │                                                       └──► AudioContext (Web Audio)    │
 │                                                               └──► GainNode (0 Leak)   │
@@ -46,6 +46,8 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │       └── Media Cache (yt-player-media) ───────────► WebM/Opus Audio & WebP Artwork    │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+> **Why MSE is Used**: Media Source Extensions (MSE) are used **specifically to keep the Android Lock Screen Media Controls UI alive**. On Android Chromium, changing `audio.src = url` sends `OnPlayerDestroyed` IPC to the OS and deallocates the native `AudioTrack`, destroying the media notification when the screen is locked. A permanent `MediaSource` object URL ensures `audio.src` is never touched, keeping the Android media notification pinned 100% of the time across track changes. Continuous buffering is an implementation detail; **Media Controls UI survival is the core driving requirement**.
 
 ---
 
