@@ -703,19 +703,26 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?v=${ts}`);
                     if (res.ok) {
                         let freshData = await res.json();
-                        if (freshData.length > 0 && Array.isArray(freshData[0])) {
-                            freshData = freshData.filter(item => {
-                                const title = String(item[1]);
-                                return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-                            }).map(item => ({
-                                id: item[0],
-                                title: item[1],
-                                channel: item[2],
-                                duration: item[3],
-                                file_path: `${pl}/${item[0]}.webm`,
-                                thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
-                            }));
-                        }
+                        freshData = freshData.filter(item => {
+                            const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+                            return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                        }).map(item => {
+                            if (Array.isArray(item)) {
+                                return {
+                                    id: item[0],
+                                    title: item[1],
+                                    channel: item[2],
+                                    duration: item[3],
+                                    file_path: `${pl}/${item[0]}.webm`,
+                                    thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
+                                };
+                            }
+                            return {
+                                ...item,
+                                file_path: `${pl}/${item.id}.webm`,
+                                thumbnail_path: `${pl}/thumbnails/${item.id}.webp`
+                            };
+                        });
                         
                         const oldLength = allDatabases[pl].length;
                         if (freshData.length !== oldLength || freshData[0]?.id !== allDatabases[pl][0]?.id) {
@@ -797,19 +804,26 @@ currentPlaylistData[globalActiveOriginalIndex];
                 return fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
                     .then(r => r.ok ? r.json() : [])
                     .then(data => {
-                        if (data.length > 0 && Array.isArray(data[0])) {
-                            data = data.filter(item => {
-                                const title = String(item[1]);
-                                return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-                            }).map(item => ({
-                                id: item[0],
-                                title: item[1],
-                                channel: item[2],
-                                duration: item[3],
-                                file_path: `${pl}/${item[0]}.webm`,
-                                thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
-                            }));
-                        }
+                        data = data.filter(item => {
+                            const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+                            return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+                        }).map(item => {
+                            if (Array.isArray(item)) {
+                                return {
+                                    id: item[0],
+                                    title: item[1],
+                                    channel: item[2],
+                                    duration: item[3],
+                                    file_path: `${pl}/${item[0]}.webm`,
+                                    thumbnail_path: `${pl}/thumbnails/${item[0]}.webp`
+                                };
+                            }
+                            return {
+                                ...item,
+                                file_path: `${pl}/${item.id}.webm`,
+                                thumbnail_path: `${pl}/thumbnails/${item.id}.webp`
+                            };
+                        });
                         allDatabases[pl] = data;
                         if (typeof window.rebuildCrossShuffleDeck === 'function') {
                             window.rebuildCrossShuffleDeck();
