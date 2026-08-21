@@ -277,32 +277,29 @@
             left: 0;
             right: 0;
             height: 4px;
-            background: transparent;
+            background: rgba(255, 255, 255, 0.12);
             border-radius: 2px;
             overflow: hidden;
             pointer-events: none;
         }
 
-        .buffer-bar {
+        .buffer-container {
             position: absolute;
-            left: 0;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .buffer-segment {
+            position: absolute;
             top: 0;
             bottom: 0;
-            width: 0%;
-            background: rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.4);
             border-radius: 2px;
             pointer-events: none;
         }
 
         .played-bar {
-            position: absolute;
-            left: 0;
-            top: 0;
-            bottom: 0;
-            width: 0%;
-            background: var(--primary-color);
-            border-radius: 2px;
-            pointer-events: none;
+            display: none !important;
         }
 
         input[type="range"]#seek-bar {
