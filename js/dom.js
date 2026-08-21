@@ -12,7 +12,6 @@
             this._endedFired = false;
             this.lastKnownTime = 0;
             this._currentUrl = '';
-            this._mseEnabled = false;
             this._audioCtx = null;
             this._gainNode = null;
             this._mediaElementSource = null;
@@ -52,7 +51,6 @@
             this.events.forEach(evt => {
                 this.active.addEventListener(evt, this.forwardEvent);
             });
-
         }
 
         _initAudioGraph() {
@@ -84,6 +82,7 @@
                 console.warn("currentTime set error:", e);
             }
         }
+
         get readyState() { return this.active.readyState; }
         get duration() { return this.active.duration; }
         get paused() { return this.active.paused; }
@@ -187,11 +186,11 @@
                 this.active.currentTime = 0;
             } catch (e) {}
 
-            if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
+            if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            else {
+                const bc = document.getElementById("buffer-container");
+                if (bc) bc.innerHTML = '';
             }
-
-            if (typeof bufferBar !== 'undefined' && bufferBar) bufferBar.style.width = '0%';
 
             if (!url) {
                 this.switching = false;
@@ -237,8 +236,8 @@
     const btnCollapse = document.getElementById("btn-collapse");
 
     const seekBar = document.getElementById("seek-bar");
-    const bufferBar = document.getElementById("buffer-bar");
-    const playedBar = document.getElementById("played-bar");
+    const seekTrack = document.getElementById("seek-track");
+    const bufferContainer = document.getElementById("buffer-container");
     const currentTimeDisplay = document.getElementById("current-time");
     const totalTimeDisplay = document.getElementById("total-time");
     

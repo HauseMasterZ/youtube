@@ -206,45 +206,40 @@
         }
     }
     function updateSeekBarProgress() {
-        const max = parseFloat(seekBar.max) || 0;
-        if (max <= 0) {
-            if (playedBar) playedBar.style.width = '0%';
-            return;
-        }
-        const val = parseFloat(seekBar.value) || 0;
-        const playedPercent = Math.min(100, Math.max(0, (val / max) * 100));
-        if (playedBar) playedBar.style.width = `${playedPercent.toFixed(2)}%`;
+        // Trailing played seek bar region removed to expose the full buffer track behind the thumb
     }
     window.updateSeekBarProgress = updateSeekBarProgress;
 
     function updateBufferProgress() {
-        if (!bufferBar) return;
+        const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
+        if (!container) return;
         if (audioPlayer && audioPlayer.switching) {
-            bufferBar.style.width = '0%';
+            container.innerHTML = '';
             return;
         }
         const max = parseFloat(seekBar.max) || 0;
         if (max <= 0) {
-            bufferBar.style.width = '0%';
+            container.innerHTML = '';
             return;
         }
-        const ct = (audioPlayer && !isNaN(audioPlayer.currentTime)) ? audioPlayer.currentTime : 0;
         const buffered = audioPlayer ? audioPlayer.buffered : null;
-        let activeBufferedEnd = ct;
-
-        if (buffered && buffered.length > 0) {
-            for (let i = 0; i < buffered.length; i++) {
-                if (ct >= buffered.start(i) - 1.0 && ct <= buffered.end(i) + 1.0) {
-                    activeBufferedEnd = Math.max(activeBufferedEnd, buffered.end(i));
-                }
-            }
-            if (activeBufferedEnd === ct && buffered.start(0) <= 1.0) {
-                activeBufferedEnd = Math.max(activeBufferedEnd, buffered.end(0));
-            }
+        if (!buffered || buffered.length === 0) {
+            container.innerHTML = '';
+            return;
         }
 
-        const bufferPercent = Math.min(100, Math.max(0, (activeBufferedEnd / max) * 100));
-        bufferBar.style.width = `${bufferPercent.toFixed(2)}%`;
+        let html = '';
+        for (let i = 0; i < buffered.length; i++) {
+            const start = buffered.start(i);
+            const end = buffered.end(i);
+            if (end <= start) continue;
+            const leftPct = Math.min(100, Math.max(0, (start / max) * 100));
+            const widthPct = Math.min(100 - leftPct, Math.max(0, ((end - start) / max) * 100));
+            if (widthPct > 0) {
+                html += `<div class="buffer-segment" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>`;
+            }
+        }
+        container.innerHTML = html;
     }
     window.updateBufferProgress = updateBufferProgress;
 

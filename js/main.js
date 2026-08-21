@@ -472,6 +472,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }
         }
+        if (typeof updateBufferProgress === 'function') updateBufferProgress();
+    });
+
+    audioPlayer.addEventListener("progress", () => {
+        if (typeof updateBufferProgress === 'function') updateBufferProgress();
     });
 
     let lastEndedTime = 0;
