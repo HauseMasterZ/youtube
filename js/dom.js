@@ -286,11 +286,14 @@
                 this._gainNode.gain.value = 0;
             }
 
-            this.active.pause();
-
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
+
+            // Synchronously prime Android AudioFocus within the user gesture call stack
+            if (!preventAutoplay) {
+                this.active.play().catch(() => {});
+            }
 
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition();
@@ -333,7 +336,7 @@
 
                     const reader = response.body.getReader();
 
-                    // Read first chunk (~256KB - 384KB)
+                    // Read initial fast-start chunk (~128KB - 256KB)
                     const { value: firstChunk, done: firstDone } = await reader.read();
 
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
@@ -359,7 +362,7 @@
                         return Promise.resolve();
                     }
 
-                    // Fast-Start: Play instantly on first chunk
+                    // Fast-Start: Play instantly with a solid 15-20s runway
                     this.active.currentTime = 0;
                     if (this._gainNode) {
                         this._gainNode.gain.value = 1.0;
