@@ -351,6 +351,60 @@
                 const activeStreamId = this._streamId;
                 this._pendingSeek = null;
 
+                // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
+                try {
+                    if (window.caches) {
+                        const mediaCache = await caches.open('yt-player-media');
+                        const cachedRes = await mediaCache.match(url);
+                        if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
+                            const fullBuffer = await cachedRes.arrayBuffer();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                            await this._clearSourceBuffer();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                            try {
+                                this._sourceBuffer.abort();
+                                this._sourceBuffer.timestampOffset = 0;
+                            } catch (e) {}
+
+                            await this._appendToSourceBuffer(fullBuffer);
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                            }
+
+                            if (this._gainNode) {
+                                this._gainNode.gain.value = 1.0;
+                            }
+
+                            if (this._pendingSeek !== null) {
+                                const target = this._pendingSeek;
+                                this._pendingSeek = null;
+                                this.active.currentTime = target;
+                            } else {
+                                this.active.currentTime = 0;
+                            }
+
+                            if (!preventAutoplay) {
+                                this.active.play().catch(e => console.warn("Cached play error:", e));
+                            }
+
+                            this.switching = false;
+                            this.dispatchEvent(new Event('loadedmetadata'));
+                            this.dispatchEvent(new Event('canplay'));
+                            this.dispatchEvent(new Event('play'));
+                            this.dispatchEvent(new Event('playing'));
+                            this.dispatchEvent(new Event('progress'));
+                            return Promise.resolve();
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Cache fast-path fallback:", e);
+                }
+
+                // 2. NETWORK PATH: Stream uncached audio with optimized ~192KB safety cushion (~12s audio)
                 try {
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
@@ -358,12 +412,10 @@
 
                     const reader = response.body.getReader();
 
-                    // Accumulate initial safety cushion (~768KB / ~40s of audio)
-                    // before playback starts to guarantee 0 audio dropouts.
                     const initialChunks = [];
                     let initialBytes = 0;
                     let streamDone = false;
-                    const INITIAL_TARGET_BYTES = 786432; // 768KB (~40s Opus)
+                    const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
 
                     while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
                         const { value: chunk, done } = await reader.read();
@@ -506,6 +558,8 @@
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
                         this.switching = false;
+                        if (this._gainNode) this._gainNode.gain.value = 1.0;
+                        this.dispatchEvent(new Event('error'));
                     }
                 }
             } else {
