@@ -29,8 +29,8 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │                                                       ▼                                │
 │   MediaSession (mediaSession.js) ◄───── DualAudioPingPong Engine (dom.js)              │
 │                                                       │                                │
-│                                                       ├──► MediaSource (MSE Object URL)│
-│                                                       │       └──► SourceBuffer (Opus) │
+│                                                       ├──► Native HTML5 <audio>        │
+│                                                       │       └──► HTTP 206 Range      │
 │                                                       │                                │
 │                                                       └──► AudioContext (Web Audio)    │
 │                                                               └──► GainNode (0 Leak)   │
@@ -43,7 +43,7 @@ This Progressive Web App (PWA) plays audio playlists with zero audio latency, of
 │                                                                                        │
 │   Service Worker (sw.js):                                                              │
 │       ├── App Shell Cache (yt-player-cache-vXX) ──► HTML, JS, CSS, Assets              │
-│       └── Media Chunk Cache (yt-player-media) ─────► Progressive WebM/Opus Chunks      │
+│       └── Media Cache (yt-player-media) ───────────► WebM/Opus Audio & WebP Artwork    │
 └────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 

@@ -4,39 +4,16 @@ This document serves as the comprehensive, authoritative technical memory for AI
 
 ---
 
-## 2. Core Audio Engine: Media Source Extensions (MSE) + Web Audio
+## 2. Core Audio Engine: Native HTML5 Audio + Range Buffering + Web Audio
 
-### The Problem: Android Lock Screen Notification Teardown
-On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the native `emptied` and `pause` events. While the phone is locked (`document.hidden = true`), this deallocates the native `AudioTrack`, destroys the underlying `player_id`, and causes Android SystemUI to immediately dismiss the lock screen media notification.
+### The Architecture: Native HTML5 Range Seeking
+The player uses native HTML5 `<audio>` elements (`audio.src = url`) paired with HTTP 206 Partial Content Range requests supported by the Cloudflare Worker media proxy and Hugging Face storage.
 
-### The Exhaustive List of Failed Approaches & Why They Failed
+### The Production Solution: Core Invariants ([`js/dom.js`](js/dom.js))
 
-| # | Approach | What Broke on Android | Why It Failed (Chromium Internals) |
-|---|---|---|---|
-| 1 | **Single `<audio.src = url>` Direct Mutation** | Notification destroyed on skip | `src` mutation triggers `emptied` → Chromium deallocates `AudioTrack` and resets `readyState = 0`. |
-| 2 | **Dual `<audio>` Elements + `old.pause()`** | Notification destroyed on skip | Pausing the inactive element sends `OnPlayerPaused` IPC, killing the primary `player_id` notification. |
-| 3 | **Dual `<audio>` Elements + `removeAttribute('src')`** | Notification destroyed on skip | Triggers `OnPlayerDestroyed` IPC in Chromium C++ media pipeline. |
-| 4 | **Dual `<audio>` Elements + `old.volume = 0`** | Old track audible during skip | `audio.volume` is **read-only** on mobile web engines (iOS/Android) to protect hardware volume. |
-| 5 | **Dual `<audio>` Elements + `old.muted = true`** | Notification destroyed on skip | In `MediaSessionImpl.java`: `if (player.isMuted()) hideNotification()` explicitly hides notification. |
-| 6 | **Dual `<audio>` Elements + Never-Cleanup (Looping)** | Notification drops intermittently | Concurrent background audio players cause Android `AudioFocus` competition and power termination. |
-| 7 | **Web Audio `MediaStreamDestination` (`srcObject`)** | Notification never appears | Chromium Android explicitly suppresses `MediaSession` notifications for `MediaStream` objects. |
-| 8 | **Setting `playbackState = "paused"` on Skip** | Notification destroyed on skip | Transitioning to `"paused"` while `document.hidden = true` tells Android to terminate the background service. |
-| 9 | **`setPositionState({ playbackRate: 0 })`** | Seekbar stuck on old song | W3C MediaSession spec §4.2.1 throws `TypeError` if `playbackRate <= 0`. Android never received position update. |
-| 10 | **`setPositionState({ playbackRate: 0.0001 })`** | Functional workaround | Mathematical trick ($5\text{s} \times 0.0001 = 0.0005\text{s}$), but non-canonical. |
-
----
-
-### The Production Solution: The 4 Invariants ([`js/dom.js`](js/dom.js))
-
-#### Invariant 1: Permanent MediaSource Object URL
-- `<audio id="audio-player-1">.src` is attached **once on startup** to `URL.createObjectURL(mediaSource)`.
-- **`audio.src` is NEVER reassigned, deleted, or reloaded.**
-- Track switching occurs entirely inside the `SourceBuffer`:
-  ```javascript
-  await this._clearSourceBuffer(); // removes old buffer
-  await this._appendToSourceBuffer(arrayBuffer); // appends new WebM/Opus track
-  ```
-- **Zero `emptied` events, zero `AudioTrack` deallocations, and zero player ID resets.**
+#### Invariant 1: Native HTTP 206 Range Buffering
+- When seeking to any timestamp, the native browser C++ engine directly calculates the byte offset from the WebM header cues and issues an HTTP 206 Range request (`Range: bytes=X-`).
+- Instant playback resumption with ~50ms latency across both buffered and unbuffered regions without custom JS stream piping.
 
 #### Invariant 2: Web Audio `GainNode` Output Routing
 - Audio from `<audio id="audio-player-1">` is routed through:
@@ -44,7 +21,7 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
 - When Next/Prev is clicked:
   - `gainNode.gain.value = 0` provides **100% true digital silence** (zero audio leak).
   - `<audio>.muted` **remains `false`**, preventing Chromium's `hideNotification()` trigger.
-  - When buffering completes, `gainNode.gain.value = 1.0` restores volume instantly.
+  - When playback resumes, `gainNode.gain.value = 1.0` restores volume instantly.
 
 #### Invariant 3: Canonical W3C Position Lifecycle ([`js/mediaSession.js`](js/mediaSession.js))
 - **During Buffering / Transition**:
@@ -55,10 +32,8 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.
 
-#### Invariant 4: `mediaSource.endOfStream()` & Near-End Watchdog
-- In MSE, if `mediaSource.endOfStream()` is not called after appending, `mediaSource.readyState` stays `'open'`. The browser assumes more audio is coming and will never dispatch the native `'ended'` event.
-- In `switchTrack()`, `mediaSource.endOfStream()` is called immediately after appending the complete buffer.
-- In `forwardEvent`, a debounced watchdog (`ct >= dur - 0.25`) ensures auto-advance executes reliably even under background CPU timer throttling.
+#### Invariant 4: Near-End Watchdog & Auto-Advance
+- In `forwardEvent`, a debounced watchdog (`ct >= dur - 0.25`) ensures auto-advance executes reliably even under background CPU timer throttling on mobile devices.
 
 ---
 
