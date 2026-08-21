@@ -47,6 +47,10 @@ On Android Chrome (and Chromium PWAs), changing `audio.src = url` triggers the n
   - Failing to pause the underlying element allows Chromium's hardware clock to advance past the end of the previous buffer while the new track's first chunk is fetched.
 - **Quirk: Auto-Advance Watchdog Physical Time Requirement**:
   - In `forwardEvent`, the near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime` (which may report `_pendingSeek`).
+- **Quirk: First-Play Opus Decoder Cold-Start Stall**:
+  - The very first `appendBuffer()` of a WebM/Opus stream triggers Chrome's decoder cold-start initialization. During this initialization, `WebMediaPlayerImpl` briefly stalls the pipeline and emits a spurious native `pause` event.
+  - If `switching` is set to `false` immediately after calling `play()`, that spurious `pause` event leaks to `main.js`, flipping the UI to paused and triggering the 2s retry watchdog (causing a visible ~0.5s pause-resume glitch on the first track).
+  - **Strict Rule**: In `switchTrack()`, do **not** set `switching = false` immediately. Listen for the native `'playing'` event (`{ once: true }`) to unlock event forwarding only after the decoder has actually begun rendering audio frames.
 - **On Actual Playback (`'playing'` event)**:
   - `navigator.mediaSession.setPositionState({ duration, playbackRate: 1.0, position: 0 })`
   - Android OS initializes seekbar at `0:00` with standard `1.0x` rate, advancing in 1:1 real-time sync with sound.

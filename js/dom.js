@@ -365,16 +365,41 @@
                         this._gainNode.gain.value = 1.0;
                     }
 
-                    if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
-                    }
-
-                    this.switching = false;
                     this.dispatchEvent(new Event('loadedmetadata'));
                     this.dispatchEvent(new Event('canplay'));
-                    this.dispatchEvent(new Event('play'));
-                    this.dispatchEvent(new Event('playing'));
-                    this.dispatchEvent(new Event('progress'));
+
+                    if (!preventAutoplay) {
+                        // Wait for the native 'playing' event before unlocking
+                        // event forwarding. This absorbs the first-play decoder
+                        // cold-start stall (which emits a spurious native 'pause')
+                        // while switching=true, so it never reaches main.js.
+                        const unlockSwitching = () => {
+                            this.active.removeEventListener('playing', unlockSwitching);
+                            clearTimeout(switchSafetyTimeout);
+                            this.switching = false;
+                            this.dispatchEvent(new Event('play'));
+                            this.dispatchEvent(new Event('playing'));
+                            this.dispatchEvent(new Event('progress'));
+                        };
+                        this.active.addEventListener('playing', unlockSwitching, { once: true });
+
+                        // Safety: if 'playing' never fires (error), unlock after 5s
+                        const switchSafetyTimeout = setTimeout(() => {
+                            this.active.removeEventListener('playing', unlockSwitching);
+                            this.switching = false;
+                            this.dispatchEvent(new Event('play'));
+                            this.dispatchEvent(new Event('progress'));
+                        }, 5000);
+
+                        this.active.play().catch(e => {
+                            console.warn("MSE fast-start play error:", e);
+                            this.active.removeEventListener('playing', unlockSwitching);
+                            clearTimeout(switchSafetyTimeout);
+                            this.switching = false;
+                        });
+                    } else {
+                        this.switching = false;
+                    }
 
                     // Single continuous background ingestion stream
                     (async () => {
