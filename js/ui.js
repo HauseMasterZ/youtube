@@ -268,26 +268,90 @@
     function getDominantColor(imgEl, trackId) {
         if (trackId && dominantColorCache.has(trackId)) return dominantColorCache.get(trackId);
         if (imgEl.dataset && imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
-        let canvas = document.createElement('canvas');
-        let ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) return '#8c73ff';
-        canvas.width = 1; canvas.height = 1;
+
+        // Downsample to 48x48 for fast, comprehensive color palette analysis
+        const sampleSize = 48;
+        canvas.width = sampleSize;
+        canvas.height = sampleSize;
+
         try {
-            ctx.drawImage(imgEl, 0, 0, 1, 1);
-            let data = ctx.getImageData(0, 0, 1, 1).data;
-            let r = data[0], g = data[1], b = data[2];
-            
-            let brightness = (r * 299 + g * 587 + b * 114) / 1000;
-            if (brightness < 120) {
-                let factor = 120 / Math.max(brightness, 1);
-                r = Math.min(255, Math.floor(r * factor));
-                g = Math.min(255, Math.floor(g * factor));
-                b = Math.min(255, Math.floor(b * factor));
+            ctx.drawImage(imgEl, 0, 0, sampleSize, sampleSize);
+            const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+
+            let bestColor = null;
+            let maxScore = -1;
+            let totalR = 0, totalG = 0, totalB = 0, validPixelCount = 0;
+
+            for (let i = 0; i < imgData.length; i += 4) {
+                const r = imgData[i];
+                const g = imgData[i + 1];
+                const b = imgData[i + 2];
+                const a = imgData[i + 3];
+
+                if (a < 128) continue; // Ignore transparent pixels
+
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+                const saturation = max === 0 ? 0 : (max - min) / max;
+
+                totalR += r;
+                totalG += g;
+                totalB += b;
+                validPixelCount++;
+
+                // Filter out near-black, near-white, and pure washed-out grays
+                if (brightness < 30 || brightness > 235 || saturation < 0.18) {
+                    continue;
+                }
+
+                // Score: prioritize high saturation and moderate-to-vibrant brightness
+                const brightnessWeight = 1 - Math.abs(brightness - 140) / 140;
+                const score = (saturation * 2.0) + (brightnessWeight * 1.2);
+
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestColor = { r, g, b, brightness };
+                }
             }
-            const finalColor = `rgb(${r}, ${g}, ${b})`;
+
+            let finalR = 140, finalG = 115, finalB = 255;
+
+            if (bestColor) {
+                finalR = bestColor.r;
+                finalG = bestColor.g;
+                finalB = bestColor.b;
+
+                // Ensure UI text readability: minimum brightness threshold
+                if (bestColor.brightness < 110) {
+                    const factor = 110 / Math.max(bestColor.brightness, 1);
+                    finalR = Math.min(255, Math.floor(finalR * factor));
+                    finalG = Math.min(255, Math.floor(finalG * factor));
+                    finalB = Math.min(255, Math.floor(finalB * factor));
+                }
+            } else if (validPixelCount > 0) {
+                // Fallback for monochromatic/grayscale album art
+                const avgR = Math.floor(totalR / validPixelCount);
+                const avgG = Math.floor(totalG / validPixelCount);
+                const avgB = Math.floor(totalB / validPixelCount);
+                const avgBrightness = (avgR * 299 + avgG * 587 + avgB * 114) / 1000;
+                const factor = avgBrightness < 120 ? (120 / Math.max(avgBrightness, 1)) : 1;
+
+                finalR = Math.min(255, Math.floor(avgR * factor));
+                finalG = Math.min(255, Math.floor(avgG * factor));
+                finalB = Math.min(255, Math.floor(avgB * factor));
+            }
+
+            const finalColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
             if (trackId) dominantColorCache.set(trackId, finalColor);
             return finalColor;
-        } catch(e) { return '#8c73ff'; }
+        } catch (e) {
+            return '#8c73ff';
+        }
     }
 
     function getSquareCroppedArtwork(imgEl, trackId) {
