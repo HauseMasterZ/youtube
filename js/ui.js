@@ -148,7 +148,7 @@
                         const loader = new Image();
                         loader.fetchPriority = "low";
                         loader.onload = () => {
-                            thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl, img: loader });
+                            thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
                             if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                 thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
                             }
@@ -369,7 +369,10 @@
             }
 
             const finalColor = `rgb(${finalR}, ${finalG}, ${finalB})`;
-            if (trackId) dominantColorCache.set(trackId, finalColor);
+            if (trackId) {
+                if (dominantColorCache.size >= 500) dominantColorCache.delete(dominantColorCache.keys().next().value);
+                dominantColorCache.set(trackId, finalColor);
+            }
             return finalColor;
         } catch (e) {
             return '#8c73ff';
@@ -396,7 +399,10 @@
 
             ctx.drawImage(imgEl, sx, sy, minDim, minDim, 0, 0, targetSize, targetSize);
             const croppedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-            if (trackId) artworkSquareCache.set(trackId, croppedDataUrl);
+            if (trackId) {
+                if (artworkSquareCache.size >= 100) artworkSquareCache.delete(artworkSquareCache.keys().next().value);
+                artworkSquareCache.set(trackId, croppedDataUrl);
+            }
             return croppedDataUrl;
         } catch (e) {
             return null;
