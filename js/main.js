@@ -579,7 +579,14 @@ currentPlaylistData[globalActiveOriginalIndex];
                 if (thumbToggleHint) thumbToggleHint.style.display = 'none';
                 const track = currentPlaylistData[playQueue[queueIndex]];
                 if (track && getThumbUrl(track)) {
+                    const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
+                    albumArt.src = thumbUrl;
+                    if (dominantColorCache.has(track.id)) {
+                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                    } else if (typeof window.fetchVisuals === 'function') {
+                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
+                    }
                 }
             } else {
                 albumArt.style.display = 'none';
@@ -622,6 +629,12 @@ currentPlaylistData[globalActiveOriginalIndex];
                     albumArt.src = thumbUrl;
                     if (dominantColorCache.has(track.id)) {
                         document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                    } else if (typeof window.fetchVisuals === 'function') {
+                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
+                    }
+                    if (hasMediaSession && navigator.mediaSession.metadata) {
+                        const squareArt = artworkSquareCache.get(track.id);
+                        navigator.mediaSession.metadata.artwork = [{ src: squareArt || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
                     }
                 }
             }
