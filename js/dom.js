@@ -25,32 +25,37 @@
                            'waiting', 'canplay', 'ended', 'durationchange'];
 
             this.forwardEvent = (e) => {
-                if (!this.switching) {
-                    if (e.type === 'timeupdate') {
-                        const ct = this.active.currentTime;
-                        const dur = this.active.duration;
-                        if (dur > 0 && ct < dur - 1.0) {
-                            this._endedFired = false;
-                        }
-                        if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
-                            if (!this._endedFired && ct >= dur - 0.25) {
-                                this._endedFired = true;
-                                this.dispatchEvent(new Event('ended'));
-                                return;
-                            }
-                        }
-                        this.lastKnownTime = ct;
+                if (this.switching) {
+                    if (e.type === 'playing' || e.type === 'canplay') {
+                        this.switching = false;
+                        this.dispatchEvent(new Event(e.type));
                     }
-                    if (e.type === 'ended') {
-                        if (!this._endedFired) {
+                    return;
+                }
+                if (e.type === 'timeupdate') {
+                    const ct = this.active.currentTime;
+                    const dur = this.active.duration;
+                    if (dur > 0 && ct < dur - 1.0) {
+                        this._endedFired = false;
+                    }
+                    if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
+                        if (!this._endedFired && ct >= dur - 0.25) {
                             this._endedFired = true;
                             this.dispatchEvent(new Event('ended'));
                             return;
                         }
+                    }
+                    this.lastKnownTime = ct;
+                }
+                if (e.type === 'ended') {
+                    if (!this._endedFired) {
+                        this._endedFired = true;
+                        this.dispatchEvent(new Event('ended'));
                         return;
                     }
-                    this.dispatchEvent(new Event(e.type));
+                    return;
                 }
+                this.dispatchEvent(new Event(e.type));
             };
             this.events.forEach(evt => {
                 this.active.addEventListener(evt, this.forwardEvent);
@@ -369,13 +374,6 @@
                     if (!preventAutoplay) {
                         this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
                     }
-
-                    this.switching = false;
-                    this.dispatchEvent(new Event('loadedmetadata'));
-                    this.dispatchEvent(new Event('canplay'));
-                    this.dispatchEvent(new Event('play'));
-                    this.dispatchEvent(new Event('playing'));
-                    this.dispatchEvent(new Event('progress'));
 
                     // Single continuous background ingestion stream
                     (async () => {
