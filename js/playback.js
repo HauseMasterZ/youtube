@@ -377,12 +377,23 @@
         }
         
         if (hasMediaSession) {
-            const squareArt = artworkSquareCache.get(track.id);
-            const rawArt = thumbUrl;
+            let squareArt = artworkSquareCache.get(track.id);
+            if (!squareArt && !thumbsDisabled && typeof getSquareCroppedArtwork === 'function') {
+                const cachedImg = typeof thumbCache !== 'undefined' ? thumbCache.get(track.id) : null;
+                if (cachedImg && (cachedImg.naturalWidth || cachedImg.width)) {
+                    squareArt = getSquareCroppedArtwork(cachedImg, track.id);
+                } else if (albumArt && albumArt.src === thumbUrl && albumArt.complete && (albumArt.naturalWidth || albumArt.width)) {
+                    squareArt = getSquareCroppedArtwork(albumArt, track.id);
+                }
+            }
+
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
-            const artworkSrc = (!thumbsDisabled && (squareArt || rawArt)) ? (squareArt || rawArt) : fallbackIcon;
+            
+            // STRICT 1:1 RULE: NEVER pass raw 16:9 thumbnail (thumbUrl) to MediaMetadata.
+            // Only pass pre-cropped 1:1 square JPEG or 1:1 square fallback icon.
+            const artworkSrc = (!thumbsDisabled && squareArt) ? squareArt : fallbackIcon;
             const artworkList = [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }];
 
             navigator.mediaSession.metadata = new MediaMetadata({
