@@ -364,14 +364,28 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching) return;
-        setPlayUI(false);
-        updateMediaSessionPosition();
-        if (hasMediaSession && window.wasPausedByUser) {
-            navigator.mediaSession.playbackState = 'paused';
+        if (window.wasPausedByUser) {
+            setPlayUI(false);
+            updateMediaSessionPosition();
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            return;
         }
-        if (!window.wasPausedByUser && !audioPlayer.switching && audioPlayer.src) {
+
+        // Non-user pause (Transient OS handshake, decoder sync, or external interruption)
+        if (audioPlayer.src) {
             window.wasInterrupted = true;
-            startInterruptionWatchdog();
+            // Instantly attempt auto-resume to eliminate transient 0.5s - 1s stalls
+            audioPlayer.play().then(() => {
+                window.wasInterrupted = false;
+                setPlayUI(true);
+            }).catch(() => {
+                // Blocked by external audio focus (e.g. phone call / alarm)
+                setPlayUI(false);
+                updateMediaSessionPosition();
+                startInterruptionWatchdog();
+            });
         }
     });
 
