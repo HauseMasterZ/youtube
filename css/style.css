@@ -183,17 +183,30 @@
             color: var(--text-secondary);
             font-size: 12px;
             text-align: center;
-            padding: 8px 0;
+            padding: 8px 12px;
             cursor: pointer;
             user-select: none;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            margin: 0 auto;
+            border-radius: 12px;
+            line-height: 1;
+            transition: background 0.2s, color 0.2s;
+        }
+
+        @media (hover: hover) {
+            #thumb-toggle-hint:hover {
+                background-color: var(--hover-color);
+            }
         }
 
         #thumb-toggle-hint svg {
-            width: 20px;
-            height: 20px;
+            width: 16px;
+            height: 16px;
             fill: currentColor;
-            vertical-align: middle;
-            margin-right: 4px;
+            flex-shrink: 0;
+            display: block;
         }
 
         #current-title {
