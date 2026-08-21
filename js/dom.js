@@ -329,37 +329,26 @@
                 try {
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    if (!response.body) throw new Error("ReadableStream not supported");
-
-                    const reader = response.body.getReader();
-
-                    // Read initial fast-start chunk (~128KB - 256KB)
-                    const { value: firstChunk, done: firstDone } = await reader.read();
+                    const arrayBuffer = await response.arrayBuffer();
 
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
-                    if (!firstChunk || firstChunk.length === 0) throw new Error("Empty first audio chunk");
-
                     await this._clearSourceBuffer();
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
                     this._sourceBuffer.timestampOffset = 0;
-                    await this._appendToSourceBuffer(firstChunk);
+                    await this._appendToSourceBuffer(arrayBuffer);
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
-                    // Fast-Start: Align playhead with buffer start to avoid underrun gap
                     const startOffset = (this._sourceBuffer.buffered.length > 0) ? this._sourceBuffer.buffered.start(0) : 0;
                     this.active.currentTime = startOffset;
                     if (this._gainNode) {
@@ -367,7 +356,7 @@
                     }
 
                     if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE fast-start play error:", e));
+                        this.active.play().catch(e => console.warn("MSE play error:", e));
                     }
 
                     this.switching = false;
@@ -376,76 +365,12 @@
                     this.dispatchEvent(new Event('play'));
                     this.dispatchEvent(new Event('playing'));
                     this.dispatchEvent(new Event('progress'));
-
-                    // Single continuous background ingestion stream
-                    (async () => {
-                        try {
-                            if (firstDone) return;
-
-                            let pendingBuffer = [];
-                            let pendingLength = 0;
-                            const FLUSH_THRESHOLD = 256 * 1024; // 256KB batching to avoid micro-stalls
-
-                            while (true) {
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                const { value: chunk, done } = await reader.read();
-
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                if (chunk && chunk.length > 0) {
-                                    pendingBuffer.push(chunk);
-                                    pendingLength += chunk.length;
-                                }
-
-                                if (done || pendingLength >= FLUSH_THRESHOLD) {
-                                    if (pendingLength > 0) {
-                                        const merged = new Uint8Array(pendingLength);
-                                        let offset = 0;
-                                        for (const b of pendingBuffer) {
-                                            merged.set(b, offset);
-                                            offset += b.length;
-                                        }
-                                        pendingBuffer = [];
-                                        pendingLength = 0;
-
-                                        await this._appendToSourceBuffer(merged);
-                                        this.dispatchEvent(new Event('progress'));
-
-                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is buffered
-                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                            if (buffEnd >= this._pendingSeek) {
-                                                const seekTarget = this._pendingSeek;
-                                                this._pendingSeek = null;
-                                                this.active.currentTime = seekTarget;
-                                                this.active.play().catch(e => console.warn("Catch-up seek play:", e));
-                                                this.dispatchEvent(new Event('seeked'));
-                                                this.dispatchEvent(new Event('timeupdate'));
-                                            }
-                                        }
-                                    }
-                                    if (done) break;
-                                }
-                            }
-                        } catch (streamErr) {
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                                console.warn("Background MSE stream pipe error:", streamErr);
-                            }
-                        }
-                    })();
                 } catch (e) {
                     if (currentAbortSignal.aborted || this._streamId !== activeStreamId) {
                         this.switching = false;
                         return Promise.resolve();
                     }
-                    console.warn("MSE progressive switch error, falling back to direct src:", e);
+                    console.warn("MSE switch error, falling back to direct src:", e);
                     this._mseEnabled = false;
                     this.active.src = url;
                     if (this._gainNode) this._gainNode.gain.value = 1.0;
