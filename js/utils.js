@@ -20,6 +20,30 @@
         const s = parseInt(match[3] || 0, 10);
         return h * 3600 + m * 60 + s;
     }
+    function normalizePlaylistData(data, folderName) {
+        if (!Array.isArray(data)) return [];
+        return data.filter(item => {
+            const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+            return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+        }).map(item => {
+            if (Array.isArray(item)) {
+                return {
+                    id: item[0],
+                    title: item[1],
+                    channel: item[2],
+                    duration: item[3],
+                    file_path: `${folderName}/${item[0]}.webm`,
+                    thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
+                };
+            }
+            return {
+                ...item,
+                file_path: `${folderName}/${item.id}.webm`,
+                thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
+            };
+        });
+    }
+
     // Environment Feature Checks
     const hasMediaSession = 'mediaSession' in navigator;
     const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
