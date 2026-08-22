@@ -297,6 +297,24 @@
         globalActiveOriginalIndex = originalIndex;
         globalActivePlaylist = targetPlaylist;
 
+        // Auto-switch view to active playing playlist if user was viewing another playlist
+        if (targetPlaylist && playlistSelect.value !== targetPlaylist) {
+            playlistSelect.value = targetPlaylist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = targetPlaylist;
+            if (allDatabases[targetPlaylist]) {
+                currentPlaylistData = allDatabases[targetPlaylist];
+                if (searchInput.value.trim() !== "") {
+                    searchInput.value = "";
+                }
+                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: targetPlaylist, index: i }));
+                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                trackList.style.display = 'block';
+                playlistMessage.style.display = 'none';
+                lastStartIndex = -1;
+                renderVirtualTracks();
+            }
+        }
+
         if (track.is_dead) {
             currentTitle.textContent = "err " + track.title + " skipping...";
             currentTitle.style.color = "#ff5555";
