@@ -212,23 +212,40 @@
     }
     window.updateSeekBarProgress = updateSeekBarProgress;
 
+    let lastBufferSignature = '';
     function updateBufferProgress() {
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
         if (audioPlayer && audioPlayer.switching) {
-            container.innerHTML = '';
+            if (lastBufferSignature !== 'empty') {
+                container.innerHTML = '';
+                lastBufferSignature = 'empty';
+            }
             return;
         }
         const max = parseFloat(seekBar.max) || 0;
         if (max <= 0) {
-            container.innerHTML = '';
+            if (lastBufferSignature !== 'empty') {
+                container.innerHTML = '';
+                lastBufferSignature = 'empty';
+            }
             return;
         }
         const buffered = audioPlayer ? audioPlayer.buffered : null;
         if (!buffered || buffered.length === 0) {
-            container.innerHTML = '';
+            if (lastBufferSignature !== 'empty') {
+                container.innerHTML = '';
+                lastBufferSignature = 'empty';
+            }
             return;
         }
+
+        let sig = `${max.toFixed(0)}_`;
+        for (let i = 0; i < buffered.length; i++) {
+            sig += `${buffered.start(i).toFixed(1)}-${buffered.end(i).toFixed(1)}_`;
+        }
+        if (sig === lastBufferSignature) return;
+        lastBufferSignature = sig;
 
         let html = '';
         for (let i = 0; i < buffered.length; i++) {

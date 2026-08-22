@@ -863,8 +863,6 @@
     gap: 16px; 
     align-items: center; 
     padding: 30vh 0; 
-    will-change: transform; 
-    transform: translateZ(0);
 }
 
 .lyrics-highlight-layer {
@@ -874,7 +872,6 @@
     width: 100%; 
     background: #000000; 
     color: var(--primary-color); 
-    will-change: transform; 
     pointer-events: none; 
     display: none; 
     font-size: clamp(14px, 3.5vw, 18px); 
@@ -903,52 +900,4 @@
 button:focus { outline: none !important; }
 .control-btn:focus { outline: none !important; }
 
-/* AI Lyrics Badge */
-.ai-lyrics-badge {
-    position: absolute;
-    top: 15px;
-    left: 20px;
-    z-index: 100;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    background: rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    font-size: 0.78rem;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    color: #ffffff;
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
-    animation: fadeInBadge 0.4s ease-out forwards;
-    user-select: none;
-    pointer-events: none;
-}
 
-.ai-lyrics-badge span {
-    background: linear-gradient(135deg, #a855f7, #ec4899, #3b82f6);
-    background-size: 200% 200%;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    animation: gradientShift 4s ease infinite;
-}
-
-@keyframes fadeInBadge {
-    from {
-        opacity: 0;
-        transform: translateY(-8px) scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
-}
-
-@keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
