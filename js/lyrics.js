@@ -37,8 +37,6 @@
 
     async function loadLyrics(track) {
         const sequenceId = currentPlaybackSequence; // Track the sequence ID to prevent race conditions
-        const existingBadge = lyricsContainer.querySelector('.ai-lyrics-badge');
-        if (existingBadge) existingBadge.remove();
 
         lyricsContent.innerHTML = '<p class="lyrics-placeholder" style="font-size: 32px; letter-spacing: 4px; font-weight: 800; color: var(--primary-color); opacity: 0.8; margin: auto;">...</p>';
         lyricsContent.style.display = 'flex';
@@ -132,14 +130,11 @@
     
     let activeLyricIndex = -1;
     let lyricsLayoutCache = [];
-    let cachedLyricsClientHeight = 0;
 
     function buildLyricsCache() {
         lyricsLayoutCache = [];
         const lyricsInner = document.getElementById('lyrics-inner');
         if (!lyricsInner) return;
-        
-        cachedLyricsClientHeight = lyricsContent.clientHeight;
         
         for (let i = 1; i < lyricsInner.children.length; i++) {
             const p = lyricsInner.children[i];

@@ -279,107 +279,75 @@
         }
         updateSeekBarProgress();
     }
-    // Removed duplicate albumArtContainer, already in dom.js
-    const thumbToggleHint = document.getElementById('thumb-toggle-hint');
+    let colorCanvas = null;
+    let colorCtx = null;
 
-    // albumArt error handling is managed in playback.js
-    
+    const COLOR_SAMPLE_SIZE = 12;
+
     function getDominantColor(imgEl, trackId) {
         if (trackId && dominantColorCache.has(trackId)) return dominantColorCache.get(trackId);
         if (imgEl.dataset && imgEl.dataset.precomputedColor) return imgEl.dataset.precomputedColor;
-        
+
         try {
             const width = imgEl.naturalWidth || imgEl.width || 320;
             const height = imgEl.naturalHeight || imgEl.height || 240;
             if (!width || !height) return '#8c73ff';
 
-            const canvas = document.createElement('canvas');
-            const sampleSize = 32;
-            canvas.width = sampleSize;
-            canvas.height = sampleSize;
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-            if (!ctx) return '#8c73ff';
+            if (!colorCanvas) {
+                colorCanvas = document.createElement('canvas');
+                colorCanvas.width = COLOR_SAMPLE_SIZE;
+                colorCanvas.height = COLOR_SAMPLE_SIZE;
+                colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
+            }
+            if (!colorCtx) return '#8c73ff';
 
-            // Sample the center 70% to avoid YouTube letterbox bars
-            const cropX = width * 0.15;
-            const cropY = height * 0.15;
-            const cropW = width * 0.70;
-            const cropH = height * 0.70;
+            // Sample center 70% to avoid YouTube letterbox borders
+            colorCtx.drawImage(imgEl, width * 0.15, height * 0.15, width * 0.7, height * 0.7, 0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE);
+            const data = colorCtx.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data;
 
-            ctx.drawImage(imgEl, cropX, cropY, cropW, cropH, 0, 0, sampleSize, sampleSize);
-            const imgData = ctx.getImageData(0, 0, sampleSize, sampleSize).data;
+            let bestR = 0, bestG = 0, bestB = 0, maxScore = -1;
+            let totR = 0, totG = 0, totB = 0, count = 0;
 
-            let bestColor = null;
-            let maxScore = -Infinity;
-            let avgR = 0, avgG = 0, avgB = 0, validPixelCount = 0;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                totR += r; totG += g; totB += b; count++;
 
-            for (let i = 0; i < imgData.length; i += 4) {
-                const r = imgData[i];
-                const g = imgData[i + 1];
-                const b = imgData[i + 2];
-                const a = imgData[i + 3];
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                const chroma = max - min;
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
 
-                if (a < 128) continue; // Ignore transparent pixels
+                // Skip dull/muddy tones (near-black, washed-out whites, or neutral grays)
+                if (brightness < 30 || brightness > 235 || chroma < 22) continue;
 
-                avgR += r;
-                avgG += g;
-                avgB += b;
-                validPixelCount++;
-
-                // Convert RGB to HSL
-                const rNorm = r / 255, gNorm = g / 255, bNorm = b / 255;
-                const max = Math.max(rNorm, gNorm, bNorm), min = Math.min(rNorm, gNorm, bNorm);
-                let h = 0, s = 0, l = (max + min) / 2;
-
-                if (max !== min) {
-                    const d = max - min;
-                    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-                    switch (max) {
-                        case rNorm: h = (gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0); break;
-                        case gNorm: h = (bNorm - rNorm) / d + 2; break;
-                        case bNorm: h = (rNorm - gNorm) / d + 4; break;
-                    }
-                    h /= 6;
-                }
-
-                // Filter out extreme darks (<15%), extreme lights (>88%), or pure grays (s < 0.18)
-                if (l < 0.15 || l > 0.88 || s < 0.18) continue;
-
-                // Score: prioritize high saturation and target luminance around 0.55 - 0.65 for high visibility on black
-                const targetL = 0.60;
-                const lightnessScore = 1 - Math.abs(l - targetL) * 2;
-                const score = s * 2.0 + lightnessScore * 1.5;
-
+                // Score by saturation and optimal luminance for dark UI visibility
+                const score = chroma * (brightness < 180 ? brightness : (255 - brightness + 100));
                 if (score > maxScore) {
                     maxScore = score;
-                    bestColor = { r, g, b, l, s };
+                    bestR = r; bestG = g; bestB = b;
                 }
             }
 
-            let finalR, finalG, finalB;
+            let finalR = bestR, finalG = bestG, finalB = bestB;
 
-            if (bestColor) {
-                finalR = bestColor.r;
-                finalG = bestColor.g;
-                finalB = bestColor.b;
-                // Ensure sufficient luminance for black background
-                if (bestColor.l < 0.40) {
-                    const boost = 0.45 / Math.max(bestColor.l, 0.01);
+            if (maxScore > 0) {
+                const br = (finalR * 299 + finalG * 587 + finalB * 114) / 1000;
+                if (br < 95) {
+                    const boost = 95 / Math.max(br, 1);
                     finalR = Math.min(255, Math.floor(finalR * boost));
                     finalG = Math.min(255, Math.floor(finalG * boost));
                     finalB = Math.min(255, Math.floor(finalB * boost));
                 }
-            } else if (validPixelCount > 0) {
-                // Fallback to average color with brightness floor
-                finalR = Math.floor(avgR / validPixelCount);
-                finalG = Math.floor(avgG / validPixelCount);
-                finalB = Math.floor(avgB / validPixelCount);
-                const brightness = (finalR * 299 + finalG * 587 + finalB * 114) / 1000;
-                if (brightness < 130) {
-                    const factor = 130 / Math.max(brightness, 1);
-                    finalR = Math.min(255, Math.floor(finalR * factor));
-                    finalG = Math.min(255, Math.floor(finalG * factor));
-                    finalB = Math.min(255, Math.floor(finalB * factor));
+            } else if (count > 0) {
+                finalR = Math.floor(totR / count);
+                finalG = Math.floor(totG / count);
+                finalB = Math.floor(totB / count);
+                const br = (finalR * 299 + finalG * 587 + finalB * 114) / 1000;
+                if (br < 110) {
+                    const boost = 110 / Math.max(br, 1);
+                    finalR = Math.min(255, Math.floor(finalR * boost));
+                    finalG = Math.min(255, Math.floor(finalG * boost));
+                    finalB = Math.min(255, Math.floor(finalB * boost));
                 }
             } else {
                 return '#8c73ff';
