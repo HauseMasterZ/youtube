@@ -62,20 +62,7 @@
         }
 
         _initAudioGraph() {
-            if (this._audioCtx || (typeof isMobileDevice !== 'undefined' && isMobileDevice)) return;
-            try {
-                const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-                if (AudioCtxClass) {
-                    this._audioCtx = new AudioCtxClass();
-                    this._mediaElementSource = this._audioCtx.createMediaElementSource(this.active);
-                    this._gainNode = this._audioCtx.createGain();
-                    this._gainNode.gain.value = 1.0;
-                    this._mediaElementSource.connect(this._gainNode);
-                    this._gainNode.connect(this._audioCtx.destination);
-                }
-            } catch (e) {
-                console.warn("AudioGraph init note:", e);
-            }
+            // Disabled Web Audio graph to guarantee 0.0% GPU usage on Desktop
         }
 
         _initMSE() {
@@ -225,13 +212,6 @@
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';
             }
-            this._initAudioGraph();
-            if (this._audioCtx && this._audioCtx.state === 'suspended') {
-                this._audioCtx.resume();
-            }
-            if (this._gainNode) {
-                this._gainNode.gain.value = 1.0;
-            }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
@@ -260,18 +240,16 @@
                 return Promise.resolve();
             }
             return new Promise(resolve => {
-                let currentVol = this._gainNode ? this._gainNode.gain.value : this.active.volume;
+                let currentVol = this.active.volume;
                 const step = currentVol / 10;
                 this.fadeInterval = setInterval(() => {
                     currentVol -= step;
                     if (currentVol > 0) {
-                        if (this._gainNode) this._gainNode.gain.value = currentVol;
-                        else this.active.volume = currentVol;
+                        this.active.volume = currentVol;
                     } else {
                         clearInterval(this.fadeInterval);
                         this.fadeInterval = null;
                         this.active.pause();
-                        if (this._gainNode) this._gainNode.gain.value = 1.0;
                         this.active.volume = 1.0;
                         resolve();
                     }
@@ -296,7 +274,6 @@
                 this.fadeInterval = null;
             }
             this.active.pause();
-            if (this._gainNode) this._gainNode.gain.value = 1.0;
             this.active.volume = 1.0;
         }
 
@@ -306,15 +283,6 @@
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
-
-            this._initAudioGraph();
-            if (this._audioCtx && this._audioCtx.state === 'suspended') {
-                this._audioCtx.resume();
-            }
-
-            if (this._gainNode) {
-                this._gainNode.gain.value = 0;
-            }
 
             this.active.pause();
 
@@ -384,9 +352,6 @@
                                 try { this._mediaSource.endOfStream(); } catch (e) {}
                             }
 
-                            if (this._gainNode) {
-                                this._gainNode.gain.value = 1.0;
-                            }
 
                             if (this._pendingSeek !== null) {
                                 const target = this._pendingSeek;
