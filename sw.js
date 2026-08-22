@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v111';
+const CACHE_NAME = 'yt-player-cache-v112';
 
 const CORE_ASSETS = [
     './index.html',
@@ -123,7 +123,21 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. For JSON/CSS/JS: Cache-first, no background revalidation
+    // 3. Lyrics (.lrc): Network-first with cache fallback to ensure newly synced lyrics update immediately
+    if (event.request.url.includes('/lyrics/') || event.request.url.includes('.lrc')) {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                }
+                return response;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // 4. For JSON/CSS/JS: Cache-first, no background revalidation
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {

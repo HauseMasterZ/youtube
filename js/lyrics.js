@@ -51,9 +51,22 @@
             const folder = parts[0];
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            const res = await fetch(lyricsUrl, { priority: 'low' });
+            let res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
-            const text = await res.text();
+            let text = await res.text();
+            
+            // If the cached response was an old dummy placeholder, re-verify with a fresh network request
+            if (text.trim() === '[00:00.00] ♪' || text.trim().length <= 25) {
+                try {
+                    const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
+                    if (freshRes.ok) {
+                        const freshText = await freshRes.text();
+                        if (freshText && freshText.trim().length > 25) {
+                            text = freshText;
+                        }
+                    }
+                } catch (err) {}
+            }
             
             // Abort if the user skipped to another track while the fetch was pending
             if (currentPlaybackSequence !== sequenceId) return;
