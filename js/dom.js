@@ -13,9 +13,6 @@
             this.lastKnownTime = 0;
             this._currentUrl = '';
             this._mseEnabled = false;
-            this._audioCtx = null;
-            this._gainNode = null;
-            this._mediaElementSource = null;
             this._pendingSeek = null;
             this._expectedDuration = 0;
             this._streamAbortController = null;
@@ -59,10 +56,6 @@
             });
 
             this._initMSE();
-        }
-
-        _initAudioGraph() {
-            // Disabled Web Audio graph to guarantee 0.0% GPU usage on Desktop
         }
 
         _initMSE() {

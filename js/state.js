@@ -22,7 +22,6 @@
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
-    let isRecovering = false;
     
     // Lyrics State
     window.lyricsActive = false;
@@ -30,12 +29,10 @@
     let currentLyricsIsUnsynced = false;
     let fetchingLyrics = false;
     
-    // UI Throttling
+    // UI Throttling & Queue Management
     let lastRenderTime = -1;
-    let syncRAFId = null;
     let searchDebounceTimer = null;
     let errorSkipTimer = null;
-    // Thumbnails enabled by default on desktop, disabled on mobile
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
