@@ -9,30 +9,8 @@
             if (!allDatabases[folderName]) {
                 const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
                 if (!res.ok) throw new Error();
-                let data = await res.json();
-                
-                data = data.filter(item => {
-                    const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
-                    return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-                }).map(item => {
-                    if (Array.isArray(item)) {
-                        return {
-                            id: item[0],
-                            title: item[1],
-                            channel: item[2],
-                            duration: item[3],
-                            file_path: `${folderName}/${item[0]}.webm`,
-                            thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
-                        };
-                    }
-                    return {
-                        ...item,
-                        file_path: `${folderName}/${item.id}.webm`,
-                        thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
-                    };
-                });
-                
-                allDatabases[folderName] = data;
+                const rawData = await res.json();
+                allDatabases[folderName] = normalizePlaylistData(rawData, folderName);
 
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
                     window.rebuildCrossShuffleDeck();
