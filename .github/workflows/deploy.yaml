@@ -60,19 +60,21 @@ jobs:
           fi
 
       - name: Build, Bundle, and Minify Source Files
+        env:
+          BUILD_VER: ${{ github.sha }}
         run: |
           npm install -g html-minifier-terser terser clean-css-cli
           
-          node -e "
+          node << 'EOF'
           const fs = require('fs');
           const path = require('path');
           const { execSync } = require('child_process');
 
-          const buildVer = '${{ github.sha }}'.substring(0, 10) || Date.now().toString();
+          const buildVer = (process.env.BUILD_VER || Date.now().toString()).substring(0, 10);
 
           function buildDirectory(dir) {
             if (!fs.existsSync(dir)) return;
-            console.log(\`==> Building, bundling, and minifying \${dir} (Build: \${buildVer})...\`);
+            console.log(`==> Building, bundling, and minifying ${dir} (Build: ${buildVer})...`);
 
             // 1. Bundle 8 JS modules into single bundle.min.js
             const jsOrder = ['dom.js', 'utils.js', 'state.js', 'ui.js', 'mediaSession.js', 'lyrics.js', 'playback.js', 'main.js'];
@@ -95,8 +97,8 @@ jobs:
             const indexPath = path.join(dir, 'index.html');
             if (fs.existsSync(indexPath)) {
               let html = fs.readFileSync(indexPath, 'utf8');
-              html = html.replace(/href=\"css\/style\.css(\?v=[^\"]*)?\"/g, `href="css/style.css?v=${buildVer}"`);
-              html = html.replace(/<script\s+src=\"js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^\"]*)?\"><\/script>(\s*)/g, '');
+              html = html.replace(/href="css\/style\.css(\?v=[^"]*)?"/g, `href="css/style.css?v=${buildVer}"`);
+              html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
               html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
               execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
@@ -122,7 +124,7 @@ jobs:
 
           buildDirectory('site-root');
           buildDirectory('site-root/dev');
-          "
+          EOF
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
