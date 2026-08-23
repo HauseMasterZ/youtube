@@ -812,10 +812,19 @@ currentPlaylistData[globalActiveOriginalIndex];
         });
     }
 
-    // --- Register Service Worker for PWA Installability ---
+    // --- Register Service Worker for PWA Installability (Deferred to avoid competing with initial paint) ---
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch((error) => {
-            console.error('ServiceWorker registration failed: ', error);
+        window.addEventListener('load', () => {
+            const registerSW = () => {
+                navigator.serviceWorker.register('sw.js').catch((error) => {
+                    console.error('ServiceWorker registration failed: ', error);
+                });
+            };
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(registerSW, { timeout: 2000 });
+            } else {
+                setTimeout(registerSW, 100);
+            }
         });
     }
 
