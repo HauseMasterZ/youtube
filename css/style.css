@@ -179,11 +179,14 @@
             align-items: center;
             flex-shrink: 0;
             width: 100%;
+            max-width: 520px;
             box-sizing: border-box;
         }
 
         #album-art-container {
             width: 80%;
+            max-width: 420px;
+            max-height: 48vh;
             cursor: pointer;
             position: relative;
             margin-bottom: 20px;
@@ -196,6 +199,9 @@
         #album-art-image {
             width: 100%;
             height: auto;
+            max-height: 48vh;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
             border-radius: 8px;
             display: none;
             background-color: #222226;
@@ -467,8 +473,8 @@
             height: 100%;
         }
 
-        /* Desktop layout */
-        @media (min-width: 1024px) and (orientation: landscape) {
+        /* Desktop / Tablet Landscape layout */
+        @media (min-width: 801px) and (orientation: landscape) {
             .now-playing {
                 max-width: 520px;
             }
