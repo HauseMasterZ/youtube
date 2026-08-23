@@ -148,7 +148,8 @@ jobs:
             if (fs.existsSync(indexPath)) {
               let html = fs.readFileSync(indexPath, 'utf8');
               if (minifiedCss) {
-                html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${minifiedCss}</style>`);
+                const inlinedCss = minifiedCss.replace(/url\((['"]?)\.\.\//g, 'url($1');
+                html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${inlinedCss}</style>`);
               }
               html = html.replace(/<link\s+rel="(preconnect|dns-prefetch)"\s+href="(__API_GATEWAY_URL__|__UPSTREAM_ORIGIN_URL__)"[^>]*>\s*/g, '');
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
