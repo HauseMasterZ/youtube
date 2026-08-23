@@ -766,23 +766,23 @@ currentPlaylistData[globalActiveOriginalIndex];
                     if (res.ok) {
                         const rawData = await res.json();
                         const freshData = normalizePlaylistData(rawData, pl);
-                        
-                        const oldLength = allDatabases[pl].length;
-                        if (freshData.length !== oldLength || freshData[0]?.id !== allDatabases[pl][0]?.id) {
-                            allDatabases[pl] = freshData;
-                            if (pl === currentPl) {
-                                currentPlaylistData = freshData;
-                                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
-                                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                                lastStartIndex = -1;
-                                renderVirtualTracks();
-                            }
+                        allDatabases[pl] = freshData;
+                        if (pl === currentPl) {
+                            currentPlaylistData = freshData;
+                            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
+                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                            lastStartIndex = -1;
+                            renderVirtualTracks();
                         }
                     }
                 } catch (err) {
                     console.warn("Failed to check playlist updates for", pl, err);
                 }
             }
+        }
+        const activeTrack = currentPlaylistData ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
+        if (activeTrack && activeTrack.color && activeTrack.color !== '#000000') {
+            document.documentElement.style.setProperty('--primary-color', activeTrack.color);
         }
     }
 
