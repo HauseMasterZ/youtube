@@ -45,9 +45,8 @@
         }
 
         #lyrics-container {
-            flex: 0 1 40vw;
-            width: 40vw;
-            min-width: 240px;
+            flex: 1;
+            min-width: 320px;
             height: 100%;
             background-color: #000000;
             border: none;
@@ -70,8 +69,8 @@
         }
 
         .player-container {
-            flex: 1 0.05 auto;
-            min-width: 320px;
+            flex: 1 0 auto;
+            min-width: clamp(400px, 32vw, 550px);
             height: 100%;
             background-color: #000000;
             border: none;
@@ -80,12 +79,13 @@
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
 
         .playlist-panel {
-            flex: 0 3 50vw;
+            flex: 0 1 50vw;
             width: 50vw;
-            min-width: 280px;
+            min-width: 220px;
             height: 100%;
             background-color: #000000;
             border: none;
