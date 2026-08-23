@@ -799,6 +799,10 @@
                 padding: 0;
                 color: var(--text-primary);
             }
+            .now-playing:not(.expanded) #btn-shuffle.active-state,
+            .now-playing:not(.expanded) #btn-repeat.active-state {
+                color: var(--primary-color);
+            }
             .now-playing:not(.expanded) #btn-shuffle svg,
             .now-playing:not(.expanded) #btn-repeat svg {
                 width: 16px;
@@ -947,6 +951,10 @@
             .now-playing.expanded #btn-repeat {
                 width: 40px;
                 height: 40px;
+            }
+            .now-playing.expanded #btn-shuffle.active-state,
+            .now-playing.expanded #btn-repeat.active-state {
+                color: var(--primary-color);
             }
             
             .now-playing.expanded #btn-shuffle svg, 
