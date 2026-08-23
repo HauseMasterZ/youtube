@@ -37,7 +37,7 @@
         .main-layout {
             display: flex;
             width: 100%;
-            max-width: calc(100vw - 24px);
+            max-width: 92vw;
             height: 100%; /* Fallback to 100% of body */
             max-height: 97%; /* Prevent hugging edges on desktop */
             gap: 20px;
@@ -870,30 +870,35 @@
 .lyrics-highlight-layer {
     position: absolute; 
     left: 0; 
-    top: 0; 
+    right: 0;
+    margin: 0 auto;
     width: 100%; 
+    max-width: 92%;
+    word-break: break-word;
     background: #000000; 
     color: var(--primary-color); 
     pointer-events: none; 
     display: none; 
-    font-size: clamp(14px, 3.5vw, 18px); 
+    font-size: clamp(15px, 1.15vw, 20px); 
     line-height: 1.5; 
     text-align: center; 
     box-sizing: border-box; 
-    padding: 0 10px; 
+    padding: 0 16px; 
     z-index: 10;
 }
 
 .lyric-line {
     color: var(--text-secondary); 
-    font-size: clamp(14px, 3.5vw, 18px); 
+    font-size: clamp(15px, 1.15vw, 20px); 
     line-height: 1.5; 
     margin: 0; 
     cursor: pointer; 
-    width: fit-content; 
+    width: 100%; 
+    max-width: 92%;
+    word-break: break-word;
     text-align: center; 
     box-sizing: border-box; 
-    padding: 0 10px;
+    padding: 0 16px;
 }
 
 
