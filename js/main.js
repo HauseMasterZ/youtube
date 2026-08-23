@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
-        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) {
+        if (window.innerWidth <= 600 && !nowPlaying.classList.contains("expanded")) {
             if (e.target.closest('.control-btn')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }, {passive: true});
         
         nowPlaying.addEventListener("touchend", (e) => {
-            if (window.innerWidth > 800) return;
+            if (window.innerWidth > 600) return;
             let touchEndY = e.changedTouches[0].screenY;
             if (nowPlaying.classList.contains("expanded") && touchEndY > touchStartY + 50) {
                 history.back();
