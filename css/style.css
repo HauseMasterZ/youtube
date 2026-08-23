@@ -37,7 +37,7 @@
         .main-layout {
             display: flex;
             width: 100%;
-            max-width: 92vw;
+            max-width: calc(100vw - 24px);
             height: 100%; /* Fallback to 100% of body */
             max-height: 97%; /* Prevent hugging edges on desktop */
             gap: 20px;
@@ -47,7 +47,8 @@
 
         #lyrics-container {
             flex: 1;
-            max-width: clamp(450px, 25vw, 700px);
+            min-width: 320px;
+            max-width: none;
             height: 100%;
             background-color: #000000;
             border: none;
@@ -582,6 +583,7 @@
             #lyrics-container {
                 position: absolute;
                 top: 0; left: 0; right: 0; bottom: 0;
+                min-width: 0;
                 max-width: 100%;
                 border-radius: 0;
                 border: none;
