@@ -411,11 +411,13 @@
         }
 
         if (!thumbsDisabled && thumbUrl) {
+            if (albumArtContainer) albumArtContainer.classList.remove('no-art');
             if (thumbToggleHint) thumbToggleHint.style.display = 'none';
             albumArt.style.display = 'block';
             albumArt.onerror = function() {
                 this.removeAttribute('src');
                 this.style.display = 'none';
+                if (albumArtContainer) albumArtContainer.classList.add('no-art');
                 document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             };
             albumArt.src = thumbUrl;
@@ -423,6 +425,7 @@
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
+            if (albumArtContainer) albumArtContainer.classList.add('no-art');
             if (thumbsDisabled && thumbToggleHint) {
                 thumbToggleHint.style.display = 'inline-flex';
                 thumbToggleHint.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5z"/><circle cx="12" cy="12" r="3"/></svg>Show thumbnails';
