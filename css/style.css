@@ -179,11 +179,14 @@
             align-items: center;
             flex-shrink: 0;
             width: 100%;
+            max-width: 500px;
             box-sizing: border-box;
         }
 
         #album-art-container {
             width: 80%;
+            max-width: 380px;
+            max-height: clamp(180px, 35vh, 380px);
             cursor: pointer;
             position: relative;
             margin-bottom: 20px;
@@ -195,7 +198,10 @@
 
         #album-art-image {
             width: 100%;
-            height: auto;
+            height: 100%;
+            max-height: clamp(180px, 35vh, 380px);
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
             border-radius: 8px;
             display: none;
             background-color: #222226;
@@ -468,14 +474,14 @@
         }
 
         /* Desktop layout */
-        @media (min-width: 1024px) and (orientation: landscape) {
+        @media (min-width: 801px) and (orientation: landscape) {
             .now-playing {
-                max-width: 520px;
+                max-width: 500px;
             }
-            #current-title { font-size: 24px; }
-            #current-channel { font-size: 16px; }
-            .main-btn { width: 64px; height: 64px; }
-            .main-btn svg { width: 36px; height: 36px; }
+            #current-title { font-size: clamp(18px, 2vw, 24px); }
+            #current-channel { font-size: clamp(13px, 1.4vw, 16px); }
+            .main-btn { width: clamp(52px, 5vw, 64px); height: clamp(52px, 5vw, 64px); }
+            .main-btn svg { width: clamp(28px, 3vw, 36px); height: clamp(28px, 3vw, 36px); }
         }
 
         .playlist-container::-webkit-scrollbar { width: 6px; }
