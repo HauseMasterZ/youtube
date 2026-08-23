@@ -525,12 +525,10 @@
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
                         this.switching = false;
-                        if (this._gainNode) this._gainNode.gain.value = 1.0;
                         this.dispatchEvent(new Event('error'));
                     }
                 }
             } else {
-                if (this._gainNode) this._gainNode.gain.value = 1.0;
                 if (!preventAutoplay) {
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = "playing";
@@ -553,6 +551,7 @@
     const currentChannel = document.getElementById("current-channel");
     const albumArtContainer = document.getElementById("album-art-container");
     const albumArt = document.getElementById("album-art-image");
+    const thumbToggleHint = document.getElementById("thumb-toggle-hint");
     
     const btnPlayPause = document.getElementById("btn-play-pause");
     const iconPlay = document.getElementById("icon-play");
