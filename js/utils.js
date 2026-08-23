@@ -22,21 +22,29 @@
     }
     function normalizeTrackItem(item, folderName) {
         if (!item) return null;
+        let normalized;
         if (Array.isArray(item)) {
-            return {
+            normalized = {
                 id: item[0],
                 title: item[1],
                 channel: item[2],
                 duration: item[3],
                 file_path: `${folderName}/${item[0]}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
+                thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`,
+                color: item[4] || '#8c73ff'
+            };
+        } else {
+            normalized = {
+                ...item,
+                file_path: `${folderName}/${item.id}.webm`,
+                thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`,
+                color: item.color || '#8c73ff'
             };
         }
-        return {
-            ...item,
-            file_path: `${folderName}/${item.id}.webm`,
-            thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
-        };
+        if (normalized.id && normalized.color) {
+            dominantColorCache.set(normalized.id, normalized.color);
+        }
+        return normalized;
     }
 
     function isValidTrackItem(item) {

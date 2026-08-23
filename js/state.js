@@ -17,7 +17,6 @@
     let repeatMode = 0; 
     
     const dominantColorCache = new Map();
-    const artworkSquareCache = new Map();
 
     let isSeeking = false;
     let crossShuffleHistory = [];
