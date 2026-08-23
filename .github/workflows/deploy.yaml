@@ -43,6 +43,23 @@ jobs:
             rm -rf site-root/dev/.git site-root/dev/.github
           fi
 
+      - name: Pre-Deployment Syntax & Integrity Guard
+        run: |
+          echo "==> Running syntax verification on source JavaScript files..."
+          for f in site-root/js/*.js site-root/sw.js; do
+            if [ -f "$f" ]; then
+              node --check "$f"
+            fi
+          done
+          if [ -d "site-root/dev" ]; then
+            for f in site-root/dev/js/*.js site-root/dev/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
+          fi
+          echo "✓ All source scripts passed syntax verification."
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
@@ -59,12 +76,22 @@ jobs:
             fi
           fi
 
+      - name: Cache npm global tools
+        uses: actions/cache@v4
+        id: npm-cache
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-npm-tools-
+
+      - name: Install Build Tools
+        run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli
+
       - name: Build, Bundle, and Minify Source Files
         env:
           BUILD_VER: ${{ github.sha }}
         run: |
-          npm install -g html-minifier-terser terser clean-css-cli
-          
           node << 'EOF'
           const fs = require('fs');
           const path = require('path');
@@ -126,6 +153,32 @@ jobs:
           buildDirectory('site-root/dev');
           EOF
 
+      - name: Post-Build Integrity Verification
+        run: |
+          echo "==> Verifying production bundle and Service Worker syntax..."
+          node --check site-root/js/bundle.min.js
+          node --check site-root/sw.js
+          if [ -d "site-root/dev" ]; then
+            if [ -f "site-root/dev/js/bundle.min.js" ]; then
+              node --check site-root/dev/js/bundle.min.js
+            fi
+            if [ -f "site-root/dev/sw.js" ]; then
+              node --check site-root/dev/sw.js
+            fi
+          fi
+          echo "✓ All production bundles verified successfully."
+
+      - name: Audit with Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            http://localhost:8080/index.html
+          staticDistDir: site-root
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+          configPath: ''
+        continue-on-error: true
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -134,3 +187,21 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Purge Cloudflare CDN Cache
+        if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+        env:
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "Purging Cloudflare edge cache for zone $CLOUDFLARE_ZONE_ID..."
+          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          
+          if echo "$RESPONSE" | grep -q '"success":true'; then
+            echo "✓ Cloudflare edge cache successfully purged!"
+          else
+            echo "⚠ Cloudflare purge notice: $RESPONSE"
+          fi
