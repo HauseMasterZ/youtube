@@ -468,7 +468,7 @@
         }
 
         /* Desktop layout */
-        @media (min-width: 1024px) and (orientation: landscape) {
+        @media (min-width: 801px) and (orientation: landscape) {
             .now-playing {
                 max-width: 520px;
             }
