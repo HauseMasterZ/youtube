@@ -586,11 +586,12 @@
             }
             .player-container {
                 height: auto;
-                max-height: 38vh;
+                max-height: 54vh;
                 min-width: 0;
                 flex: none;
                 border: none;
-                justify-content: flex-start;
+                justify-content: center;
+                align-items: center;
             }
             .playlist-panel {
                 flex: 1;
@@ -606,14 +607,15 @@
 
         @media (orientation: portrait) {
             .now-playing:not(.expanded) {
-                padding: 10px 16px 6px 16px;
+                padding: 16px 20px 10px 20px;
+                max-width: 520px;
             }
             .now-playing:not(.expanded) #album-art-container {
-                width: clamp(140px, 20vh, 200px);
-                height: clamp(140px, 20vh, 200px);
-                max-width: 200px;
-                max-height: 20vh;
-                margin-bottom: 8px;
+                width: clamp(200px, 32vh, 420px);
+                height: clamp(200px, 32vh, 420px);
+                max-width: 420px;
+                max-height: 32vh;
+                margin-bottom: 14px;
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: 100%;
@@ -623,22 +625,31 @@
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
-                margin-bottom: 4px;
+                margin-bottom: 6px;
             }
             .now-playing:not(.expanded) #current-title {
-                font-size: 16px;
+                font-size: clamp(18px, 2.2vh, 24px);
             }
             .now-playing:not(.expanded) #current-channel {
-                font-size: 13px;
-                margin: 2px 0 6px 0;
+                font-size: clamp(13px, 1.6vh, 16px);
+                margin: 3px 0 8px 0;
             }
             .now-playing:not(.expanded) .progress-container {
-                margin: 4px 0;
-                width: 90%;
-                max-width: 450px;
+                margin: 8px 0;
+                width: 92%;
+                max-width: 500px;
             }
             .now-playing:not(.expanded) .playback-controls {
-                gap: 12px;
+                gap: 16px;
+                margin-top: 4px;
+            }
+            .now-playing:not(.expanded) .main-btn {
+                width: 56px;
+                height: 56px;
+            }
+            .now-playing:not(.expanded) .main-btn svg {
+                width: 30px;
+                height: 30px;
             }
         }
 
