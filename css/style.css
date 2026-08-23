@@ -51,13 +51,21 @@
             background-color: #000000;
             border: none;
             border-radius: 0;
-            padding: 20px 16px;
+            padding: 0;
             box-sizing: border-box;
             position: relative;
             display: none; /* flex when active */
             flex-direction: column;
             align-items: center;
             overflow: hidden;
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        #lyrics-container::-webkit-scrollbar {
+            display: none;
+            width: 0;
+            height: 0;
         }
 
         .player-container {
@@ -75,7 +83,8 @@
         }
 
         .playlist-panel {
-            flex: 0 1 clamp(350px, 28vw, 480px);
+            flex: 0 1 50vw;
+            width: 50vw;
             min-width: 220px;
             height: 100%;
             background-color: #000000;
@@ -842,6 +851,14 @@
     align-items: center; 
     gap: 16px; 
     padding-bottom: 20px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#lyrics-content::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
 }
 
 #playlist-message {
