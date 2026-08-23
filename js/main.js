@@ -514,7 +514,7 @@ currentPlaylistData[globalActiveOriginalIndex];
             }
         }, 3000);
     });
-    const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5z"/><circle cx="12" cy="12" r="3"/></svg>';
+    const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>';
 
     function updateThumbToggleUI() {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
@@ -569,6 +569,9 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
+        // In mobile mini mode, unexpanded clicks are handled by the main miniplayer expand listener
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
+
         e.stopPropagation();
         
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
@@ -625,6 +628,8 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastPlayerDblTime = 0;
     let lastPlayerTapX = 0;
     nowPlaying.addEventListener("click", (e) => {
+        // If in mobile mini mode and unexpanded, do not trigger seek gestures
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
         if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         if (!isPlaying) return;
@@ -654,6 +659,8 @@ currentPlaylistData[globalActiveOriginalIndex];
         }, {passive: true});
 
         nowPlaying.addEventListener("touchend", (e) => {
+            // If in mobile mini mode and unexpanded, do not trigger seek gestures
+            if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
             if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
             const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
             if (!isPlaying) return;

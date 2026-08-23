@@ -764,17 +764,18 @@
             }
             
             .now-playing.expanded #thumb-toggle-hint {
-                font-size: 14px;
-                padding: 40% 0 0 0;
-                height: 100%;
-                box-sizing: border-box;
-                flex-direction: column;
+                font-size: 13px;
+                padding: 8px 12px;
+                height: auto;
+                flex-direction: row;
+                margin-bottom: 16px;
+                display: inline-flex;
             }
             .now-playing.expanded #thumb-toggle-hint svg {
-                width: 32px;
-                height: 32px;
-                display: block;
-                margin: 0 auto 10px auto;
+                width: 16px;
+                height: 16px;
+                display: inline-block;
+                margin: 0;
             }
             
             .now-playing:not(.expanded) .title-channel-wrapper {
