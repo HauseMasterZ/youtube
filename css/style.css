@@ -686,7 +686,7 @@
             }
         }
 
-        @media (max-width: 800px) {
+        @media (max-width: 600px) {
             /* Expandable Pill Player */
             .now-playing {
                 position: fixed;
