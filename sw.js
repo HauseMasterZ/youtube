@@ -44,6 +44,22 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+// LRU Cache Size Limiter to protect browser storage quotas
+async function limitCacheSize(cacheName, maxItems) {
+    try {
+        const cache = await caches.open(cacheName);
+        const keys = await cache.keys();
+        if (keys.length > maxItems) {
+            const deleteCount = keys.length - maxItems;
+            for (let i = 0; i < deleteCount; i++) {
+                await cache.delete(keys[i]);
+            }
+        }
+    } catch (e) {
+        // Ignore cache lock errors
+    }
+}
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
@@ -91,6 +107,7 @@ self.addEventListener('fetch', (event) => {
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
                         cache.put(cacheKeyUrl.href, response.clone());
+                        limitCacheSize('yt-player-media', 120);
                         return response;
                     });
                 });
@@ -111,6 +128,7 @@ self.addEventListener('fetch', (event) => {
                     const response = await fetch(event.request);
                     if (response.ok || response.type === 'opaque') {
                         cache.put(event.request, response.clone());
+                        limitCacheSize(THUMBS_CACHE, 300);
                     }
                     return response;
                 } catch (err) {
