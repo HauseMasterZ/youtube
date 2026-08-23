@@ -45,11 +45,11 @@
         }
 
         #lyrics-container {
-            flex: 0 0 clamp(300px, 25vw, 500px);
+            flex: 1;
+            min-width: 320px;
             height: 100%;
             background-color: #000000;
             border: none;
-            border-right: 1px solid var(--border-color);
             border-radius: 0;
             padding: 20px 16px;
             box-sizing: border-box;
@@ -65,18 +65,19 @@
             min-width: 0;
             height: 100%;
             background-color: #000000;
+            border: none;
             overflow: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-right: 1px solid var(--border-color);
         }
 
         .playlist-panel {
-            flex: 0 0 clamp(350px, 30vw, 550px);
+            flex: 0 0 clamp(350px, 28vw, 480px);
             height: 100%;
             background-color: #000000;
+            border: none;
             display: flex;
             flex-direction: column;
             overflow: hidden;
