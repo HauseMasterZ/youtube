@@ -180,6 +180,8 @@ jobs:
       - name: Audit Deployed Site with Lighthouse CI
         if: steps.deployment.outputs.page_url != ''
         uses: treosh/lighthouse-ci-action@v12
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
             ${{ steps.deployment.outputs.page_url }}
