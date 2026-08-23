@@ -20,28 +20,89 @@
         const s = parseInt(match[3] || 0, 10);
         return h * 3600 + m * 60 + s;
     }
+    function normalizeTrackItem(item, folderName) {
+        if (!item) return null;
+        if (Array.isArray(item)) {
+            return {
+                id: item[0],
+                title: item[1],
+                channel: item[2],
+                duration: item[3],
+                file_path: `${folderName}/${item[0]}.webm`,
+                thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
+            };
+        }
+        return {
+            ...item,
+            file_path: `${folderName}/${item.id}.webm`,
+            thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
+        };
+    }
+
+    function isValidTrackItem(item) {
+        if (!item) return false;
+        const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
+        return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
+    }
+
     function normalizePlaylistData(data, folderName) {
         if (!Array.isArray(data)) return [];
-        return data.filter(item => {
-            const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
-            return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
-        }).map(item => {
-            if (Array.isArray(item)) {
-                return {
-                    id: item[0],
-                    title: item[1],
-                    channel: item[2],
-                    duration: item[3],
-                    file_path: `${folderName}/${item[0]}.webm`,
-                    thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`
-                };
+        
+        const result = [];
+        let i = 0;
+        
+        // Immediate pass: Normalize the first 30 valid tracks for instant 0ms mount
+        for (; i < data.length && result.length < 30; i++) {
+            const item = data[i];
+            if (isValidTrackItem(item)) {
+                result.push(normalizeTrackItem(item, folderName));
             }
-            return {
-                ...item,
-                file_path: `${folderName}/${item.id}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`
+        }
+
+        // Background idle slice: Normalize the rest without blocking the main thread
+        if (i < data.length) {
+            const scheduleIdle = (cb) => {
+                if ('requestIdleCallback' in window) {
+                    window.requestIdleCallback(cb, { timeout: 2000 });
+                } else {
+                    setTimeout(() => cb({ timeRemaining: () => 15, didTimeout: true }), 16);
+                }
             };
-        });
+
+            const processRemaining = (deadline) => {
+                while (i < data.length && (deadline.timeRemaining() > 1 || deadline.didTimeout)) {
+                    const chunkLimit = Math.min(i + 50, data.length);
+                    for (; i < chunkLimit; i++) {
+                        const item = data[i];
+                        if (isValidTrackItem(item)) {
+                            result.push(normalizeTrackItem(item, folderName));
+                        }
+                    }
+                }
+
+                if (i < data.length) {
+                    scheduleIdle(processRemaining);
+                } else {
+                    // Full playlist normalized: sync UI list bounds & cross-shuffle deck
+                    if (typeof playlistSelect !== 'undefined' && playlistSelect.value === folderName && typeof searchInput !== 'undefined' && searchInput.value.trim() === '') {
+                        filteredIndices = result.map((_, idx) => ({ playlist: folderName, index: idx }));
+                        if (typeof trackList !== 'undefined') {
+                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                        }
+                        if (typeof generateQueue === 'function' && (!globalActivePlaylist || queueIndex === -1)) {
+                            generateQueue(false, folderName);
+                        }
+                    }
+                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                        window.rebuildCrossShuffleDeck();
+                    }
+                }
+            };
+
+            scheduleIdle(processRemaining);
+        }
+
+        return result;
     }
 
     // Environment Feature Checks
