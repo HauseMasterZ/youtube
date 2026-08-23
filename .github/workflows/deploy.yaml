@@ -177,9 +177,9 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Wait 5s for GitHub Pages CDN Propagation
+      - name: Wait 15s for GitHub Pages CDN Propagation
         if: steps.deployment.outputs.page_url != ''
-        run: sleep 5
+        run: sleep 15
 
       - name: Audit Deployed Site with Lighthouse CI
         if: steps.deployment.outputs.page_url != ''
