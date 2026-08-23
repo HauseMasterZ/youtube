@@ -775,33 +775,31 @@ currentPlaylistData[globalActiveOriginalIndex];
         loadPlaylist(playlistSelect.value);
     }
     
-    // Keyboard Shortcuts (Desktop Only)
-    if (!isMobileDevice) {
-        window.addEventListener('keydown', (e) => {
-            if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range')) return;
-            
-            if (e.key === ':' || (e.key === ';' && e.shiftKey)) {
-                btnPrev.click();
-            } else if (e.key === '"' || (e.key === "'" && e.shiftKey)) {
-                btnNext.click();
-            } else if (e.key === 'ArrowLeft') {
-                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
-            } else if (e.key === 'ArrowRight') {
-                let dur = audioPlayer.duration;
-                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
-                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-            } else if (e.key === ' ') {
-                if (e.repeat) {
-                    e.preventDefault();
-                    return;
-                }
-                btnPlayPause.click();
+    // Keyboard Shortcuts (Universal)
+    window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range')) return;
+        
+        if (e.key === ':' || (e.key === ';' && e.shiftKey)) {
+            btnPrev.click();
+        } else if (e.key === '"' || (e.key === "'" && e.shiftKey)) {
+            btnNext.click();
+        } else if (e.key === 'ArrowLeft') {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
+        } else if (e.key === 'ArrowRight') {
+            let dur = audioPlayer.duration;
+            if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+            audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
+        } else if (e.key === ' ') {
+            if (e.repeat) {
                 e.preventDefault();
-            } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-                searchInput.focus();
+                return;
             }
-        });
-    }
+            btnPlayPause.click();
+            e.preventDefault();
+        } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            searchInput.focus();
+        }
+    });
 
     // PWA Install Button Logic
     let deferredPrompt;
