@@ -201,7 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, {passive: true});
 
     lyricsContainer.addEventListener("touchend", (e) => {
-        if (window.innerWidth > 1024) return;
+        if (window.innerWidth > 1110) return;
         let touchEndY = e.changedTouches[0].screenY;
         const lyricsContent = document.getElementById('lyrics-content');
         
@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
-        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) {
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
             if (e.target.closest('.control-btn')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }, {passive: true});
         
         nowPlaying.addEventListener("touchend", (e) => {
-            if (window.innerWidth > 800) return;
+            if (window.innerWidth > 750) return;
             let touchEndY = e.changedTouches[0].screenY;
             if (nowPlaying.classList.contains("expanded") && touchEndY > touchStartY + 50) {
                 history.back();
@@ -570,7 +570,7 @@ currentPlaylistData[globalActiveOriginalIndex];
     
     albumArtContainer.addEventListener("click", (e) => {
         // In mobile mini mode, unexpanded clicks are handled by the main miniplayer expand listener
-        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
 
         e.stopPropagation();
         
@@ -629,7 +629,7 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastPlayerTapX = 0;
     nowPlaying.addEventListener("click", (e) => {
         // If in mobile mini mode and unexpanded, do not trigger seek gestures
-        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
         if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         if (!isPlaying) return;
@@ -660,7 +660,7 @@ currentPlaylistData[globalActiveOriginalIndex];
 
         nowPlaying.addEventListener("touchend", (e) => {
             // If in mobile mini mode and unexpanded, do not trigger seek gestures
-            if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) return;
+            if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
             if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
             const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
             if (!isPlaying) return;
