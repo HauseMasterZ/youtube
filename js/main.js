@@ -201,7 +201,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, {passive: true});
 
     lyricsContainer.addEventListener("touchend", (e) => {
-        if (window.innerWidth > 800) return;
+        if (window.innerWidth > 1024) return;
         let touchEndY = e.changedTouches[0].screenY;
         const lyricsContent = document.getElementById('lyrics-content');
         
@@ -514,6 +514,8 @@ currentPlaylistData[globalActiveOriginalIndex];
             }
         }, 3000);
     });
+    const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5z"/><circle cx="12" cy="12" r="3"/></svg>';
+
     function updateThumbToggleUI() {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         if (thumbsDisabled) {
@@ -521,7 +523,7 @@ currentPlaylistData[globalActiveOriginalIndex];
             if (albumArtContainer) albumArtContainer.classList.add('no-art');
             if (thumbToggleHint) {
                 thumbToggleHint.style.display = 'flex';
-                thumbToggleHint.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5C21.27 7.61 17 4.5 12 4.5zm0 13c-3.04 0-5.5-2.46-5.5-5.5S8.96 6.5 12 6.5s5.5 2.46 5.5 5.5-2.46 5.5-5.5 5.5z"/><circle cx="12" cy="12" r="3"/></svg>Show thumbnails';
+                thumbToggleHint.innerHTML = `${eyeIconSvg}Show thumbnails`;
             }
             document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         } else {
@@ -544,7 +546,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                 if (albumArtContainer) albumArtContainer.classList.add('no-art');
                 if (thumbToggleHint) {
                     thumbToggleHint.style.display = 'flex';
-                    thumbToggleHint.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>Hide thumbnails';
+                    thumbToggleHint.innerHTML = `${eyeIconSvg}Hide thumbnails`;
                 }
             }
         }
@@ -553,24 +555,25 @@ currentPlaylistData[globalActiveOriginalIndex];
     // Initialize thumb toggle hint visibility
     updateThumbToggleUI();
 
+    function performSeekDelta(delta) {
+        if (!audioPlayer.src) return;
+        let dur = audioPlayer.duration;
+        if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+        let targetTime = Math.max(0, Math.min(dur || 0, audioPlayer.currentTime + delta));
+        audioPlayer.currentTime = targetTime;
+        updateTimeUI(audioPlayer.currentTime);
+        if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
+        updateMediaSessionPosition();
+    }
+
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
         e.stopPropagation();
         
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-        const rect = albumArtContainer.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
-        const width = rect.width;
         
-        // Prevent NaN logic from defaulting to isMiddle
-        if (isNaN(clickX) || width === 0) return;
-
-        const isLeft = clickX < width * 0.33;
-        const isRight = clickX > width * 0.66;
-        const isMiddle = !isLeft && !isRight;
-
-        if (isMiddle || !isPlaying) {
+        if (e.target.closest('#thumb-toggle-hint') || !isPlaying) {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
@@ -595,25 +598,86 @@ currentPlaylistData[globalActiveOriginalIndex];
             return;
         }
 
+        const rect = albumArtContainer.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const width = rect.width;
+        if (isNaN(clickX) || width === 0) return;
+
+        const isLeft = clickX < width * 0.35;
+        const isRight = clickX > width * 0.65;
+        const isMiddle = !isLeft && !isRight;
+
         const now = Date.now();
         const isDoubleClick = (now - lastArtClickTime) < 300;
         lastArtClickTime = now;
-        if (isDoubleClick) {
-            if (isLeft) {
-                audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            } else if (isRight) {
-                let dur = audioPlayer.duration;
-                if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
-                audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-                updateTimeUI(audioPlayer.currentTime);
-                if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-                updateMediaSessionPosition();
-            }
+
+        if (isDoubleClick && (isLeft || isRight)) {
+            if (isLeft) performSeekDelta(-5);
+            else if (isRight) performSeekDelta(5);
+        } else if (isMiddle && !thumbsDisabled) {
+            thumbsDisabled = true;
+            updateThumbToggleUI();
+            lastStartIndex = -1;
+            renderVirtualTracks();
         }
     });
+
+    let lastPlayerDblTime = 0;
+    let lastPlayerTapX = 0;
+    nowPlaying.addEventListener("click", (e) => {
+        if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
+        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+        if (!isPlaying) return;
+
+        const now = Date.now();
+        if (now - lastPlayerDblTime < 300) {
+            const rect = nowPlaying.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            if (clickX < width * 0.4) {
+                performSeekDelta(-5);
+            } else if (clickX > width * 0.6) {
+                performSeekDelta(5);
+            }
+            lastPlayerDblTime = 0;
+        } else {
+            lastPlayerDblTime = now;
+        }
+    });
+
+    if (hasTouch) {
+        let touchStartSeekY = 0;
+        nowPlaying.addEventListener("touchstart", (e) => {
+            if (e.touches && e.touches.length > 0) {
+                touchStartSeekY = e.touches[0].screenY;
+            }
+        }, {passive: true});
+
+        nowPlaying.addEventListener("touchend", (e) => {
+            if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
+            const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+            if (!isPlaying) return;
+
+            const touch = e.changedTouches && e.changedTouches[0];
+            if (!touch || Math.abs(touch.screenY - touchStartSeekY) > 30) return;
+
+            const now = Date.now();
+            if (now - lastPlayerDblTime < 300 && Math.abs(touch.clientX - lastPlayerTapX) < 60) {
+                const rect = nowPlaying.getBoundingClientRect();
+                const clickX = touch.clientX - rect.left;
+                const width = rect.width;
+                if (clickX < width * 0.4) {
+                    performSeekDelta(-5);
+                } else if (clickX > width * 0.6) {
+                    performSeekDelta(5);
+                }
+                lastPlayerDblTime = 0;
+            } else {
+                lastPlayerDblTime = now;
+                lastPlayerTapX = touch.clientX;
+            }
+        }, {passive: true});
+    }
 
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
