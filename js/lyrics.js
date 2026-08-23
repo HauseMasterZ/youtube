@@ -183,11 +183,20 @@
                 const highlightLayer = document.getElementById('lyrics-highlight-layer');
                 
                 if (highlightLayer) {
-                    highlightLayer.style.display = 'block';
-                    highlightLayer.textContent = cache.text;
-                    highlightLayer.style.height = `${cache.height}px`;
-                    highlightLayer.style.top = `${cache.top}px`;
-                    highlightLayer.style.color = 'var(--primary-color)';
+                    if (highlightLayer.textContent !== cache.text) {
+                        highlightLayer.textContent = cache.text;
+                    }
+                    const topPx = `${cache.top}px`;
+                    if (highlightLayer.style.top !== topPx) {
+                        highlightLayer.style.top = topPx;
+                    }
+                    const heightPx = `${cache.height}px`;
+                    if (highlightLayer.style.height !== heightPx) {
+                        highlightLayer.style.height = heightPx;
+                    }
+                    if (highlightLayer.style.display !== 'block') {
+                        highlightLayer.style.display = 'block';
+                    }
                 }
             }
         }
