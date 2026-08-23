@@ -157,7 +157,7 @@
                     const highlightLayer = document.getElementById('lyrics-highlight-layer');
                     if (highlightLayer) {
                         highlightLayer.style.height = `${cache.height}px`;
-                        highlightLayer.style.transform = `translateY(${cache.top}px)`;
+                        highlightLayer.style.top = `${cache.top}px`;
                     }
                 }
             }
@@ -186,7 +186,7 @@
                     highlightLayer.style.display = 'block';
                     highlightLayer.textContent = cache.text;
                     highlightLayer.style.height = `${cache.height}px`;
-                    highlightLayer.style.transform = `translateY(${cache.top}px)`;
+                    highlightLayer.style.top = `${cache.top}px`;
                     highlightLayer.style.color = 'var(--primary-color)';
                 }
             }
