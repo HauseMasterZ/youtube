@@ -44,6 +44,21 @@
                     playlistContainer.scrollTop = 0;
                     renderVirtualTracks();
                 }
+
+                // Once initial playlist is loaded and rendered, register SW in background
+                if (!window._swRegistered && 'serviceWorker' in navigator) {
+                    window._swRegistered = true;
+                    const registerSW = () => {
+                        navigator.serviceWorker.register('sw.js').catch((error) => {
+                            console.error('ServiceWorker registration failed: ', error);
+                        });
+                    };
+                    if ('requestIdleCallback' in window) {
+                        requestIdleCallback(registerSW, { timeout: 5000 });
+                    } else {
+                        setTimeout(registerSW, 500);
+                    }
+                }
             });
         } catch (error) {
             console.error(error);
