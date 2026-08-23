@@ -819,23 +819,7 @@ currentPlaylistData[globalActiveOriginalIndex];
         });
     }
 
-    // --- Register Service Worker for PWA Installability (Deferred with 3s buffer after load) ---
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            setTimeout(() => {
-                const registerSW = () => {
-                    navigator.serviceWorker.register('sw.js').catch((error) => {
-                        console.error('ServiceWorker registration failed: ', error);
-                    });
-                };
-                if ('requestIdleCallback' in window) {
-                    requestIdleCallback(registerSW, { timeout: 2000 });
-                } else {
-                    registerSW();
-                }
-            }, 3000);
-        });
-    }
+
 
     // --- Startup Strategy: Desktop loads all 3 in parallel; Mobile loads 1 on-demand ---
     requestAnimationFrame(() => {
