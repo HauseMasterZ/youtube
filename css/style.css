@@ -769,11 +769,9 @@
                 color: var(--text-secondary);
             }
             
-            /* Hide secondary controls in mini mode to maximize title/artist space */
+            /* Hide only progress bar and lyrics hint in mini mode */
             .now-playing:not(.expanded) .progress-container, 
-            .now-playing:not(.expanded) #lyrics-toggle-hint,
-            .now-playing:not(.expanded) #btn-shuffle, 
-            .now-playing:not(.expanded) #btn-repeat {
+            .now-playing:not(.expanded) #lyrics-toggle-hint {
                 display: none !important;
             }
             
@@ -783,16 +781,36 @@
                 margin: 0;
                 display: flex;
                 align-items: center;
-                gap: 4px;
+                gap: 2px;
                 flex-shrink: 0;
+            }
+            
+            .now-playing:not(.expanded) #btn-shuffle,
+            .now-playing:not(.expanded) #btn-repeat {
+                width: 28px;
+                height: 28px;
+                min-width: 28px;
+                min-height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border: none;
+                padding: 0;
+                color: var(--text-primary);
+            }
+            .now-playing:not(.expanded) #btn-shuffle svg,
+            .now-playing:not(.expanded) #btn-repeat svg {
+                width: 16px;
+                height: 16px;
             }
             
             .now-playing:not(.expanded) #btn-prev,
             .now-playing:not(.expanded) #btn-next {
-                width: 34px;
-                height: 34px;
-                min-width: 34px;
-                min-height: 34px;
+                width: 32px;
+                height: 32px;
+                min-width: 32px;
+                min-height: 32px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
