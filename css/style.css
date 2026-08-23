@@ -586,9 +586,11 @@
             }
             .player-container {
                 height: auto;
+                max-height: 38vh;
                 min-width: 0;
                 flex: none;
                 border: none;
+                justify-content: flex-start;
             }
             .playlist-panel {
                 flex: 1;
@@ -599,6 +601,44 @@
                 flex-direction: column;
                 overflow: hidden;
                 border: none;
+            }
+        }
+
+        @media (orientation: portrait) {
+            .now-playing:not(.expanded) {
+                padding: 10px 16px 6px 16px;
+            }
+            .now-playing:not(.expanded) #album-art-container {
+                width: clamp(140px, 20vh, 200px);
+                height: clamp(140px, 20vh, 200px);
+                max-width: 200px;
+                max-height: 20vh;
+                margin-bottom: 8px;
+            }
+            .now-playing:not(.expanded) #album-art-image {
+                width: 100%;
+                height: 100%;
+                aspect-ratio: 1 / 1;
+                object-fit: cover;
+                border-radius: 8px;
+            }
+            .now-playing:not(.expanded) .title-channel-wrapper {
+                margin-bottom: 4px;
+            }
+            .now-playing:not(.expanded) #current-title {
+                font-size: 16px;
+            }
+            .now-playing:not(.expanded) #current-channel {
+                font-size: 13px;
+                margin: 2px 0 6px 0;
+            }
+            .now-playing:not(.expanded) .progress-container {
+                margin: 4px 0;
+                width: 90%;
+                max-width: 450px;
+            }
+            .now-playing:not(.expanded) .playback-controls {
+                gap: 12px;
             }
         }
 
