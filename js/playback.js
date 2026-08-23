@@ -381,11 +381,8 @@
         const thumbUrl = getThumbUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
-        if (dominantColorCache.has(track.id)) {
-            document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-        } else if (thumbsDisabled) {
-            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-        }
+        const activeColor = (!thumbsDisabled && track.color) ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+        document.documentElement.style.setProperty('--primary-color', activeColor);
 
         if (preloadedFetches.has(cacheKey)) {
             const controller = preloadedFetches.get(cacheKey);
@@ -394,24 +391,11 @@
         }
         
         if (hasMediaSession) {
-            let squareArt = artworkSquareCache.get(track.id);
-            if (!squareArt && !thumbsDisabled && typeof getSquareCroppedArtwork === 'function') {
-                const cachedEntry = typeof thumbCache !== 'undefined' ? (thumbCache.get(thumbUrl) || thumbCache.get(track.id)) : null;
-                const cachedImg = cachedEntry ? (cachedEntry.img || (cachedEntry instanceof HTMLImageElement ? cachedEntry : null)) : null;
-                if (cachedImg && (cachedImg.naturalWidth || cachedImg.width)) {
-                    squareArt = getSquareCroppedArtwork(cachedImg, track.id);
-                } else if (albumArt && albumArt.src === thumbUrl && albumArt.complete && (albumArt.naturalWidth || albumArt.width)) {
-                    squareArt = getSquareCroppedArtwork(albumArt, track.id);
-                }
-            }
-
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
             
-            // STRICT 1:1 RULE: NEVER pass raw 16:9 thumbnail (thumbUrl) to MediaMetadata.
-            // Only pass pre-cropped 1:1 square JPEG or 1:1 square fallback icon.
-            const artworkSrc = (!thumbsDisabled && squareArt) ? squareArt : fallbackIcon;
+            const artworkSrc = (!thumbsDisabled && thumbUrl) ? thumbUrl : fallbackIcon;
             const artworkList = [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }];
 
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -438,7 +422,6 @@
                 document.documentElement.style.setProperty('--primary-color', '#8c73ff');
             };
             albumArt.src = thumbUrl;
-            fetchVisuals(track.id, thumbUrl, sequenceId, track);
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
@@ -456,86 +439,6 @@
             loadLyrics(track);
         }
     }
-
-    function fetchVisuals(trackId, thumbUrl, sequenceId, track, isPreload = false) {
-        if (!thumbUrl) return;
-        const hasCachedColor = dominantColorCache.has(trackId);
-        const hasCachedSquare = artworkSquareCache.has(trackId);
-        
-        const isCurrentActive = () => {
-            const cur = (allDatabases[globalActivePlaylist] && allDatabases[globalActivePlaylist][globalActiveOriginalIndex])
-                     || (currentPlaylistData && (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]));
-            return cur && cur.id === trackId;
-        };
-
-        if (!isPreload && isCurrentActive()) {
-            if (hasCachedColor) {
-                document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(trackId));
-            }
-
-            if (hasCachedSquare && hasMediaSession && !thumbsDisabled && track) {
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: [{ src: artworkSquareCache.get(trackId), sizes: '512x512', type: 'image/jpeg' }]
-                });
-            }
-        }
-
-        if (hasCachedColor && hasCachedSquare) return;
-
-        (async () => {
-            try {
-                const res = await fetch(thumbUrl);
-                if (!res.ok) throw new Error("Thumb fetch error");
-                const blob = await res.blob();
-                if (!isPreload && currentPlaybackSequence !== sequenceId) return;
-
-                const blobUrl = URL.createObjectURL(blob);
-                const offscreenImg = new Image();
-                offscreenImg.onload = () => {
-                    try {
-                        let color = dominantColorCache.get(trackId);
-                        if (!color) {
-                            color = getDominantColor(offscreenImg, trackId);
-                        }
-                        let squareData = artworkSquareCache.get(trackId);
-                        if (!squareData && typeof getSquareCroppedArtwork === 'function') {
-                            squareData = getSquareCroppedArtwork(offscreenImg, trackId);
-                        }
-
-                        if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId) {
-                            if (color && !thumbsDisabled) {
-                                document.documentElement.style.setProperty('--primary-color', color);
-                            }
-                            if (squareData && hasMediaSession && !thumbsDisabled && track) {
-                                navigator.mediaSession.metadata = new MediaMetadata({
-                                    title: track.title,
-                                    artist: track.channel,
-                                    artwork: [{ src: squareData, sizes: '512x512', type: 'image/jpeg' }]
-                                });
-                            }
-                        }
-                    } catch (err) {
-                        console.warn("Visual extraction error:", err);
-                    } finally {
-                        URL.revokeObjectURL(blobUrl);
-                    }
-                };
-                offscreenImg.onerror = () => {
-                    URL.revokeObjectURL(blobUrl);
-                };
-                offscreenImg.src = blobUrl;
-            } catch (e) {
-                if (!isPreload && isCurrentActive() && currentPlaybackSequence === sequenceId && !dominantColorCache.has(trackId)) {
-                    document.documentElement.style.setProperty('--primary-color', '#8c73ff');
-                }
-            }
-        })();
-    }
-    window.fetchVisuals = fetchVisuals;
-
-    // Removed old Blob preloadTrack, SmartBuffer handles it natively
 
     function triggerPreloads() {
         let nextTrack = null;
@@ -556,22 +459,25 @@
         const nextCacheKey = nextTrack ? getAudioUrl(nextTrack) : null;
         const currentTrack = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
         const currentCacheKey = currentTrack ? getAudioUrl(currentTrack) : null;
-        
-        for (const url of preloadedFetches.keys()) {
+
+        // Cleanup stale preloads
+        for (const [url, controller] of preloadedFetches.entries()) {
             if (url !== nextCacheKey && url !== currentCacheKey) {
-                const controller = preloadedFetches.get(url);
                 if (controller && controller.abort) controller.abort();
                 preloadedFetches.delete(url);
             }
         }
-        
+
         if (nextTrack) {
             const audioUrl = getAudioUrl(nextTrack);
             if (!preloadedFetches.has(audioUrl)) {
                 const controller = new AbortController();
-                const fetchPromise = caches.match(audioUrl).then(cachedResponse => {
-                    if (cachedResponse) return cachedResponse.blob();
-                    return fetch(audioUrl, { priority: 'low', signal: controller.signal }).then(response => {
+                const fetchPromise = caches.open('yt-player-media').then(cache => {
+                    return cache.match(audioUrl).then(match => {
+                        if (match) return; // Already in media cache
+                        return fetch(audioUrl, { signal: controller.signal });
+                    }).then(response => {
+                        if (!response) return;
                         if (!response.ok) throw new Error();
                         const cloned = response.clone();
                         caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned)).catch(e => {});
@@ -581,10 +487,5 @@
                 fetchPromise.catch(e => {});
                 preloadedFetches.set(audioUrl, controller);
             }
-
-            if (!thumbsDisabled && getThumbUrl(nextTrack)) {
-                fetchVisuals(nextTrack.id, getThumbUrl(nextTrack), currentPlaybackSequence, nextTrack, true);
-            }
         }
     }
-

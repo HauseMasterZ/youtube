@@ -326,11 +326,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
                 if (!thumbsDisabled) {
-                    const squareArt = artworkSquareCache.get(track.id);
                     const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
-                    const art = squareArt || rawArt;
-                    if (art) {
-                        navigator.mediaSession.metadata.artwork = [{ src: art, sizes: '512x512', type: 'image/jpeg' }];
+                    if (rawArt) {
+                        navigator.mediaSession.metadata.artwork = [{ src: rawArt, sizes: '512x512', type: 'image/jpeg' }];
                     }
                 }
             }
@@ -537,11 +535,8 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    if (dominantColorCache.has(track.id)) {
-                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                    } else if (typeof window.fetchVisuals === 'function') {
-                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
-                    }
+                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
                 }
             } else {
                 albumArt.style.display = 'none';
@@ -585,14 +580,10 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    if (dominantColorCache.has(track.id)) {
-                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                    } else if (typeof window.fetchVisuals === 'function') {
-                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
-                    }
+                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
-                        const squareArt = artworkSquareCache.get(track.id);
-                        navigator.mediaSession.metadata.artwork = [{ src: squareArt || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
                     }
                 }
             }
@@ -610,14 +601,10 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    if (dominantColorCache.has(track.id)) {
-                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
-                    } else if (typeof window.fetchVisuals === 'function') {
-                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
-                    }
+                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
-                        const squareArt = artworkSquareCache.get(track.id);
-                        navigator.mediaSession.metadata.artwork = [{ src: squareArt || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
                     }
                 }
             }
