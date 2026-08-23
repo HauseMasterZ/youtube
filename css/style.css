@@ -1069,20 +1069,7 @@
 }
 
 .lyrics-highlight-layer {
-    position: absolute; 
-    left: 0; 
-    top: 0; 
-    width: 100%; 
-    background: #000000; 
-    color: var(--primary-color); 
-    pointer-events: none; 
-    display: none; 
-    font-size: clamp(14px, 3.5vw, 18px); 
-    line-height: 1.5; 
-    text-align: center; 
-    box-sizing: border-box; 
-    padding: 0 10px; 
-    z-index: 10;
+    display: none !important;
 }
 
 .lyric-line {
@@ -1095,6 +1082,12 @@
     text-align: center; 
     box-sizing: border-box; 
     padding: 0 10px;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.lyric-line.active {
+    color: var(--primary-color) !important;
+    font-weight: 600;
 }
 
 
