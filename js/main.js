@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            if (e.target.closest('.control-btn, #album-art-container, #thumb-toggle-hint')) return;
+            if (e.target.closest('.control-btn, #thumb-toggle-hint')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
         }
@@ -571,11 +571,18 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
+        const isThumbHint = Boolean(e.target.closest('#thumb-toggle-hint'));
+        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+
+        // In mobile mini mode, unexpanded clicks:
+        // If clicking album art while playing and thumbnails enabled, let it bubble to expand the player
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded") && !isThumbHint && isPlaying && !thumbsDisabled) {
+            return;
+        }
+
         e.stopPropagation();
         
-        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-        
-        if (e.target.closest('#thumb-toggle-hint') || !isPlaying || (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded"))) {
+        if (isThumbHint || !isPlaying || thumbsDisabled) {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
@@ -599,9 +606,6 @@ currentPlaylistData[globalActiveOriginalIndex];
             renderVirtualTracks();
             return;
         }
-
-        // In mobile mini mode, seeking gestures are skipped
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
 
         const rect = albumArtContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
