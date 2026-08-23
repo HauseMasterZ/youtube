@@ -80,6 +80,8 @@
             align-items: flex-end;
             justify-content: center;
             flex-shrink: 0;
+            padding-right: clamp(32px, 4.5vw, 64px);
+            box-sizing: border-box;
         }
 
         .playlist-panel {

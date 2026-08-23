@@ -168,17 +168,6 @@ jobs:
           fi
           echo "✓ All production bundles verified successfully."
 
-      - name: Audit with Lighthouse CI
-        uses: treosh/lighthouse-ci-action@v12
-        with:
-          urls: |
-            http://localhost:8080/index.html
-          staticDistDir: site-root
-          uploadArtifacts: true
-          temporaryPublicStorage: true
-          configPath: ''
-        continue-on-error: true
-
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -187,6 +176,16 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Audit Deployed Site with Lighthouse CI
+        if: steps.deployment.outputs.page_url != ''
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          urls: |
+            ${{ steps.deployment.outputs.page_url }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        continue-on-error: true
 
       - name: Purge Cloudflare CDN Cache
         if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
