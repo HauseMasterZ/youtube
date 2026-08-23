@@ -1039,6 +1039,7 @@
     padding-bottom: 20px;
     scrollbar-width: none;
     -ms-overflow-style: none;
+    contain: content;
 }
 
 #lyrics-content::-webkit-scrollbar {
@@ -1067,6 +1068,7 @@
     gap: 16px; 
     align-items: center; 
     padding: 30vh 0; 
+    contain: layout paint;
 }
 
 .lyrics-highlight-layer {
