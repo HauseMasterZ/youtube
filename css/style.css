@@ -489,7 +489,7 @@
         }
 
         /* Desktop layout */
-        @media (min-width: 801px) and (orientation: landscape) {
+        @media (min-width: 1025px) and (orientation: landscape) {
             .now-playing {
                 max-width: 520px;
             }
@@ -600,7 +600,7 @@
             transition: background-color 0.25s ease;
         }
 
-        @media (max-width: 800px), (orientation: portrait) {
+        @media (max-width: 1024px), (orientation: portrait) {
             .main-layout {
                 max-height: 100%;
                 flex-direction: column;
@@ -637,7 +637,7 @@
             }
         }
 
-        @media (min-width: 801px) and (orientation: portrait) {
+        @media (min-width: 1025px) and (orientation: portrait) {
             .now-playing:not(.expanded) {
                 padding: 14px 20px 18px 20px;
                 max-width: 520px;
