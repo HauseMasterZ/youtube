@@ -68,8 +68,14 @@ jobs:
           GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
+            if [ -f site-root/index.html ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/index.html
+            fi
             if [ -f site-root/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/js/utils.js
+            fi
+            if [ -f site-root/dev/index.html ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/index.html
             fi
             if [ -f site-root/dev/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
@@ -120,21 +126,26 @@ jobs:
             execSync(`terser --compress --mangle -o "${bundlePath}" "${tempBundle}"`);
             if (fs.existsSync(tempBundle)) fs.unlinkSync(tempBundle);
 
-            // 2. Update and minify index.html
+            // 2. Minify CSS
+            const cssPath = path.join(dir, 'css', 'style.css');
+            let minifiedCss = '';
+            if (fs.existsSync(cssPath)) {
+              execSync(`cleancss -O2 -o "${cssPath}" "${cssPath}"`);
+              minifiedCss = fs.readFileSync(cssPath, 'utf8');
+            }
+
+            // 3. Update, inline Critical CSS, and minify index.html
             const indexPath = path.join(dir, 'index.html');
             if (fs.existsSync(indexPath)) {
               let html = fs.readFileSync(indexPath, 'utf8');
-              html = html.replace(/href="css\/style\.css(\?v=[^"]*)?"/g, `href="css/style.css?v=${buildVer}"`);
+              if (minifiedCss) {
+                html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${minifiedCss}</style>`);
+              }
+              html = html.replace(/<link\s+rel="(preconnect|dns-prefetch)"\s+href="__API_GATEWAY_URL__"[^>]*>\s*/g, '');
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
               html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
               execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
-            }
-
-            // 3. Minify CSS
-            const cssPath = path.join(dir, 'css', 'style.css');
-            if (fs.existsSync(cssPath)) {
-              execSync(`cleancss -O2 -o "${cssPath}" "${cssPath}"`);
             }
 
             // 4. Update and minify sw.js
