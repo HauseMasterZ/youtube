@@ -60,6 +60,7 @@
             overflow: hidden;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            contain: layout;
         }
 
         #lyrics-container::-webkit-scrollbar {
