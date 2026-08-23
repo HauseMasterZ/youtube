@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            if (e.target.closest('.control-btn, #thumb-toggle-hint')) return;
+            if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
         }
@@ -571,18 +571,37 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
-        const isThumbHint = Boolean(e.target.closest('#thumb-toggle-hint'));
+        e.stopPropagation();
+        
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-
-        // In mobile mini mode, unexpanded clicks:
-        // If clicking album art while playing and thumbnails enabled, let it bubble to expand the player
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded") && !isThumbHint && isPlaying && !thumbsDisabled) {
+        
+        // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
+            thumbsDisabled = !thumbsDisabled;
+            updateThumbToggleUI();
+            if (!thumbsDisabled && isPlaying) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && getThumbUrl(track)) {
+                    const thumbUrl = getThumbUrl(track);
+                    albumArt.style.display = 'block';
+                    albumArt.src = thumbUrl;
+                    if (dominantColorCache.has(track.id)) {
+                        document.documentElement.style.setProperty('--primary-color', dominantColorCache.get(track.id));
+                    } else if (typeof window.fetchVisuals === 'function') {
+                        window.fetchVisuals(track.id, thumbUrl, currentPlaybackSequence, track);
+                    }
+                    if (hasMediaSession && navigator.mediaSession.metadata) {
+                        const squareArt = artworkSquareCache.get(track.id);
+                        navigator.mediaSession.metadata.artwork = [{ src: squareArt || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                    }
+                }
+            }
+            lastStartIndex = -1;
+            renderVirtualTracks();
             return;
         }
 
-        e.stopPropagation();
-        
-        if (isThumbHint || !isPlaying || thumbsDisabled) {
+        if (e.target.closest('#thumb-toggle-hint') || !isPlaying || thumbsDisabled) {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
