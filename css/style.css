@@ -449,7 +449,7 @@
             .player-container {
                 max-width: 900px;
                 display: grid;
-                grid-template-columns: 1fr 1fr;
+                grid-template-columns: minmax(320px, 1fr) 1.2fr;
                 grid-template-rows: auto 1fr;
             }
             .header {
@@ -471,12 +471,9 @@
         }
 
         @media (min-width: 1024px) and (orientation: landscape) {
-            #lyrics-container {
-                max-width: clamp(400px, 30vw, 680px);
-            }
             .player-container {
-                max-width: clamp(800px, 60vw, 1360px);
-                grid-template-columns: 1fr 1fr;
+                max-width: clamp(1100px, 60vw, 1600px);
+                grid-template-columns: minmax(400px, 1fr) 1.5fr;
             }
             #current-title { font-size: 24px; }
             #current-channel { font-size: 16px; }
@@ -592,9 +589,6 @@
             }
             .player-container {
                 height: 100%;
-            }
-            .lyric-line, .lyrics-highlight-layer {
-                font-size: clamp(14px, 4vw, 18px);
             }
         }
 
@@ -874,35 +868,30 @@
 .lyrics-highlight-layer {
     position: absolute; 
     left: 0; 
-    right: 0;
-    margin: 0 auto;
+    top: 0; 
     width: 100%; 
-    max-width: 92%;
-    word-break: break-word;
     background: #000000; 
     color: var(--primary-color); 
     pointer-events: none; 
     display: none; 
-    font-size: clamp(15px, 1.15vw, 20px); 
+    font-size: clamp(14px, 3.5vw, 18px); 
     line-height: 1.5; 
     text-align: center; 
     box-sizing: border-box; 
-    padding: 0 16px; 
+    padding: 0 10px; 
     z-index: 10;
 }
 
 .lyric-line {
     color: var(--text-secondary); 
-    font-size: clamp(15px, 1.15vw, 20px); 
+    font-size: clamp(14px, 3.5vw, 18px); 
     line-height: 1.5; 
     margin: 0; 
     cursor: pointer; 
-    width: 100%; 
-    max-width: 92%;
-    word-break: break-word;
+    width: fit-content; 
     text-align: center; 
     box-sizing: border-box; 
-    padding: 0 16px;
+    padding: 0 10px;
 }
 
 
