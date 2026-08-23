@@ -183,9 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (queueIndex >= 0 && queueIndex < playQueue.length) {
                 loadLyrics(currentPlaylistData[playQueue[queueIndex]]);
             }
-            if (!audioPlayer.paused && !lyricsRafId && !currentLyricsIsUnsynced) {
-                lyricsRafId = requestAnimationFrame(lyricsLoop);
-            }
+            updateLyricsUI(audioPlayer.currentTime);
         } else {
             history.back();
         }
@@ -336,8 +334,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         }
-        if (window.lyricsActive && !lyricsRafId && !currentLyricsIsUnsynced) {
-            lyricsRafId = requestAnimationFrame(lyricsLoop);
+        if (window.lyricsActive) {
+            updateLyricsUI(audioPlayer.currentTime);
         }
     });
 
@@ -353,6 +351,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));
+            if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
         }
     });
 
@@ -440,6 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }
         }
+        if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
         if (typeof updateBufferProgress === 'function') updateBufferProgress();
     });
 
