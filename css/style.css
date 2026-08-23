@@ -206,6 +206,22 @@
             background-color: #222226;
         }
 
+        #album-art-container.no-art {
+            width: auto !important;
+            height: auto !important;
+            min-width: 0 !important;
+            min-height: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
+            margin-bottom: 12px !important;
+            background-color: transparent !important;
+        }
+
+        #album-art-container.no-art #thumb-toggle-hint {
+            display: inline-flex !important;
+            margin: 0 auto;
+        }
+
         #thumb-toggle-hint {
             display: none;
             color: var(--text-secondary);
@@ -600,12 +616,14 @@
             }
             .player-container {
                 height: auto;
-                max-height: 54vh;
+                max-height: none;
                 min-width: 0;
-                flex: none;
+                flex: 0 0 auto;
                 border: none;
                 justify-content: center;
                 align-items: center;
+                padding-right: 0;
+                overflow: visible;
             }
             .playlist-panel {
                 flex: 1;
@@ -621,15 +639,15 @@
 
         @media (min-width: 801px) and (orientation: portrait) {
             .now-playing:not(.expanded) {
-                padding: 16px 20px 10px 20px;
+                padding: 14px 20px 18px 20px;
                 max-width: 520px;
             }
             .now-playing:not(.expanded) #album-art-container {
-                width: clamp(200px, 32vh, 420px);
-                height: clamp(200px, 32vh, 420px);
-                max-width: 420px;
-                max-height: 32vh;
-                margin-bottom: 14px;
+                width: clamp(160px, 26vh, 340px);
+                height: clamp(160px, 26vh, 340px);
+                max-width: 340px;
+                max-height: 26vh;
+                margin-bottom: 12px;
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: 100%;
