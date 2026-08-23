@@ -47,8 +47,7 @@
 
         #lyrics-container {
             flex: 1;
-            min-width: 320px;
-            max-width: none;
+            max-width: clamp(450px, 25vw, 700px);
             height: 100%;
             background-color: #000000;
             border: none;
@@ -450,7 +449,7 @@
             .player-container {
                 max-width: 900px;
                 display: grid;
-                grid-template-columns: minmax(320px, 1fr) 1.2fr;
+                grid-template-columns: 1fr 1fr;
                 grid-template-rows: auto 1fr;
             }
             .header {
@@ -472,9 +471,12 @@
         }
 
         @media (min-width: 1024px) and (orientation: landscape) {
+            #lyrics-container {
+                max-width: clamp(400px, 30vw, 680px);
+            }
             .player-container {
-                max-width: clamp(1100px, 60vw, 1600px);
-                grid-template-columns: minmax(400px, 1fr) 1.5fr;
+                max-width: clamp(800px, 60vw, 1360px);
+                grid-template-columns: 1fr 1fr;
             }
             #current-title { font-size: 24px; }
             #current-channel { font-size: 16px; }
@@ -583,7 +585,6 @@
             #lyrics-container {
                 position: absolute;
                 top: 0; left: 0; right: 0; bottom: 0;
-                min-width: 0;
                 max-width: 100%;
                 border-radius: 0;
                 border: none;
@@ -591,6 +592,9 @@
             }
             .player-container {
                 height: 100%;
+            }
+            .lyric-line, .lyrics-highlight-layer {
+                font-size: clamp(14px, 4vw, 18px);
             }
         }
 
