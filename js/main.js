@@ -812,19 +812,21 @@ currentPlaylistData[globalActiveOriginalIndex];
         });
     }
 
-    // --- Register Service Worker for PWA Installability (Deferred to avoid competing with initial paint) ---
+    // --- Register Service Worker for PWA Installability (Deferred with 3s buffer after load) ---
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            const registerSW = () => {
-                navigator.serviceWorker.register('sw.js').catch((error) => {
-                    console.error('ServiceWorker registration failed: ', error);
-                });
-            };
-            if ('requestIdleCallback' in window) {
-                requestIdleCallback(registerSW, { timeout: 2000 });
-            } else {
-                setTimeout(registerSW, 100);
-            }
+            setTimeout(() => {
+                const registerSW = () => {
+                    navigator.serviceWorker.register('sw.js').catch((error) => {
+                        console.error('ServiceWorker registration failed: ', error);
+                    });
+                };
+                if ('requestIdleCallback' in window) {
+                    requestIdleCallback(registerSW, { timeout: 2000 });
+                } else {
+                    registerSW();
+                }
+            }, 3000);
         });
     }
 
