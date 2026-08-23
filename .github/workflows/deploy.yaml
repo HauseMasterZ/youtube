@@ -88,35 +88,35 @@ jobs:
             const bundlePath = path.join(jsDir, 'bundle.min.js');
             const tempBundle = path.join(jsDir, 'bundle.tmp.js');
             fs.writeFileSync(tempBundle, combinedJs, 'utf8');
-            execSync(\`terser --compress --mangle --toplevel=false -o \"\${bundlePath}\" \"\${tempBundle}\"\`);
+            execSync(`terser --compress --mangle -o "${bundlePath}" "${tempBundle}"`);
             if (fs.existsSync(tempBundle)) fs.unlinkSync(tempBundle);
 
             // 2. Update and minify index.html
             const indexPath = path.join(dir, 'index.html');
             if (fs.existsSync(indexPath)) {
               let html = fs.readFileSync(indexPath, 'utf8');
-              html = html.replace(/href=\"css\/style\.css(\?v=[^\"]*)?\"/g, \`href=\"css/style.css?v=\${buildVer}\"\`);
+              html = html.replace(/href=\"css\/style\.css(\?v=[^\"]*)?\"/g, `href="css/style.css?v=${buildVer}"`);
               html = html.replace(/<script\s+src=\"js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^\"]*)?\"><\/script>(\s*)/g, '');
-              html = html.replace(/<\/body>/, \`<script src=\"js/bundle.min.js?v=\${buildVer}\"></script>\\n</body>\`);
+              html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
-              execSync(\`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o \"\${indexPath}\" \"\${indexPath}\"\`);
+              execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
             }
 
             // 3. Minify CSS
             const cssPath = path.join(dir, 'css', 'style.css');
             if (fs.existsSync(cssPath)) {
-              execSync(\`cleancss -O2 -o \"\${cssPath}\" \"\${cssPath}\"\`);
+              execSync(`cleancss -O2 -o "${cssPath}" "${cssPath}"`);
             }
 
             // 4. Update and minify sw.js
             const swPath = path.join(dir, 'sw.js');
             if (fs.existsSync(swPath)) {
               let sw = fs.readFileSync(swPath, 'utf8');
-              sw = sw.replace(/const CACHE_NAME = '[^']*';/, \`const CACHE_NAME = 'yt-player-cache-\${buildVer}';\`);
+              sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'yt-player-cache-${buildVer}';`);
               sw = sw.replace(/'\.\/js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js',?\s*/g, '');
-              sw = sw.replace(/const CORE_ASSETS = \[/, \`const CORE_ASSETS = [\\n    './js/bundle.min.js',\`);
+              sw = sw.replace(/const CORE_ASSETS = \[/, `const CORE_ASSETS = [\n    './js/bundle.min.js',`);
               fs.writeFileSync(swPath, sw, 'utf8');
-              execSync(\`terser --compress --mangle --toplevel=false -o \"\${swPath}\" \"\${swPath}\"\`);
+              execSync(`terser --compress --mangle -o "${swPath}" "${swPath}"`);
             }
           }
 
