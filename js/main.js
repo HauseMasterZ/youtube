@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
-        if (window.innerWidth <= 600 && !nowPlaying.classList.contains("expanded")) {
+        if (window.innerWidth <= 800 && !nowPlaying.classList.contains("expanded")) {
             if (e.target.closest('.control-btn')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
@@ -379,7 +379,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }, {passive: true});
         
         nowPlaying.addEventListener("touchend", (e) => {
-            if (window.innerWidth > 600) return;
+            if (window.innerWidth > 800) return;
             let touchEndY = e.changedTouches[0].screenY;
             if (nowPlaying.classList.contains("expanded") && touchEndY > touchStartY + 50) {
                 history.back();
@@ -829,27 +829,29 @@ currentPlaylistData[globalActiveOriginalIndex];
     }
 
     // --- Startup Strategy: Desktop loads all 3 in parallel; Mobile loads 1 on-demand ---
-    if (!isMobileDevice) {
-        // Desktop: Parallel fetch all 3 playlists for 0ms instant global search and switching
-        Promise.all(ALL_PLAYLISTS.map(pl => {
-            if (pl === playlistSelect.value) {
-                return loadPlaylist(pl);
-            } else {
-                return fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
-                    .then(r => r.ok ? r.json() : [])
-                    .then(rawData => {
-                        allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                            window.rebuildCrossShuffleDeck();
-                        }
-                    })
-                    .catch(() => {});
-            }
-        }));
-    } else {
-        // Mobile: Load only active playlist to conserve cellular bandwidth & RAM
-        loadPlaylist(playlistSelect.value);
-    }
+    requestAnimationFrame(() => {
+        if (!isMobileDevice) {
+            // Desktop: Parallel fetch all 3 playlists for 0ms instant global search and switching
+            Promise.all(ALL_PLAYLISTS.map(pl => {
+                if (pl === playlistSelect.value) {
+                    return loadPlaylist(pl);
+                } else {
+                    return fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+                        .then(r => r.ok ? r.json() : [])
+                        .then(rawData => {
+                            allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                                window.rebuildCrossShuffleDeck();
+                            }
+                        })
+                        .catch(() => {});
+                }
+            }));
+        } else {
+            // Mobile: Load only active playlist to conserve cellular bandwidth & RAM
+            loadPlaylist(playlistSelect.value);
+        }
+    });
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
