@@ -573,17 +573,83 @@
         @media (max-width: 800px), (orientation: portrait) {
             .main-layout {
                 max-height: 100%;
+                flex-direction: column;
             }
             #lyrics-container {
                 position: absolute;
                 top: 0; left: 0; right: 0; bottom: 0;
+                min-width: 0;
                 max-width: 100%;
                 border-radius: 0;
                 border: none;
                 z-index: 100;
             }
             .player-container {
+                height: auto;
+                max-height: 54vh;
+                min-width: 0;
+                flex: none;
+                border: none;
+                justify-content: center;
+                align-items: center;
+            }
+            .playlist-panel {
+                flex: 1;
+                width: 100%;
                 height: 100%;
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+                border: none;
+            }
+        }
+
+        @media (min-width: 801px) and (orientation: portrait) {
+            .now-playing:not(.expanded) {
+                padding: 16px 20px 10px 20px;
+                max-width: 520px;
+            }
+            .now-playing:not(.expanded) #album-art-container {
+                width: clamp(200px, 32vh, 420px);
+                height: clamp(200px, 32vh, 420px);
+                max-width: 420px;
+                max-height: 32vh;
+                margin-bottom: 14px;
+            }
+            .now-playing:not(.expanded) #album-art-image {
+                width: 100%;
+                height: 100%;
+                aspect-ratio: 1 / 1;
+                object-fit: cover;
+                border-radius: 8px;
+            }
+            .now-playing:not(.expanded) .title-channel-wrapper {
+                margin-bottom: 6px;
+            }
+            .now-playing:not(.expanded) #current-title {
+                font-size: clamp(18px, 2.2vh, 24px);
+            }
+            .now-playing:not(.expanded) #current-channel {
+                font-size: clamp(13px, 1.6vh, 16px);
+                margin: 3px 0 8px 0;
+            }
+            .now-playing:not(.expanded) .progress-container {
+                margin: 8px 0;
+                width: 92%;
+                max-width: 500px;
+            }
+            .now-playing:not(.expanded) .playback-controls {
+                gap: 16px;
+                margin-top: 4px;
+            }
+            .now-playing:not(.expanded) .main-btn {
+                width: 56px;
+                height: 56px;
+            }
+            .now-playing:not(.expanded) .main-btn svg {
+                width: 30px;
+                height: 30px;
             }
         }
 
@@ -596,16 +662,17 @@
                 right: 10px;
                 width: auto;
                 height: 60px;
-                background-color: #1a1a1a;
+                background-color: #1a1a1e;
                 border-radius: 30px;
-                padding: 0 15px 0 5px;
+                padding: 0 10px 0 8px;
                 box-sizing: border-box;
                 z-index: 50;
                 display: flex;
                 flex-direction: row;
                 align-items: center;
                 gap: 10px;
-                border: 1px solid var(--border-color);
+                border: none;
+                box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
                 transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 overflow: hidden;
                 cursor: pointer;
@@ -614,10 +681,16 @@
             .now-playing:not(.expanded) #album-art-container {
                 width: 44px;
                 height: 44px;
+                min-width: 44px;
+                min-height: 44px;
                 margin: 0;
                 border-radius: 50%;
                 overflow: hidden;
                 flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: #222226;
             }
             
             .now-playing:not(.expanded) #album-art-image {
@@ -631,16 +704,22 @@
             .now-playing:not(.expanded) #thumb-toggle-hint { 
                 font-size: 0;
                 padding: 0;
+                margin: 0;
                 width: 100%;
                 height: 100%;
                 display: flex;
                 justify-content: center;
                 align-items: center;
+                border-radius: 50%;
+                line-height: 0;
+                gap: 0;
             }
             .now-playing:not(.expanded) #thumb-toggle-hint svg {
                 margin: 0;
-                width: 24px;
-                height: 24px;
+                width: 22px;
+                height: 22px;
+                display: block;
+                flex-shrink: 0;
             }
             
             .now-playing.expanded #thumb-toggle-hint {
@@ -657,48 +736,95 @@
                 margin: 0 auto 10px auto;
             }
             
-            .title-channel-wrapper {
+            .now-playing:not(.expanded) .title-channel-wrapper {
                 flex: 1;
-                text-align: left;
                 min-width: 0;
+                text-align: left;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                overflow: hidden;
+                padding-right: 4px;
             }
             
-            #current-title {
+            .now-playing:not(.expanded) #current-title {
                 font-size: 14px;
+                font-weight: 500;
                 margin: 0;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                line-height: 1.3;
+                color: #ffffff;
             }
             
-            #current-channel {
+            .now-playing:not(.expanded) #current-channel {
                 font-size: 12px;
                 margin: 0;
                 display: block;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                line-height: 1.2;
                 color: var(--text-secondary);
             }
             
-            /* Hide expanded controls in mini mode */
-            .progress-container, #lyrics-toggle-hint {
-                display: none;
+            /* Hide secondary controls in mini mode to maximize title/artist space */
+            .now-playing:not(.expanded) .progress-container, 
+            .now-playing:not(.expanded) #lyrics-toggle-hint,
+            .now-playing:not(.expanded) #btn-shuffle, 
+            .now-playing:not(.expanded) #btn-repeat {
+                display: none !important;
             }
             
-            #btn-shuffle, #btn-repeat {
-                width: 30px;
-                height: 30px;
-            }
-            #btn-shuffle svg, #btn-repeat svg {
-                width: 20px;
-                height: 20px;
-            }
-            
-            .playback-controls {
+            .now-playing:not(.expanded) .playback-controls {
                 width: auto;
                 padding: 0;
                 margin: 0;
                 display: flex;
-                gap: 2px;
-                justify-content: flex-end;
+                align-items: center;
+                gap: 4px;
+                flex-shrink: 0;
+            }
+            
+            .now-playing:not(.expanded) #btn-prev,
+            .now-playing:not(.expanded) #btn-next {
+                width: 34px;
+                height: 34px;
+                min-width: 34px;
+                min-height: 34px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: transparent;
+                border: none;
+                padding: 0;
+                color: var(--text-primary);
+            }
+            .now-playing:not(.expanded) #btn-prev svg,
+            .now-playing:not(.expanded) #btn-next svg {
+                width: 18px;
+                height: 18px;
+            }
+            
+            .now-playing:not(.expanded) .main-btn {
+                width: 40px;
+                height: 40px;
+                min-width: 40px;
+                min-height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
+                margin: 0;
+                padding: 0;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            }
+            .now-playing:not(.expanded) .main-btn svg {
+                width: 20px;
+                height: 20px;
+                margin-left: 2px;
             }
             
             /* Make room for the floating pill */
@@ -775,7 +901,28 @@
                 display: flex;
                 width: 100%;
                 justify-content: space-between;
+                align-items: center;
                 margin-top: 10px;
+            }
+            
+            .now-playing.expanded .main-btn {
+                width: 64px;
+                height: 64px;
+            }
+            .now-playing.expanded .main-btn svg {
+                width: 32px;
+                height: 32px;
+            }
+            
+            .now-playing.expanded #btn-prev,
+            .now-playing.expanded #btn-next {
+                width: 44px;
+                height: 44px;
+            }
+            .now-playing.expanded #btn-prev svg,
+            .now-playing.expanded #btn-next svg {
+                width: 26px;
+                height: 26px;
             }
             
             .now-playing.expanded #btn-shuffle, 
