@@ -63,9 +63,10 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
-      - name: Inject API Gateway URL
+      - name: Inject API Gateway and Origin URLs
         env:
           GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
+          UPSTREAM_ORIGIN_URL: ${{ secrets.UPSTREAM_ORIGIN_URL || vars.UPSTREAM_ORIGIN_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -79,6 +80,14 @@ jobs:
             fi
             if [ -f site-root/dev/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
+            fi
+          fi
+          if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
+            if [ -f site-root/index.html ]; then
+              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/index.html
+            fi
+            if [ -f site-root/dev/index.html ]; then
+              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/dev/index.html
             fi
           fi
 
@@ -141,7 +150,7 @@ jobs:
               if (minifiedCss) {
                 html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${minifiedCss}</style>`);
               }
-              html = html.replace(/<link\s+rel="(preconnect|dns-prefetch)"\s+href="__API_GATEWAY_URL__"[^>]*>\s*/g, '');
+              html = html.replace(/<link\s+rel="(preconnect|dns-prefetch)"\s+href="(__API_GATEWAY_URL__|__UPSTREAM_ORIGIN_URL__)"[^>]*>\s*/g, '');
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
               html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
