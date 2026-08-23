@@ -35,14 +35,16 @@
             // Force first render
             lastStartIndex = -1;
             
-            if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
-                // Must render virtual tracks first so the elements exist in DOM before scrolling
-                renderVirtualTracks();
-                scrollToTrack(globalActiveOriginalIndex);
-            } else {
-                playlistContainer.scrollTop = 0;
-                renderVirtualTracks();
-            }
+            requestAnimationFrame(() => {
+                if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
+                    // Must render virtual tracks first so the elements exist in DOM before scrolling
+                    renderVirtualTracks();
+                    scrollToTrack(globalActiveOriginalIndex);
+                } else {
+                    playlistContainer.scrollTop = 0;
+                    renderVirtualTracks();
+                }
+            });
         } catch (error) {
             console.error(error);
             trackList.style.display = 'none';
