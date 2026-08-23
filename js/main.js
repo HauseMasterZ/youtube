@@ -358,7 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            if (e.target.closest('.control-btn')) return;
+            if (e.target.closest('.control-btn, #album-art-container, #thumb-toggle-hint')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
         }
@@ -571,14 +571,11 @@ currentPlaylistData[globalActiveOriginalIndex];
     let lastArtClickTime = 0;
     
     albumArtContainer.addEventListener("click", (e) => {
-        // In mobile mini mode, unexpanded clicks are handled by the main miniplayer expand listener
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
-
         e.stopPropagation();
         
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         
-        if (e.target.closest('#thumb-toggle-hint') || !isPlaying) {
+        if (e.target.closest('#thumb-toggle-hint') || !isPlaying || (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded"))) {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
@@ -602,6 +599,9 @@ currentPlaylistData[globalActiveOriginalIndex];
             renderVirtualTracks();
             return;
         }
+
+        // In mobile mini mode, seeking gestures are skipped
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
 
         const rect = albumArtContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
