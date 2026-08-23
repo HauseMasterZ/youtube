@@ -518,6 +518,12 @@ currentPlaylistData[globalActiveOriginalIndex];
 
     function updateThumbToggleUI() {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+        const track = isPlaying ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
+        if (track) {
+            const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+            document.documentElement.style.setProperty('--primary-color', activeColor);
+        }
+
         if (thumbsDisabled) {
             albumArt.style.display = 'none';
             if (albumArtContainer) albumArtContainer.classList.add('no-art');
@@ -525,19 +531,12 @@ currentPlaylistData[globalActiveOriginalIndex];
                 thumbToggleHint.style.display = 'flex';
                 thumbToggleHint.innerHTML = `${eyeIconSvg}Show thumbnails`;
             }
-            document.documentElement.style.setProperty('--primary-color', '#8c73ff');
         } else {
-            if (isPlaying) {
+            if (isPlaying && track && getThumbUrl(track)) {
                 if (albumArtContainer) albumArtContainer.classList.remove('no-art');
                 if (thumbToggleHint) thumbToggleHint.style.display = 'none';
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                }
+                albumArt.style.display = 'block';
+                albumArt.src = getThumbUrl(track);
             } else {
                 albumArt.style.display = 'none';
                 if (albumArtContainer) albumArtContainer.classList.add('no-art');
