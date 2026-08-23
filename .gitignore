@@ -2,6 +2,7 @@
 *.env
 *.log
 *.txt
+!robots.txt
 *.old
 *.good
 *.ps1
