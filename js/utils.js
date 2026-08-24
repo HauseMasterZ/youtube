@@ -20,15 +20,10 @@
         const s = parseInt(match[3] || 0, 10);
         return h * 3600 + m * 60 + s;
     }
-    function isValidHexColor(c) {
-        return typeof c === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c) && c !== '#000000';
-    }
-
     function normalizeTrackItem(item, folderName) {
         if (!item) return null;
         let normalized;
         if (Array.isArray(item)) {
-            const rawColor = (item.length >= 6 && isValidHexColor(item[5])) ? item[5] : (isValidHexColor(item[4]) ? item[4] : null);
             normalized = {
                 id: item[0],
                 title: item[1],
@@ -36,18 +31,17 @@
                 duration: item[3],
                 file_path: `${folderName}/${item[0]}.webm`,
                 thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`,
-                color: rawColor || '#8c73ff'
+                color: item[5] || '#8c73ff'
             };
         } else {
-            const rawColor = isValidHexColor(item.color) ? item.color : null;
             normalized = {
                 ...item,
                 file_path: `${folderName}/${item.id}.webm`,
                 thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`,
-                color: rawColor || '#8c73ff'
+                color: item.color || '#8c73ff'
             };
         }
-        if (normalized.id && normalized.color && normalized.color !== '#8c73ff') {
+        if (normalized.id && normalized.color) {
             dominantColorCache.set(normalized.id, normalized.color);
         }
         return normalized;
