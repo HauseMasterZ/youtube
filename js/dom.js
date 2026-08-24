@@ -463,30 +463,28 @@
                     }
                     this.dispatchEvent(new Event('progress'));
 
-                    // Single continuous background ingestion stream for remaining chunks
-                    (async () => {
-                        try {
-                            if (streamDone) {
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
-                                }
-                                return;
-                            }
+                    // Background ingestion stream with network switch / disconnection auto-recovery
+                    let totalBytesReceived = initialBytes;
+                    let isIngesting = false;
 
+                    const readStream = async (activeReader) => {
+                        isIngesting = true;
+                        try {
                             while (true) {
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
+                                    try { activeReader.cancel(); } catch (e) {}
                                     break;
                                 }
 
-                                const { value: nextChunk, done } = await reader.read();
+                                const { value: nextChunk, done } = await activeReader.read();
 
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
+                                    try { activeReader.cancel(); } catch (e) {}
                                     break;
                                 }
 
                                 if (done) {
+                                    streamDone = true;
                                     if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                         try { this._mediaSource.endOfStream(); } catch (e) {}
                                     }
@@ -494,6 +492,7 @@
                                 }
 
                                 if (nextChunk && nextChunk.length > 0) {
+                                    totalBytesReceived += nextChunk.length;
                                     await this._appendToSourceBuffer(nextChunk);
                                     this.dispatchEvent(new Event('progress'));
 
@@ -516,11 +515,63 @@
                                 }
                             }
                         } catch (streamErr) {
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                                console.warn("Background MSE stream error:", streamErr);
+                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
+                                console.warn("MSE stream interrupted (network switch), auto-resuming:", streamErr);
+                                scheduleRetry(1000);
+                            }
+                        } finally {
+                            isIngesting = false;
+                        }
+                    };
+
+                    let retryTimer = null;
+                    const scheduleRetry = (delayMs = 1500) => {
+                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId || isIngesting) return;
+                        clearTimeout(retryTimer);
+                        retryTimer = setTimeout(attemptResume, delayMs);
+                    };
+
+                    const attemptResume = async () => {
+                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId || isIngesting) return;
+                        try {
+                            const res = await fetch(url, {
+                                signal: currentAbortSignal,
+                                headers: { 'Range': `bytes=${totalBytesReceived}-` }
+                            });
+                            if (!res.ok) {
+                                scheduleRetry(2500);
+                                return;
+                            }
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
+                            if (res.body) {
+                                const newReader = res.body.getReader();
+                                readStream(newReader);
+                            }
+                        } catch (err) {
+                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
+                                scheduleRetry(2500);
                             }
                         }
-                    })();
+                    };
+
+                    const onOnline = () => {
+                        if (!streamDone && !currentAbortSignal.aborted && this._streamId === activeStreamId && !isIngesting) {
+                            attemptResume();
+                        }
+                    };
+                    window.addEventListener('online', onOnline);
+                    currentAbortSignal.addEventListener('abort', () => {
+                        window.removeEventListener('online', onOnline);
+                        clearTimeout(retryTimer);
+                    });
+
+                    if (streamDone) {
+                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                            try { this._mediaSource.endOfStream(); } catch (e) {}
+                        }
+                    } else {
+                        readStream(reader);
+                    }
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
