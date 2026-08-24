@@ -31,14 +31,14 @@
                 duration: item[3],
                 file_path: `${folderName}/${item[0]}.webm`,
                 thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`,
-                color: item[5] || '#8c73ff'
+                color: (item[5] && item[5] !== '#000000') ? item[5] : '#8c73ff'
             };
         } else {
             normalized = {
                 ...item,
                 file_path: `${folderName}/${item.id}.webm`,
                 thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`,
-                color: item.color || '#8c73ff'
+                color: (item.color && item.color !== '#000000') ? item.color : '#8c73ff'
             };
         }
         if (normalized.id && normalized.color) {
