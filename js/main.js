@@ -480,31 +480,29 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("error", () => {
         if (audioPlayer.switching) return;
+        if (!navigator.onLine) return;
         const activeEl = audioPlayer.active || audioPlayer;
         const err = activeEl.error;
         // Ignore MEDIA_ERR_ABORTED (1) from in-flight aborted stream / track change
         if (err && err.code === 1) return;
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
           
-          // Android Power Management / Network drop: Try to recover ONCE before skipping.
-          const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
-          if (ct > 0 && !isRecovering && audioPlayer.readyState > 0) {
-              isRecovering = true;
-              const savedTime = ct;
-              const track = currentPlaylistData[playQueue[queueIndex]] || 
-currentPlaylistData[globalActiveOriginalIndex];
-              if (!track) { isRecovering = false; return; }
-  
-              const onMeta = () => {
-                  audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                  audioPlayer.currentTime = savedTime;
-                  isRecovering = false;
-              };
+        const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
+        if (ct > 0 && !isRecovering) {
+            isRecovering = true;
+            const savedTime = ct;
+            const track = currentPlaylistData[playQueue[queueIndex]] || 
+                          currentPlaylistData[globalActiveOriginalIndex];
+            if (!track) { isRecovering = false; return; }
+
+            const onMeta = () => {
+                audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                isRecovering = false;
+            };
             audioPlayer.addEventListener('loadedmetadata', onMeta);
             
-            const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
-            audioPlayer.recoverTrack(recoveryUrl);
+            audioPlayer.recoverTrack(recoveryUrl, savedTime);
             return;
         }
 
@@ -525,6 +523,16 @@ currentPlaylistData[globalActiveOriginalIndex];
                 playNext();
             }
         }, 3000);
+    });
+
+    window.addEventListener('online', () => {
+        if (!audioPlayer.switching && audioPlayer.getAttribute('src')) {
+            const track = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+            if (track) {
+                const curPos = audioPlayer.currentTime || audioPlayer.lastKnownTime || 0;
+                audioPlayer.recoverTrack(getAudioUrl(track), curPos);
+            }
+        }
     });
     const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>';
 
@@ -574,37 +582,40 @@ currentPlaylistData[globalActiveOriginalIndex];
         updateMediaSessionPosition();
     }
 
-    let lastArtClickTime = 0;
-    
-    albumArtContainer.addEventListener("click", (e) => {
-        e.stopPropagation();
-        
+    let lastArtTapTime = 0;
+
+    function toggleThumbnails() {
+        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+        thumbsDisabled = !thumbsDisabled;
+        updateThumbToggleUI();
+        if (!thumbsDisabled && isPlaying) {
+            const track = currentPlaylistData[playQueue[queueIndex]];
+            if (track && getThumbUrl(track)) {
+                const thumbUrl = getThumbUrl(track);
+                albumArt.style.display = 'block';
+                albumArt.src = thumbUrl;
+                const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                document.documentElement.style.setProperty('--primary-color', activeColor);
+                if (hasMediaSession && navigator.mediaSession.metadata) {
+                    navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                }
+            }
+        }
+        lastStartIndex = -1;
+        renderVirtualTracks();
+    }
+
+    function handleArtTap(clientX) {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         
         // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            thumbsDisabled = !thumbsDisabled;
-            updateThumbToggleUI();
-            if (!thumbsDisabled && isPlaying) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                    if (hasMediaSession && navigator.mediaSession.metadata) {
-                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                    }
-                }
-            }
-            lastStartIndex = -1;
-            renderVirtualTracks();
+            toggleThumbnails();
             return;
         }
 
         const rect = albumArtContainer.getBoundingClientRect();
-        const clickX = e.clientX - rect.left;
+        const clickX = clientX - rect.left;
         const width = rect.width;
         if (isNaN(clickX) || width === 0) return;
 
@@ -613,31 +624,21 @@ currentPlaylistData[globalActiveOriginalIndex];
         const isMiddle = !isLeft && !isRight;
 
         const now = Date.now();
-        const isDoubleClick = (now - lastArtClickTime) < 300;
-        lastArtClickTime = now;
+        const isDoubleTap = (now - lastArtTapTime) < 320;
+        lastArtTapTime = now;
 
-        if (isDoubleClick && (isLeft || isRight)) {
+        if (isDoubleTap && (isLeft || isRight)) {
             if (isLeft) performSeekDelta(-5);
             else if (isRight) performSeekDelta(5);
+            lastArtTapTime = 0;
         } else if (isMiddle || !isPlaying) {
-            thumbsDisabled = !thumbsDisabled;
-            updateThumbToggleUI();
-            if (!thumbsDisabled && isPlaying) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                    if (hasMediaSession && navigator.mediaSession.metadata) {
-                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                    }
-                }
-            }
-            lastStartIndex = -1;
-            renderVirtualTracks();
+            toggleThumbnails();
         }
+    }
+
+    albumArtContainer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        handleArtTap(e.clientX);
     });
 
     const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
