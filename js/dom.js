@@ -371,8 +371,11 @@
                     console.warn("Cache fast-path fallback:", e);
                 }
 
-                // 2. NETWORK PATH: Stream uncached audio with optimized ~192KB safety cushion (~12s audio)
+                // 2. NETWORK PATH: Stream uncached audio with optimized ~192KB safety cushion (~12s audio) & resilient auto-recovery
                 try {
+                    let totalBytesAppended = 0;
+                    let streamDone = false;
+
                     const response = await fetch(url, { signal: currentAbortSignal });
                     if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
                     if (!response.body) throw new Error("ReadableStream not supported");
@@ -381,7 +384,6 @@
 
                     const initialChunks = [];
                     let initialBytes = 0;
-                    let streamDone = false;
                     const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
 
                     while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
@@ -423,6 +425,8 @@
                         this._sourceBuffer.timestampOffset = 0;
                     } catch (e) {}
                     await this._appendToSourceBuffer(initialCombined.buffer);
+                    totalBytesAppended += initialCombined.byteLength;
+
                     if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                         try { reader.cancel(); } catch (e) {}
                         this.switching = false;
@@ -463,62 +467,138 @@
                     }
                     this.dispatchEvent(new Event('progress'));
 
-                    // Single continuous background ingestion stream for remaining chunks
+                    // Resilient background ingestion stream with network-switch / Range auto-recovery
                     (async () => {
-                        try {
-                            if (streamDone) {
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
-                                }
-                                return;
-                            }
-
-                            while (true) {
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                const { value: nextChunk, done } = await reader.read();
-
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { reader.cancel(); } catch (e) {}
-                                    break;
-                                }
-
-                                if (done) {
-                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                        try { this._mediaSource.endOfStream(); } catch (e) {}
+                        const readStream = async (activeReader) => {
+                            try {
+                                while (true) {
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                        try { activeReader.cancel(); } catch (e) {}
+                                        break;
                                     }
-                                    break;
-                                }
 
-                                if (nextChunk && nextChunk.length > 0) {
-                                    await this._appendToSourceBuffer(nextChunk);
-                                    this.dispatchEvent(new Event('progress'));
+                                    const { value: nextChunk, done } = await activeReader.read();
 
-                                    // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
-                                    if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                                        const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                        if (buffEnd >= this._pendingSeek) {
-                                            const seekTarget = this._pendingSeek;
-                                            this._pendingSeek = null;
-                                            this.active.currentTime = seekTarget;
-                                            if (!preventAutoplay) {
-                                                this.active.play().catch(e => console.warn("Catch-up seek play:", e));
-                                                this.dispatchEvent(new Event('play'));
-                                                this.dispatchEvent(new Event('playing'));
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                        try { activeReader.cancel(); } catch (e) {}
+                                        break;
+                                    }
+
+                                    if (done) {
+                                        streamDone = true;
+                                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                            try { this._mediaSource.endOfStream(); } catch (e) {}
+                                        }
+                                        break;
+                                    }
+
+                                    if (nextChunk && nextChunk.length > 0) {
+                                        totalBytesAppended += nextChunk.length;
+                                        await this._appendToSourceBuffer(nextChunk);
+                                        this.dispatchEvent(new Event('progress'));
+
+                                        // Auto-resume playback if paused/stalled due to buffer exhaustion
+                                        if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
+                                            this.active.play().catch(() => {});
+                                        }
+
+                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
+                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                            if (buffEnd >= this._pendingSeek) {
+                                                const seekTarget = this._pendingSeek;
+                                                this._pendingSeek = null;
+                                                this.active.currentTime = seekTarget;
+                                                if (!preventAutoplay) {
+                                                    this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                                    this.dispatchEvent(new Event('play'));
+                                                    this.dispatchEvent(new Event('playing'));
+                                                }
+                                                this.dispatchEvent(new Event('seeked'));
+                                                this.dispatchEvent(new Event('timeupdate'));
                                             }
-                                            this.dispatchEvent(new Event('seeked'));
-                                            this.dispatchEvent(new Event('timeupdate'));
                                         }
                                     }
                                 }
+                            } catch (streamErr) {
+                                if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
+                                    console.warn("Background MSE stream interrupted (network switch). Triggering recovery...");
+                                    attemptRecovery();
+                                }
                             }
-                        } catch (streamErr) {
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                                console.warn("Background MSE stream error:", streamErr);
+                        };
+
+                        let isRecovering = false;
+                        const attemptRecovery = async () => {
+                            if (isRecovering || streamDone || currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) return;
+                            isRecovering = true;
+
+                            let backoff = 300;
+                            while (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
+                                try {
+                                    const resumeUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
+                                    const resumeRes = await fetch(resumeUrl, {
+                                        headers: { 'Range': `bytes=${totalBytesAppended}-` },
+                                        signal: currentAbortSignal
+                                    });
+
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
+
+                                    if (resumeRes.ok || resumeRes.status === 206) {
+                                        const isPartial = resumeRes.status === 206;
+                                        const newReader = resumeRes.body.getReader();
+
+                                        if (isPartial) {
+                                            isRecovering = false;
+                                            await readStream(newReader);
+                                            return;
+                                        } else {
+                                            // Fallback if CDN/server ignored Range header: discard leading totalBytesAppended bytes
+                                            let skipped = 0;
+                                            let skipFailed = false;
+                                            while (skipped < totalBytesAppended) {
+                                                const { value: sChunk, done: sDone } = await newReader.read();
+                                                if (sDone || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                                    try { newReader.cancel(); } catch (e) {}
+                                                    skipFailed = true;
+                                                    break;
+                                                }
+                                                if (sChunk) skipped += sChunk.length;
+                                            }
+                                            if (!skipFailed) {
+                                                isRecovering = false;
+                                                await readStream(newReader);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                } catch (recErr) {
+                                    // Connection still transitioning, wait and retry
+                                }
+
+                                await new Promise(r => setTimeout(r, backoff));
+                                backoff = Math.min(backoff * 1.5, 3000);
                             }
+                            isRecovering = false;
+                        };
+
+                        const onOnlineResume = () => {
+                            if (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
+                                attemptRecovery();
+                            }
+                        };
+
+                        window.addEventListener('online', onOnlineResume);
+                        currentAbortSignal.addEventListener('abort', () => {
+                            window.removeEventListener('online', onOnlineResume);
+                        });
+
+                        if (streamDone) {
+                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                            }
+                        } else {
+                            readStream(reader);
                         }
                     })();
                 } catch (e) {
