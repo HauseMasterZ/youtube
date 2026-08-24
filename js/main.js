@@ -610,27 +610,6 @@ currentPlaylistData[globalActiveOriginalIndex];
             return;
         }
 
-        if (e.target.closest('#thumb-toggle-hint') || !isPlaying || thumbsDisabled) {
-            thumbsDisabled = !thumbsDisabled;
-            updateThumbToggleUI();
-            if (!thumbsDisabled && isPlaying) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                    if (hasMediaSession && navigator.mediaSession.metadata) {
-                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                    }
-                }
-            }
-            lastStartIndex = -1;
-            renderVirtualTracks();
-            return;
-        }
-
         const rect = albumArtContainer.getBoundingClientRect();
         const clickX = e.clientX - rect.left;
         const width = rect.width;
@@ -647,9 +626,22 @@ currentPlaylistData[globalActiveOriginalIndex];
         if (isDoubleClick && (isLeft || isRight)) {
             if (isLeft) performSeekDelta(-5);
             else if (isRight) performSeekDelta(5);
-        } else if (isMiddle && !thumbsDisabled) {
-            thumbsDisabled = true;
+        } else if (isMiddle || e.target.closest('#thumb-toggle-hint')) {
+            thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
+            if (!thumbsDisabled && isPlaying) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && getThumbUrl(track)) {
+                    const thumbUrl = getThumbUrl(track);
+                    albumArt.style.display = 'block';
+                    albumArt.src = thumbUrl;
+                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
+                    if (hasMediaSession && navigator.mediaSession.metadata) {
+                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                    }
+                }
+            }
             lastStartIndex = -1;
             renderVirtualTracks();
         }
