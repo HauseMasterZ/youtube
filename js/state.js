@@ -1,3 +1,8 @@
+    // Environment Feature Checks
+    const hasMediaSession = 'mediaSession' in navigator;
+    const hasTouch = 'ontouchstart' in window || (navigator.maxTouchPoints > 0);
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     const ALL_PLAYLISTS = ["Gym", "Driving", "Songs"];
     let allDatabases = {
         Gym: null,
