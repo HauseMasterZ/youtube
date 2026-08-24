@@ -15,9 +15,10 @@
     
     let playQueue = [];     
     let queueIndex = -1;    
+    let queueBasePlaylist = null;
     let globalActiveOriginalIndex = -1; 
     let globalActivePlaylist = null;
-    let queueBasePlaylist = null;
+    let lastUserScrollTime = 0;
     
     let shuffleMode = 0;
     let repeatMode = 0; 
