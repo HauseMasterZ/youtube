@@ -41,6 +41,7 @@
     let errorSkipTimer = null;
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
+    window.wasPausedByUser = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
 
