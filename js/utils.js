@@ -2,17 +2,6 @@
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
     function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
-    function hexToRgba(hex, alpha = 0.4) {
-        if (!hex || typeof hex !== 'string' || !hex.startsWith('#')) return `rgba(140, 115, 255, ${alpha})`;
-        let clean = hex.slice(1);
-        if (clean.length === 3) clean = clean.split('').map(c => c + c).join('');
-        const num = parseInt(clean, 16);
-        if (isNaN(num)) return `rgba(140, 115, 255, ${alpha})`;
-        const r = (num >> 16) & 255;
-        const g = (num >> 8) & 255;
-        const b = num & 255;
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    }
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds === Infinity) return "0:00";
         const mins = Math.floor(seconds / 60);
