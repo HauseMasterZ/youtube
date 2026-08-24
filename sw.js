@@ -15,6 +15,7 @@ const CORE_ASSETS = [
     './manifest.json',
     './assets/icon-192.png',
     './assets/icon-512.png',
+    './assets/icon.svg',
     './assets/purple-note.svg',
     './assets/fonts/GoogleSansFlex-Latin.woff2'
 ];
