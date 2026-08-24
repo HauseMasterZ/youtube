@@ -579,7 +579,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
+                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
@@ -600,7 +600,7 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    const activeColor = track.color || dominantColorCache.get(track.id) || '#8c73ff';
+                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
