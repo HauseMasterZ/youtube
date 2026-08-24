@@ -180,18 +180,17 @@
             align-items: center;
             flex-shrink: 0;
             width: 100%;
-            max-width: 520px;
+            max-width: 680px;
             box-sizing: border-box;
         }
 
         #album-art-container {
-            width: clamp(200px, 34vh, 420px);
-            height: clamp(200px, 34vh, 420px);
-            max-width: 420px;
-            max-height: 34vh;
+            width: clamp(220px, 80%, 600px);
+            max-width: 600px;
+            aspect-ratio: 1 / 1;
             cursor: pointer;
             position: relative;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
             touch-action: manipulation;
             display: flex;
             justify-content: center;
@@ -210,7 +209,8 @@
 
         #album-art-container.no-art {
             width: 100%;
-            max-width: 420px;
+            max-width: 600px;
+            aspect-ratio: unset;
             height: auto;
             min-height: 48px;
             margin-bottom: 12px;
@@ -492,19 +492,19 @@
         /* Desktop layout */
         @media (min-width: 1111px) and (orientation: landscape) {
             .now-playing {
-                max-width: 520px;
+                max-width: 680px;
             }
             #album-art-container {
-                width: clamp(200px, 36vh, 400px);
-                height: clamp(200px, 36vh, 400px);
-                max-width: 400px;
-                max-height: 36vh;
-                margin-bottom: 16px;
+                width: clamp(220px, 80%, 600px);
+                max-width: 600px;
+                aspect-ratio: 1 / 1;
+                height: auto;
+                margin-bottom: 18px;
             }
             #current-title { font-size: clamp(18px, 2.2vh, 24px); }
             #current-channel { font-size: clamp(13px, 1.6vh, 16px); }
-            .main-btn { width: 60px; height: 60px; }
-            .main-btn svg { width: 32px; height: 32px; }
+            .main-btn { width: 64px; height: 64px; }
+            .main-btn svg { width: 36px; height: 36px; }
         }
 
         .playlist-container::-webkit-scrollbar { width: 6px; }
