@@ -70,8 +70,7 @@
     }
 
     function generateQueue(resetPlayback = false, targetPlaylist = null) {
-        const pl = targetPlaylist || queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
-        queueBasePlaylist = pl;
+        const pl = targetPlaylist || globalActivePlaylist || playlistSelect.value;
         const data = allDatabases[pl] || currentPlaylistData;
         if (!data || data.length === 0) return;
 
@@ -108,9 +107,9 @@
             poolInitialized = false;
             playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         }
-        queueBasePlaylist = playlist;
         globalActivePlaylist = playlist;
         globalActiveOriginalIndex = trackIndex;
+        queueBasePlaylist = playlist;
         queueIndex = trackIndex;
         executePlayback();
     }
@@ -129,8 +128,8 @@
         } else {
             // Single playlist mode
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
-            const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
-            const itemToQueue = (playlist === basePl) ? originalIndex : { playlist, index: originalIndex };
+            const curPl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+            const itemToQueue = (playlist === curPl) ? originalIndex : { playlist, index: originalIndex };
             playQueue.splice(insertPos, 0, itemToQueue);
         }
     };
@@ -140,9 +139,9 @@
             await loadPlaylist(targetPlaylist);
         }
 
-        queueBasePlaylist = targetPlaylist;
         globalActivePlaylist = targetPlaylist;
         globalActiveOriginalIndex = targetOriginalIndex;
+        queueBasePlaylist = targetPlaylist;
         currentPlaylistData = allDatabases[targetPlaylist] || currentPlaylistData;
 
         // Auto-switch playlist dropdown and active dataset to the target playlist
@@ -454,30 +453,19 @@
                 let nIdx = queueIndex + 1;
                 if (nIdx >= playQueue.length && repeatMode === 1) nIdx = 0;
                 if (nIdx < playQueue.length) {
-                    const nextItem = playQueue[nIdx];
-                    if (typeof nextItem === 'object' && nextItem !== null) {
-                        if (allDatabases[nextItem.playlist]) nextTrack = allDatabases[nextItem.playlist][nextItem.index];
+                    const nItem = playQueue[nIdx];
+                    if (typeof nItem === 'object' && nItem !== null) {
+                        nextTrack = allDatabases[nItem.playlist] && allDatabases[nItem.playlist][nItem.index];
                     } else {
                         const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
-                        if (allDatabases[basePl]) nextTrack = allDatabases[basePl][nextItem];
-                        else if (currentPlaylistData) nextTrack = currentPlaylistData[nextItem];
+                        nextTrack = (allDatabases[basePl] && allDatabases[basePl][nItem]) || currentPlaylistData[nItem];
                     }
                 }
             }
         }
         
         const nextCacheKey = nextTrack ? getAudioUrl(nextTrack) : null;
-        let currentTrack = null;
-        if (queueIndex >= 0 && queueIndex < playQueue.length) {
-            const curItem = playQueue[queueIndex];
-            if (typeof curItem === 'object' && curItem !== null) {
-                if (allDatabases[curItem.playlist]) currentTrack = allDatabases[curItem.playlist][curItem.index];
-            } else {
-                const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
-                if (allDatabases[basePl]) currentTrack = allDatabases[basePl][curItem];
-                else if (currentPlaylistData) currentTrack = currentPlaylistData[curItem];
-            }
-        }
+        const currentTrack = track;
         const currentCacheKey = currentTrack ? getAudioUrl(currentTrack) : null;
 
         // Cleanup stale preloads

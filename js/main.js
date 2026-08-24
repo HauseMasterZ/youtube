@@ -84,6 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     playlistContainer.addEventListener("scroll", () => {
+        lastUserScrollTime = Date.now();
         isScrollingFast = true;
         clearTimeout(scrollSettleTimer);
         scrollSettleTimer = setTimeout(() => {
@@ -95,26 +96,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isRendering) {
             window.requestAnimationFrame(renderVirtualTracks);
         }
+    }, { passive: true });
+
+    ['touchstart', 'touchmove', 'wheel'].forEach(evt => {
+        playlistContainer.addEventListener(evt, () => {
+            lastUserScrollTime = Date.now();
+        }, { passive: true });
     });
+
+    function triggerEnqueuedFlash(li) {
+        if (!li || !li.dataset.index || !li.dataset.playlist) return;
+        const pl = li.dataset.playlist;
+        const idx = parseInt(li.dataset.index);
+        const targetTrack = (allDatabases[pl] && allDatabases[pl][idx]) || currentPlaylistData[idx];
+        const songColor = targetTrack ? ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff')) : '#8c73ff';
+        li.style.setProperty('--enqueued-color', songColor);
+        li.classList.add("enqueued-flash");
+        setTimeout(() => {
+            li.classList.remove("enqueued-flash");
+            li.style.removeProperty('--enqueued-color');
+        }, 250);
+    }
 
     let holdTimer = null;
     let holdStartX = 0;
     let holdStartY = 0;
     let suppressNextClick = false;
-
-    function triggerEnqueueFlash(li) {
-        if (!li) return;
-        const plName = li.dataset.playlist;
-        const idx = parseInt(li.dataset.index);
-        const song = (allDatabases[plName] && allDatabases[plName][idx]) || (currentPlaylistData && currentPlaylistData[idx]);
-        const songColor = (song && song.color && song.color !== '#000000') ? song.color : (song ? (dominantColorCache.get(song.id) || '#8c73ff') : '#8c73ff');
-        li.style.setProperty('--flash-color', hexToRgba(songColor, 0.4));
-        li.classList.add("enqueued-flash");
-        setTimeout(() => {
-            li.classList.remove("enqueued-flash");
-            li.style.removeProperty('--flash-color');
-        }, 250);
-    }
 
     trackList.addEventListener("pointerdown", (e) => {
         const li = e.target.closest("li");
@@ -130,7 +137,7 @@ document.addEventListener("DOMContentLoaded", () => {
             suppressNextClick = true;
             queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
             if (navigator.vibrate) navigator.vibrate(40);
-            triggerEnqueueFlash(li);
+            triggerEnqueuedFlash(li);
         }, 500);
     });
 
@@ -173,7 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         e.preventDefault();
         queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-        triggerEnqueueFlash(li);
+        triggerEnqueuedFlash(li);
     });
 
     window.addEventListener("popstate", (e) => {
@@ -480,29 +487,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("error", () => {
         if (audioPlayer.switching) return;
-        if (!navigator.onLine) return;
         const activeEl = audioPlayer.active || audioPlayer;
         const err = activeEl.error;
         // Ignore MEDIA_ERR_ABORTED (1) from in-flight aborted stream / track change
         if (err && err.code === 1) return;
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
           
-        const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
-        if (ct > 0 && !isRecovering) {
-            isRecovering = true;
-            const savedTime = ct;
-            const track = currentPlaylistData[playQueue[queueIndex]] || 
-                          currentPlaylistData[globalActiveOriginalIndex];
-            if (!track) { isRecovering = false; return; }
-
-            const onMeta = () => {
-                audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                isRecovering = false;
-            };
+          // Android Power Management / Network drop: Try to recover ONCE before skipping.
+          const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
+          if (ct > 0 && !isRecovering && audioPlayer.readyState > 0) {
+              isRecovering = true;
+              const savedTime = ct;
+              const track = currentPlaylistData[playQueue[queueIndex]] || 
+currentPlaylistData[globalActiveOriginalIndex];
+              if (!track) { isRecovering = false; return; }
+  
+              const onMeta = () => {
+                  audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                  audioPlayer.currentTime = savedTime;
+                  isRecovering = false;
+              };
             audioPlayer.addEventListener('loadedmetadata', onMeta);
             
+            const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
-            audioPlayer.recoverTrack(recoveryUrl, savedTime);
+            audioPlayer.recoverTrack(recoveryUrl);
             return;
         }
 
@@ -524,7 +533,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }, 3000);
     });
-
     const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>';
 
     function updateThumbToggleUI() {
@@ -573,40 +581,58 @@ document.addEventListener("DOMContentLoaded", () => {
         updateMediaSessionPosition();
     }
 
-    let lastArtTapTime = 0;
-
-    function toggleThumbnails() {
-        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-        thumbsDisabled = !thumbsDisabled;
-        updateThumbToggleUI();
-        if (!thumbsDisabled && isPlaying) {
-            const track = currentPlaylistData[playQueue[queueIndex]];
-            if (track && getThumbUrl(track)) {
-                const thumbUrl = getThumbUrl(track);
-                albumArt.style.display = 'block';
-                albumArt.src = thumbUrl;
-                const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                document.documentElement.style.setProperty('--primary-color', activeColor);
-                if (hasMediaSession && navigator.mediaSession.metadata) {
-                    navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                }
-            }
-        }
-        lastStartIndex = -1;
-        renderVirtualTracks();
-    }
-
-    function handleArtTap(clientX) {
+    let lastArtClickTime = 0;
+    
+    albumArtContainer.addEventListener("click", (e) => {
+        e.stopPropagation();
+        
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         
         // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            toggleThumbnails();
+            thumbsDisabled = !thumbsDisabled;
+            updateThumbToggleUI();
+            if (!thumbsDisabled && isPlaying) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && getThumbUrl(track)) {
+                    const thumbUrl = getThumbUrl(track);
+                    albumArt.style.display = 'block';
+                    albumArt.src = thumbUrl;
+                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
+                    if (hasMediaSession && navigator.mediaSession.metadata) {
+                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                    }
+                }
+            }
+            lastStartIndex = -1;
+            renderVirtualTracks();
+            return;
+        }
+
+        if (e.target.closest('#thumb-toggle-hint') || !isPlaying || thumbsDisabled) {
+            thumbsDisabled = !thumbsDisabled;
+            updateThumbToggleUI();
+            if (!thumbsDisabled && isPlaying) {
+                const track = currentPlaylistData[playQueue[queueIndex]];
+                if (track && getThumbUrl(track)) {
+                    const thumbUrl = getThumbUrl(track);
+                    albumArt.style.display = 'block';
+                    albumArt.src = thumbUrl;
+                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    document.documentElement.style.setProperty('--primary-color', activeColor);
+                    if (hasMediaSession && navigator.mediaSession.metadata) {
+                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                    }
+                }
+            }
+            lastStartIndex = -1;
+            renderVirtualTracks();
             return;
         }
 
         const rect = albumArtContainer.getBoundingClientRect();
-        const clickX = clientX - rect.left;
+        const clickX = e.clientX - rect.left;
         const width = rect.width;
         if (isNaN(clickX) || width === 0) return;
 
@@ -615,24 +641,81 @@ document.addEventListener("DOMContentLoaded", () => {
         const isMiddle = !isLeft && !isRight;
 
         const now = Date.now();
-        const isDoubleTap = (now - lastArtTapTime) < 320;
-        lastArtTapTime = now;
+        const isDoubleClick = (now - lastArtClickTime) < 300;
+        lastArtClickTime = now;
 
-        if (isDoubleTap && (isLeft || isRight)) {
+        if (isDoubleClick && (isLeft || isRight)) {
             if (isLeft) performSeekDelta(-5);
             else if (isRight) performSeekDelta(5);
-            lastArtTapTime = 0;
-        } else if (isMiddle || !isPlaying) {
-            toggleThumbnails();
+        } else if (isMiddle && !thumbsDisabled) {
+            thumbsDisabled = true;
+            updateThumbToggleUI();
+            lastStartIndex = -1;
+            renderVirtualTracks();
         }
-    }
-
-    albumArtContainer.addEventListener("click", (e) => {
-        e.stopPropagation();
-        handleArtTap(e.clientX);
     });
 
-    const isInstalled = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    let lastPlayerDblTime = 0;
+    let lastPlayerTapX = 0;
+    nowPlaying.addEventListener("click", (e) => {
+        // If in mobile mini mode and unexpanded, do not trigger seek gestures
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
+        if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
+        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+        if (!isPlaying) return;
+
+        const now = Date.now();
+        if (now - lastPlayerDblTime < 300) {
+            const rect = nowPlaying.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const width = rect.width;
+            if (clickX < width * 0.4) {
+                performSeekDelta(-5);
+            } else if (clickX > width * 0.6) {
+                performSeekDelta(5);
+            }
+            lastPlayerDblTime = 0;
+        } else {
+            lastPlayerDblTime = now;
+        }
+    });
+
+    if (hasTouch) {
+        let touchStartSeekY = 0;
+        nowPlaying.addEventListener("touchstart", (e) => {
+            if (e.touches && e.touches.length > 0) {
+                touchStartSeekY = e.touches[0].screenY;
+            }
+        }, {passive: true});
+
+        nowPlaying.addEventListener("touchend", (e) => {
+            // If in mobile mini mode and unexpanded, do not trigger seek gestures
+            if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
+            if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
+            const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
+            if (!isPlaying) return;
+
+            const touch = e.changedTouches && e.changedTouches[0];
+            if (!touch || Math.abs(touch.screenY - touchStartSeekY) > 30) return;
+
+            const now = Date.now();
+            if (now - lastPlayerDblTime < 300 && Math.abs(touch.clientX - lastPlayerTapX) < 60) {
+                const rect = nowPlaying.getBoundingClientRect();
+                const clickX = touch.clientX - rect.left;
+                const width = rect.width;
+                if (clickX < width * 0.4) {
+                    performSeekDelta(-5);
+                } else if (clickX > width * 0.6) {
+                    performSeekDelta(5);
+                }
+                lastPlayerDblTime = 0;
+            } else {
+                lastPlayerDblTime = now;
+                lastPlayerTapX = touch.clientX;
+            }
+        }, {passive: true});
+    }
+
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
         if (e.target.value === "INSTALL_APP") {
