@@ -217,9 +217,8 @@
             return this.active.play();
         }
 
-        recoverTrack(url, targetTime = null) {
-            const resumeTime = targetTime !== null ? targetTime : (this.currentTime || this.lastKnownTime || 0);
-            this.switchTrack(url, window.wasPausedByUser, this._expectedDuration, resumeTime);
+        recoverTrack(url) {
+            this.switchTrack(url, false, this._expectedDuration);
         }
 
         pause() {
@@ -271,23 +270,18 @@
             this.active.volume = 1.0;
         }
 
-        async switchTrack(url, preventAutoplay, expectedDuration = 0, resumeSeekTarget = null) {
+        async switchTrack(url, preventAutoplay, expectedDuration = 0) {
             this.switching = true;
             this._endedFired = false;
+            this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
 
             this.active.pause();
 
-            if (resumeSeekTarget !== null) {
-                this._pendingSeek = resumeSeekTarget;
-            } else {
-                this.lastKnownTime = 0;
-                this._pendingSeek = null;
-                try {
-                    this.active.currentTime = 0;
-                } catch (e) {}
-            }
+            try {
+                this.active.currentTime = 0;
+            } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition();
@@ -325,9 +319,7 @@
 
                 this._streamId = (this._streamId || 0) + 1;
                 const activeStreamId = this._streamId;
-                if (resumeSeekTarget === null) {
-                    this._pendingSeek = null;
-                }
+                this._pendingSeek = null;
 
                 // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
                 try {
@@ -471,28 +463,30 @@
                     }
                     this.dispatchEvent(new Event('progress'));
 
-                    // Background ingestion stream with network switch / disconnection auto-recovery
-                    let totalBytesReceived = initialBytes;
-                    let isIngesting = false;
-
-                    const readStream = async (activeReader) => {
-                        isIngesting = true;
+                    // Single continuous background ingestion stream for remaining chunks
+                    (async () => {
                         try {
+                            if (streamDone) {
+                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                }
+                                return;
+                            }
+
                             while (true) {
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { activeReader.cancel(); } catch (e) {}
+                                    try { reader.cancel(); } catch (e) {}
                                     break;
                                 }
 
-                                const { value: nextChunk, done } = await activeReader.read();
+                                const { value: nextChunk, done } = await reader.read();
 
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { activeReader.cancel(); } catch (e) {}
+                                    try { reader.cancel(); } catch (e) {}
                                     break;
                                 }
 
                                 if (done) {
-                                    streamDone = true;
                                     if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                         try { this._mediaSource.endOfStream(); } catch (e) {}
                                     }
@@ -500,14 +494,8 @@
                                 }
 
                                 if (nextChunk && nextChunk.length > 0) {
-                                    totalBytesReceived += nextChunk.length;
                                     await this._appendToSourceBuffer(nextChunk);
                                     this.dispatchEvent(new Event('progress'));
-
-                                    // Resume playback if paused due to lack of buffer (not user paused)
-                                    if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
-                                        this.active.play().catch(() => {});
-                                    }
 
                                     // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
                                     if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
@@ -528,58 +516,16 @@
                                 }
                             }
                         } catch (streamErr) {
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
-                                console.warn("MSE stream interrupted (network switch). Will resume upon reconnection:", streamErr);
+                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
+                                console.warn("Background MSE stream error:", streamErr);
                             }
-                        } finally {
-                            isIngesting = false;
                         }
-                    };
-
-                    const onOnlineResume = async () => {
-                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId || isIngesting) return;
-                        try {
-                            const res = await fetch(url, { signal: currentAbortSignal });
-                            if (!res.ok || !res.body || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
-                            const newReader = res.body.getReader();
-                            let skippedBytes = 0;
-                            isIngesting = true;
-                            while (skippedBytes < totalBytesReceived) {
-                                const { value: skipChunk, done: skipDone } = await newReader.read();
-                                if (skipDone || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { newReader.cancel(); } catch (e) {}
-                                    isIngesting = false;
-                                    return;
-                                }
-                                if (skipChunk && skipChunk.length > 0) {
-                                    skippedBytes += skipChunk.length;
-                                }
-                            }
-                            readStream(newReader);
-                        } catch (err) {
-                            isIngesting = false;
-                        }
-                    };
-
-                    window.addEventListener('online', onOnlineResume);
-                    currentAbortSignal.addEventListener('abort', () => {
-                        window.removeEventListener('online', onOnlineResume);
-                    });
-
-                    if (streamDone) {
-                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                            try { this._mediaSource.endOfStream(); } catch (e) {}
-                        }
-                    } else {
-                        readStream(reader);
-                    }
+                    })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
                         this.switching = false;
-                        if (navigator.onLine) {
-                            this.dispatchEvent(new Event('error'));
-                        }
+                        this.dispatchEvent(new Event('error'));
                     }
                 }
             } else {
