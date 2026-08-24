@@ -209,8 +209,7 @@
         }
 
         #album-art-container.no-art {
-            background-color: #1a1a1e;
-            border-radius: 8px;
+            background-color: transparent !important;
         }
 
         #album-art-container.no-art #thumb-toggle-hint {
@@ -858,8 +857,7 @@
                 cursor: pointer;
             }
             
-            .now-playing.expanded #album-art-container,
-            .now-playing.expanded #album-art-container.no-art {
+            .now-playing.expanded #album-art-container {
                 width: 90%;
                 max-width: 450px;
                 aspect-ratio: 1 / 1;
@@ -867,7 +865,10 @@
                 max-height: none;
                 border-radius: 12px;
                 margin-bottom: 30px;
-                background-color: #1a1a1e;
+            }
+            
+            .now-playing.expanded #album-art-container.no-art {
+                background-color: transparent !important;
             }
             
             .now-playing.expanded #album-art-image {

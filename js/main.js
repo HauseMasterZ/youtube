@@ -525,15 +525,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 3000);
     });
 
-    window.addEventListener('online', () => {
-        if (!audioPlayer.switching && audioPlayer.getAttribute('src')) {
-            const track = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
-            if (track) {
-                const curPos = audioPlayer.currentTime || audioPlayer.lastKnownTime || 0;
-                audioPlayer.recoverTrack(getAudioUrl(track), curPos);
-            }
-        }
-    });
     const eyeIconSvg = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>';
 
     function updateThumbToggleUI() {
