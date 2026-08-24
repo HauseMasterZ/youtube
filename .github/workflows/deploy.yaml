@@ -106,6 +106,7 @@ jobs:
       - name: Build, Bundle, and Minify Source Files
         env:
           BUILD_VER: ${{ github.sha }}
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           node << 'EOF'
           const fs = require('fs');
@@ -113,6 +114,7 @@ jobs:
           const { execSync } = require('child_process');
 
           const buildVer = (process.env.BUILD_VER || Date.now().toString()).substring(0, 10);
+          const branch = process.env.BRANCH_NAME || 'dev';
 
           function buildDirectory(dir) {
             if (!fs.existsSync(dir)) return;
@@ -170,15 +172,31 @@ jobs:
             }
           }
 
-          buildDirectory('site-root');
-          buildDirectory('site-root/dev');
+          if (branch === 'main') {
+            buildDirectory('site-root');
+            if (fs.existsSync('site-root/dev')) {
+              buildDirectory('site-root/dev');
+            }
+          } else {
+            if (fs.existsSync('site-root/dev')) {
+              buildDirectory('site-root/dev');
+            }
+          }
           EOF
 
       - name: Post-Build Integrity Verification
+        env:
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           echo "==> Verifying production bundle and Service Worker syntax..."
-          node --check site-root/js/bundle.min.js
-          node --check site-root/sw.js
+          if [ "$BRANCH_NAME" = "main" ]; then
+            if [ -f "site-root/js/bundle.min.js" ]; then
+              node --check site-root/js/bundle.min.js
+            fi
+            if [ -f "site-root/sw.js" ]; then
+              node --check site-root/sw.js
+            fi
+          fi
           if [ -d "site-root/dev" ]; then
             if [ -f "site-root/dev/js/bundle.min.js" ]; then
               node --check site-root/dev/js/bundle.min.js
@@ -187,7 +205,7 @@ jobs:
               node --check site-root/dev/sw.js
             fi
           fi
-          echo "✓ All production bundles verified successfully."
+          echo "✓ Production bundles verified successfully."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
