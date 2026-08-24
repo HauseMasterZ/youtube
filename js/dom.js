@@ -217,8 +217,9 @@
             return this.active.play();
         }
 
-        recoverTrack(url) {
-            this.switchTrack(url, false, this._expectedDuration);
+        recoverTrack(url, targetTime = null) {
+            const resumeTime = targetTime !== null ? targetTime : (this.currentTime || this.lastKnownTime || 0);
+            this.switchTrack(url, window.wasPausedByUser, this._expectedDuration, resumeTime);
         }
 
         pause() {
@@ -270,18 +271,23 @@
             this.active.volume = 1.0;
         }
 
-        async switchTrack(url, preventAutoplay, expectedDuration = 0) {
+        async switchTrack(url, preventAutoplay, expectedDuration = 0, resumeSeekTarget = null) {
             this.switching = true;
             this._endedFired = false;
-            this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
 
             this.active.pause();
 
-            try {
-                this.active.currentTime = 0;
-            } catch (e) {}
+            if (resumeSeekTarget !== null) {
+                this._pendingSeek = resumeSeekTarget;
+            } else {
+                this.lastKnownTime = 0;
+                this._pendingSeek = null;
+                try {
+                    this.active.currentTime = 0;
+                } catch (e) {}
+            }
 
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition();
@@ -319,7 +325,9 @@
 
                 this._streamId = (this._streamId || 0) + 1;
                 const activeStreamId = this._streamId;
-                this._pendingSeek = null;
+                if (resumeSeekTarget === null) {
+                    this._pendingSeek = null;
+                }
 
                 // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
                 try {
@@ -530,9 +538,8 @@
 
                     const attemptRecovery = () => {
                         if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId) return;
-                        const currentPos = this.currentTime;
-                        this._pendingSeek = currentPos;
-                        this.switchTrack(url, window.wasPausedByUser, this._expectedDuration);
+                        const currentPos = this.currentTime || this.lastKnownTime || 0;
+                        this.switchTrack(url, window.wasPausedByUser, this._expectedDuration, currentPos);
                     };
 
                     const onOnlineOrStalled = () => {
@@ -561,7 +568,9 @@
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
                         this.switching = false;
-                        this.dispatchEvent(new Event('error'));
+                        if (navigator.onLine) {
+                            this.dispatchEvent(new Event('error'));
+                        }
                     }
                 }
             } else {
