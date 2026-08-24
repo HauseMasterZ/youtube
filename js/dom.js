@@ -521,82 +521,33 @@
                             }
                         } catch (streamErr) {
                             if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
-                                console.warn("MSE stream interrupted (network switch), auto-resuming:", streamErr);
-                                scheduleRetry(1000);
+                                console.warn("MSE stream interrupted (network switch). Will recover upon reconnection:", streamErr);
                             }
                         } finally {
                             isIngesting = false;
                         }
                     };
 
-                    let retryTimer = null;
-                    const scheduleRetry = (delayMs = 1500) => {
-                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId || isIngesting) return;
-                        clearTimeout(retryTimer);
-                        retryTimer = setTimeout(attemptResume, delayMs);
-                    };
-
-                    const attemptResume = async () => {
-                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId || isIngesting) return;
-                        try {
-                            const res = await fetch(url, { signal: currentAbortSignal });
-                            if (!res.ok || !res.body) {
-                                scheduleRetry(2500);
-                                return;
-                            }
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
-                            
-                            const newReader = res.body.getReader();
-                            let skippedBytes = 0;
-                            isIngesting = true;
-
-                            while (skippedBytes < totalBytesReceived) {
-                                const { value: skipChunk, done: skipDone } = await newReader.read();
-                                if (skipDone || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                    try { newReader.cancel(); } catch (e) {}
-                                    isIngesting = false;
-                                    return;
-                                }
-                                if (skipChunk && skipChunk.length > 0) {
-                                    if (skippedBytes + skipChunk.length > totalBytesReceived) {
-                                        const sliceOffset = totalBytesReceived - skippedBytes;
-                                        const remainingSlice = skipChunk.subarray(sliceOffset);
-                                        skippedBytes += skipChunk.length;
-                                        totalBytesReceived += remainingSlice.length;
-                                        await this._appendToSourceBuffer(remainingSlice.buffer || remainingSlice);
-                                        this.dispatchEvent(new Event('progress'));
-                                        if (!window.wasPausedByUser && this.active.paused) {
-                                            this.active.play().catch(() => {});
-                                        }
-                                        break;
-                                    } else {
-                                        skippedBytes += skipChunk.length;
-                                    }
-                                }
-                            }
-
-                            readStream(newReader);
-                        } catch (err) {
-                            isIngesting = false;
-                            if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
-                                scheduleRetry(2500);
-                            }
-                        }
+                    const attemptRecovery = () => {
+                        if (streamDone || currentAbortSignal.aborted || this._streamId !== activeStreamId) return;
+                        const currentPos = this.currentTime;
+                        this._pendingSeek = currentPos;
+                        this.switchTrack(url, window.wasPausedByUser, this._expectedDuration);
                     };
 
                     const onOnlineOrStalled = () => {
                         if (!streamDone && !currentAbortSignal.aborted && this._streamId === activeStreamId && !isIngesting) {
-                            attemptResume();
+                            attemptRecovery();
                         }
                     };
+
                     window.addEventListener('online', onOnlineOrStalled);
-                    this.active.addEventListener('waiting', onOnlineOrStalled);
                     this.active.addEventListener('stalled', onOnlineOrStalled);
+                    this.active.addEventListener('error', onOnlineOrStalled);
                     currentAbortSignal.addEventListener('abort', () => {
                         window.removeEventListener('online', onOnlineOrStalled);
-                        this.active.removeEventListener('waiting', onOnlineOrStalled);
                         this.active.removeEventListener('stalled', onOnlineOrStalled);
-                        clearTimeout(retryTimer);
+                        this.active.removeEventListener('error', onOnlineOrStalled);
                     });
 
                     if (streamDone) {
