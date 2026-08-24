@@ -655,66 +655,7 @@ currentPlaylistData[globalActiveOriginalIndex];
         }
     });
 
-    let lastPlayerDblTime = 0;
-    let lastPlayerTapX = 0;
-    nowPlaying.addEventListener("click", (e) => {
-        // If in mobile mini mode and unexpanded, do not trigger seek gestures
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
-        if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
-        const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-        if (!isPlaying) return;
 
-        const now = Date.now();
-        if (now - lastPlayerDblTime < 300) {
-            const rect = nowPlaying.getBoundingClientRect();
-            const clickX = e.clientX - rect.left;
-            const width = rect.width;
-            if (clickX < width * 0.4) {
-                performSeekDelta(-5);
-            } else if (clickX > width * 0.6) {
-                performSeekDelta(5);
-            }
-            lastPlayerDblTime = 0;
-        } else {
-            lastPlayerDblTime = now;
-        }
-    });
-
-    if (hasTouch) {
-        let touchStartSeekY = 0;
-        nowPlaying.addEventListener("touchstart", (e) => {
-            if (e.touches && e.touches.length > 0) {
-                touchStartSeekY = e.touches[0].screenY;
-            }
-        }, {passive: true});
-
-        nowPlaying.addEventListener("touchend", (e) => {
-            // If in mobile mini mode and unexpanded, do not trigger seek gestures
-            if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) return;
-            if (e.target.closest('button, input, select, a, #thumb-toggle-hint, #btn-lyrics-toggle, .playback-controls, .progress-container, #album-art-container')) return;
-            const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
-            if (!isPlaying) return;
-
-            const touch = e.changedTouches && e.changedTouches[0];
-            if (!touch || Math.abs(touch.screenY - touchStartSeekY) > 30) return;
-
-            const now = Date.now();
-            if (now - lastPlayerDblTime < 300 && Math.abs(touch.clientX - lastPlayerTapX) < 60) {
-                const rect = nowPlaying.getBoundingClientRect();
-                const clickX = touch.clientX - rect.left;
-                const width = rect.width;
-                if (clickX < width * 0.4) {
-                    performSeekDelta(-5);
-                } else if (clickX > width * 0.6) {
-                    performSeekDelta(5);
-                }
-                lastPlayerDblTime = 0;
-            } else {
-                lastPlayerDblTime = now;
-                lastPlayerTapX = touch.clientX;
-            }
-        }, {passive: true});
-    }
 
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
