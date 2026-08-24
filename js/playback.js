@@ -70,7 +70,8 @@
     }
 
     function generateQueue(resetPlayback = false, targetPlaylist = null) {
-        const pl = targetPlaylist || globalActivePlaylist || playlistSelect.value;
+        const pl = targetPlaylist || queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+        queueBasePlaylist = pl;
         const data = allDatabases[pl] || currentPlaylistData;
         if (!data || data.length === 0) return;
 
@@ -107,6 +108,7 @@
             poolInitialized = false;
             playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
         }
+        queueBasePlaylist = playlist;
         globalActivePlaylist = playlist;
         globalActiveOriginalIndex = trackIndex;
         queueIndex = trackIndex;
@@ -127,8 +129,8 @@
         } else {
             // Single playlist mode
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
-            const curPl = globalActivePlaylist || playlistSelect.value;
-            const itemToQueue = (playlist === curPl) ? originalIndex : { playlist, index: originalIndex };
+            const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+            const itemToQueue = (playlist === basePl) ? originalIndex : { playlist, index: originalIndex };
             playQueue.splice(insertPos, 0, itemToQueue);
         }
     };
@@ -138,6 +140,7 @@
             await loadPlaylist(targetPlaylist);
         }
 
+        queueBasePlaylist = targetPlaylist;
         globalActivePlaylist = targetPlaylist;
         globalActiveOriginalIndex = targetOriginalIndex;
         currentPlaylistData = allDatabases[targetPlaylist] || currentPlaylistData;
@@ -282,7 +285,7 @@
             track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]);
         } else {
             originalIndex = rawQueueItem;
-            targetPlaylist = globalActivePlaylist || playlistSelect.value;
+            targetPlaylist = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
             track = (allDatabases[targetPlaylist] && allDatabases[targetPlaylist][originalIndex]) 
                  || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
         }
@@ -450,12 +453,31 @@
             if (playQueue.length > 0) {
                 let nIdx = queueIndex + 1;
                 if (nIdx >= playQueue.length && repeatMode === 1) nIdx = 0;
-                if (nIdx < playQueue.length) nextTrack = currentPlaylistData[playQueue[nIdx]];
+                if (nIdx < playQueue.length) {
+                    const nextItem = playQueue[nIdx];
+                    if (typeof nextItem === 'object' && nextItem !== null) {
+                        if (allDatabases[nextItem.playlist]) nextTrack = allDatabases[nextItem.playlist][nextItem.index];
+                    } else {
+                        const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+                        if (allDatabases[basePl]) nextTrack = allDatabases[basePl][nextItem];
+                        else if (currentPlaylistData) nextTrack = currentPlaylistData[nextItem];
+                    }
+                }
             }
         }
         
         const nextCacheKey = nextTrack ? getAudioUrl(nextTrack) : null;
-        const currentTrack = currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex];
+        let currentTrack = null;
+        if (queueIndex >= 0 && queueIndex < playQueue.length) {
+            const curItem = playQueue[queueIndex];
+            if (typeof curItem === 'object' && curItem !== null) {
+                if (allDatabases[curItem.playlist]) currentTrack = allDatabases[curItem.playlist][curItem.index];
+            } else {
+                const basePl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+                if (allDatabases[basePl]) currentTrack = allDatabases[basePl][curItem];
+                else if (currentPlaylistData) currentTrack = currentPlaylistData[curItem];
+            }
+        }
         const currentCacheKey = currentTrack ? getAudioUrl(currentTrack) : null;
 
         // Cleanup stale preloads

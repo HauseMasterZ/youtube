@@ -17,6 +17,7 @@
     let queueIndex = -1;    
     let globalActiveOriginalIndex = -1; 
     let globalActivePlaylist = null;
+    let queueBasePlaylist = null;
     
     let shuffleMode = 0;
     let repeatMode = 0; 

@@ -102,6 +102,20 @@ document.addEventListener("DOMContentLoaded", () => {
     let holdStartY = 0;
     let suppressNextClick = false;
 
+    function triggerEnqueueFlash(li) {
+        if (!li) return;
+        const plName = li.dataset.playlist;
+        const idx = parseInt(li.dataset.index);
+        const song = (allDatabases[plName] && allDatabases[plName][idx]) || (currentPlaylistData && currentPlaylistData[idx]);
+        const songColor = (song && song.color && song.color !== '#000000') ? song.color : (song ? (dominantColorCache.get(song.id) || '#8c73ff') : '#8c73ff');
+        li.style.setProperty('--flash-color', hexToRgba(songColor, 0.4));
+        li.classList.add("enqueued-flash");
+        setTimeout(() => {
+            li.classList.remove("enqueued-flash");
+            li.style.removeProperty('--flash-color');
+        }, 250);
+    }
+
     trackList.addEventListener("pointerdown", (e) => {
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
@@ -116,8 +130,7 @@ document.addEventListener("DOMContentLoaded", () => {
             suppressNextClick = true;
             queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
             if (navigator.vibrate) navigator.vibrate(40);
-            li.classList.add("enqueued-flash");
-            setTimeout(() => li.classList.remove("enqueued-flash"), 250);
+            triggerEnqueueFlash(li);
         }, 500);
     });
 
@@ -160,8 +173,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         e.preventDefault();
         queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-        li.classList.add("enqueued-flash");
-        setTimeout(() => li.classList.remove("enqueued-flash"), 250);
+        triggerEnqueueFlash(li);
     });
 
     window.addEventListener("popstate", (e) => {
