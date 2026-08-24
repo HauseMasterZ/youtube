@@ -119,7 +119,7 @@ jobs:
             console.log(`==> Building, bundling, and minifying ${dir} (Build: ${buildVer})...`);
 
             // 1. Bundle 8 JS modules into single bundle.min.js
-            const jsOrder = ['dom.js', 'state.js', 'utils.js', 'ui.js', 'mediaSession.js', 'lyrics.js', 'playback.js', 'main.js'];
+            const jsOrder = ['state.js', 'dom.js', 'utils.js', 'ui.js', 'mediaSession.js', 'lyrics.js', 'playback.js', 'main.js'];
             const jsDir = path.join(dir, 'js');
             let combinedJs = '';
             jsOrder.forEach(file => {
