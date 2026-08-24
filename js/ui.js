@@ -301,3 +301,69 @@
         } catch (e) {}
         return PURPLE_NOTE_SVG_DATA_URI;
     }
+
+    let colorCanvas = null;
+    let colorCtx = null;
+    const COLOR_SAMPLE_SIZE = 16;
+
+    function getDominantColor(imgEl, trackId) {
+        if (trackId && dominantColorCache.has(trackId)) {
+            const cached = dominantColorCache.get(trackId);
+            if (cached && cached !== '#8c73ff' && cached !== '#000000') return cached;
+        }
+
+        try {
+            const width = imgEl.naturalWidth || imgEl.width || 320;
+            const height = imgEl.naturalHeight || imgEl.height || 240;
+            if (!width || !height) return '#8c73ff';
+
+            if (!colorCanvas) {
+                colorCanvas = document.createElement('canvas');
+                colorCanvas.width = COLOR_SAMPLE_SIZE;
+                colorCanvas.height = COLOR_SAMPLE_SIZE;
+                colorCtx = colorCanvas.getContext('2d', { willReadFrequently: true });
+            }
+            if (!colorCtx) return '#8c73ff';
+
+            // Sample center 80% to avoid letterboxes
+            colorCtx.drawImage(imgEl, width * 0.1, height * 0.1, width * 0.8, height * 0.8, 0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE);
+            const data = colorCtx.getImageData(0, 0, COLOR_SAMPLE_SIZE, COLOR_SAMPLE_SIZE).data;
+
+            let bestR = 140, bestG = 115, bestB = 255, maxScore = -1;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i + 1], b = data[i + 2];
+                const max = Math.max(r, g, b);
+                const min = Math.min(r, g, b);
+                const chroma = max - min;
+                const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+                // Skip dull/muddy tones
+                if (brightness < 25 || brightness > 240 || chroma < 18) continue;
+
+                const score = chroma * (brightness < 180 ? brightness : (255 - brightness + 100));
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestR = r; bestG = g; bestB = b;
+                }
+            }
+
+            let finalR = bestR, finalG = bestG, finalB = bestB;
+            const br = (finalR * 299 + finalG * 587 + finalB * 114) / 1000;
+            if (br < 95) {
+                const boost = 95 / Math.max(br, 1);
+                finalR = Math.min(255, Math.floor(finalR * boost));
+                finalG = Math.min(255, Math.floor(finalG * boost));
+                finalB = Math.min(255, Math.floor(finalB * boost));
+            }
+
+            const finalColor = `#${finalR.toString(16).padStart(2, '0')}${finalG.toString(16).padStart(2, '0')}${finalB.toString(16).padStart(2, '0')}`;
+            if (trackId && finalColor !== '#8c73ff') {
+                dominantColorCache.set(trackId, finalColor);
+            }
+            return finalColor;
+        } catch (e) {
+            return '#8c73ff';
+        }
+    }
+    window.getDominantColor = getDominantColor;
