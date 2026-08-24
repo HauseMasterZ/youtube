@@ -599,7 +599,7 @@
         }
 
         #track-list li.enqueued-flash {
-            background-color: rgba(140, 115, 255, 0.4) !important;
+            background-color: var(--flash-color, rgba(140, 115, 255, 0.4)) !important;
             transition: background-color 0.25s ease;
         }
 
