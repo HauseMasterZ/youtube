@@ -18,24 +18,12 @@
             this._streamAbortController = null;
             this._streamId = 0;
 
-            this._pausedAtTime = null;
-            this._pauseHoldTimeout = null;
-            this._isHoldPaused = false;
-            this._audioCtx = null;
-            this._sourceNode = null;
-            this._gainNode = null;
-
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
                            'waiting', 'canplay', 'ended', 'durationchange'];
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
-                    if (this._isHoldPaused) {
-                        if (e.type === 'timeupdate' || e.type === 'ended') {
-                            return;
-                        }
-                    }
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
@@ -68,25 +56,6 @@
             });
 
             this._initMSE();
-        }
-
-        _initAudioContext() {
-            if (this._gainNode) return;
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtx) return;
-                if (!this._audioCtx) {
-                    this._audioCtx = new AudioCtx();
-                }
-                if (!this._sourceNode) {
-                    this._sourceNode = this._audioCtx.createMediaElementSource(this.active);
-                    this._gainNode = this._audioCtx.createGain();
-                    this._sourceNode.connect(this._gainNode);
-                    this._gainNode.connect(this._audioCtx.destination);
-                }
-            } catch (e) {
-                console.warn("WebAudio GainNode init failed:", e);
-            }
         }
 
         _initMSE() {
@@ -171,7 +140,6 @@
         }
 
         get currentTime() {
-            if (this._isHoldPaused && this._pausedAtTime !== null) return this._pausedAtTime;
             if (this._pendingSeek !== null) return this._pendingSeek;
             return this.active.currentTime;
         }
@@ -179,9 +147,6 @@
         set currentTime(v) {
             try {
                 this.lastKnownTime = v;
-                if (this._isHoldPaused) {
-                    this._pausedAtTime = v;
-                }
                 if (v < (this.active.duration || Infinity) - 0.5) {
                     this._endedFired = false;
                 }
@@ -218,7 +183,6 @@
             return this.active.duration || this._expectedDuration || 0;
         }
         get paused() {
-            if (this._isHoldPaused) return true;
             if (this._pendingSeek !== null) return false;
             return this.active.paused;
         }
@@ -235,28 +199,6 @@
 
         play() {
             window.wasPausedByUser = false;
-            this._initAudioContext();
-            if (this._audioCtx && this._audioCtx.state === 'suspended') {
-                this._audioCtx.resume().catch(() => {});
-            }
-
-            if (this._pauseHoldTimeout) {
-                clearTimeout(this._pauseHoldTimeout);
-                this._pauseHoldTimeout = null;
-            }
-
-            if (this._isHoldPaused) {
-                this._isHoldPaused = false;
-                if (this._pausedAtTime !== null) {
-                    try { this.active.currentTime = this._pausedAtTime; } catch (e) {}
-                    this._pausedAtTime = null;
-                }
-            }
-
-            if (this._gainNode) {
-                this._gainNode.gain.value = 1.0;
-            }
-
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
             }
@@ -280,8 +222,32 @@
         }
 
         pause() {
-            this.instantPause();
-            return Promise.resolve();
+            window.wasPausedByUser = true;
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            if (this.active.paused || this.fadeInterval) return Promise.resolve();
+            if (document.hidden) {
+                this.active.pause();
+                this.active.volume = 1.0;
+                return Promise.resolve();
+            }
+            return new Promise(resolve => {
+                let currentVol = this.active.volume;
+                const step = currentVol / 10;
+                this.fadeInterval = setInterval(() => {
+                    currentVol -= step;
+                    if (currentVol > 0) {
+                        this.active.volume = currentVol;
+                    } else {
+                        clearInterval(this.fadeInterval);
+                        this.fadeInterval = null;
+                        this.active.pause();
+                        this.active.volume = 1.0;
+                        resolve();
+                    }
+                }, 5);
+            });
         }
 
         load() { return this.active.load(); }
@@ -293,58 +259,18 @@
 
         instantPause() {
             window.wasPausedByUser = true;
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
-
-            this._isHoldPaused = true;
-            this._pausedAtTime = this.active.currentTime;
-
-            if (this._pauseHoldTimeout) {
-                clearTimeout(this._pauseHoldTimeout);
-                this._pauseHoldTimeout = null;
-            }
-
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-                if (typeof updateMediaSessionPosition === 'function') {
-                    updateMediaSessionPosition(this._pausedAtTime, this.duration, 1.0);
-                }
-            }
-
-            if (this._gainNode) {
-                this._gainNode.gain.value = 0;
-            }
-
-            // Schedule true teardown / hard pause after 60 seconds of inactivity
-            this._pauseHoldTimeout = setTimeout(() => {
-                if (this._isHoldPaused) {
-                    this._isHoldPaused = false;
-                    this.active.pause();
-                    if (this._gainNode) {
-                        this._gainNode.gain.value = 1.0;
-                    }
-                    if (this._pausedAtTime !== null) {
-                        try { this.active.currentTime = this._pausedAtTime; } catch (e) {}
-                    }
-                }
-            }, 60000);
-
-            this.dispatchEvent(new Event('pause'));
+            this.active.pause();
+            this.active.volume = 1.0;
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
-            if (this._pauseHoldTimeout) {
-                clearTimeout(this._pauseHoldTimeout);
-                this._pauseHoldTimeout = null;
-            }
-            this._isHoldPaused = false;
-            this._pausedAtTime = null;
-            if (this._gainNode) {
-                this._gainNode.gain.value = 1.0;
-            }
-
             this.switching = true;
             this._endedFired = false;
             this.lastKnownTime = 0;
