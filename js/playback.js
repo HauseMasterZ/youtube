@@ -420,6 +420,19 @@
                 this.style.display = 'none';
                 if (albumArtContainer) albumArtContainer.classList.add('no-art');
             };
+            albumArt.onload = function() {
+                const currentPrimary = document.documentElement.style.getPropertyValue('--primary-color');
+                if (!currentPrimary || currentPrimary === '#8c73ff' || currentPrimary === '#000000' || !track.color || track.color === '#8c73ff' || track.color === '#000000') {
+                    if (typeof getDominantColor === 'function') {
+                        const extracted = getDominantColor(this, track.id);
+                        if (extracted && extracted !== '#8c73ff' && extracted !== '#000000') {
+                            track.color = extracted;
+                            document.documentElement.style.setProperty('--primary-color', extracted);
+                        }
+                    }
+                }
+            };
+            albumArt.crossOrigin = "anonymous";
             albumArt.src = thumbUrl;
         } else {
             albumArt.removeAttribute('src');
