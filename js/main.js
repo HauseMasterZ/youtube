@@ -240,10 +240,12 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         if (audioPlayer.paused) {
+            window.wasPausedByUser = false;
             audioPlayer.play().catch(e => {
                 console.warn("Play blocked:", e);
             });
         } else {
+            window.wasPausedByUser = true;
             audioPlayer.pause();
         }
     });
