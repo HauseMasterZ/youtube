@@ -28,27 +28,6 @@
     const thumbCache = new Map();
     let isScrollingFast = false;
     let scrollSettleTimer = null;
-    let isUserInteractingWithScroll = false;
-    let lastUserScrollTime = 0;
-
-    playlistContainer.addEventListener("touchstart", () => {
-        isUserInteractingWithScroll = true;
-        lastUserScrollTime = Date.now();
-    }, { passive: true });
-
-    playlistContainer.addEventListener("touchend", () => {
-        isUserInteractingWithScroll = false;
-        lastUserScrollTime = Date.now();
-    }, { passive: true });
-
-    playlistContainer.addEventListener("touchcancel", () => {
-        isUserInteractingWithScroll = false;
-        lastUserScrollTime = Date.now();
-    }, { passive: true });
-
-    playlistContainer.addEventListener("wheel", () => {
-        lastUserScrollTime = Date.now();
-    }, { passive: true });
 
     applyShuffleUI();
     applyRepeatUI();
@@ -197,7 +176,7 @@
         
         isRendering = false;
     }
-    function scrollToTrack(originalIndex, force = false) {
+    function scrollToTrack(originalIndex) {
         const currentPl = playlistSelect.value;
         const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
         
@@ -208,19 +187,15 @@
             return; 
         }
         
-        // If user is actively scrolling or touched the scroll list recently, do not forcefully hijack scroll position unless explicitly forced (e.g. user track click)
-        if (!force && (isUserInteractingWithScroll || isScrollingFast || (Date.now() - lastUserScrollTime < 2500))) {
-            lastStartIndex = -1;
-            renderVirtualTracks();
-            return;
+        const isUserActiveScrolling = (Date.now() - lastUserScrollTime < 1500) || isScrollingFast;
+        if (!isUserActiveScrolling) {
+            const scrollPos = virtualIndex * ITEM_HEIGHT;
+            const containerHeight = playlistContainer.clientHeight || 400;
+            playlistContainer.scrollTo({ 
+                top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
+                behavior: "instant" 
+            });
         }
-
-        const scrollPos = virtualIndex * ITEM_HEIGHT;
-        const containerHeight = playlistContainer.clientHeight || 400;
-        playlistContainer.scrollTo({ 
-            top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
-            behavior: "instant" 
-        });
         
         // Force highlight update immediately even during scroll
         lastStartIndex = -1;
