@@ -82,8 +82,13 @@ document.addEventListener("DOMContentLoaded", () => {
             renderVirtualTracks();
         } else if (e.key === "Enter") {
             e.preventDefault();
-            if (selectedSearchIndex >= 0 && selectedSearchIndex < filteredIndices.length) {
-                const item = filteredIndices[selectedSearchIndex];
+            const targetIdx = selectedSearchIndex >= 0 ? selectedSearchIndex : (filteredIndices.length > 0 ? 0 : -1);
+            if (targetIdx >= 0 && targetIdx < filteredIndices.length) {
+                if (searchDebounceTimer) {
+                    clearTimeout(searchDebounceTimer);
+                    searchDebounceTimer = null;
+                }
+                const item = filteredIndices[targetIdx];
                 playTrackSelection(item.playlist, item.index);
                 searchInput.blur();
             }

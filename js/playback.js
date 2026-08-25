@@ -1,5 +1,9 @@
 
     async function loadPlaylist(folderName) {
+        if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+        }
         trackList.style.display = 'none';
         playlistMessage.style.display = 'block';
         playlistMessage.textContent = 'Loading...';
@@ -39,7 +43,7 @@
                 if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
                     // Must render virtual tracks first so the elements exist in DOM before scrolling
                     renderVirtualTracks();
-                    scrollToTrack(globalActiveOriginalIndex);
+                    scrollToTrack(globalActiveOriginalIndex, true);
                 } else {
                     playlistContainer.scrollTop = 0;
                     renderVirtualTracks();
@@ -99,6 +103,12 @@
     // Helper for cross-playlist shuffle: switch playlist context and play a specific track
     // Helper for cross-playlist shuffle and history navigation: switch playlist context and play a specific track
     function playFromPlaylist(playlist, trackIndex, isHistoryNav = false) {
+        if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+        }
+        lastUserScrollTime = 0;
+        isScrollingFast = false;
         if (playlist !== playlistSelect.value) {
             playlistSelect.value = playlist;
             if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = playlist;
@@ -113,7 +123,7 @@
         globalActiveOriginalIndex = trackIndex;
         queueBasePlaylist = playlist;
         queueIndex = trackIndex;
-        executePlayback(false, isHistoryNav);
+        executePlayback(false, isHistoryNav, true);
     }
 
     window.playTrackSelection = playTrackSelection;
@@ -137,13 +147,21 @@
     };
 
     async function playTrackSelection(targetPlaylist, targetOriginalIndex) {
+        if (searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+        }
+
+        lastUserScrollTime = 0;
+        isScrollingFast = false;
+        globalActivePlaylist = targetPlaylist;
+        globalActiveOriginalIndex = targetOriginalIndex;
+        queueBasePlaylist = targetPlaylist;
+
         if (!allDatabases[targetPlaylist] && typeof loadPlaylist === 'function') {
             await loadPlaylist(targetPlaylist);
         }
 
-        globalActivePlaylist = targetPlaylist;
-        globalActiveOriginalIndex = targetOriginalIndex;
-        queueBasePlaylist = targetPlaylist;
         currentPlaylistData = allDatabases[targetPlaylist] || currentPlaylistData;
 
         // Auto-switch playlist dropdown and active dataset to the target playlist
@@ -194,7 +212,7 @@
             queueIndex = targetOriginalIndex;
         }
 
-        executePlayback();
+        executePlayback(false, false, true);
     }
     window.lastPlaybackDirection = 1;
 
@@ -278,7 +296,7 @@
             audioPlayer.play();
         }
     }
-    function executePlayback(preventAutoplay = false, isHistoryNav = false) {
+    function executePlayback(preventAutoplay = false, isHistoryNav = false, forceScroll = false) {
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
@@ -349,7 +367,7 @@
             currentTitle.textContent = "err " + track.title + " skipping...";
             currentTitle.style.color = "#ff5555";
             currentChannel.textContent = track.channel;
-            scrollToTrack(originalIndex);
+            scrollToTrack(originalIndex, forceScroll);
             
             // Mark the visual list item immediately
             Array.from(trackList.children).forEach(li => li.classList.remove('active'));
@@ -391,7 +409,7 @@
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
 
-        scrollToTrack(originalIndex);
+        scrollToTrack(originalIndex, forceScroll);
 
         updateTimeUI(0);
         let parsedDuration = 0;
