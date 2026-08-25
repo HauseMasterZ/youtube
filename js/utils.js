@@ -1,6 +1,37 @@
     const baseUrl = "__API_GATEWAY_URL__";
+    const artworkSquareCache = new Map();
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
     function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
+    function getSquareArtwork(url, trackId, callback) {
+        if (!url) return;
+        if (artworkSquareCache.has(trackId)) {
+            callback(artworkSquareCache.get(trackId));
+            return;
+        }
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = function() {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 512;
+                canvas.height = 512;
+                const ctx = canvas.getContext('2d');
+                const size = Math.min(img.naturalWidth, img.naturalHeight);
+                const sx = (img.naturalWidth - size) / 2;
+                const sy = (img.naturalHeight - size) / 2;
+                ctx.drawImage(img, sx, sy, size, size, 0, 0, 512, 512);
+                const squareUrl = canvas.toDataURL('image/jpeg', 0.92);
+                artworkSquareCache.set(trackId, squareUrl);
+                callback(squareUrl);
+            } catch (e) {
+                callback(url);
+            }
+        };
+        img.onerror = function() {
+            callback(url);
+        };
+        img.src = url;
+    }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds === Infinity) return "0:00";
