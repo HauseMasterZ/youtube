@@ -81,7 +81,7 @@
             align-items: flex-end;
             justify-content: center;
             flex-shrink: 0;
-            padding-right: clamp(32px, 4.5vw, 64px);
+            padding-right: clamp(2px, 3px, 4px);
             box-sizing: border-box;
         }
 
