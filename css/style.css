@@ -188,7 +188,7 @@
         #album-art-container {
             width: auto;
             max-width: 100%;
-            cursor: pointer;
+            cursor: default;
             position: relative;
             margin-bottom: 18px;
             touch-action: manipulation;
@@ -206,6 +206,7 @@
             border-radius: 8px;
             display: none;
             background-color: transparent;
+            cursor: pointer;
         }
 
         #album-art-container.no-art {
@@ -672,25 +673,31 @@
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
+                width: 100%;
+                max-width: 480px;
                 margin-bottom: 6px;
             }
             .now-playing:not(.expanded) #current-title {
                 font-size: clamp(18px, 2.2vh, 24px);
+                width: 100%;
+                max-width: 100%;
             }
             .now-playing:not(.expanded) #current-channel {
                 font-size: clamp(13px, 1.6vh, 16px);
                 margin: 3px 0 8px 0;
+                width: 100%;
+                max-width: 100%;
             }
             .now-playing:not(.expanded) .progress-container {
                 margin: 8px 0;
-                width: var(--art-width, 100%);
-                max-width: var(--art-width, 500px);
+                width: 100%;
+                max-width: 480px;
             }
             .now-playing:not(.expanded) .playback-controls {
                 gap: 16px;
                 margin-top: 4px;
-                width: var(--art-width, 100%);
-                max-width: var(--art-width, 500px);
+                width: 100%;
+                max-width: 480px;
             }
             .now-playing:not(.expanded) .main-btn {
                 width: 56px;
