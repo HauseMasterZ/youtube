@@ -468,12 +468,14 @@
                 this.removeAttribute('src');
                 this.style.display = 'none';
                 if (albumArtContainer) albumArtContainer.classList.add('no-art');
+                if (typeof nowPlaying !== 'undefined' && nowPlaying) nowPlaying.style.removeProperty('--art-width');
             };
             albumArt.src = thumbUrl;
         } else {
             albumArt.removeAttribute('src');
             albumArt.style.display = 'none';
             if (albumArtContainer) albumArtContainer.classList.add('no-art');
+            if (typeof nowPlaying !== 'undefined' && nowPlaying) nowPlaying.style.removeProperty('--art-width');
             if (thumbsDisabled && thumbToggleHint) {
                 thumbToggleHint.style.display = 'inline-flex';
                 thumbToggleHint.innerHTML = '<svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>Show thumbnails';
