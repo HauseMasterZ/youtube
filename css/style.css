@@ -509,6 +509,7 @@
         @media (min-width: 1111px) and (orientation: landscape) {
             .now-playing {
                 max-width: 680px;
+                padding: 0;
             }
             #album-art-container {
                 width: clamp(220px, 80%, 600px);
