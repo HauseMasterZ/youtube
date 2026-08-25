@@ -13,19 +13,24 @@
             this.lastKnownTime = 0;
             this._currentUrl = '';
             this._mseEnabled = false;
-            this._audioCtx = null;
-            this._gainNode = null;
-            this._mediaElementSource = null;
+            this._pendingSeek = null;
+            this._expectedDuration = 0;
+            this._streamAbortController = null;
+            this._streamId = 0;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
-                           'waiting', 'canplay', 'ended'];
+                           'waiting', 'canplay', 'ended', 'durationchange'];
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
                     if (e.type === 'timeupdate') {
+                        if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
                         const dur = this.active.duration;
+                        if (dur > 0 && ct < dur - 1.0) {
+                            this._endedFired = false;
+                        }
                         if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= dur - 0.25) {
                                 this._endedFired = true;
@@ -53,23 +58,6 @@
             this._initMSE();
         }
 
-        _initAudioGraph() {
-            if (this._audioCtx) return;
-            try {
-                const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
-                if (AudioCtxClass) {
-                    this._audioCtx = new AudioCtxClass();
-                    this._mediaElementSource = this._audioCtx.createMediaElementSource(this.active);
-                    this._gainNode = this._audioCtx.createGain();
-                    this._gainNode.gain.value = 1.0;
-                    this._mediaElementSource.connect(this._gainNode);
-                    this._gainNode.connect(this._audioCtx.destination);
-                }
-            } catch (e) {
-                console.warn("AudioGraph init note:", e);
-            }
-        }
-
         _initMSE() {
             const mime = 'audio/webm; codecs="opus"';
             if ('MediaSource' in window && MediaSource.isTypeSupported(mime)) {
@@ -94,7 +82,7 @@
                     });
                     this.active.src = URL.createObjectURL(this._mediaSource);
                 } catch (e) {
-                    console.warn("MSE init failed, falling back to standard src:", e);
+                    console.warn("MSE init failed:", e);
                     this._mseEnabled = false;
                 }
             }
@@ -110,6 +98,9 @@
         async _clearSourceBuffer() {
             if (!this._sourceBuffer) return;
             await this._waitForUpdate();
+            try {
+                this._sourceBuffer.abort();
+            } catch (e) {}
             if (this._sourceBuffer.buffered.length > 0) {
                 try {
                     const end = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
@@ -119,6 +110,9 @@
                     console.warn("MSE clear error:", e);
                 }
             }
+            try {
+                this._sourceBuffer.abort();
+            } catch (e) {}
         }
 
         async _appendToSourceBuffer(arrayBuffer) {
@@ -145,34 +139,71 @@
             });
         }
 
-        get currentTime() { return this.active.currentTime; }
+        get currentTime() {
+            if (this._pendingSeek !== null) return this._pendingSeek;
+            return this.active.currentTime;
+        }
+
         set currentTime(v) {
             try {
-                this.active.currentTime = v;
                 this.lastKnownTime = v;
+                if (v < (this.active.duration || Infinity) - 0.5) {
+                    this._endedFired = false;
+                }
+
+                if (this._mseEnabled) {
+                    if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
+                        this._pendingSeek = v;
+                        this.active.pause();
+                        this.dispatchEvent(new Event('timeupdate'));
+                        return;
+                    }
+
+                    const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                    if (v > buffEnd + 0.5) {
+                        this._pendingSeek = v;
+                        this.active.pause();
+                        this.dispatchEvent(new Event('timeupdate'));
+                        return;
+                    }
+                }
+
+                this._pendingSeek = null;
+                this.active.currentTime = v;
             } catch (e) {
                 this._pendingSeek = v;
             }
         }
+
         get readyState() { return this.active.readyState; }
-        get duration() { return this.active.duration; }
-        get paused() { return this.active.paused; }
+        get duration() {
+            if (this._mseEnabled && this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
+                return this._expectedDuration;
+            }
+            return this.active.duration || this._expectedDuration || 0;
+        }
+        get paused() {
+            if (this._pendingSeek !== null) return false;
+            return this.active.paused;
+        }
         get playbackRate() { return this.active.playbackRate; }
         set playbackRate(v) { this.active.playbackRate = v; }
         get src() { return this._currentUrl || this.active.src; }
         set src(v) { this._currentUrl = v; }
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
-        get buffered() { return this.active.buffered; }
+        get buffered() {
+            if (this._mseEnabled && this._sourceBuffer) return this._sourceBuffer.buffered;
+            return this.active.buffered;
+        }
 
         play() {
             window.wasPausedByUser = false;
-            this._initAudioGraph();
-            if (this._audioCtx && this._audioCtx.state === 'suspended') {
-                this._audioCtx.resume();
+            if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
+                this._endedFired = false;
             }
-            if (this._gainNode) {
-                this._gainNode.gain.value = 1.0;
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
@@ -180,15 +211,21 @@
                 this.active.volume = 1.0;
             }
             this.active.muted = false;
+            if (this._pendingSeek !== null) {
+                return Promise.resolve();
+            }
             return this.active.play();
         }
 
         recoverTrack(url) {
-            this.switchTrack(url, false);
+            this.switchTrack(url, false, this._expectedDuration);
         }
 
         pause() {
             window.wasPausedByUser = true;
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
                 this.active.pause();
@@ -196,18 +233,16 @@
                 return Promise.resolve();
             }
             return new Promise(resolve => {
-                let currentVol = this._gainNode ? this._gainNode.gain.value : this.active.volume;
+                let currentVol = this.active.volume;
                 const step = currentVol / 10;
                 this.fadeInterval = setInterval(() => {
                     currentVol -= step;
                     if (currentVol > 0) {
-                        if (this._gainNode) this._gainNode.gain.value = currentVol;
-                        else this.active.volume = currentVol;
+                        this.active.volume = currentVol;
                     } else {
                         clearInterval(this.fadeInterval);
                         this.fadeInterval = null;
                         this.active.pause();
-                        if (this._gainNode) this._gainNode.gain.value = 1.0;
                         this.active.volume = 1.0;
                         resolve();
                     }
@@ -224,36 +259,26 @@
 
         instantPause() {
             window.wasPausedByUser = true;
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
             this.active.pause();
-            if (this._gainNode) this._gainNode.gain.value = 1.0;
             this.active.volume = 1.0;
         }
 
-        async switchTrack(url, preventAutoplay) {
+        async switchTrack(url, preventAutoplay, expectedDuration = 0) {
             this.switching = true;
             this._endedFired = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
+            this._expectedDuration = expectedDuration || 0;
 
-            this._initAudioGraph();
-            if (this._audioCtx && this._audioCtx.state === 'suspended') {
-                this._audioCtx.resume();
-            }
-
-            // Instantly silence audio output via GainNode (zero audio leak) without setting active.muted = true
-            // (Keeping active.muted = false prevents Chromium Android from hiding the lock screen notification)
-            if (this._gainNode) {
-                this._gainNode.gain.value = 0;
-            }
-
-            // Immediately pause the underlying <audio> element so its playhead stops advancing
             this.active.pause();
 
-            // Immediately reset the underlying <audio> element's playhead to 0:00
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
@@ -262,7 +287,11 @@
                 updateMediaSessionPosition();
             }
 
-            if (typeof bufferBar !== 'undefined' && bufferBar) bufferBar.style.width = '0%';
+            if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            else {
+                const bc = document.getElementById("buffer-container");
+                if (bc) bc.innerHTML = '';
+            }
 
             if (!url) {
                 this.switching = false;
@@ -274,69 +303,339 @@
             }
 
             if (this._mseEnabled && this._sourceBuffer) {
+                if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
+                    try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                }
+
                 if (!preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
 
+                if (this._streamAbortController) {
+                    try { this._streamAbortController.abort(); } catch (e) {}
+                }
+                this._streamAbortController = new AbortController();
+                const currentAbortSignal = this._streamAbortController.signal;
+
+                this._streamId = (this._streamId || 0) + 1;
+                const activeStreamId = this._streamId;
+                this._pendingSeek = null;
+
+                // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
                 try {
-                    // Fetch new track bytes
-                    const response = await fetch(url);
-                    if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    const data = await response.arrayBuffer();
+                    if (window.caches) {
+                        const mediaCache = await caches.open('yt-player-media');
+                        const cachedRes = await mediaCache.match(url);
+                        if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
+                            const fullBuffer = await cachedRes.arrayBuffer();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
-                    if (this._currentUrl !== url) {
-                        this.switching = false;
-                        return Promise.resolve();
+                            await this._clearSourceBuffer();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                            try {
+                                this._sourceBuffer.abort();
+                                this._sourceBuffer.timestampOffset = 0;
+                            } catch (e) {}
+
+                            await this._appendToSourceBuffer(fullBuffer);
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                            }
+
+
+                            if (this._pendingSeek !== null) {
+                                const target = this._pendingSeek;
+                                this._pendingSeek = null;
+                                this.active.currentTime = target;
+                            } else {
+                                this.active.currentTime = 0;
+                            }
+
+                            if (!preventAutoplay) {
+                                this.active.play().catch(e => console.warn("Cached play error:", e));
+                            }
+
+                            this.switching = false;
+                            this.dispatchEvent(new Event('loadedmetadata'));
+                            this.dispatchEvent(new Event('canplay'));
+                            this.dispatchEvent(new Event('play'));
+                            this.dispatchEvent(new Event('playing'));
+                            this.dispatchEvent(new Event('progress'));
+                            return Promise.resolve();
+                        }
+                    }
+                } catch (e) {
+                    console.warn("Cache fast-path fallback:", e);
+                }
+
+                // 2. NETWORK PATH: Stream uncached audio with optimized ~192KB safety cushion (~12s audio) & resilient auto-recovery
+                try {
+                    let totalBytesAppended = 0;
+                    let streamDone = false;
+
+                    const initialChunks = [];
+                    let initialBytes = 0;
+                    const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
+
+                    let fetchBackoff = 300;
+                    let response = null;
+                    let reader = null;
+
+                    // Initial buffer fetch retry loop for network handoffs / session switches
+                    while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                            this.switching = false;
+                            return Promise.resolve();
+                        }
+
+                        try {
+                            if (!response || !reader) {
+                                const fetchUrl = initialBytes > 0 
+                                    ? (url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`)
+                                    : url;
+                                const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
+                                
+                                response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
+                                if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
+                                if (!response.body) throw new Error("ReadableStream not supported");
+                                reader = response.body.getReader();
+                            }
+
+                            const { value: chunk, done } = await reader.read();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                try { reader.cancel(); } catch (e) {}
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
+                            if (done) {
+                                streamDone = true;
+                                break;
+                            }
+                            if (chunk && chunk.length > 0) {
+                                initialChunks.push(chunk);
+                                initialBytes += chunk.length;
+                            }
+                        } catch (initErr) {
+                            if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
+                            reader = null;
+                            response = null;
+                            await new Promise(r => setTimeout(r, fetchBackoff));
+                            fetchBackoff = Math.min(fetchBackoff * 1.5, 2000);
+                        }
                     }
 
-                    // Clear old buffer and immediately append new data
+                    if (initialChunks.length === 0) throw new Error("Empty audio stream");
+
+                    // Combine initial chunks into a single contiguous Uint8Array to prevent partial block slicing
+                    const initialCombined = new Uint8Array(initialBytes);
+                    let offset = 0;
+                    for (const c of initialChunks) {
+                        initialCombined.set(c, offset);
+                        offset += c.length;
+                    }
+
                     await this._clearSourceBuffer();
-                    if (this._currentUrl !== url) {
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
-                    this._sourceBuffer.timestampOffset = 0;
-                    await this._appendToSourceBuffer(data);
-                    if (this._currentUrl !== url) {
+                    try {
+                        this._sourceBuffer.abort();
+                        this._sourceBuffer.timestampOffset = 0;
+                    } catch (e) {}
+                    await this._appendToSourceBuffer(initialCombined.buffer);
+                    totalBytesAppended += initialCombined.byteLength;
+
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                        try { reader.cancel(); } catch (e) {}
                         this.switching = false;
                         return Promise.resolve();
                     }
 
-                    this.active.currentTime = 0;
                     if (this._gainNode) {
                         this._gainNode.gain.value = 1.0;
                     }
 
-                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                        try {
-                            this._mediaSource.endOfStream();
-                        } catch (e) {
-                            console.warn("MSE endOfStream note:", e);
+                    if (this._pendingSeek !== null) {
+                        const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
+                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
+                            : 0;
+                        if (buffEnd >= this._pendingSeek) {
+                            const seekTarget = this._pendingSeek;
+                            this._pendingSeek = null;
+                            this.active.currentTime = seekTarget;
+                            if (!preventAutoplay) {
+                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                            }
+                        } else {
+                            this.active.pause();
                         }
-                    }
-
-                    if (!preventAutoplay) {
-                        this.active.play().catch(e => console.warn("MSE play error:", e));
+                    } else {
+                        this.active.currentTime = 0;
+                        if (!preventAutoplay) {
+                            this.active.play().catch(e => console.warn("MSE play error:", e));
+                        }
                     }
 
                     this.switching = false;
                     this.dispatchEvent(new Event('loadedmetadata'));
                     this.dispatchEvent(new Event('canplay'));
-                    this.dispatchEvent(new Event('play'));
-                    this.dispatchEvent(new Event('playing'));
-                } catch (e) {
-                    console.warn("MSE track switch error, falling back to direct src:", e);
-                    this._mseEnabled = false;
-                    this.active.src = url;
-                    if (this._gainNode) this._gainNode.gain.value = 1.0;
-                    if (!preventAutoplay) {
-                        this.active.play().catch(() => {});
+                    if (this._pendingSeek === null) {
+                        this.dispatchEvent(new Event('play'));
+                        this.dispatchEvent(new Event('playing'));
                     }
-                    this.switching = false;
+                    this.dispatchEvent(new Event('progress'));
+
+                    // Resilient background ingestion stream with network-switch / Range auto-recovery
+                    (async () => {
+                        const readStream = async (activeReader) => {
+                            try {
+                                while (true) {
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                        try { activeReader.cancel(); } catch (e) {}
+                                        break;
+                                    }
+
+                                    const { value: nextChunk, done } = await activeReader.read();
+
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                        try { activeReader.cancel(); } catch (e) {}
+                                        break;
+                                    }
+
+                                    if (done) {
+                                        streamDone = true;
+                                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                            try { this._mediaSource.endOfStream(); } catch (e) {}
+                                        }
+                                        break;
+                                    }
+
+                                    if (nextChunk && nextChunk.length > 0) {
+                                        totalBytesAppended += nextChunk.length;
+                                        await this._appendToSourceBuffer(nextChunk);
+                                        this.dispatchEvent(new Event('progress'));
+
+                                        // Auto-resume playback if paused/stalled due to buffer exhaustion
+                                        if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
+                                            this.active.play().catch(() => {});
+                                        }
+
+                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
+                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                            if (buffEnd >= this._pendingSeek) {
+                                                const seekTarget = this._pendingSeek;
+                                                this._pendingSeek = null;
+                                                this.active.currentTime = seekTarget;
+                                                if (!preventAutoplay) {
+                                                    this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                                    this.dispatchEvent(new Event('play'));
+                                                    this.dispatchEvent(new Event('playing'));
+                                                }
+                                                this.dispatchEvent(new Event('seeked'));
+                                                this.dispatchEvent(new Event('timeupdate'));
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch (streamErr) {
+                                if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
+                                    console.warn("Background MSE stream interrupted (network switch). Triggering recovery...");
+                                    attemptRecovery();
+                                }
+                            }
+                        };
+
+                        let isRecovering = false;
+                        const attemptRecovery = async () => {
+                            if (isRecovering || streamDone || currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) return;
+                            isRecovering = true;
+
+                            let backoff = 300;
+                            while (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
+                                try {
+                                    const resumeUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
+                                    const resumeRes = await fetch(resumeUrl, {
+                                        headers: { 'Range': `bytes=${totalBytesAppended}-` },
+                                        signal: currentAbortSignal
+                                    });
+
+                                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
+
+                                    if (resumeRes.ok || resumeRes.status === 206) {
+                                        const isPartial = resumeRes.status === 206;
+                                        const newReader = resumeRes.body.getReader();
+
+                                        if (isPartial) {
+                                            isRecovering = false;
+                                            await readStream(newReader);
+                                            return;
+                                        } else {
+                                            // Fallback if CDN/server ignored Range header: discard leading totalBytesAppended bytes
+                                            let skipped = 0;
+                                            let skipFailed = false;
+                                            while (skipped < totalBytesAppended) {
+                                                const { value: sChunk, done: sDone } = await newReader.read();
+                                                if (sDone || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                                    try { newReader.cancel(); } catch (e) {}
+                                                    skipFailed = true;
+                                                    break;
+                                                }
+                                                if (sChunk) skipped += sChunk.length;
+                                            }
+                                            if (!skipFailed) {
+                                                isRecovering = false;
+                                                await readStream(newReader);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                } catch (recErr) {
+                                    // Connection still transitioning, wait and retry
+                                }
+
+                                await new Promise(r => setTimeout(r, backoff));
+                                backoff = Math.min(backoff * 1.5, 3000);
+                            }
+                            isRecovering = false;
+                        };
+
+                        const onOnlineResume = () => {
+                            if (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
+                                attemptRecovery();
+                            }
+                        };
+
+                        window.addEventListener('online', onOnlineResume);
+                        currentAbortSignal.addEventListener('abort', () => {
+                            window.removeEventListener('online', onOnlineResume);
+                        });
+
+                        if (streamDone) {
+                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                            }
+                        } else {
+                            readStream(reader);
+                        }
+                    })();
+                } catch (e) {
+                    if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
+                        console.warn("MSE switchTrack error:", e);
+                        this.switching = false;
+                        this.dispatchEvent(new Event('error'));
+                    }
                 }
             } else {
-                if (this._gainNode) this._gainNode.gain.value = 1.0;
                 if (!preventAutoplay) {
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = "playing";
@@ -359,6 +658,7 @@
     const currentChannel = document.getElementById("current-channel");
     const albumArtContainer = document.getElementById("album-art-container");
     const albumArt = document.getElementById("album-art-image");
+    const thumbToggleHint = document.getElementById("thumb-toggle-hint");
     
     const btnPlayPause = document.getElementById("btn-play-pause");
     const iconPlay = document.getElementById("icon-play");
@@ -377,8 +677,8 @@
     const btnCollapse = document.getElementById("btn-collapse");
 
     const seekBar = document.getElementById("seek-bar");
-    const bufferBar = document.getElementById("buffer-bar");
-    const playedBar = document.getElementById("played-bar");
+    const seekTrack = document.getElementById("seek-track");
+    const bufferContainer = document.getElementById("buffer-container");
     const currentTimeDisplay = document.getElementById("current-time");
     const totalTimeDisplay = document.getElementById("total-time");
     
