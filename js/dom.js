@@ -321,6 +321,14 @@
                 const activeStreamId = this._streamId;
                 this._pendingSeek = null;
 
+                if (this._mseEnabled && this._sourceBuffer) {
+                    await this._clearSourceBuffer();
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                        this.switching = false;
+                        return Promise.resolve();
+                    }
+                }
+
                 // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
                 try {
                     if (window.caches) {
@@ -631,6 +639,7 @@
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         console.warn("MSE switchTrack error:", e);
+                        this._clearSourceBuffer().catch(() => {});
                         this.switching = false;
                         this.dispatchEvent(new Event('error'));
                     }
