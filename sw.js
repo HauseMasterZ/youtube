@@ -13,8 +13,8 @@ const CORE_ASSETS = [
     './js/main.js',
     './css/style.css',
     './manifest.json',
-    './assets/icon-any-192.png',
-    './assets/icon-any-512.png',
+    './assets/icon-192-v3.png',
+    './assets/icon-512-v3.png',
     './assets/icon.svg',
     './assets/purple-note.svg',
     './assets/fonts/GoogleSansFlex-Latin.woff2'
