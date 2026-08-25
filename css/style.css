@@ -200,8 +200,10 @@
         #album-art-image {
             width: auto;
             height: auto;
+            min-width: min(300px, 85vw);
+            min-height: 260px;
             max-width: min(600px, 85vw);
-            max-height: 48vh;
+            max-height: 52vh;
             object-fit: contain;
             border-radius: 8px;
             display: none;
@@ -661,14 +663,16 @@
                 width: auto;
                 height: auto;
                 max-width: 520px;
-                max-height: 48vh;
+                max-height: 52vh;
                 margin-bottom: 14px;
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: auto;
                 height: auto;
+                min-width: min(300px, 85vw);
+                min-height: 260px;
                 max-width: min(520px, 85vw);
-                max-height: 48vh;
+                max-height: 52vh;
                 object-fit: contain;
                 border-radius: 8px;
             }
