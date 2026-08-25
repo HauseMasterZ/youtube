@@ -660,21 +660,21 @@
             .now-playing:not(.expanded) #album-art-container {
                 width: auto;
                 height: auto;
-                max-width: 500px;
-                max-height: 42vh;
+                max-width: 520px;
+                max-height: 48vh;
                 margin-bottom: 14px;
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: auto;
                 height: auto;
-                max-width: min(500px, 85vw);
-                max-height: 42vh;
+                max-width: min(520px, 85vw);
+                max-height: 48vh;
                 object-fit: contain;
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
-                width: var(--art-width, 100%);
-                max-width: var(--art-width, 500px);
+                width: var(--art-width, 100%) !important;
+                max-width: var(--art-width, 520px) !important;
                 margin-bottom: 6px;
             }
             .now-playing:not(.expanded) #current-title {
@@ -690,14 +690,14 @@
             }
             .now-playing:not(.expanded) .progress-container {
                 margin: 8px 0;
-                width: var(--art-width, 100%);
-                max-width: var(--art-width, 500px);
+                width: var(--art-width, 100%) !important;
+                max-width: var(--art-width, 520px) !important;
             }
             .now-playing:not(.expanded) .playback-controls {
                 gap: 16px;
                 margin-top: 4px;
-                width: var(--art-width, 100%);
-                max-width: var(--art-width, 500px);
+                width: var(--art-width, 100%) !important;
+                max-width: var(--art-width, 520px) !important;
             }
             .now-playing:not(.expanded) .main-btn {
                 width: 56px;
