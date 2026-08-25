@@ -200,10 +200,8 @@
         #album-art-image {
             width: auto;
             height: auto;
-            min-width: min(300px, 85vw);
-            min-height: 260px;
             max-width: min(600px, 85vw);
-            max-height: 52vh;
+            max-height: 48vh;
             object-fit: contain;
             border-radius: 8px;
             display: none;
@@ -511,7 +509,7 @@
                 max-width: 680px;
             }
             #album-art-container {
-                width: clamp(220px, 80%, 600px);
+                width: auto;
                 max-width: 600px;
                 height: auto;
                 margin-bottom: 18px;
