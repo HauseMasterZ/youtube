@@ -175,18 +175,20 @@
         .now-playing {
             padding: 22px 20px 16px 20px;
             text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr);
+            justify-items: center;
             flex-shrink: 0;
-            width: 100%;
-            max-width: 680px;
+            width: min-content;
+            min-width: min(280px, 90vw);
+            max-width: min(600px, 92vw);
+            margin: 0 auto;
             box-sizing: border-box;
         }
 
         #album-art-container {
-            width: clamp(220px, 80%, 600px);
-            max-width: 600px;
+            width: auto;
+            max-width: 100%;
             cursor: pointer;
             position: relative;
             margin-bottom: 18px;
@@ -199,7 +201,7 @@
         #album-art-image {
             width: auto;
             height: auto;
-            max-width: 100%;
+            max-width: min(600px, 85vw);
             max-height: 48vh;
             object-fit: contain;
             border-radius: 8px;
@@ -208,8 +210,8 @@
         }
 
         #album-art-container.no-art {
-            width: 100%;
-            max-width: 600px;
+            width: clamp(280px, 85vw, 480px);
+            max-width: 480px;
             height: auto;
             min-height: 48px;
             margin-bottom: 12px;
@@ -252,15 +254,25 @@
             display: block;
         }
 
+        .title-channel-wrapper {
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
         #current-title {
             font-size: clamp(16px, 4.5vw, 20px);
             font-weight: 600;
             margin: 0 0 6px 0;
             white-space: normal;
             word-wrap: break-word;
+            overflow-wrap: break-word;
+            word-break: break-word;
             width: 100%;
             letter-spacing: 0.2px;
             color: #ffffff;
+            text-align: center;
         }
 
         #current-channel {
@@ -272,6 +284,7 @@
             text-overflow: ellipsis;
             width: 100%;
             font-weight: 500;
+            text-align: center;
         }
 
         #lyrics-toggle-hint {
@@ -305,11 +318,12 @@
 
         .progress-container {
             width: 100%;
-            max-width: 500px;
+            max-width: 100%;
             display: flex;
             align-items: center;
             gap: 12px;
             margin-bottom: 16px;
+            box-sizing: border-box;
         }
 
         .time-display {
@@ -414,6 +428,7 @@
             align-items: center;
             justify-content: space-between;
             width: 100%;
+            max-width: 100%;
             padding: 0 10px;
             margin-bottom: 8px;
             box-sizing: border-box;
@@ -669,13 +684,14 @@
             }
             .now-playing:not(.expanded) .progress-container {
                 margin: 8px 0;
-                width: 92%;
-                max-width: 500px;
+                width: 100%;
+                max-width: 100%;
             }
             .now-playing:not(.expanded) .playback-controls {
                 gap: 16px;
                 margin-top: 4px;
-                max-width: 500px;
+                width: 100%;
+                max-width: 100%;
             }
             .now-playing:not(.expanded) .main-btn {
                 width: 56px;
@@ -882,6 +898,7 @@
             .now-playing.expanded .title-channel-wrapper {
                 flex: none;
                 width: 100%;
+                max-width: 100%;
                 margin-bottom: 25px;
             }
             
@@ -889,22 +906,30 @@
                 font-size: 22px;
                 margin-bottom: 5px;
                 white-space: normal;
+                word-wrap: break-word;
+                overflow-wrap: break-word;
+                word-break: break-word;
                 text-align: center;
+                width: 100%;
             }
             
             .now-playing.expanded #current-channel {
                 font-size: 16px;
                 text-align: center;
+                width: 100%;
             }
             
             .now-playing.expanded .progress-container {
                 display: flex;
                 width: 100%;
+                max-width: 100%;
+                margin-bottom: 20px;
             }
             
             .now-playing.expanded .playback-controls {
                 display: flex;
                 width: 100%;
+                max-width: 100%;
                 justify-content: space-between;
                 align-items: center;
                 margin-top: 10px;
