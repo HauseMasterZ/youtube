@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v65';
+const CACHE_NAME = 'yt-player-cache-v129';
 
 const CORE_ASSETS = [
     './index.html',
@@ -28,12 +28,14 @@ self.addEventListener('install', (event) => {
     self.skipWaiting();
 });
 
+const THUMBS_CACHE = 'yt-player-thumbs';
+
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media') {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -42,9 +44,26 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+// LRU Cache Size Limiter to protect browser storage quotas
+async function limitCacheSize(cacheName, maxItems) {
+    try {
+        const cache = await caches.open(cacheName);
+        const keys = await cache.keys();
+        if (keys.length > maxItems) {
+            const deleteCount = keys.length - maxItems;
+            for (let i = 0; i < deleteCount; i++) {
+                await cache.delete(keys[i]);
+            }
+        }
+    } catch (e) {
+        // Ignore cache lock errors
+    }
+}
+
 self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
+    // 1. Audio Media Caching
     if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
         if (event.request.url.includes('bypass=true')) return;
 
@@ -88,6 +107,7 @@ self.addEventListener('fetch', (event) => {
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
                         cache.put(cacheKeyUrl.href, response.clone());
+                        limitCacheSize('yt-player-media', 120);
                         return response;
                     });
                 });
@@ -96,13 +116,50 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
+    // 2. Persistent Thumbnail Caching (Supports CORS & Opaque responses)
+    if (event.request.url.includes('/thumbnails/') || event.request.url.includes('.webp')) {
+        event.respondWith(
+            caches.open(THUMBS_CACHE).then(async (cache) => {
+                const cached = await cache.match(event.request);
+                if (cached && (event.request.mode === 'no-cors' || cached.type !== 'opaque')) {
+                    return cached;
+                }
+                try {
+                    const response = await fetch(event.request);
+                    if (response.ok || response.type === 'opaque') {
+                        cache.put(event.request, response.clone());
+                        limitCacheSize(THUMBS_CACHE, 300);
+                    }
+                    return response;
+                } catch (err) {
+                    return cached || fetch(event.request);
+                }
+            })
+        );
+        return;
+    }
+
     if (event.request.url.startsWith('blob:')) return;
 
-    // For JSON/CSS/JS: Cache-first, no background revalidation
+    // 3. Database JSON & Lyrics (.lrc): Network-first with cache fallback to ensure newly synced tracks/colors/lyrics update immediately
+    if (event.request.url.includes('_Playlist_Database.json') || event.request.url.includes('/lyrics/') || event.request.url.includes('.lrc')) {
+        event.respondWith(
+            fetch(event.request).then(response => {
+                if (response.ok) {
+                    const clone = response.clone();
+                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                }
+                return response;
+            }).catch(() => caches.match(event.request))
+        );
+        return;
+    }
+
+    // 4. For JSON/CSS/JS: Cache-first, no background revalidation
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {
-                if (response.ok) {
+                if (response.ok && !event.request.url.includes('/sync') && !event.request.url.includes('/status')) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }

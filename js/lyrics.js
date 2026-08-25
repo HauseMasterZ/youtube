@@ -37,8 +37,6 @@
 
     async function loadLyrics(track) {
         const sequenceId = currentPlaybackSequence; // Track the sequence ID to prevent race conditions
-        const existingBadge = lyricsContainer.querySelector('.ai-lyrics-badge');
-        if (existingBadge) existingBadge.remove();
 
         lyricsContent.innerHTML = '<p class="lyrics-placeholder" style="font-size: 32px; letter-spacing: 4px; font-weight: 800; color: var(--primary-color); opacity: 0.8; margin: auto;">...</p>';
         lyricsContent.style.display = 'flex';
@@ -51,9 +49,22 @@
             const folder = parts[0];
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            const res = await fetch(lyricsUrl, { priority: 'low' });
+            let res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
-            const text = await res.text();
+            let text = await res.text();
+            
+            // If the cached response was an old dummy placeholder, re-verify with a fresh network request
+            if (text.trim() === '[00:00.00] ♪' || text.trim().length <= 25) {
+                try {
+                    const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
+                    if (freshRes.ok) {
+                        const freshText = await freshRes.text();
+                        if (freshText && freshText.trim().length > 25) {
+                            text = freshText;
+                        }
+                    }
+                } catch (err) {}
+            }
             
             // Abort if the user skipped to another track while the fetch was pending
             if (currentPlaybackSequence !== sequenceId) return;
@@ -119,14 +130,11 @@
     
     let activeLyricIndex = -1;
     let lyricsLayoutCache = [];
-    let cachedLyricsClientHeight = 0;
 
     function buildLyricsCache() {
         lyricsLayoutCache = [];
         const lyricsInner = document.getElementById('lyrics-inner');
         if (!lyricsInner) return;
-        
-        cachedLyricsClientHeight = lyricsContent.clientHeight;
         
         for (let i = 1; i < lyricsInner.children.length; i++) {
             const p = lyricsInner.children[i];
@@ -149,7 +157,7 @@
                     const highlightLayer = document.getElementById('lyrics-highlight-layer');
                     if (highlightLayer) {
                         highlightLayer.style.height = `${cache.height}px`;
-                        highlightLayer.style.transform = `translateY(${cache.top}px)`;
+                        highlightLayer.style.top = `${cache.top}px`;
                     }
                 }
             }
@@ -175,33 +183,25 @@
                 const highlightLayer = document.getElementById('lyrics-highlight-layer');
                 
                 if (highlightLayer) {
-                    highlightLayer.style.display = 'block';
-                    highlightLayer.textContent = cache.text;
-                    highlightLayer.style.height = `${cache.height}px`;
-                    highlightLayer.style.transform = `translateY(${cache.top}px)`;
-                    highlightLayer.style.color = 'var(--primary-color)';
+                    if (highlightLayer.textContent !== cache.text) {
+                        highlightLayer.textContent = cache.text;
+                    }
+                    const topPx = `${cache.top}px`;
+                    if (highlightLayer.style.top !== topPx) {
+                        highlightLayer.style.top = topPx;
+                    }
+                    const heightPx = `${cache.height}px`;
+                    if (highlightLayer.style.height !== heightPx) {
+                        highlightLayer.style.height = heightPx;
+                    }
+                    if (highlightLayer.style.display !== 'block') {
+                        highlightLayer.style.display = 'block';
+                    }
                 }
             }
         }
     }
 
-    let lyricsRafId = null;
-    let lastLyricsRender = 0;
-    
-    function lyricsLoop(timestamp) {
-        if (!window.lyricsActive || audioPlayer.paused || currentLyricsIsUnsynced) {
-            lyricsRafId = null;
-            return;
-        }
-        
-        // Throttle to ~15fps (66ms per frame)
-        if (timestamp - lastLyricsRender >= 66) {
-            lastLyricsRender = timestamp;
-            updateLyricsUI(audioPlayer.currentTime);
-        }
-        
-        lyricsRafId = requestAnimationFrame(lyricsLoop);
-    }
     function pushHistoryState(viewName) {
         history.pushState({ view: viewName }, "");
     }
@@ -210,8 +210,4 @@
         window.lyricsActive = false;
         lyricsToggleHint.style.color = 'var(--text-secondary)';
         lyricsContainer.style.display = 'none';
-        if (lyricsRafId) {
-            cancelAnimationFrame(lyricsRafId);
-            lyricsRafId = null;
-        }
     }
