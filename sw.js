@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v129';
+const CACHE_NAME = 'yt-player-cache-v131';
 
 const CORE_ASSETS = [
     './index.html',
@@ -107,7 +107,7 @@ self.addEventListener('fetch', (event) => {
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
                         cache.put(cacheKeyUrl.href, response.clone());
-                        limitCacheSize('yt-player-media', 120);
+                        limitCacheSize('yt-player-media', 1000);
                         return response;
                     });
                 });
@@ -116,19 +116,19 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 2. Persistent Thumbnail Caching (Supports CORS & Opaque responses)
+    // 2. Persistent Thumbnail Caching (URL-normalized)
     if (event.request.url.includes('/thumbnails/') || event.request.url.includes('.webp')) {
         event.respondWith(
             caches.open(THUMBS_CACHE).then(async (cache) => {
-                const cached = await cache.match(event.request);
-                if (cached && (event.request.mode === 'no-cors' || cached.type !== 'opaque')) {
+                const cached = await cache.match(event.request.url);
+                if (cached) {
                     return cached;
                 }
                 try {
                     const response = await fetch(event.request);
                     if (response.ok || response.type === 'opaque') {
-                        cache.put(event.request, response.clone());
-                        limitCacheSize(THUMBS_CACHE, 300);
+                        cache.put(event.request.url, response.clone());
+                        limitCacheSize(THUMBS_CACHE, 1000);
                     }
                     return response;
                 } catch (err) {
