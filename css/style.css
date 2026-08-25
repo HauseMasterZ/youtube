@@ -657,16 +657,16 @@
                 max-width: 520px;
             }
             .now-playing:not(.expanded) #album-art-container {
-                width: clamp(160px, 80%, 340px);
+                width: auto;
                 height: auto;
-                max-width: 340px;
+                max-width: 520px;
                 max-height: 26vh;
                 margin-bottom: 12px;
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: auto;
                 height: auto;
-                max-width: 100%;
+                max-width: min(520px, 90vw);
                 max-height: 26vh;
                 object-fit: contain;
                 border-radius: 8px;
@@ -797,30 +797,37 @@
                 margin: 0;
             }
             
-            .title-channel-wrapper {
-                flex: 1;
-                text-align: left;
-                min-width: 0;
+            .now-playing:not(.expanded) .title-channel-wrapper {
+                flex: 1 !important;
+                width: auto !important;
+                max-width: none !important;
+                text-align: left !important;
+                min-width: 0 !important;
             }
             
-            #current-title {
+            .now-playing:not(.expanded) #current-title {
                 font-size: 14px;
                 margin: 0;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                width: auto !important;
+                max-width: 100% !important;
+                text-align: left !important;
             }
             
-            #current-channel {
+            .now-playing:not(.expanded) #current-channel {
                 font-size: 12px;
                 margin: 0;
                 display: block;
                 color: var(--text-secondary);
+                text-align: left !important;
             }
             
             /* Hide expanded controls in mini mode */
-            .progress-container, #lyrics-toggle-hint {
-                display: none;
+            .now-playing:not(.expanded) .progress-container,
+            .now-playing:not(.expanded) #lyrics-toggle-hint {
+                display: none !important;
             }
             
             #btn-shuffle, #btn-repeat {
@@ -832,13 +839,15 @@
                 height: 20px;
             }
             
-            .playback-controls {
-                width: auto;
-                padding: 0;
-                margin: 0;
-                display: flex;
-                gap: 2px;
-                justify-content: flex-end;
+            .now-playing:not(.expanded) .playback-controls {
+                width: auto !important;
+                max-width: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                display: flex !important;
+                gap: 2px !important;
+                justify-content: flex-end !important;
+                flex-shrink: 0 !important;
             }
             
             /* Make room for the floating pill */
