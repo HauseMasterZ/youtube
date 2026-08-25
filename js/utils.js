@@ -1,6 +1,116 @@
     const baseUrl = "__API_GATEWAY_URL__";
     const artworkSquareCache = new Map();
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
+
+    function damerauLevenshtein(s1, s2) {
+        const m = s1.length, n = s2.length;
+        if (Math.abs(m - n) > 2) return 99;
+        const dp = Array.from({ length: m + 1 }, () => new Uint8Array(n + 1));
+        for (let i = 0; i <= m; i++) dp[i][0] = i;
+        for (let j = 0; j <= n; j++) dp[0][j] = j;
+        for (let i = 1; i <= m; i++) {
+            for (let j = 1; j <= n; j++) {
+                const cost = s1.charCodeAt(i - 1) === s2.charCodeAt(j - 1) ? 0 : 1;
+                let d = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+                if (i > 1 && j > 1 && s1.charCodeAt(i - 1) === s2.charCodeAt(j - 2) && s1.charCodeAt(i - 2) === s2.charCodeAt(j - 1)) {
+                    d = Math.min(d, dp[i - 2][j - 2] + cost);
+                }
+                dp[i][j] = d;
+            }
+        }
+        return dp[m][n];
+    }
+
+    function calculateFuzzyScore(query, titleRaw, channelRaw) {
+        if (!query) return 0;
+        const title = (titleRaw || "").toLowerCase();
+        const channel = (channelRaw || "").toLowerCase();
+        const combined = `${title} ${channel}`;
+
+        // 1. Exact full match
+        if (title === query) return 10000;
+        if (combined === query) return 9000;
+
+        // 2. Exact phrase substring
+        const titleIdx = title.indexOf(query);
+        if (titleIdx !== -1) {
+            const isWordStart = (titleIdx === 0 || " -_([/{".includes(title[titleIdx - 1]));
+            return 7000 + (isWordStart ? 1000 : 0) - titleIdx * 2;
+        }
+        const combIdx = combined.indexOf(query);
+        if (combIdx !== -1) {
+            return 5000 - combIdx * 2;
+        }
+
+        // 3. Acronym match (e.g. 'mtbmb' -> 'Music To Be Murdered By')
+        const titleWords = title.match(/[a-z0-9]+/g) || [];
+        const channelWords = channel.match(/[a-z0-9]+/g) || [];
+        const allWords = titleWords.concat(channelWords);
+
+        if (titleWords.length > 1) {
+            const acronym = titleWords.map(w => w[0]).join("");
+            if (query === acronym || (query.length >= 3 && acronym.includes(query))) {
+                return 4500;
+            }
+        }
+
+        // 4. Multi-token fuzzy match
+        const tokens = query.split(/\s+/).filter(Boolean);
+        if (tokens.length === 0) return 0;
+
+        let totalTokenScore = 0;
+        for (let t = 0; t < tokens.length; t++) {
+            const token = tokens[t];
+            const tLen = token.length;
+            const maxDist = tLen <= 4 ? 1 : 2;
+            let bestWordScore = 0;
+
+            for (let w = 0; w < allWords.length; w++) {
+                const word = allWords[w];
+                if (word === token) {
+                    bestWordScore = Math.max(bestWordScore, 1000);
+                    break;
+                } else if (word.startsWith(token)) {
+                    bestWordScore = Math.max(bestWordScore, 800);
+                } else if (word.includes(token)) {
+                    bestWordScore = Math.max(bestWordScore, 600);
+                } else if (tLen >= 3) {
+                    const subW = word.slice(0, tLen);
+                    const dist = damerauLevenshtein(token, subW);
+                    if (dist <= maxDist) {
+                        bestWordScore = Math.max(bestWordScore, 500 - dist * 100);
+                    } else {
+                        const distFull = damerauLevenshtein(token, word);
+                        if (distFull <= maxDist) {
+                            bestWordScore = Math.max(bestWordScore, 400 - distFull * 100);
+                        }
+                    }
+                }
+            }
+
+            if (bestWordScore === 0 && tLen >= 3) {
+                // Sequential subsequence match (e.g. 'gdzla' in 'godzilla')
+                let ti = 0;
+                for (let i = 0; i < combined.length; i++) {
+                    if (combined[i] === token[ti]) {
+                        ti++;
+                        if (ti === tLen) break;
+                    }
+                }
+                if (ti === tLen) {
+                    bestWordScore = 300;
+                }
+            }
+
+            if (bestWordScore > 0) {
+                totalTokenScore += bestWordScore;
+            } else {
+                return 0; // All tokens must match
+            }
+        }
+
+        return 2000 + totalTokenScore;
+    }
     function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
     async function getSquareArtwork(url, trackId, callback) {
         if (!url) return;
