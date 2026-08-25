@@ -7,17 +7,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const currentPl = playlistSelect.value;
             
             if (!query) {
-                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
+                filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i })) : [];
             } else {
-                filteredIndices = [];
+                const scoredResults = [];
                 const addedIds = new Set();
                 
-                // 1. Current playlist matches
+                // 1. Current playlist matches (with a slight current playlist bias of +50)
                 if (currentPlaylistData) {
                     for (let i = 0; i < currentPlaylistData.length; i++) {
                         const track = currentPlaylistData[i];
-                        if (getSearchString(track).includes(query)) {
-                            filteredIndices.push({ playlist: currentPl, index: i });
+                        const score = calculateFuzzyScore(query, track.title, track.channel);
+                        if (score > 0) {
+                            scoredResults.push({ playlist: currentPl, index: i, score: score + 50 });
                             addedIds.add(track.id || track.file_path);
                         }
                     }
@@ -29,15 +30,21 @@ document.addEventListener("DOMContentLoaded", () => {
                         const data = allDatabases[pl];
                         for (let i = 0; i < data.length; i++) {
                             const track = data[i];
-                            if (getSearchString(track).includes(query)) {
-                                if (!addedIds.has(track.id || track.file_path)) {
-                                    filteredIndices.push({ playlist: pl, index: i });
-                                    addedIds.add(track.id || track.file_path);
+                            const trackKey = track.id || track.file_path;
+                            if (!addedIds.has(trackKey)) {
+                                const score = calculateFuzzyScore(query, track.title, track.channel);
+                                if (score > 0) {
+                                    scoredResults.push({ playlist: pl, index: i, score: score });
+                                    addedIds.add(trackKey);
                                 }
                             }
                         }
                     }
                 }
+
+                // Rank by highest relevance score
+                scoredResults.sort((a, b) => b.score - a.score);
+                filteredIndices = scoredResults.map(item => ({ playlist: item.playlist, index: item.index }));
             }
             
             if (filteredIndices.length > 0) {
