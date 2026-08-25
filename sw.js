@@ -107,7 +107,7 @@ self.addEventListener('fetch', (event) => {
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
                         cache.put(cacheKeyUrl.href, response.clone());
-                        limitCacheSize('yt-player-media', 120);
+                        limitCacheSize('yt-player-media', 1000);
                         return response;
                     });
                 });
@@ -128,7 +128,7 @@ self.addEventListener('fetch', (event) => {
                     const response = await fetch(event.request);
                     if (response.ok || response.type === 'opaque') {
                         cache.put(event.request.url, response.clone());
-                        limitCacheSize(THUMBS_CACHE, 300);
+                        limitCacheSize(THUMBS_CACHE, 1000);
                     }
                     return response;
                 } catch (err) {
