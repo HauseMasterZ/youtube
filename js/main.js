@@ -856,6 +856,29 @@ currentPlaylistData[globalActiveOriginalIndex];
             loadPlaylist(playlistSelect.value);
         }
     });
+
+    function syncArtWidth() {
+        if (!albumArt || !nowPlaying) return;
+        if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
+            const rect = albumArt.getBoundingClientRect();
+            const w = rect.width || albumArt.offsetWidth;
+            if (w > 0) {
+                nowPlaying.style.setProperty('--art-width', `${Math.round(w)}px`);
+                return;
+            }
+        }
+        nowPlaying.style.removeProperty('--art-width');
+    }
+
+    if (albumArt) {
+        albumArt.addEventListener('load', syncArtWidth);
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(syncArtWidth);
+            ro.observe(albumArt);
+            ro.observe(albumArtContainer);
+        }
+    }
+    window.addEventListener('resize', syncArtWidth);
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
