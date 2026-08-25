@@ -176,7 +176,7 @@
         
         isRendering = false;
     }
-    function scrollToTrack(originalIndex) {
+    function scrollToTrack(originalIndex, forceScroll = false) {
         const currentPl = playlistSelect.value;
         const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
         
@@ -188,7 +188,7 @@
         }
         
         const isUserActiveScrolling = (Date.now() - lastUserScrollTime < 1500) || isScrollingFast;
-        if (!isUserActiveScrolling) {
+        if (forceScroll || !isUserActiveScrolling) {
             const scrollPos = virtualIndex * ITEM_HEIGHT;
             const containerHeight = playlistContainer.clientHeight || 400;
             playlistContainer.scrollTo({ 
