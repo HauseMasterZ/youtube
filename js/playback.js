@@ -512,7 +512,12 @@
         }
         
         const nextCacheKey = nextTrack ? getAudioUrl(nextTrack) : null;
-        const currentTrack = track;
+        let currentTrack = null;
+        if (globalActivePlaylist && allDatabases[globalActivePlaylist] && globalActiveOriginalIndex >= 0) {
+            currentTrack = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+        } else if (currentPlaylistData && globalActiveOriginalIndex >= 0) {
+            currentTrack = currentPlaylistData[globalActiveOriginalIndex];
+        }
         const currentCacheKey = currentTrack ? getAudioUrl(currentTrack) : null;
 
         // Cleanup stale preloads
