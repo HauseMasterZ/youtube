@@ -350,11 +350,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
                     if (rawArt) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || rawArt, sizes: '512x512', type: 'image/jpeg' }];
-                        if (!sqCached) {
+                        if (sqCached) {
+                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
+                        } else {
                             getSquareArtwork(rawArt, track.id, (sqUrl) => {
                                 if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: track.title,
+                                        artist: track.channel,
+                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
+                                    });
                                 }
                             });
                         }
@@ -612,11 +617,16 @@ currentPlaylistData[globalActiveOriginalIndex];
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                        if (!sqCached) {
+                        if (sqCached) {
+                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
+                        } else {
                             getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
                                 if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: track.title,
+                                        artist: track.channel,
+                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
+                                    });
                                 }
                             });
                         }
@@ -657,11 +667,16 @@ currentPlaylistData[globalActiveOriginalIndex];
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
-                        if (!sqCached) {
+                        if (sqCached) {
+                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
+                        } else {
                             getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
                                 if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: track.title,
+                                        artist: track.channel,
+                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
+                                    });
                                 }
                             });
                         }
