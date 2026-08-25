@@ -28,6 +28,8 @@
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
+    let playbackHistory = [];
+    let playbackHistoryIndex = -1;
     
     // Lyrics State
     window.lyricsActive = false;

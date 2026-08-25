@@ -349,7 +349,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!thumbsDisabled) {
                     const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
                     if (rawArt) {
-                        navigator.mediaSession.metadata.artwork = [{ src: rawArt, sizes: '512x512', type: 'image/jpeg' }];
+                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
+                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || rawArt, sizes: '512x512', type: 'image/jpeg' }];
+                        if (!sqCached) {
+                            getSquareArtwork(rawArt, track.id, (sqUrl) => {
+                                if (hasMediaSession && navigator.mediaSession.metadata) {
+                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -603,7 +611,15 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
-                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
+                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        if (!sqCached) {
+                            getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
+                                if (hasMediaSession && navigator.mediaSession.metadata) {
+                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                }
+                            });
+                        }
                     }
                 }
             }
@@ -640,7 +656,15 @@ currentPlaylistData[globalActiveOriginalIndex];
                     const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
-                        navigator.mediaSession.metadata.artwork = [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
+                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || thumbUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        if (!sqCached) {
+                            getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
+                                if (hasMediaSession && navigator.mediaSession.metadata) {
+                                    navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                                }
+                            });
+                        }
                     }
                 }
             }
