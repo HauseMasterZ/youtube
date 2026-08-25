@@ -97,21 +97,23 @@
     }
 
     // Helper for cross-playlist shuffle: switch playlist context and play a specific track
-    function playFromPlaylist(playlist, trackIndex) {
+    // Helper for cross-playlist shuffle and history navigation: switch playlist context and play a specific track
+    function playFromPlaylist(playlist, trackIndex, isHistoryNav = false) {
         if (playlist !== playlistSelect.value) {
             playlistSelect.value = playlist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = playlist;
             currentPlaylistData = allDatabases[playlist];
             searchInput.value = '';
-            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: playlist, index: i }));
+            filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: playlist, index: i })) : [];
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
-            playQueue = Array.from({length: currentPlaylistData.length}, (_, i) => i);
+            playQueue = currentPlaylistData ? Array.from({length: currentPlaylistData.length}, (_, i) => i) : [];
         }
         globalActivePlaylist = playlist;
         globalActiveOriginalIndex = trackIndex;
         queueBasePlaylist = playlist;
         queueIndex = trackIndex;
-        executePlayback();
+        executePlayback(false, isHistoryNav);
     }
 
     window.playTrackSelection = playTrackSelection;
@@ -213,10 +215,18 @@
             }
 
             const target = crossShuffleHistory[crossShufflePos];
-            playFromPlaylist(target.playlist, target.index);
+            playFromPlaylist(target.playlist, target.index, true);
             return;
         }    
         
+        // If navigating forward in history (after user clicked prev)
+        if (playbackHistoryIndex >= 0 && playbackHistoryIndex < playbackHistory.length - 1) {
+            playbackHistoryIndex++;
+            const nextEntry = playbackHistory[playbackHistoryIndex];
+            playFromPlaylist(nextEntry.playlist, nextEntry.index, true);
+            return;
+        }
+
         if (playQueue.length === 0) return;
         
         if (queueIndex + 1 < playQueue.length) {
@@ -232,17 +242,25 @@
 
     function playPrev() {
         window.lastPlaybackDirection = -1;
-        // Cross-playlist shuffle (mode 2)
+        // Cross-playlist shuffle (mode 1)
         if (shuffleMode === 1) {
             if (crossShufflePos > 0) {
                 crossShufflePos--;
                 const entry = crossShuffleHistory[crossShufflePos];
-                playFromPlaylist(entry.playlist, entry.index);
+                playFromPlaylist(entry.playlist, entry.index, true);
             } else {
                 audioPlayer.currentTime = 0;
                 updateTimeUI(0);
                 audioPlayer.play();
             }
+            return;
+        }
+
+        // Reverse chronological playback history across playlists
+        if (playbackHistoryIndex > 0) {
+            playbackHistoryIndex--;
+            const prevEntry = playbackHistory[playbackHistoryIndex];
+            playFromPlaylist(prevEntry.playlist, prevEntry.index, true);
             return;
         }
         
@@ -260,7 +278,7 @@
             audioPlayer.play();
         }
     }
-    function executePlayback(preventAutoplay = false) {
+    function executePlayback(preventAutoplay = false, isHistoryNav = false) {
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
@@ -293,6 +311,21 @@
 
         globalActiveOriginalIndex = originalIndex;
         globalActivePlaylist = targetPlaylist;
+
+        // Record into playback history stack for reverse chronological previous-track navigation
+        if (!uiOnly && !isHistoryNav) {
+            const currentEntry = playbackHistory[playbackHistoryIndex];
+            if (!currentEntry || currentEntry.playlist !== targetPlaylist || currentEntry.index !== originalIndex) {
+                if (playbackHistoryIndex >= 0 && playbackHistoryIndex < playbackHistory.length - 1) {
+                    playbackHistory.splice(playbackHistoryIndex + 1);
+                }
+                playbackHistory.push({ playlist: targetPlaylist, index: originalIndex });
+                if (playbackHistory.length > 300) {
+                    playbackHistory.shift();
+                }
+                playbackHistoryIndex = playbackHistory.length - 1;
+            }
+        }
 
         // Auto-switch view to active playing playlist if user was viewing another playlist
         if (targetPlaylist && playlistSelect.value !== targetPlaylist) {
@@ -397,7 +430,8 @@
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
             
-            const artworkSrc = (!thumbsDisabled && thumbUrl) ? thumbUrl : fallbackIcon;
+            const squareCached = (thumbUrl && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+            const artworkSrc = (!thumbsDisabled && (squareCached || thumbUrl)) ? (squareCached || thumbUrl) : fallbackIcon;
             const artworkList = [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }];
 
             navigator.mediaSession.metadata = new MediaMetadata({
@@ -405,6 +439,15 @@
                 artist: track.channel,
                 artwork: artworkList
             });
+
+            if (!thumbsDisabled && thumbUrl && !squareCached) {
+                getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
+                    if (hasMediaSession && navigator.mediaSession.metadata && globalActiveOriginalIndex === originalIndex) {
+                        navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                    }
+                });
+            }
+
             // Clear position state during buffering (W3C standard method)
             if ('setPositionState' in navigator.mediaSession) {
                 try {
