@@ -870,7 +870,11 @@ currentPlaylistData[globalActiveOriginalIndex];
         }
         if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
             const rect = albumArt.getBoundingClientRect();
-            const w = rect.width || albumArt.offsetWidth || (albumArt.naturalWidth ? (albumArt.clientHeight * (albumArt.naturalWidth / albumArt.naturalHeight)) : 0);
+            let w = rect.width;
+            if (albumArt.naturalWidth && albumArt.naturalHeight) {
+                const ratio = albumArt.naturalWidth / albumArt.naturalHeight;
+                w = Math.min(rect.width, rect.height * ratio);
+            }
             if (w > 0) {
                 nowPlaying.style.setProperty('--art-width', `${Math.round(w)}px`);
                 return;
