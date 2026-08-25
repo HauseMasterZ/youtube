@@ -376,30 +376,57 @@
                     let totalBytesAppended = 0;
                     let streamDone = false;
 
-                    const response = await fetch(url, { signal: currentAbortSignal });
-                    if (!response.ok) throw new Error(`Fetch status: ${response.status}`);
-                    if (!response.body) throw new Error("ReadableStream not supported");
-
-                    const reader = response.body.getReader();
-
                     const initialChunks = [];
                     let initialBytes = 0;
                     const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
 
+                    let fetchBackoff = 300;
+                    let response = null;
+                    let reader = null;
+
+                    // Initial buffer fetch retry loop for network handoffs / session switches
                     while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
-                        const { value: chunk, done } = await reader.read();
                         if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                            try { reader.cancel(); } catch (e) {}
                             this.switching = false;
                             return Promise.resolve();
                         }
-                        if (done) {
-                            streamDone = true;
-                            break;
-                        }
-                        if (chunk && chunk.length > 0) {
-                            initialChunks.push(chunk);
-                            initialBytes += chunk.length;
+
+                        try {
+                            if (!response || !reader) {
+                                const fetchUrl = initialBytes > 0 
+                                    ? (url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`)
+                                    : url;
+                                const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
+                                
+                                response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
+                                if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
+                                if (!response.body) throw new Error("ReadableStream not supported");
+                                reader = response.body.getReader();
+                            }
+
+                            const { value: chunk, done } = await reader.read();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                try { reader.cancel(); } catch (e) {}
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
+                            if (done) {
+                                streamDone = true;
+                                break;
+                            }
+                            if (chunk && chunk.length > 0) {
+                                initialChunks.push(chunk);
+                                initialBytes += chunk.length;
+                            }
+                        } catch (initErr) {
+                            if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
+                            reader = null;
+                            response = null;
+                            await new Promise(r => setTimeout(r, fetchBackoff));
+                            fetchBackoff = Math.min(fetchBackoff * 1.5, 2000);
                         }
                     }
 
