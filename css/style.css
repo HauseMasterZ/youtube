@@ -173,7 +173,7 @@
         #search-input:focus { border: none; outline: none; }
 
         .now-playing {
-            padding: 22px 20px 16px 20px;
+            padding: 22px 0px 16px 0px;
             text-align: center;
             display: flex;
             flex-direction: column;
