@@ -180,18 +180,16 @@
             align-items: center;
             flex-shrink: 0;
             width: 100%;
-            max-width: 520px;
+            max-width: 680px;
             box-sizing: border-box;
         }
 
         #album-art-container {
-            width: min(80%, min(38vh, 420px));
-            max-width: 420px;
-            max-height: 38vh;
-            aspect-ratio: 1 / 1;
+            width: clamp(220px, 80%, 600px);
+            max-width: 600px;
             cursor: pointer;
             position: relative;
-            margin-bottom: 16px;
+            margin-bottom: 18px;
             touch-action: manipulation;
             display: flex;
             justify-content: center;
@@ -199,20 +197,19 @@
         }
 
         #album-art-image {
-            width: 100%;
-            height: 100%;
-            aspect-ratio: 1 / 1;
-            object-fit: cover;
+            width: auto;
+            height: auto;
+            max-width: 100%;
+            max-height: 48vh;
+            object-fit: contain;
             border-radius: 8px;
             display: none;
-            background-color: #222226;
+            background-color: transparent;
         }
 
         #album-art-container.no-art {
             width: 100%;
-            max-width: 420px;
-            max-height: none;
-            aspect-ratio: unset;
+            max-width: 600px;
             height: auto;
             min-height: 48px;
             margin-bottom: 12px;
@@ -494,15 +491,13 @@
         /* Desktop layout */
         @media (min-width: 1111px) and (orientation: landscape) {
             .now-playing {
-                max-width: 520px;
+                max-width: 680px;
             }
             #album-art-container {
-                width: min(80%, min(38vh, 420px));
-                max-width: 420px;
-                max-height: 38vh;
-                aspect-ratio: 1 / 1;
+                width: clamp(220px, 80%, 600px);
+                max-width: 600px;
                 height: auto;
-                margin-bottom: 16px;
+                margin-bottom: 18px;
             }
             #current-title { font-size: clamp(18px, 2.2vh, 24px); }
             #current-channel { font-size: clamp(13px, 1.6vh, 16px); }
@@ -641,24 +636,25 @@
             }
         }
 
-        @media (min-width: 751px) and (orientation: portrait) {
+        @media (min-width: 751px) and (max-width: 1110px), (min-width: 751px) and (orientation: portrait) {
             .now-playing:not(.expanded) {
                 padding: 14px 20px 18px 20px;
                 width: 100%;
                 max-width: 520px;
             }
             .now-playing:not(.expanded) #album-art-container {
-                width: clamp(160px, 26vh, 340px);
-                height: clamp(160px, 26vh, 340px);
+                width: clamp(160px, 80%, 340px);
+                height: auto;
                 max-width: 340px;
                 max-height: 26vh;
                 margin-bottom: 12px;
             }
             .now-playing:not(.expanded) #album-art-image {
-                width: 100%;
-                height: 100%;
-                aspect-ratio: 1 / 1;
-                object-fit: cover;
+                width: auto;
+                height: auto;
+                max-width: 100%;
+                max-height: 26vh;
+                object-fit: contain;
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
@@ -869,11 +865,17 @@
                 width: 90%;
                 max-width: 450px;
                 height: auto;
+                max-height: 45vh;
                 border-radius: 12px;
                 margin-bottom: 30px;
             }
             
             .now-playing.expanded #album-art-image {
+                width: auto;
+                height: auto;
+                max-width: 100%;
+                max-height: 45vh;
+                object-fit: contain;
                 border-radius: 12px;
             }
             
