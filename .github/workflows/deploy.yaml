@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - alpha
 
 permissions:
   contents: read
@@ -35,12 +36,27 @@ jobs:
           path: dev-src
         continue-on-error: true
 
+      - name: Checkout alpha (Alpha Staging)
+        uses: actions/checkout@v4
+        with:
+          ref: alpha
+          path: alpha-src
+        continue-on-error: true
+
       - name: Merge Dev Subdirectory
         run: |
           if [ -d "dev-src" ]; then
             mkdir -p site-root/dev
             cp -rf dev-src/* site-root/dev/
             rm -rf site-root/dev/.git site-root/dev/.github
+          fi
+
+      - name: Merge Alpha Subdirectory
+        run: |
+          if [ -d "alpha-src" ]; then
+            mkdir -p site-root/alpha
+            cp -rf alpha-src/* site-root/alpha/
+            rm -rf site-root/alpha/.git site-root/alpha/.github
           fi
 
       - name: Pre-Deployment Syntax & Integrity Guard
@@ -53,6 +69,13 @@ jobs:
           done
           if [ -d "site-root/dev" ]; then
             for f in site-root/dev/js/*.js site-root/dev/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
+          fi
+          if [ -d "site-root/alpha" ]; then
+            for f in site-root/alpha/js/*.js site-root/alpha/sw.js; do
               if [ -f "$f" ]; then
                 node --check "$f"
               fi
@@ -81,6 +104,12 @@ jobs:
             if [ -f site-root/dev/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
             fi
+            if [ -f site-root/alpha/index.html ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/alpha/index.html
+            fi
+            if [ -f site-root/alpha/js/utils.js ]; then
+              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/alpha/js/utils.js
+            fi
           fi
           if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -88,6 +117,9 @@ jobs:
             fi
             if [ -f site-root/dev/index.html ]; then
               sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/dev/index.html
+            fi
+            if [ -f site-root/alpha/index.html ]; then
+              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/alpha/index.html
             fi
           fi
 
@@ -177,9 +209,15 @@ jobs:
             if (fs.existsSync('site-root/dev')) {
               buildDirectory('site-root/dev');
             }
+            if (fs.existsSync('site-root/alpha')) {
+              buildDirectory('site-root/alpha');
+            }
           } else {
             if (fs.existsSync('site-root/dev')) {
               buildDirectory('site-root/dev');
+            }
+            if (fs.existsSync('site-root/alpha')) {
+              buildDirectory('site-root/alpha');
             }
           }
           EOF
@@ -203,6 +241,14 @@ jobs:
             fi
             if [ -f "site-root/dev/sw.js" ]; then
               node --check site-root/dev/sw.js
+            fi
+          fi
+          if [ -d "site-root/alpha" ]; then
+            if [ -f "site-root/alpha/js/bundle.min.js" ]; then
+              node --check site-root/alpha/js/bundle.min.js
+            fi
+            if [ -f "site-root/alpha/sw.js" ]; then
+              node --check site-root/alpha/sw.js
             fi
           fi
           echo "✓ Production bundles verified successfully."
