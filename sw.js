@@ -13,8 +13,6 @@ const CORE_ASSETS = [
     './js/main.js',
     './css/style.css',
     './manifest.json',
-    './assets/icon-maskable-192.png',
-    './assets/icon-maskable-512.png',
     './assets/icon-any-192.png',
     './assets/icon-any-512.png',
     './assets/icon.svg',
