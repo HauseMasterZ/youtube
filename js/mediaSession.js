@@ -39,9 +39,11 @@
                 }
                 return;
             }
+            window.wasPausedByUser = false;
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
+            window.wasPausedByUser = true;
             audioPlayer.instantPause();
         });
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
