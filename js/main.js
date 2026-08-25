@@ -870,7 +870,7 @@ currentPlaylistData[globalActiveOriginalIndex];
         }
         if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
             const rect = albumArt.getBoundingClientRect();
-            const w = rect.width || albumArt.offsetWidth;
+            const w = rect.width || albumArt.offsetWidth || (albumArt.naturalWidth ? (albumArt.clientHeight * (albumArt.naturalWidth / albumArt.naturalHeight)) : 0);
             if (w > 0) {
                 nowPlaying.style.setProperty('--art-width', `${Math.round(w)}px`);
                 return;
@@ -880,14 +880,13 @@ currentPlaylistData[globalActiveOriginalIndex];
     }
 
     if (albumArt) {
-        albumArt.addEventListener('load', syncArtWidth);
+        albumArt.addEventListener('load', () => requestAnimationFrame(syncArtWidth));
         if (window.ResizeObserver) {
-            const ro = new ResizeObserver(syncArtWidth);
+            const ro = new ResizeObserver(() => requestAnimationFrame(syncArtWidth));
             ro.observe(albumArt);
-            ro.observe(albumArtContainer);
         }
     }
-    window.addEventListener('resize', syncArtWidth);
+    window.addEventListener('resize', () => requestAnimationFrame(syncArtWidth));
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
