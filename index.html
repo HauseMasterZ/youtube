@@ -3,15 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YouTube Music</title>
+    <title>Music</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E" type="image/svg+xml">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23FF0000'/%3E%3Ccircle cx='12' cy='12' r='7.5' fill='none' stroke='%23FFFFFF' stroke-width='1.8'/%3E%3Cpolygon points='10,8.5 16,12 10,15.5' fill='%23FFFFFF'/%3E%3C/svg%3E">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' xml:space='preserve' viewBox='0 0 176 176'%3E%3Ccircle cx='88' cy='88' r='88' fill='black'/%3E%3Cpath fill='%23FFF' d='M88 46c23.1 0 42 18.8 42 42s-18.8 42-42 42-42-18.8-42-42 18.9-42 42-42m0-4c-25.4 0-46 20.6-46 46s20.6 46 46 46 46-20.6 46-46-20.6-46-46-46'/%3E%3Cpath fill='%238c73ff' d='m72 111 39-24-39-22z'/%3E%3C/svg%3E">
     <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="__API_GATEWAY_URL__" crossorigin>
+    <link rel="preconnect" href="__API_GATEWAY_URL__">
+    <link rel="dns-prefetch" href="__API_GATEWAY_URL__">
+    <link rel="preconnect" href="__UPSTREAM_ORIGIN_URL__" crossorigin>
+    <link rel="dns-prefetch" href="__UPSTREAM_ORIGIN_URL__">
+    <link rel="preload" href="assets/fonts/GoogleSansFlex-Latin.woff2" as="font" type="font/woff2" crossorigin>
+    <meta name="robots" content="index, follow">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="YT Player">
-    <link rel="stylesheet" href="css/style.css?v=21.00">
+    <meta name="apple-mobile-web-app-title" content="Music">
+    <link rel="stylesheet" href="css/style.css?v=25.04">
 </head>
 <body>
 
@@ -27,105 +34,106 @@
     </div>
 
     <div class="player-container">
-    <div class="header">
-        <div style="display: flex; gap: 8px; align-items: center;">
-            <select id="playlist-select" style="flex: 1;">
-                <option value="Gym">Gym</option>
-                <option value="Driving">Driving</option>
-                <option value="Songs">Songs</option>
-                <option value="INSTALL_APP">Install App...</option>
-            </select>
-            <button id="btn-sync" class="sync-btn" aria-label="Sync Playlists">
-                <svg id="icon-sync" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
-                </svg>
+        <div class="now-playing" id="now-playing">
+            <button class="btn-collapse" id="btn-collapse" style="display: none;">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
             </button>
-        </div>
-        <div style="position:relative;margin-top:10px;">
-            <input type="text" id="search-input" placeholder="Search tracks..." autocomplete="off">
-            <a href="#" id="github-link" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);opacity:0.3;line-height:0;" title="GitHub">
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="#ffffff"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-            </a>
-        </div>
-    </div>
-
-    <div class="now-playing" id="now-playing">
-        <button class="btn-collapse" id="btn-collapse" style="display: none;">
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
-        </button>
-        <div id="album-art-container">
-            <img id="album-art-image" src="" alt="Album Art" decoding="async" fetchpriority="low">
-            <div id="thumb-toggle-hint"><svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>Show thumbnails</div>
-        </div>
-        <div class="title-channel-wrapper" id="title-channel-wrapper">
-            <h2 id="current-title">Select a track</h2>
-            <p id="current-channel">--</p>
-        </div>
-        <div id="lyrics-toggle-hint"><svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 12H5v-2h14v2zm0-4H5V9h14v2z"/></svg>Show lyrics</div>
-        <div id="media-session-controls" style="display: none;"></div>
-        <audio id="audio-player-1" preload="auto" crossorigin="anonymous"></audio>
-
-        <div class="progress-container">
-            <span id="current-time" class="time-display">0:00</span>
-            <div class="seek-wrap">
-                <div class="seek-track">
-                    <div id="buffer-bar" class="buffer-bar"></div>
-                    <div id="played-bar" class="played-bar"></div>
-                </div>
-                <input type="range" id="seek-bar" min="0" value="0" step="0.1">
+            <div id="album-art-container" class="no-art">
+                <img id="album-art-image" src="" alt="Album Art" decoding="async" fetchpriority="low" crossorigin="anonymous">
+                <div id="thumb-toggle-hint"><svg viewBox="0 0 24 24"><path d="M12 4.5C7.3 4.5 3.2 7.4 1.5 11.5c1.7 4.1 5.8 7 10.5 7s8.8-2.9 10.5-7C20.8 7.4 16.7 4.5 12 4.5zm0 11.5c-2.5 0-4.5-2-4.5-4.5S9.5 7 12 7s4.5 2 4.5 4.5-2 4.5-4.5 4.5zm0-7c-1.4 0-2.5 1.1-2.5 2.5S10.6 14 12 14s2.5-1.1 2.5-2.5S13.4 9 12 9z"/></svg>Hide thumbnails</div>
             </div>
-            <span id="total-time" class="time-display">0:00</span>
-        </div>
-        
-        <div class="playback-controls">
-            <button id="btn-shuffle" class="control-btn" aria-label="Shuffle">
-                <svg id="icon-shuffle" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-                <svg id="icon-shuffle-one" viewBox="0 0 24 24" style="display: none;">
-                    <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
-                    <text x="3" y="15" font-size="10" font-weight="500" fill="currentColor" font-family="sans-serif" text-anchor="middle" stroke="#000000" stroke-width="3" paint-order="stroke fill">1</text>
-                </svg>
-            </button>
+            <div class="title-channel-wrapper" id="title-channel-wrapper">
+                <h2 id="current-title">Select a track</h2>
+                <p id="current-channel">--</p>
+            </div>
+            <div id="lyrics-toggle-hint"><svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 12H5v-2h14v2zm0-4H5V9h14v2z"/></svg>Show lyrics</div>
+            <div id="media-session-controls" style="display: none;"></div>
+            <audio id="audio-player-1" preload="auto" crossorigin="anonymous"></audio>
+
+            <div class="progress-container">
+                <span id="current-time" class="time-display">0:00</span>
+                <div class="seek-wrap">
+                    <div class="seek-track" id="seek-track">
+                        <div id="buffer-container" class="buffer-container"></div>
+                    </div>
+                    <input type="range" id="seek-bar" min="0" value="0" step="0.1">
+                </div>
+                <span id="total-time" class="time-display">0:00</span>
+            </div>
             
-            <button id="btn-prev" class="control-btn" aria-label="Previous">
-                <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
-            </button>
-            
-            <button id="btn-play-pause" class="control-btn main-btn" aria-label="Play/Pause">
-                <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                <svg id="icon-pause" viewBox="0 0 24 24" style="display: none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-            </button>
-            
-            <button id="btn-next" class="control-btn" aria-label="Next">
-                <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
-            </button>
-            
-            <button id="btn-repeat" class="control-btn" aria-label="Repeat">
-                <svg id="icon-repeat" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
-                <svg id="icon-repeat-one" viewBox="0 0 24 24" style="display: none;">
-                    <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-                    <text x="12" y="16" font-size="11" font-weight="600" fill="currentColor" font-family="sans-serif" text-anchor="middle" stroke="#000000" stroke-width="3" paint-order="stroke fill">1</text>
-                </svg>
-            </button>
+            <div class="playback-controls">
+                <button id="btn-shuffle" class="control-btn" aria-label="Shuffle">
+                    <svg id="icon-shuffle" viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+                    <svg id="icon-shuffle-one" viewBox="0 0 24 24" style="display: none;">
+                        <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
+                        <text x="3.5" y="15" font-size="9" font-weight="700" fill="currentColor" font-family="'Google Sans Flex', -apple-system, sans-serif" text-anchor="middle">1</text>
+                    </svg>
+                </button>
+                
+                <button id="btn-prev" class="control-btn" aria-label="Previous">
+                    <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+                </button>
+                
+                <button id="btn-play-pause" class="control-btn main-btn" aria-label="Play/Pause">
+                    <svg id="icon-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    <svg id="icon-pause" viewBox="0 0 24 24" style="display: none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </button>
+                
+                <button id="btn-next" class="control-btn" aria-label="Next">
+                    <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+                </button>
+                
+                <button id="btn-repeat" class="control-btn" aria-label="Repeat">
+                    <svg id="icon-repeat" viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+                    <svg id="icon-repeat-one" viewBox="0 0 24 24" style="display: none;">
+                        <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
+                        <text x="12" y="15.2" font-size="9" font-weight="700" fill="currentColor" font-family="'Google Sans Flex', -apple-system, sans-serif" text-anchor="middle">1</text>
+                    </svg>
+                </button>
+            </div>
         </div>
     </div>
 
-    <div class="playlist-container" id="playlist-container">
-        <div id="playlist-message">Loading...</div>
-        <ul id="track-list">
-        </ul>
+    <div class="playlist-panel">
+        <div class="header">
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="playlist-select" style="flex: 1;">
+                    <option value="Gym">Gym</option>
+                    <option value="Driving">Driving</option>
+                    <option value="Songs">Songs</option>
+                    <option value="INSTALL_APP">Install App...</option>
+                    <option value="HARD_RELOAD">Hard Reload...</option>
+                </select>
+                <button id="btn-sync" class="sync-btn" aria-label="Sync Playlists">
+                    <svg id="icon-sync" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                        <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                    </svg>
+                </button>
+            </div>
+            <div style="position:relative;margin-top:10px;">
+                <input type="text" id="search-input" placeholder="Search tracks..." autocomplete="off">
+                <a href="https://github.com/HauseMasterZ/youtube" target="_blank" rel="noopener noreferrer" id="github-link" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);opacity:0.3;line-height:0;" title="GitHub">
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="#ffffff"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                </a>
+            </div>
+        </div>
+
+        <div class="playlist-container" id="playlist-container">
+            <div id="playlist-message">Loading...</div>
+            <ul id="track-list">
+            </ul>
+        </div>
     </div>
-</div>
 
 
-<script src="js/dom.js?v=21.00"></script>
-<script src="js/utils.js?v=21.00"></script>
-
-<script src="js/state.js?v=21.00"></script>
-<script src="js/ui.js?v=21.00"></script>
-<script src="js/mediaSession.js?v=21.00"></script>
-<script src="js/lyrics.js?v=21.00"></script>
-<script src="js/playback.js?v=21.00"></script>
-<script src="js/main.js?v=21.00"></script>
+<script src="js/state.js?v=25.06"></script>
+<script src="js/dom.js?v=25.06"></script>
+<script src="js/utils.js?v=25.06"></script>
+<script src="js/ui.js?v=25.06"></script>
+<script src="js/mediaSession.js?v=25.06"></script>
+<script src="js/lyrics.js?v=25.06"></script>
+<script src="js/playback.js?v=25.06"></script>
+<script src="js/main.js?v=25.06"></script>
 </body>
 
 
