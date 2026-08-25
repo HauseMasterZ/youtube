@@ -512,6 +512,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    let isRecoveringAudio = false;
+    let recoveryAttempts = 0;
+
+    audioPlayer.addEventListener("playing", () => {
+        isRecoveringAudio = false;
+        recoveryAttempts = 0;
+    });
+
     audioPlayer.addEventListener("error", () => {
         if (audioPlayer.switching) return;
         const activeEl = audioPlayer.active || audioPlayer;
@@ -520,27 +528,33 @@ document.addEventListener("DOMContentLoaded", () => {
         if (err && err.code === 1) return;
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
           
-          // Android Power Management / Network drop: Try to recover ONCE before skipping.
-          const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
-          if (ct > 0 && !isRecovering && audioPlayer.readyState > 0) {
-              isRecovering = true;
-              const savedTime = ct;
-              const track = currentPlaylistData[playQueue[queueIndex]] || 
-currentPlaylistData[globalActiveOriginalIndex];
-              if (!track) { isRecovering = false; return; }
-  
-              const onMeta = () => {
-                  audioPlayer.removeEventListener('loadedmetadata', onMeta);
-                  audioPlayer.currentTime = savedTime;
-                  isRecovering = false;
-              };
+        // Android Power Management / Network drop: Try to recover before skipping (both buffering & mid-playback)
+        if (recoveryAttempts < 3 && !isRecoveringAudio) {
+            isRecoveringAudio = true;
+            recoveryAttempts++;
+            const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
+            const savedTime = ct;
+            const track = (currentPlaylistData && currentPlaylistData[playQueue[queueIndex]]) || 
+                          (currentPlaylistData && currentPlaylistData[globalActiveOriginalIndex]);
+            if (!track) { isRecoveringAudio = false; return; }
+
+            const onMeta = () => {
+                audioPlayer.removeEventListener('loadedmetadata', onMeta);
+                if (savedTime > 0) {
+                    audioPlayer.currentTime = savedTime;
+                }
+                isRecoveringAudio = false;
+                recoveryAttempts = 0;
+            };
             audioPlayer.addEventListener('loadedmetadata', onMeta);
             
-            const cacheKey = `${baseUrl}/_cache/${track.id}`;
             let recoveryUrl = getAudioUrl(track);
             audioPlayer.recoverTrack(recoveryUrl);
             return;
         }
+
+        recoveryAttempts = 0;
+        isRecoveringAudio = false;
 
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";
@@ -552,7 +566,6 @@ currentPlaylistData[globalActiveOriginalIndex];
         
         errorSkipTimer = setTimeout(() => {
             errorSkipTimer = null;
-            isRecovering = false;
             if (window.lastPlaybackDirection === -1) {
                 playPrev();
             } else {
