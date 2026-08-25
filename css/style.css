@@ -173,7 +173,7 @@
         #search-input:focus { border: none; outline: none; }
 
         .now-playing {
-            padding: 0px 0px 0px 0px;
+            padding: 22px 20px 16px 20px;
             text-align: center;
             display: flex;
             flex-direction: column;
@@ -200,10 +200,8 @@
         #album-art-image {
             width: auto;
             height: auto;
-            min-width: min(300px, 85vw);
-            min-height: 260px;
             max-width: min(600px, 85vw);
-            max-height: 52vh;
+            max-height: 48vh;
             object-fit: contain;
             border-radius: 8px;
             display: none;
@@ -509,7 +507,6 @@
         @media (min-width: 1111px) and (orientation: landscape) {
             .now-playing {
                 max-width: 680px;
-                padding: 0;
             }
             #album-art-container {
                 width: clamp(220px, 80%, 600px);
