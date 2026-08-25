@@ -1,3 +1,8 @@
+    // Environment Feature Checks
+    var hasMediaSession = 'mediaSession' in navigator;
+    var hasTouch = 'ontouchstart' in window || (navigator.maxTouchPoints > 0);
+    var isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
     const ALL_PLAYLISTS = ["Gym", "Driving", "Songs"];
     let allDatabases = {
         Gym: null,
@@ -10,19 +15,21 @@
     
     let playQueue = [];     
     let queueIndex = -1;    
+    let queueBasePlaylist = null;
     let globalActiveOriginalIndex = -1; 
     let globalActivePlaylist = null;
+    let lastUserScrollTime = 0;
     
     let shuffleMode = 0;
     let repeatMode = 0; 
     
     const dominantColorCache = new Map();
-    const artworkSquareCache = new Map();
 
     let isSeeking = false;
     let crossShuffleHistory = [];
     let crossShufflePos = -1;
-    let isRecovering = false;
+    let playbackHistory = [];
+    let playbackHistoryIndex = -1;
     
     // Lyrics State
     window.lyricsActive = false;
@@ -30,14 +37,13 @@
     let currentLyricsIsUnsynced = false;
     let fetchingLyrics = false;
     
-    // UI Throttling
+    // UI Throttling & Queue Management
     let lastRenderTime = -1;
-    let syncRAFId = null;
     let searchDebounceTimer = null;
     let errorSkipTimer = null;
-    // Thumbnails enabled by default on desktop, disabled on mobile
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
+    window.wasPausedByUser = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
 
