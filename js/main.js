@@ -645,7 +645,12 @@ currentPlaylistData[globalActiveOriginalIndex];
             return;
         }
 
-        const rect = albumArtContainer.getBoundingClientRect();
+        const targetEl = (albumArt && albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) 
+            ? albumArt 
+            : albumArtContainer;
+        const rect = targetEl.getBoundingClientRect();
+        if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+
         const clickX = e.clientX - rect.left;
         const width = rect.width;
         if (isNaN(clickX) || width === 0) return;
@@ -859,6 +864,10 @@ currentPlaylistData[globalActiveOriginalIndex];
 
     function syncArtWidth() {
         if (!albumArt || !nowPlaying) return;
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains('expanded')) {
+            nowPlaying.style.removeProperty('--art-width');
+            return;
+        }
         if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
             const rect = albumArt.getBoundingClientRect();
             const w = rect.width || albumArt.offsetWidth;
