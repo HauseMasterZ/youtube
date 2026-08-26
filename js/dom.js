@@ -54,11 +54,11 @@
             this.events.forEach(evt => {
                 this.active.addEventListener(evt, this.forwardEvent);
             });
-
-            this._initMSE();
         }
 
         _initMSE() {
+            if (this._mseInitialized) return;
+            this._mseInitialized = true;
             const mime = 'audio/webm; codecs="opus"';
             if ('MediaSource' in window && MediaSource.isTypeSupported(mime)) {
                 try {
@@ -198,6 +198,7 @@
         }
 
         play() {
+            this._initMSE();
             window.wasPausedByUser = false;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
@@ -271,6 +272,7 @@
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
+            this._initMSE();
             this.switching = true;
             this._endedFired = false;
             this.lastKnownTime = 0;
