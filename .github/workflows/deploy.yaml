@@ -236,6 +236,7 @@ jobs:
         if: always()
         env:
           LH_LINKS: ${{ steps.lighthouse.outputs.links }}
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           REPORT_URL=""
           if [ -n "$LH_LINKS" ]; then
@@ -244,14 +245,79 @@ jobs:
           if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
             REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
           fi
+          export REPORT_URL
 
-          if [ -n "$REPORT_URL" ]; then
-            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
-            echo "🚀 **[Click here to view the Full Lighthouse Report]($REPORT_URL)**" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
-            echo "⚠ Lighthouse report URL could not be retrieved." >> $GITHUB_STEP_SUMMARY
-          fi
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+
+          try {
+            const lhciDir = ".lighthouseci";
+            const manifestPath = path.join(lhciDir, "manifest.json");
+            const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+            const branch = process.env.BRANCH_NAME || "branch";
+            const reportUrl = process.env.REPORT_URL || "";
+
+            if (!fs.existsSync(manifestPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n🚀 **[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
+            if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n🚀 **[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const lhr = JSON.parse(fs.readFileSync(repRun.jsonPath, "utf8"));
+            const scoreBadge = (val) => {
+              const s = Math.round((val || 0) * 100);
+              const emoji = s >= 90 ? "🟢" : s >= 50 ? "🟠" : "🔴";
+              return `${emoji} **${s}**`;
+            };
+
+            const perf = scoreBadge(lhr.categories?.performance?.score);
+            const a11y = scoreBadge(lhr.categories?.accessibility?.score);
+            const bp = scoreBadge(lhr.categories?.["best-practices"]?.score);
+            const seo = scoreBadge(lhr.categories?.seo?.score);
+
+            const fcp = lhr.audits?.["first-contentful-paint"]?.displayValue || "N/A";
+            const lcp = lhr.audits?.["largest-contentful-paint"]?.displayValue || "N/A";
+            const tbt = lhr.audits?.["total-blocking-time"]?.displayValue || "N/A";
+            const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
+            const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
+
+            let md = `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n`;
+            md += `### 🎯 Category Scores\n`;
+            md += `| Performance | Accessibility | Best Practices | SEO |\n`;
+            md += `| :---: | :---: | :---: | :---: |\n`;
+            md += `| ${perf} | ${a11y} | ${bp} | ${seo} |\n\n`;
+            md += `### ⚡ Core Web Vitals & Key Metrics\n`;
+            md += `| Metric | Measurement |\n`;
+            md += `|---|---|\n`;
+            md += `| **First Contentful Paint (FCP)** | \`${fcp}\` |\n`;
+            md += `| **Largest Contentful Paint (LCP)** | \`${lcp}\` |\n`;
+            md += `| **Total Blocking Time (TBT)** | \`${tbt}\` |\n`;
+            md += `| **Speed Index (SI)** | \`${si}\` |\n`;
+            md += `| **Cumulative Layout Shift (CLS)** | \`${cls}\` |\n\n`;
+
+            if (reportUrl) {
+              md += `🚀 **[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
+              md += `**Direct URL:** ${reportUrl}\n`;
+            }
+
+            if (summaryFile) {
+              fs.appendFileSync(summaryFile, md, "utf8");
+            }
+          } catch (err) {
+            console.error("Summary builder notice:", err);
+          }
+          '
 
       - name: Purge Cloudflare CDN Cache
         if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
