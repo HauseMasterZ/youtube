@@ -234,9 +234,24 @@ jobs:
 
       - name: Pin Lighthouse Report to GitHub Summary
         if: always()
+        env:
+          LH_LINKS: ${{ steps.lighthouse.outputs.links }}
         run: |
-          echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
-          echo "🚀 **[Click here to view the Full Lighthouse Report](${{ steps.lighthouse.outputs.links }})**" >> $GITHUB_STEP_SUMMARY
+          REPORT_URL=""
+          if [ -n "$LH_LINKS" ]; then
+            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' | head -n 1)
+          fi
+          if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
+            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
+          fi
+
+          if [ -n "$REPORT_URL" ]; then
+            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
+            echo "🚀 **[Click here to view the Full Lighthouse Report]($REPORT_URL)**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
+            echo "⚠ Lighthouse report URL could not be retrieved." >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Purge Cloudflare CDN Cache
         if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
