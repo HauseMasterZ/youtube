@@ -99,9 +99,9 @@
                 let skeletonHtml = '';
                 for (let i = 0; i < 8; i++) {
                     skeletonHtml += `<li class="track-skeleton" style="transform: translate3d(0, ${i * ITEM_HEIGHT}px, 0); height: ${ITEM_HEIGHT}px;">
-                        <div class="track-info" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
-                            <span class="track-title skeleton-text" style="font-size: 14px; font-weight: 500;">Loading track...</span>
-                            <span class="track-channel skeleton-text" style="font-size: 12px; color: var(--text-secondary);">--</span>
+                        <div class="track-info" style="display: flex; flex-direction: column; width: 100%;">
+                            <span class="track-title skeleton-text" style="display: block; width: 85%; height: 16px; border-radius: 4px; background: rgba(255,255,255,0.08);"></span>
+                            <span class="track-channel skeleton-text" style="display: block; width: 45%; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.05); margin-top: 4px;"></span>
                         </div>
                     </li>`;
                 }
