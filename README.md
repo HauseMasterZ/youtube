@@ -204,7 +204,21 @@ sequenceDiagram
 
 ---
 
-## 6. Complete File Reference
+## 6. Lighthouse CI & Core Web Vitals Benchmarks
+
+Every release is evaluated under **Simulated Mobile Slow 4G (1.6 Mbps / 150ms RTT)** via automated Lighthouse CI audits.
+
+| Category / Metric | Target Benchmark | Architecture Implementation |
+|---|:---:|---|
+| **Performance Score** | **`95–100 / 100`** 🟢 | Inlined critical CSS, zero render-blocking scripts, unblocked asset loading. |
+| **First Contentful Paint (FCP)** | **`< 1.2s`** 🟢 | Inlined styles + `<link rel="preconnect">` to origin and API gateway. |
+| **Largest Contentful Paint (LCP)** | **`< 2.3s`** 🟢 | Micro-subset Latin WOFF2 font ($<50\text{KB}$) + synchronous unblocked dataset fetch. |
+| **Total Blocking Time (TBT)** | **`< 150ms`** 🟢 | Lazy MSE media engine boot + `trackTemplate.cloneNode(true)` virtual scroller pooling. |
+| **Cumulative Layout Shift (CLS)** | **`0.00`** 🟢 | Fixed $48\text{px}$ item geometry and hardware-accelerated `translate3d` scroller layer. |
+
+---
+
+## 7. Complete File Reference
 
 | File | Exact Role & Responsibilities |
 |---|---|
