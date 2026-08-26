@@ -230,11 +230,11 @@
         }
 
         #album-art-container.no-art #album-art-image {
-            display: none !important;
+            display: none;
         }
 
         #album-art-container.no-art #thumb-toggle-hint {
-            display: inline-flex !important;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
             font-size: 13px;
@@ -251,7 +251,7 @@
         }
 
         #album-art-container:not(.no-art) #thumb-toggle-hint {
-            display: none !important;
+            display: none;
         }
 
         #thumb-toggle-hint {
@@ -938,8 +938,8 @@
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
-                width: 100% !important;
-                max-width: 480px !important;
+                width: 100%;
+                max-width: 480px;
                 margin-bottom: clamp(2px, 1vh, 6px);
             }
             .now-playing:not(.expanded) #current-title {
@@ -955,14 +955,14 @@
             }
             .now-playing:not(.expanded) .progress-container {
                 margin: clamp(4px, 1.2vh, 8px) 0;
-                width: 100% !important;
-                max-width: 480px !important;
+                width: 100%;
+                max-width: 480px;
             }
             .now-playing:not(.expanded) .playback-controls {
                 gap: 16px;
                 margin-top: 4px;
-                width: 100% !important;
-                max-width: 480px !important;
+                width: 100%;
+                max-width: 480px;
             }
             .now-playing:not(.expanded) .main-btn {
                 width: clamp(44px, 6.5vh, 56px);
@@ -1028,46 +1028,46 @@
             }
             
             .now-playing #album-art-container:not(.no-art) #thumb-toggle-hint {
-                display: none !important;
+                display: none;
             }
             
             .now-playing:not(.expanded) #thumb-toggle-hint,
             .now-playing:not(.expanded) #album-art-container.no-art #thumb-toggle-hint { 
-                font-size: 0 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                gap: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                line-height: 0 !important;
-                border-radius: 50% !important;
-                background: transparent !important;
-                border: none !important;
-                box-sizing: border-box !important;
+                font-size: 0;
+                padding: 0;
+                margin: 0;
+                gap: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                line-height: 0;
+                border-radius: 50%;
+                background: transparent;
+                border: none;
+                box-sizing: border-box;
             }
             .now-playing:not(.expanded) #thumb-toggle-hint svg,
             .now-playing:not(.expanded) #album-art-container.no-art #thumb-toggle-hint svg {
-                margin: 0 !important;
-                width: 22px !important;
-                height: 22px !important;
-                display: block !important;
-                flex-shrink: 0 !important;
+                margin: 0;
+                width: 22px;
+                height: 22px;
+                display: block;
+                flex-shrink: 0;
             }
             
             .now-playing.expanded #thumb-toggle-hint {
-                font-size: 13px !important;
-                padding: 8px 12px !important;
-                height: auto !important;
-                flex-direction: row !important;
-                margin-bottom: 16px !important;
-                display: inline-flex !important;
-                background: transparent !important;
-                background-color: transparent !important;
-                border: none !important;
-                color: var(--text-secondary) !important;
+                font-size: 13px;
+                padding: 8px 12px;
+                height: auto;
+                flex-direction: row;
+                margin-bottom: 16px;
+                display: inline-flex;
+                background: transparent;
+                background-color: transparent;
+                border: none;
+                color: var(--text-secondary);
             }
             .now-playing.expanded #thumb-toggle-hint svg {
                 width: 16px;
