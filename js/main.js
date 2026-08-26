@@ -95,6 +95,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    let scrollRafId = null;
+    function scheduleVirtualRender() {
+        if (scrollRafId !== null) return;
+        scrollRafId = window.requestAnimationFrame(() => {
+            scrollRafId = null;
+            renderVirtualTracks();
+        });
+    }
+
     playlistContainer.addEventListener("scroll", () => {
         lastUserScrollTime = Date.now();
         isScrollingFast = true;
@@ -105,9 +114,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderVirtualTracks();
         }, 120);
 
-        if (!isRendering) {
-            window.requestAnimationFrame(renderVirtualTracks);
-        }
+        scheduleVirtualRender();
     }, { passive: true });
 
     ['touchstart', 'touchmove', 'wheel'].forEach(evt => {
@@ -785,17 +792,21 @@ document.addEventListener("DOMContentLoaded", () => {
         for (const pl of ALL_PLAYLISTS) {
             if (allDatabases[pl]) {
                 try {
-                    const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?v=${ts}`);
+                    const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${ts}`);
                     if (res.ok) {
                         const rawData = await res.json();
                         const freshData = normalizePlaylistData(rawData, pl);
-                        allDatabases[pl] = freshData;
-                        if (pl === currentPl) {
-                            currentPlaylistData = freshData;
-                            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
-                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                            lastStartIndex = -1;
-                            renderVirtualTracks();
+                        if (typeof applyPlaylistData === 'function') {
+                            applyPlaylistData(pl, freshData, true);
+                        } else {
+                            allDatabases[pl] = freshData;
+                            if (pl === currentPl) {
+                                currentPlaylistData = freshData;
+                                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
+                                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                                lastStartIndex = -1;
+                                renderVirtualTracks();
+                            }
                         }
                     }
                 } catch (err) {
@@ -855,28 +866,41 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-    // --- Startup Strategy: Desktop loads all 3 in parallel; Mobile loads 1 on-demand ---
-    requestAnimationFrame(() => {
+    // --- Startup Strategy: SWR Instant Paint + Background Revalidation ---
+    requestAnimationFrame(async () => {
+        const initialPl = playlistSelect.value;
+        
+        // 1. Instantly trigger loadPlaylist for the visible active playlist
+        loadPlaylist(initialPl);
+
+        // 2. On Desktop: In background, warm up / revalidate other 2 playlists for instant search & cross-playlist switching
         if (!isMobileDevice) {
-            // Desktop: Parallel fetch all 3 playlists for 0ms instant global search and switching
-            Promise.all(ALL_PLAYLISTS.map(pl => {
-                if (pl === playlistSelect.value) {
-                    return loadPlaylist(pl);
-                } else {
-                    return fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
-                        .then(r => r.ok ? r.json() : [])
-                        .then(rawData => {
+            const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== initialPl);
+            for (const pl of otherPlaylists) {
+                // Check cache first
+                if ('caches' in window) {
+                    try {
+                        const cache = await caches.open(CACHE_NAME);
+                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
+                        const cachedRes = await cache.match(dbUrl);
+                        if (cachedRes && !allDatabases[pl]) {
+                            const rawData = await cachedRes.json();
                             allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                            if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                                window.rebuildCrossShuffleDeck();
-                            }
-                        })
-                        .catch(() => {});
+                        }
+                    } catch (e) {}
                 }
-            }));
-        } else {
-            // Mobile: Load only active playlist to conserve cellular bandwidth & RAM
-            loadPlaylist(playlistSelect.value);
+
+                // Background revalidation fetch
+                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`)
+                    .then(r => r.ok ? r.json() : [])
+                    .then(rawData => {
+                        allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                            window.rebuildCrossShuffleDeck();
+                        }
+                    })
+                    .catch(() => {});
+            }
         }
     });
 
