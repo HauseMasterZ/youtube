@@ -544,19 +544,20 @@
                 width: 100%;
             }
             #album-art-container {
-                width: auto;
+                width: 100%;
                 max-width: 650px;
-                height: auto;
+                height: clamp(260px, 56vh, 620px);
                 margin-bottom: clamp(8px, 2vh, 18px);
                 display: flex;
                 justify-content: center;
+                align-items: center;
                 cursor: default;
             }
             #album-art-image {
-                width: auto;
-                height: auto;
-                max-width: min(650px, 85vw);
-                max-height: clamp(260px, 56vh, 620px);
+                width: 100%;
+                height: 100%;
+                max-width: 650px;
+                max-height: 100%;
                 object-fit: contain;
                 border-radius: 8px;
                 cursor: pointer;
@@ -566,6 +567,7 @@
             .playback-controls {
                 width: var(--art-width, 100%);
                 max-width: var(--art-width, 650px);
+                min-width: 280px;
             }
             #current-title { font-size: clamp(18px, 2.2vh, 24px); }
             #current-channel {
