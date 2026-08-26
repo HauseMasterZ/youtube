@@ -908,10 +908,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 const ratio = albumArt.naturalWidth / albumArt.naturalHeight;
                 w = Math.min(rect.width, rect.height * ratio);
             }
-            if (w > 0) {
-                nowPlaying.style.setProperty('--art-width', `${Math.round(w)}px`);
-                return;
-            }
+            w = Math.max(Math.round(w), 280);
+            nowPlaying.style.setProperty('--art-width', `${w}px`);
+            return;
         }
         nowPlaying.style.removeProperty('--art-width');
     }
