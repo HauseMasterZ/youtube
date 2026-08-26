@@ -38,7 +38,12 @@
                 }
             });
         } else {
-            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
+            const len = currentPlaylistData.length;
+            const indices = new Array(len);
+            for (let i = 0; i < len; i++) {
+                indices[i] = { playlist: folderName, index: i };
+            }
+            filteredIndices = indices;
         }
 
         trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
