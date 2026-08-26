@@ -553,6 +553,16 @@
                 align-items: center;
                 cursor: default;
             }
+            #album-art-container.no-art {
+                height: auto;
+                margin-bottom: clamp(6px, 1.5vh, 14px);
+            }
+            #album-art-container.no-art ~ .title-channel-wrapper,
+            #album-art-container.no-art ~ .progress-container,
+            #album-art-container.no-art ~ .playback-controls {
+                width: 100%;
+                max-width: min(520px, 35vw);
+            }
             #album-art-image {
                 width: 100%;
                 height: 100%;
@@ -1209,6 +1219,7 @@
                 font-size: 16px;
                 text-align: center;
                 width: 100%;
+                color: var(--primary-color);
             }
             
             .now-playing.expanded .progress-container {
