@@ -866,43 +866,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-    // --- Startup Strategy: SWR Instant Paint + Background Revalidation ---
-    requestAnimationFrame(async () => {
-        const initialPl = playlistSelect.value;
-        
-        // 1. Instantly trigger loadPlaylist for the visible active playlist
-        loadPlaylist(initialPl);
+    // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
+    const initialPl = playlistSelect.value;
+    loadPlaylist(initialPl);
 
-        // 2. On Desktop: In background, warm up / revalidate other 2 playlists for instant search & cross-playlist switching
-        if (!isMobileDevice) {
-            const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== initialPl);
-            for (const pl of otherPlaylists) {
-                // Check cache first
-                if ('caches' in window) {
-                    try {
-                        const cache = await caches.open(CACHE_NAME);
-                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                        const cachedRes = await cache.match(dbUrl);
-                        if (cachedRes && !allDatabases[pl]) {
-                            const rawData = await cachedRes.json();
-                            allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                        }
-                    } catch (e) {}
-                }
-
-                // Background revalidation fetch
-                fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
-                    .then(r => r.ok ? r.json() : [])
-                    .then(rawData => {
-                        allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                            window.rebuildCrossShuffleDeck();
-                        }
-                    })
-                    .catch(() => {});
-            }
+    // Desktop only: Background warm other playlists for instant tab switching & global search
+    if (!isMobileDevice) {
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
+        } else {
+            setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
         }
-    });
+    }
+
+    function warmRemainingPlaylists(activePl) {
+        const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
+        for (const pl of otherPlaylists) {
+            if (allDatabases[pl]) continue;
+            fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+                .then(r => r.ok ? r.json() : [])
+                .then(rawData => {
+                    allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                        window.rebuildCrossShuffleDeck();
+                    }
+                })
+                .catch(() => {});
+        }
+    }
 
     function syncArtWidth() {
         if (!albumArt || !nowPlaying) return;
