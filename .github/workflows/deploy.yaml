@@ -153,7 +153,6 @@ jobs:
                 const inlinedCss = minifiedCss.replace(/url\((['"]?)\.\.\//g, 'url($1');
                 html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${inlinedCss}</style>`);
               }
-              html = html.replace(/<link\s+rel="(preconnect|dns-prefetch)"\s+href="(__API_GATEWAY_URL__|__UPSTREAM_ORIGIN_URL__)"[^>]*>\s*/g, '');
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
               html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
@@ -231,6 +230,15 @@ jobs:
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
+
+      - name: Pin Lighthouse Report to GitHub Summary
+        if: always()
+        run: |
+          REPORT_URL=$(find .lighthouseci -name "manifest.json" -exec grep -o "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^\"]*" {} + | head -n 1)
+          if [ -n "$REPORT_URL" ]; then
+            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
+            echo "🚀 **[Click here to view the Full Lighthouse Report]($REPORT_URL)**" >> $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Purge Cloudflare CDN Cache
         if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
