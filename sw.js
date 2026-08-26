@@ -141,8 +141,41 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. Database JSON & Lyrics (.lrc): Network-first with cache fallback to ensure newly synced tracks/colors/lyrics update immediately
-    if (event.request.url.includes('_Playlist_Database.json') || event.request.url.includes('/lyrics/') || event.request.url.includes('.lrc')) {
+    // 3. Database JSON: Stale-While-Revalidate Strategy
+    if (event.request.url.includes('_Playlist_Database.json')) {
+        const cleanUrl = event.request.url.split('?')[0];
+        // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network and update cache
+        if (event.request.url.includes('?t=') || event.request.url.includes('?v=')) {
+            event.respondWith(
+                fetch(event.request).then(response => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
+                    }
+                    return response;
+                }).catch(() => caches.match(cleanUrl))
+            );
+            return;
+        }
+
+        // Standard request: Instant cache response with network fallback
+        event.respondWith(
+            caches.match(cleanUrl).then(cached => {
+                if (cached) return cached;
+                return fetch(event.request).then(response => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
+                    }
+                    return response;
+                });
+            })
+        );
+        return;
+    }
+
+    // 4. Lyrics (.lrc): Network-first with cache fallback
+    if (event.request.url.includes('/lyrics/') || event.request.url.includes('.lrc')) {
         event.respondWith(
             fetch(event.request).then(response => {
                 if (response.ok) {
@@ -155,7 +188,7 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 4. For JSON/CSS/JS: Cache-first, no background revalidation
+    // 5. For JSON/CSS/JS and App Shell: Cache-first, no background revalidation
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {
