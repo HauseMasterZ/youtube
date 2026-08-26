@@ -640,6 +640,29 @@
             text-overflow: ellipsis;
         }
 
+        .track-skeleton {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+            box-sizing: border-box;
+            contain: layout paint;
+        }
+
+        .skeleton-text {
+            opacity: 0.25;
+            animation: skeleton-pulse 1.2s infinite ease-in-out;
+        }
+
+        @keyframes skeleton-pulse {
+            0%, 100% { opacity: 0.25; }
+            50% { opacity: 0.08; }
+        }
+
         .track-thumb {
             width: 36px;
             height: 36px;
