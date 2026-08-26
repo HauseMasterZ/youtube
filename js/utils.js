@@ -1,5 +1,19 @@
     const baseUrl = "__API_GATEWAY_URL__";
     const artworkSquareCache = new Map();
+    const MAX_SQUARE_CACHE = 30;
+
+    function setCachedSquareArtwork(trackId, url) {
+        if (artworkSquareCache.size >= MAX_SQUARE_CACHE) {
+            const oldestKey = artworkSquareCache.keys().next().value;
+            const oldestUrl = artworkSquareCache.get(oldestKey);
+            if (oldestUrl && typeof oldestUrl === 'string' && oldestUrl.startsWith('blob:')) {
+                try { URL.revokeObjectURL(oldestUrl); } catch (e) {}
+            }
+            artworkSquareCache.delete(oldestKey);
+        }
+        artworkSquareCache.set(trackId, url);
+    }
+
     function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
 
     function damerauLevenshtein(s1, s2) {
@@ -134,11 +148,11 @@
             canvas.toBlob((squareBlob) => {
                 if (squareBlob) {
                     const blobUrl = URL.createObjectURL(squareBlob);
-                    artworkSquareCache.set(trackId, blobUrl);
+                    setCachedSquareArtwork(trackId, blobUrl);
                     callback(blobUrl);
                 } else {
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-                    artworkSquareCache.set(trackId, dataUrl);
+                    setCachedSquareArtwork(trackId, dataUrl);
                     callback(dataUrl);
                 }
             }, 'image/jpeg', 0.92);
@@ -156,7 +170,7 @@
                     const sy = (img.naturalHeight - size) / 2;
                     ctx.drawImage(img, sx, sy, size, size, 0, 0, 512, 512);
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-                    artworkSquareCache.set(trackId, dataUrl);
+                    setCachedSquareArtwork(trackId, dataUrl);
                     callback(dataUrl);
                 } catch(e) {
                     callback(url);
