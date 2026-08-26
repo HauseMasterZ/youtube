@@ -891,7 +891,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 // Background revalidation fetch
-                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`)
+                fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
                     .then(r => r.ok ? r.json() : [])
                     .then(rawData => {
                         allDatabases[pl] = normalizePlaylistData(rawData, pl);
