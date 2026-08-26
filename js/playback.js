@@ -42,7 +42,10 @@
         }
 
         trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-        poolInitialized = false;
+        if (!poolInitialized || trackList.querySelector('.track-skeleton')) {
+            trackList.innerHTML = '';
+            poolInitialized = false;
+        }
         lastStartIndex = -1;
 
         trackList.style.display = 'block';
@@ -88,10 +91,23 @@
         }
 
         if (!hasRendered) {
-            trackList.style.display = 'none';
-            playlistMessage.style.display = 'block';
-            playlistMessage.textContent = 'Loading...';
-            playlistMessage.style.color = 'var(--text-secondary)';
+            // Instead of hiding trackList and showing 'Loading...', render skeleton rows for instant LCP:
+            trackList.style.display = 'block';
+            playlistMessage.style.display = 'none';
+            
+            if (trackList.children.length === 0) {
+                let skeletonHtml = '';
+                for (let i = 0; i < 8; i++) {
+                    skeletonHtml += `<li class="track-skeleton" style="transform: translate3d(0, ${i * ITEM_HEIGHT}px, 0); height: ${ITEM_HEIGHT}px;">
+                        <div class="track-info" style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+                            <span class="track-title skeleton-text" style="font-size: 14px; font-weight: 500;">Loading track...</span>
+                            <span class="track-channel skeleton-text" style="font-size: 12px; color: var(--text-secondary);">--</span>
+                        </div>
+                    </li>`;
+                }
+                trackList.innerHTML = skeletonHtml;
+                trackList.style.height = `${8 * ITEM_HEIGHT}px`;
+            }
         }
 
         // Initialize queue if starting fresh
