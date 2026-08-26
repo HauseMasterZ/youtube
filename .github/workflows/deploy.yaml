@@ -227,7 +227,7 @@ jobs:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ steps.deployment.outputs.page_url }}
+            ${{ github.ref_name == 'dev' && format('{0}dev/', steps.deployment.outputs.page_url) || steps.deployment.outputs.page_url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
