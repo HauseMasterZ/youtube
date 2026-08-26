@@ -220,6 +220,7 @@ jobs:
         run: sleep 15
 
       - name: Audit Deployed Site with Lighthouse CI
+        id: lighthouse
         if: steps.deployment.outputs.page_url != ''
         uses: treosh/lighthouse-ci-action@v12
         env:
@@ -234,11 +235,8 @@ jobs:
       - name: Pin Lighthouse Report to GitHub Summary
         if: always()
         run: |
-          REPORT_URL=$(find .lighthouseci -name "manifest.json" -exec grep -o "https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^\"]*" {} + | head -n 1)
-          if [ -n "$REPORT_URL" ]; then
-            echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
-            echo "🚀 **[Click here to view the Full Lighthouse Report]($REPORT_URL)**" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "## 📊 Lighthouse CI Report" >> $GITHUB_STEP_SUMMARY
+          echo "🚀 **[Click here to view the Full Lighthouse Report](${{ steps.lighthouse.outputs.links }})**" >> $GITHUB_STEP_SUMMARY
 
       - name: Purge Cloudflare CDN Cache
         if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
