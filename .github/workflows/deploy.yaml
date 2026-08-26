@@ -134,7 +134,7 @@ jobs:
             const bundlePath = path.join(jsDir, 'bundle.min.js');
             const tempBundle = path.join(jsDir, 'bundle.tmp.js');
             fs.writeFileSync(tempBundle, combinedJs, 'utf8');
-            execSync(`terser --compress --mangle -o "${bundlePath}" "${tempBundle}"`);
+            execSync(`terser --compress passes=3,pure_getters=true,unsafe=true --mangle --comments false -o "${bundlePath}" "${tempBundle}"`);
             if (fs.existsSync(tempBundle)) fs.unlinkSync(tempBundle);
 
             // 2. Minify CSS
@@ -168,7 +168,7 @@ jobs:
               sw = sw.replace(/'\.\/js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js',?\s*/g, '');
               sw = sw.replace(/const CORE_ASSETS = \[/, `const CORE_ASSETS = [\n    './js/bundle.min.js',`);
               fs.writeFileSync(swPath, sw, 'utf8');
-              execSync(`terser --compress --mangle -o "${swPath}" "${swPath}"`);
+              execSync(`terser --compress passes=3,pure_getters=true,unsafe=true --mangle --comments false -o "${swPath}" "${swPath}"`);
             }
           }
 

@@ -48,6 +48,7 @@
 
         // Only redraw DOM if the index window actually shifted
         if (lastStartIndex === startIndex && lastEndIndex === endIndex) {
+            isRendering = false;
             return; 
         }
 
@@ -105,7 +106,7 @@
             li.style.display = "flex";
             li.dataset.playlist = item.playlist;
             li.dataset.index = item.index;
-            li.style.top = `${i * ITEM_HEIGHT}px`;
+            li.style.transform = `translate3d(0, ${i * ITEM_HEIGHT}px, 0)`;
             
             const isCurrentPlaylist = (item.playlist === currentPl);
             
@@ -147,19 +148,36 @@
                         
                         const loader = new Image();
                         loader.fetchPriority = "low";
-                        loader.onload = () => {
-                            thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
-                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                            }
-                        };
-                        loader.onerror = () => {
-                            thumbCache.set(thumbUrl, { status: 'failed' });
-                            if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                thumbDiv.style.backgroundImage = 'none';
-                            }
-                        };
                         loader.src = thumbUrl;
+
+                        if (typeof loader.decode === 'function') {
+                            loader.decode()
+                                .then(() => {
+                                    thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
+                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                        thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
+                                    }
+                                })
+                                .catch(() => {
+                                    thumbCache.set(thumbUrl, { status: 'failed' });
+                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                        thumbDiv.style.backgroundImage = 'none';
+                                    }
+                                });
+                        } else {
+                            loader.onload = () => {
+                                thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
+                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                    thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
+                                }
+                            };
+                            loader.onerror = () => {
+                                thumbCache.set(thumbUrl, { status: 'failed' });
+                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
+                                    thumbDiv.style.backgroundImage = 'none';
+                                }
+                            };
+                        }
                     }
                 }
                 thumbDiv.style.display = "block";
