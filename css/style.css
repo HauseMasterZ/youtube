@@ -973,15 +973,14 @@
         }
 
         @media (max-width: 750px) and (orientation: portrait) {
-            /* Expandable Pill Player */
-            .now-playing,
-            .now-playing:not(.expanded) {
+            /* Expandable Pill Player (Default Mini Mode) */
+            .now-playing {
                 position: fixed;
                 bottom: 15px;
                 left: 10px;
                 right: 10px;
-                width: auto !important;
-                max-width: none !important;
+                width: auto;
+                max-width: none;
                 height: 60px;
                 background-color: #1a1a1e;
                 border-radius: 30px;
@@ -1000,26 +999,25 @@
                 cursor: pointer;
             }
             
-            .now-playing:not(.expanded) #album-art-container,
-            .now-playing:not(.expanded) #album-art-container.no-art {
-                width: 44px !important;
-                height: 44px !important;
-                min-width: 44px !important;
-                min-height: 44px !important;
-                max-width: 44px !important;
-                max-height: 44px !important;
-                margin: 0 !important;
-                border-radius: 50% !important;
-                overflow: hidden !important;
-                flex-shrink: 0 !important;
-                display: flex !important;
-                align-items: center !important;
-                justify-content: center !important;
-                background-color: #222226 !important;
-                box-sizing: border-box !important;
+            .now-playing #album-art-container {
+                width: 44px;
+                height: 44px;
+                min-width: 44px;
+                min-height: 44px;
+                max-width: 44px;
+                max-height: 44px;
+                margin: 0;
+                border-radius: 50%;
+                overflow: hidden;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background-color: #222226;
+                box-sizing: border-box;
             }
             
-            .now-playing:not(.expanded) #album-art-image {
+            .now-playing #album-art-image {
                 border-radius: 50%;
                 width: 100%;
                 height: 100%;
@@ -1027,34 +1025,32 @@
                 object-fit: cover;
             }
             
-            .now-playing:not(.expanded) #album-art-container:not(.no-art) #thumb-toggle-hint {
-                display: none !important;
+            .now-playing #album-art-container:not(.no-art) #thumb-toggle-hint {
+                display: none;
             }
             
-            .now-playing:not(.expanded) #thumb-toggle-hint,
-            .now-playing:not(.expanded) #album-art-container.no-art #thumb-toggle-hint { 
-                font-size: 0 !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                gap: 0 !important;
-                width: 100% !important;
-                height: 100% !important;
-                display: flex !important;
-                justify-content: center !important;
-                align-items: center !important;
-                line-height: 0 !important;
-                border-radius: 50% !important;
-                background: transparent !important;
-                border: none !important;
-                box-sizing: border-box !important;
+            .now-playing #thumb-toggle-hint { 
+                font-size: 0;
+                padding: 0;
+                margin: 0;
+                gap: 0;
+                width: 100%;
+                height: 100%;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                line-height: 0;
+                border-radius: 50%;
+                background: transparent;
+                border: none;
+                box-sizing: border-box;
             }
-            .now-playing:not(.expanded) #thumb-toggle-hint svg,
-            .now-playing:not(.expanded) #album-art-container.no-art #thumb-toggle-hint svg {
-                margin: 0 !important;
-                width: 22px !important;
-                height: 22px !important;
-                display: block !important;
-                flex-shrink: 0 !important;
+            .now-playing #thumb-toggle-hint svg {
+                margin: 0;
+                width: 22px;
+                height: 22px;
+                display: block;
+                flex-shrink: 0;
             }
             
             .now-playing.expanded #thumb-toggle-hint {
@@ -1072,37 +1068,37 @@
                 margin: 0;
             }
             
-            .now-playing:not(.expanded) .title-channel-wrapper {
-                flex: 1 !important;
-                width: auto !important;
-                max-width: none !important;
-                text-align: left !important;
-                min-width: 0 !important;
+            .now-playing .title-channel-wrapper {
+                flex: 1;
+                width: auto;
+                max-width: none;
+                text-align: left;
+                min-width: 0;
             }
             
-            .now-playing:not(.expanded) #current-title {
+            .now-playing #current-title {
                 font-size: 14px;
                 margin: 0;
-                white-space: nowrap !important;
-                overflow: hidden !important;
-                text-overflow: ellipsis !important;
-                width: auto !important;
-                max-width: 100% !important;
-                text-align: left !important;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                width: auto;
+                max-width: 100%;
+                text-align: left;
             }
             
-            .now-playing:not(.expanded) #current-channel {
+            .now-playing #current-channel {
                 font-size: 12px;
                 margin: 0;
                 display: block;
                 color: var(--text-secondary);
-                text-align: left !important;
+                text-align: left;
             }
             
             /* Hide expanded controls in mini mode */
-            .now-playing:not(.expanded) .progress-container,
-            .now-playing:not(.expanded) #lyrics-toggle-hint {
-                display: none !important;
+            .now-playing .progress-container,
+            .now-playing #lyrics-toggle-hint {
+                display: none;
             }
             
             #btn-shuffle, #btn-repeat {
@@ -1114,15 +1110,15 @@
                 height: 20px;
             }
             
-            .now-playing:not(.expanded) .playback-controls {
-                width: auto !important;
-                max-width: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                display: flex !important;
-                gap: 2px !important;
-                justify-content: flex-end !important;
-                flex-shrink: 0 !important;
+            .now-playing .playback-controls {
+                width: auto;
+                max-width: none;
+                padding: 0;
+                margin: 0;
+                display: flex;
+                gap: 2px;
+                justify-content: flex-end;
+                flex-shrink: 0;
             }
             
             /* Make room for the floating pill */

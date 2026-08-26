@@ -29,24 +29,30 @@
     let isScrollingFast = false;
     let scrollSettleTimer = null;
 
-    // Static Track Template for Instant DOM Node Cloning (< 1ms vs ~30ms innerHTML parsing)
-    const trackTemplate = document.createElement("li");
-    trackTemplate.className = "track-item";
-    const tThumb = document.createElement("div");
-    tThumb.className = "track-thumb";
-    const tSpan = document.createElement("span");
-    tSpan.style.flex = "1";
-    tSpan.style.whiteSpace = "nowrap";
-    tSpan.style.overflow = "hidden";
-    tSpan.style.textOverflow = "ellipsis";
-    const tLink = document.createElement("a");
-    tLink.target = "_blank";
-    tLink.className = "yt-link-icon";
-    tLink.title = "Open on YouTube";
-    tLink.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>';
-    trackTemplate.appendChild(tThumb);
-    trackTemplate.appendChild(tSpan);
-    trackTemplate.appendChild(tLink);
+    // Lazy Track Template (Instantiated on first render, zero overhead during bundle evaluation)
+    let trackTemplate = null;
+    function getTrackTemplate() {
+        if (!trackTemplate) {
+            trackTemplate = document.createElement("li");
+            trackTemplate.className = "track-item";
+            const tThumb = document.createElement("div");
+            tThumb.className = "track-thumb";
+            const tSpan = document.createElement("span");
+            tSpan.style.flex = "1";
+            tSpan.style.whiteSpace = "nowrap";
+            tSpan.style.overflow = "hidden";
+            tSpan.style.textOverflow = "ellipsis";
+            const tLink = document.createElement("a");
+            tLink.target = "_blank";
+            tLink.className = "yt-link-icon";
+            tLink.title = "Open on YouTube";
+            tLink.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>';
+            trackTemplate.appendChild(tThumb);
+            trackTemplate.appendChild(tSpan);
+            trackTemplate.appendChild(tLink);
+        }
+        return trackTemplate;
+    }
 
     applyShuffleUI();
     applyRepeatUI();
@@ -80,7 +86,7 @@
         
         // Fast Template Cloned DOM Object Pooling
         while (trackList.children.length < requiredNodes) {
-            const li = trackTemplate.cloneNode(true);
+            const li = getTrackTemplate().cloneNode(true);
             li.lastElementChild.addEventListener("click", (e) => e.stopPropagation());
             trackList.appendChild(li);
         }
