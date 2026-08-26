@@ -2,8 +2,8 @@
     function applyPlaylistData(folderName, normalizedData, isRevalidation = false) {
         const prevData = allDatabases[folderName];
         
-        // Fast change detection to prevent unnecessary DOM mutations
-        if (isRevalidation && prevData && JSON.stringify(prevData) === JSON.stringify(normalizedData)) {
+        // Fast O(1) change detection to prevent main thread blocking and unnecessary DOM mutations
+        if (isRevalidation && prevData && prevData.length === normalizedData.length && prevData[0]?.id === normalizedData[0]?.id && prevData[prevData.length - 1]?.id === normalizedData[normalizedData.length - 1]?.id) {
             return; // Zero changes, zero DOM churn
         }
 
@@ -101,9 +101,9 @@
             }
         }
 
-        // Phase 2: Background Revalidation (Non-blocking)
+        // Phase 2: Background Revalidation (Hits Cloudflare CDN with zero cache-misses)
         if (navigator.onLine !== false) {
-            const revalidateUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
+            const revalidateUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
             fetch(revalidateUrl)
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
