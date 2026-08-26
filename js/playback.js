@@ -1,75 +1,147 @@
 
+    function applyPlaylistData(folderName, normalizedData, isRevalidation = false) {
+        const prevData = allDatabases[folderName];
+        
+        // Fast change detection to prevent unnecessary DOM mutations
+        if (isRevalidation && prevData && JSON.stringify(prevData) === JSON.stringify(normalizedData)) {
+            return; // Zero changes, zero DOM churn
+        }
+
+        allDatabases[folderName] = normalizedData;
+
+        if (typeof window.rebuildCrossShuffleDeck === 'function') {
+            window.rebuildCrossShuffleDeck();
+        }
+
+        const isCurrentlyViewing = (playlistSelect.value === folderName);
+        if (!isCurrentlyViewing) return;
+
+        // Active playing track ID preservation across background playlist updates
+        if (globalActivePlaylist === folderName && globalActiveOriginalIndex >= 0 && prevData && prevData[globalActiveOriginalIndex]) {
+            const currentTrackId = prevData[globalActiveOriginalIndex].id;
+            const newIndex = normalizedData.findIndex(t => t.id === currentTrackId);
+            if (newIndex !== -1) {
+                globalActiveOriginalIndex = newIndex;
+            }
+        }
+
+        currentPlaylistData = normalizedData;
+        const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+        if (filterText) {
+            filteredIndices = [];
+            currentPlaylistData.forEach((track, idx) => {
+                const titleMatch = track.title && track.title.toLowerCase().includes(filterText);
+                const channelMatch = track.channel && track.channel.toLowerCase().includes(filterText);
+                if (titleMatch || channelMatch) {
+                    filteredIndices.push({ playlist: folderName, index: idx });
+                }
+            });
+        } else {
+            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
+        }
+
+        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+        poolInitialized = false;
+        lastStartIndex = -1;
+
+        trackList.style.display = 'block';
+        playlistMessage.style.display = 'none';
+
+        renderVirtualTracks();
+
+        if (!isRevalidation) {
+            if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
+                scrollToTrack(globalActiveOriginalIndex, true);
+            } else {
+                playlistContainer.scrollTop = 0;
+            }
+        }
+    }
+
     async function loadPlaylist(folderName) {
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
         }
-        trackList.style.display = 'none';
-        playlistMessage.style.display = 'block';
-        playlistMessage.textContent = 'Loading...';
-        playlistMessage.style.color = 'var(--text-secondary)';
-        
-        try {
-            if (!allDatabases[folderName]) {
-                const res = await fetch(`${baseUrl}/${folderName}/_Playlist_Database.json`);
-                if (!res.ok) throw new Error();
-                const rawData = await res.json();
-                allDatabases[folderName] = normalizePlaylistData(rawData, folderName);
 
-                if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                    window.rebuildCrossShuffleDeck();
-                }
-            }
-            
-            currentPlaylistData = allDatabases[folderName];
-            
-            searchInput.value = '';
-            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
-            
-            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-            poolInitialized = false;
-            
-            // Only generate a new queue if there is no active playback in progress
-            if (!globalActivePlaylist || queueIndex === -1) {
-                generateQueue(true, folderName);
-            }
-            
-            trackList.style.display = 'block';
-            playlistMessage.style.display = 'none';
-            // Force first render
-            lastStartIndex = -1;
-            
-            requestAnimationFrame(() => {
-                if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
-                    // Must render virtual tracks first so the elements exist in DOM before scrolling
-                    renderVirtualTracks();
-                    scrollToTrack(globalActiveOriginalIndex, true);
-                } else {
-                    playlistContainer.scrollTop = 0;
-                    renderVirtualTracks();
-                }
+        let hasRendered = false;
 
-                // Once initial playlist is loaded and rendered, register SW in background
-                if (!window._swRegistered && 'serviceWorker' in navigator) {
-                    window._swRegistered = true;
-                    const registerSW = () => {
-                        navigator.serviceWorker.register('sw.js').catch((error) => {
-                            console.error('ServiceWorker registration failed: ', error);
-                        });
-                    };
-                    if ('requestIdleCallback' in window) {
-                        requestIdleCallback(registerSW, { timeout: 5000 });
-                    } else {
-                        setTimeout(registerSW, 500);
-                    }
+        // Phase 1: In-Memory / Cache API Instant Paint (0ms)
+        if (allDatabases[folderName]) {
+            applyPlaylistData(folderName, allDatabases[folderName], false);
+            hasRendered = true;
+        } else if ('caches' in window) {
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+                const cachedRes = await cache.match(dbUrl);
+                if (cachedRes) {
+                    const rawData = await cachedRes.json();
+                    const normalized = normalizePlaylistData(rawData, folderName);
+                    applyPlaylistData(folderName, normalized, false);
+                    hasRendered = true;
                 }
-            });
-        } catch (error) {
-            console.error(error);
+            } catch (e) {
+                console.warn("Cache read failed for playlist:", folderName, e);
+            }
+        }
+
+        if (!hasRendered) {
             trackList.style.display = 'none';
             playlistMessage.style.display = 'block';
-            playlistMessage.textContent = 'Failed to load playlist database.';
-            playlistMessage.style.color = '#ff5555';
+            playlistMessage.textContent = 'Loading...';
+            playlistMessage.style.color = 'var(--text-secondary)';
+        }
+
+        // Initialize queue if starting fresh
+        if (!globalActivePlaylist || queueIndex === -1) {
+            if (allDatabases[folderName]) {
+                generateQueue(true, folderName);
+            }
+        }
+
+        // Phase 2: Background Revalidation (Non-blocking)
+        if (navigator.onLine !== false) {
+            const revalidateUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
+            fetch(revalidateUrl)
+                .then(res => {
+                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                    return res.json();
+                })
+                .then(rawData => {
+                    const freshData = normalizePlaylistData(rawData, folderName);
+                    applyPlaylistData(folderName, freshData, hasRendered);
+                    
+                    // Generate queue if it wasn't generated during cache-miss
+                    if (!hasRendered && (!globalActivePlaylist || queueIndex === -1)) {
+                        generateQueue(true, folderName);
+                    }
+                })
+                .catch(err => {
+                    if (!hasRendered) {
+                        console.error("Failed to load playlist:", err);
+                        trackList.style.display = 'none';
+                        playlistMessage.style.display = 'block';
+                        playlistMessage.textContent = 'Failed to load playlist database.';
+                        playlistMessage.style.color = '#ff5555';
+                    }
+                });
+        }
+
+        // Ensure Service Worker is registered in background
+        if (!window._swRegistered && 'serviceWorker' in navigator) {
+            window._swRegistered = true;
+            const registerSW = () => {
+                navigator.serviceWorker.register('sw.js').catch((error) => {
+                    console.error('ServiceWorker registration failed: ', error);
+                });
+            };
+            if ('requestIdleCallback' in window) {
+                requestIdleCallback(registerSW, { timeout: 5000 });
+            } else {
+                setTimeout(registerSW, 500);
+            }
         }
     }
 
