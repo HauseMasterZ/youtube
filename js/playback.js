@@ -62,7 +62,7 @@
         }
     }
 
-    async function loadPlaylist(folderName) {
+    function loadPlaylist(folderName) {
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
@@ -70,57 +70,34 @@
 
         let hasRendered = false;
 
-        // Phase 1: In-Memory / Cache API Instant Paint (0ms)
+        // 1. In-Memory Instant Paint (0ms)
         if (allDatabases[folderName]) {
             applyPlaylistData(folderName, allDatabases[folderName], false);
             hasRendered = true;
-        } else if ('caches' in window) {
-            try {
-                const cache = await caches.open(CACHE_NAME);
-                const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
-                const cachedRes = await cache.match(dbUrl);
-                if (cachedRes) {
-                    const rawData = await cachedRes.json();
-                    const normalized = normalizePlaylistData(rawData, folderName);
-                    applyPlaylistData(folderName, normalized, false);
-                    hasRendered = true;
+        }
+
+        // 2. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
+        if (!hasRendered && 'caches' in window) {
+            caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(cached => {
+                if (cached && !hasRendered) {
+                    cached.json().then(rawData => {
+                        if (!hasRendered) {
+                            const normalized = normalizePlaylistData(rawData, folderName);
+                            applyPlaylistData(folderName, normalized, false);
+                            hasRendered = true;
+                            if (!globalActivePlaylist || queueIndex === -1) {
+                                generateQueue(true, folderName);
+                            }
+                        }
+                    }).catch(() => {});
                 }
-            } catch (e) {
-                console.warn("Cache read failed for playlist:", folderName, e);
-            }
+            }).catch(() => {});
         }
 
-        if (!hasRendered) {
-            // Instead of hiding trackList and showing 'Loading...', render skeleton rows for instant LCP:
-            trackList.style.display = 'block';
-            playlistMessage.style.display = 'none';
-            
-            if (trackList.children.length === 0) {
-                let skeletonHtml = '';
-                for (let i = 0; i < 8; i++) {
-                    skeletonHtml += `<li class="track-skeleton" style="transform: translate3d(0, ${i * ITEM_HEIGHT}px, 0); height: ${ITEM_HEIGHT}px;">
-                        <div class="track-info" style="display: flex; flex-direction: column; width: 100%;">
-                            <span class="track-title skeleton-text" style="display: block; width: 85%; height: 16px; border-radius: 4px; background: rgba(255,255,255,0.08);"></span>
-                            <span class="track-channel skeleton-text" style="display: block; width: 45%; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.05); margin-top: 4px;"></span>
-                        </div>
-                    </li>`;
-                }
-                trackList.innerHTML = skeletonHtml;
-                trackList.style.height = `${8 * ITEM_HEIGHT}px`;
-            }
-        }
-
-        // Initialize queue if starting fresh
-        if (!globalActivePlaylist || queueIndex === -1) {
-            if (allDatabases[folderName]) {
-                generateQueue(true, folderName);
-            }
-        }
-
-        // Phase 2: Background Revalidation (Hits Cloudflare CDN with zero cache-misses)
+        // 3. Direct Unblocked Network Fetch to Cloudflare Worker Proxy
         if (navigator.onLine !== false) {
-            const revalidateUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
-            fetch(revalidateUrl)
+            const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+            fetch(dbUrl)
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
@@ -128,10 +105,17 @@
                 .then(rawData => {
                     const freshData = normalizePlaylistData(rawData, folderName);
                     applyPlaylistData(folderName, freshData, hasRendered);
-                    
-                    // Generate queue if it wasn't generated during cache-miss
-                    if (!hasRendered && (!globalActivePlaylist || queueIndex === -1)) {
+                    hasRendered = true;
+
+                    if (!globalActivePlaylist || queueIndex === -1) {
                         generateQueue(true, folderName);
+                    }
+
+                    // Background cache update for offline PWA capability
+                    if ('caches' in window) {
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(dbUrl, new Response(JSON.stringify(rawData)));
+                        }).catch(() => {});
                     }
                 })
                 .catch(err => {
@@ -145,7 +129,7 @@
                 });
         }
 
-        // Ensure Service Worker is registered in background
+        // 4. Deferred Service Worker Registration (dedicates 100% network & CPU to LCP paint)
         if (!window._swRegistered && 'serviceWorker' in navigator) {
             window._swRegistered = true;
             const registerSW = () => {
@@ -156,7 +140,7 @@
             if ('requestIdleCallback' in window) {
                 requestIdleCallback(registerSW, { timeout: 5000 });
             } else {
-                setTimeout(registerSW, 500);
+                setTimeout(registerSW, 1000);
             }
         }
     }
