@@ -430,10 +430,13 @@ document.addEventListener("DOMContentLoaded", () => {
         
         nowPlaying.addEventListener("touchend", (e) => {
             if (window.innerWidth > 750) return;
-            let touchEndY = e.changedTouches[0].screenY;
-            if (nowPlaying.classList.contains("expanded") && touchEndY > touchStartY + 50) {
+            const touchEndY = e.changedTouches[0].screenY;
+            const deltaY = touchEndY - touchStartY;
+            const minimizeThreshold = Math.max(80, window.innerHeight * 0.12);
+
+            if (nowPlaying.classList.contains("expanded") && deltaY >= minimizeThreshold) {
                 history.back();
-            } else if (!nowPlaying.classList.contains("expanded") && touchEndY < touchStartY - 20) {
+            } else if (!nowPlaying.classList.contains("expanded") && deltaY <= -20) {
                 nowPlaying.classList.add("expanded");
                 pushHistoryState('player');
             }
@@ -866,43 +869,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-    // --- Startup Strategy: SWR Instant Paint + Background Revalidation ---
-    requestAnimationFrame(async () => {
-        const initialPl = playlistSelect.value;
-        
-        // 1. Instantly trigger loadPlaylist for the visible active playlist
-        loadPlaylist(initialPl);
+    // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
+    const initialPl = playlistSelect.value;
+    loadPlaylist(initialPl);
 
-        // 2. On Desktop: In background, warm up / revalidate other 2 playlists for instant search & cross-playlist switching
-        if (!isMobileDevice) {
-            const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== initialPl);
-            for (const pl of otherPlaylists) {
-                // Check cache first
-                if ('caches' in window) {
-                    try {
-                        const cache = await caches.open(CACHE_NAME);
-                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                        const cachedRes = await cache.match(dbUrl);
-                        if (cachedRes && !allDatabases[pl]) {
-                            const rawData = await cachedRes.json();
-                            allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                        }
-                    } catch (e) {}
-                }
-
-                // Background revalidation fetch
-                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`)
-                    .then(r => r.ok ? r.json() : [])
-                    .then(rawData => {
-                        allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                            window.rebuildCrossShuffleDeck();
-                        }
-                    })
-                    .catch(() => {});
-            }
+    // Desktop only: Background warm other playlists for instant tab switching & global search
+    if (!isMobileDevice) {
+        if ('requestIdleCallback' in window) {
+            requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
+        } else {
+            setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
         }
-    });
+    }
+
+    function warmRemainingPlaylists(activePl) {
+        const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
+        for (const pl of otherPlaylists) {
+            if (allDatabases[pl]) continue;
+            fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+                .then(r => r.ok ? r.json() : [])
+                .then(rawData => {
+                    allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                        window.rebuildCrossShuffleDeck();
+                    }
+                })
+                .catch(() => {});
+        }
+    }
 
     function syncArtWidth() {
         if (!albumArt || !nowPlaying) return;
@@ -910,17 +904,16 @@ document.addEventListener("DOMContentLoaded", () => {
             nowPlaying.style.removeProperty('--art-width');
             return;
         }
-        if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
+        if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art') && albumArt.src) {
             const rect = albumArt.getBoundingClientRect();
             let w = rect.width;
             if (albumArt.naturalWidth && albumArt.naturalHeight) {
                 const ratio = albumArt.naturalWidth / albumArt.naturalHeight;
                 w = Math.min(rect.width, rect.height * ratio);
             }
-            if (w > 0) {
-                nowPlaying.style.setProperty('--art-width', `${Math.round(w)}px`);
-                return;
-            }
+            w = Math.max(Math.round(w), 280);
+            nowPlaying.style.setProperty('--art-width', `${w}px`);
+            return;
         }
         nowPlaying.style.removeProperty('--art-width');
     }

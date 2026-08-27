@@ -2,8 +2,8 @@
     function applyPlaylistData(folderName, normalizedData, isRevalidation = false) {
         const prevData = allDatabases[folderName];
         
-        // Fast change detection to prevent unnecessary DOM mutations
-        if (isRevalidation && prevData && JSON.stringify(prevData) === JSON.stringify(normalizedData)) {
+        // Fast O(1) change detection to prevent main thread blocking and unnecessary DOM mutations
+        if (isRevalidation && prevData && prevData.length === normalizedData.length && prevData[0]?.id === normalizedData[0]?.id && prevData[prevData.length - 1]?.id === normalizedData[normalizedData.length - 1]?.id) {
             return; // Zero changes, zero DOM churn
         }
 
@@ -38,11 +38,19 @@
                 }
             });
         } else {
-            filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: folderName, index: i }));
+            const len = currentPlaylistData.length;
+            const indices = new Array(len);
+            for (let i = 0; i < len; i++) {
+                indices[i] = { playlist: folderName, index: i };
+            }
+            filteredIndices = indices;
         }
 
         trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-        poolInitialized = false;
+        if (!poolInitialized || trackList.querySelector('.track-skeleton')) {
+            trackList.innerHTML = '';
+            poolInitialized = false;
+        }
         lastStartIndex = -1;
 
         trackList.style.display = 'block';
@@ -59,7 +67,7 @@
         }
     }
 
-    async function loadPlaylist(folderName) {
+    function loadPlaylist(folderName) {
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
@@ -67,44 +75,41 @@
 
         let hasRendered = false;
 
-        // Phase 1: In-Memory / Cache API Instant Paint (0ms)
+        // 1. In-Memory Instant Paint (0ms)
         if (allDatabases[folderName]) {
             applyPlaylistData(folderName, allDatabases[folderName], false);
             hasRendered = true;
-        } else if ('caches' in window) {
-            try {
-                const cache = await caches.open(CACHE_NAME);
-                const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
-                const cachedRes = await cache.match(dbUrl);
-                if (cachedRes) {
-                    const rawData = await cachedRes.json();
-                    const normalized = normalizePlaylistData(rawData, folderName);
-                    applyPlaylistData(folderName, normalized, false);
-                    hasRendered = true;
+            return;
+        }
+
+        // 2. If not in memory, immediately show loading state
+        trackList.style.display = 'none';
+        playlistMessage.style.display = 'block';
+        playlistMessage.textContent = 'Loading...';
+        playlistMessage.style.color = 'var(--text-secondary)';
+
+        // 3. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
+        if ('caches' in window) {
+            caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(cached => {
+                if (cached && !hasRendered) {
+                    cached.json().then(rawData => {
+                        if (!hasRendered) {
+                            const normalized = normalizePlaylistData(rawData, folderName);
+                            applyPlaylistData(folderName, normalized, false);
+                            hasRendered = true;
+                            if (!globalActivePlaylist || queueIndex === -1) {
+                                generateQueue(true, folderName);
+                            }
+                        }
+                    }).catch(() => {});
                 }
-            } catch (e) {
-                console.warn("Cache read failed for playlist:", folderName, e);
-            }
+            }).catch(() => {});
         }
 
-        if (!hasRendered) {
-            trackList.style.display = 'none';
-            playlistMessage.style.display = 'block';
-            playlistMessage.textContent = 'Loading...';
-            playlistMessage.style.color = 'var(--text-secondary)';
-        }
-
-        // Initialize queue if starting fresh
-        if (!globalActivePlaylist || queueIndex === -1) {
-            if (allDatabases[folderName]) {
-                generateQueue(true, folderName);
-            }
-        }
-
-        // Phase 2: Background Revalidation (Non-blocking)
+        // 4. Direct Unblocked Network Fetch to Cloudflare Worker Proxy
         if (navigator.onLine !== false) {
-            const revalidateUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
-            fetch(revalidateUrl)
+            const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+            fetch(dbUrl)
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
@@ -112,10 +117,17 @@
                 .then(rawData => {
                     const freshData = normalizePlaylistData(rawData, folderName);
                     applyPlaylistData(folderName, freshData, hasRendered);
-                    
-                    // Generate queue if it wasn't generated during cache-miss
-                    if (!hasRendered && (!globalActivePlaylist || queueIndex === -1)) {
+                    hasRendered = true;
+
+                    if (!globalActivePlaylist || queueIndex === -1) {
                         generateQueue(true, folderName);
+                    }
+
+                    // Background cache update for offline PWA capability
+                    if ('caches' in window) {
+                        caches.open(CACHE_NAME).then(cache => {
+                            cache.put(dbUrl, new Response(JSON.stringify(rawData)));
+                        }).catch(() => {});
                     }
                 })
                 .catch(err => {
@@ -129,7 +141,7 @@
                 });
         }
 
-        // Ensure Service Worker is registered in background
+        // 4. Deferred Service Worker Registration (dedicates 100% network & CPU to LCP paint)
         if (!window._swRegistered && 'serviceWorker' in navigator) {
             window._swRegistered = true;
             const registerSW = () => {
@@ -140,7 +152,7 @@
             if ('requestIdleCallback' in window) {
                 requestIdleCallback(registerSW, { timeout: 5000 });
             } else {
-                setTimeout(registerSW, 500);
+                setTimeout(registerSW, 1000);
             }
         }
     }
@@ -519,18 +531,19 @@
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
-            
-            const squareCached = (thumbUrl && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-            const artworkSrc = (!thumbsDisabled && squareCached) ? squareCached : fallbackIcon;
-            const artworkList = [{ src: artworkSrc, sizes: '512x512', type: 'image/jpeg' }];
+
+            // Instant Phase 1: Use cached 1:1 square, or instant raw thumb (0ms delay)
+            const squareCached = (thumbUrl && typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+            const initialArtwork = (!thumbsDisabled && (squareCached || thumbUrl)) ? (squareCached || thumbUrl) : fallbackIcon;
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: artworkList
+                artwork: [{ src: initialArtwork, sizes: '512x512', type: 'image/jpeg' }]
             });
 
-            if (!thumbsDisabled && thumbUrl && !squareCached) {
+            // Async Phase 2: Compute 1:1 square crop in background and update metadata
+            if (!thumbsDisabled && thumbUrl && !squareCached && typeof getSquareArtwork === 'function') {
                 getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
                     if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
                         navigator.mediaSession.metadata = new MediaMetadata({
