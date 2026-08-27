@@ -234,60 +234,12 @@
 
     function normalizePlaylistData(data, folderName) {
         if (!Array.isArray(data)) return [];
-        
         const result = [];
-        let i = 0;
-        
-        // Immediate pass: Normalize the first 30 valid tracks for instant 0ms mount
-        for (; i < data.length && result.length < 30; i++) {
+        for (let i = 0; i < data.length; i++) {
             const item = data[i];
             if (isValidTrackItem(item)) {
                 result.push(normalizeTrackItem(item, folderName));
             }
         }
-
-        // Background idle slice: Normalize the rest without blocking the main thread
-        if (i < data.length) {
-            const scheduleIdle = (cb) => {
-                if ('requestIdleCallback' in window) {
-                    window.requestIdleCallback(cb, { timeout: 2000 });
-                } else {
-                    setTimeout(() => cb({ timeRemaining: () => 15, didTimeout: true }), 16);
-                }
-            };
-
-            const processRemaining = (deadline) => {
-                while (i < data.length && (deadline.timeRemaining() > 1 || deadline.didTimeout)) {
-                    const chunkLimit = Math.min(i + 50, data.length);
-                    for (; i < chunkLimit; i++) {
-                        const item = data[i];
-                        if (isValidTrackItem(item)) {
-                            result.push(normalizeTrackItem(item, folderName));
-                        }
-                    }
-                }
-
-                if (i < data.length) {
-                    scheduleIdle(processRemaining);
-                } else {
-                    // Full playlist normalized: sync UI list bounds & cross-shuffle deck
-                    if (typeof playlistSelect !== 'undefined' && playlistSelect.value === folderName && typeof searchInput !== 'undefined' && searchInput.value.trim() === '') {
-                        filteredIndices = result.map((_, idx) => ({ playlist: folderName, index: idx }));
-                        if (typeof trackList !== 'undefined') {
-                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                        }
-                        if (typeof generateQueue === 'function' && (!globalActivePlaylist || queueIndex === -1)) {
-                            generateQueue(false, folderName);
-                        }
-                    }
-                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                        window.rebuildCrossShuffleDeck();
-                    }
-                }
-            };
-
-            scheduleIdle(processRemaining);
-        }
-
         return result;
     }

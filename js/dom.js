@@ -54,11 +54,11 @@
             this.events.forEach(evt => {
                 this.active.addEventListener(evt, this.forwardEvent);
             });
-
-            this._initMSE();
         }
 
         _initMSE() {
+            if (this._mseInitialized) return;
+            this._mseInitialized = true;
             const mime = 'audio/webm; codecs="opus"';
             if ('MediaSource' in window && MediaSource.isTypeSupported(mime)) {
                 try {
@@ -97,10 +97,10 @@
 
         async _clearSourceBuffer() {
             if (!this._sourceBuffer) return;
-            await this._waitForUpdate();
             try {
                 this._sourceBuffer.abort();
             } catch (e) {}
+
             if (this._sourceBuffer.buffered.length > 0) {
                 try {
                     const end = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
@@ -110,9 +110,6 @@
                     console.warn("MSE clear error:", e);
                 }
             }
-            try {
-                this._sourceBuffer.abort();
-            } catch (e) {}
         }
 
         async _appendToSourceBuffer(arrayBuffer) {
@@ -198,6 +195,7 @@
         }
 
         play() {
+            this._initMSE();
             window.wasPausedByUser = false;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
@@ -271,6 +269,7 @@
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
+            this._initMSE();
             this.switching = true;
             this._endedFired = false;
             this.lastKnownTime = 0;
