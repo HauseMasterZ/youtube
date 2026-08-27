@@ -985,6 +985,11 @@
         }
 
         @media (max-width: 750px) and (orientation: portrait) {
+            /* Prevent underlying track list from reflowing during 120Hz swipe animations */
+            .playlist-container {
+                contain: layout paint;
+            }
+
             /* Expandable Pill Player (Default Mini Mode) */
             .now-playing {
                 position: fixed;
@@ -1005,10 +1010,7 @@
                 gap: 10px;
                 border: none;
                 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-                transition: height 0.28s cubic-bezier(0.2, 0, 0, 1),
-                            bottom 0.28s cubic-bezier(0.2, 0, 0, 1),
-                            border-radius 0.28s cubic-bezier(0.2, 0, 0, 1),
-                            background-color 0.28s ease;
+                transition: all 0.32s cubic-bezier(0.32, 0.72, 0, 1);
                 overflow: hidden;
                 cursor: pointer;
             }
@@ -1029,6 +1031,7 @@
                 justify-content: center;
                 background-color: #222226;
                 box-sizing: border-box;
+                transition: all 0.32s cubic-bezier(0.32, 0.72, 0, 1);
             }
             
             .now-playing #album-art-image {
@@ -1037,6 +1040,7 @@
                 height: 100%;
                 aspect-ratio: 1 / 1;
                 object-fit: cover;
+                transition: border-radius 0.32s cubic-bezier(0.32, 0.72, 0, 1);
             }
             
             .now-playing #album-art-container:not(.no-art) #thumb-toggle-hint {
@@ -1181,7 +1185,9 @@
                 width: 90%;
                 max-width: 450px;
                 height: auto;
-                max-height: 45vh;
+                min-width: 0;
+                min-height: 0;
+                max-height: none;
                 border-radius: 12px;
                 margin-bottom: 30px;
                 background: transparent;
