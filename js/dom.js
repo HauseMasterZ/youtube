@@ -97,10 +97,10 @@
 
         async _clearSourceBuffer() {
             if (!this._sourceBuffer) return;
-            await this._waitForUpdate();
             try {
                 this._sourceBuffer.abort();
             } catch (e) {}
+
             if (this._sourceBuffer.buffered.length > 0) {
                 try {
                     const end = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
@@ -110,9 +110,6 @@
                     console.warn("MSE clear error:", e);
                 }
             }
-            try {
-                this._sourceBuffer.abort();
-            } catch (e) {}
         }
 
         async _appendToSourceBuffer(arrayBuffer) {

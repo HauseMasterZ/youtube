@@ -525,15 +525,28 @@
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
-            const artworkList = (!thumbsDisabled && thumbUrl)
-                ? [{ src: thumbUrl, sizes: '512x512', type: 'image/webp' }]
-                : [{ src: fallbackIcon, sizes: '512x512', type: 'image/svg+xml' }];
+            // Instant Phase 1: Use cached 1:1 square, or instant raw thumb (0ms delay)
+            const squareCached = (thumbUrl && typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+            const initialArtwork = (!thumbsDisabled && (squareCached || thumbUrl)) ? (squareCached || thumbUrl) : fallbackIcon;
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
                 artist: track.channel,
-                artwork: artworkList
+                artwork: [{ src: initialArtwork, sizes: '512x512', type: 'image/jpeg' }]
             });
+
+            // Async Phase 2: Compute 1:1 square crop in background and update metadata
+            if (!thumbsDisabled && thumbUrl && !squareCached && typeof getSquareArtwork === 'function') {
+                getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
+                    if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: track.title,
+                            artist: track.channel,
+                            artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
+                        });
+                    }
+                });
+            }
 
             // Clear position state during buffering (W3C standard method)
             if ('setPositionState' in navigator.mediaSession) {
