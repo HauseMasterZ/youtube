@@ -430,10 +430,13 @@ document.addEventListener("DOMContentLoaded", () => {
         
         nowPlaying.addEventListener("touchend", (e) => {
             if (window.innerWidth > 750) return;
-            let touchEndY = e.changedTouches[0].screenY;
-            if (nowPlaying.classList.contains("expanded") && touchEndY > touchStartY + 50) {
+            const touchEndY = e.changedTouches[0].screenY;
+            const deltaY = touchEndY - touchStartY;
+            const minimizeThreshold = Math.max(80, window.innerHeight * 0.12);
+
+            if (nowPlaying.classList.contains("expanded") && deltaY >= minimizeThreshold) {
                 history.back();
-            } else if (!nowPlaying.classList.contains("expanded") && touchEndY < touchStartY - 20) {
+            } else if (!nowPlaying.classList.contains("expanded") && deltaY <= -20) {
                 nowPlaying.classList.add("expanded");
                 pushHistoryState('player');
             }

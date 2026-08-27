@@ -79,10 +79,17 @@
         if (allDatabases[folderName]) {
             applyPlaylistData(folderName, allDatabases[folderName], false);
             hasRendered = true;
+            return;
         }
 
-        // 2. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
-        if (!hasRendered && 'caches' in window) {
+        // 2. If not in memory, immediately show loading state
+        trackList.style.display = 'none';
+        playlistMessage.style.display = 'block';
+        playlistMessage.textContent = 'Loading...';
+        playlistMessage.style.color = 'var(--text-secondary)';
+
+        // 3. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
+        if ('caches' in window) {
             caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(cached => {
                 if (cached && !hasRendered) {
                     cached.json().then(rawData => {
@@ -99,7 +106,7 @@
             }).catch(() => {});
         }
 
-        // 3. Direct Unblocked Network Fetch to Cloudflare Worker Proxy
+        // 4. Direct Unblocked Network Fetch to Cloudflare Worker Proxy
         if (navigator.onLine !== false) {
             const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
             fetch(dbUrl)
