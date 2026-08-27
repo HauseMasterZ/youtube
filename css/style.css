@@ -1005,8 +1005,11 @@
                 gap: 10px;
                 border: none;
                 box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-                will-change: transform, opacity;
-                transition: transform 0.28s cubic-bezier(0.2, 0, 0, 1), opacity 0.2s ease;
+                will-change: height, border-radius, bottom, transform;
+                transition: height 0.28s cubic-bezier(0.2, 0, 0, 1),
+                            bottom 0.28s cubic-bezier(0.2, 0, 0, 1),
+                            border-radius 0.28s cubic-bezier(0.2, 0, 0, 1),
+                            background-color 0.28s ease;
                 overflow: hidden;
                 cursor: pointer;
             }
