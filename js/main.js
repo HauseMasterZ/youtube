@@ -901,7 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
             nowPlaying.style.removeProperty('--art-width');
             return;
         }
-        if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art')) {
+        if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art') && albumArt.src) {
             const rect = albumArt.getBoundingClientRect();
             let w = rect.width;
             if (albumArt.naturalWidth && albumArt.naturalHeight) {
