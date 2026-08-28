@@ -623,13 +623,13 @@
             height: 0;
         }
 
-        /* 10px Edge Hit-Test Zone */
+        /* 15px Edge Hit-Test Zone */
         .fast-scroller {
             position: absolute;
             right: 0;
             top: 0;
             bottom: 0;
-            width: 10px;
+            width: 15px;
             z-index: 90;
             touch-action: none;
             user-select: none;
@@ -688,14 +688,14 @@
             font-size: 11px;
             font-weight: 700;
             letter-spacing: 0.5px;
-            color: var(--primary-color, #8c73ff);
+            color: var(--text-primary, #e6e6e6);
             text-transform: uppercase;
         }
 
         .fast-scroll-title {
             font-size: 13px;
             font-weight: 600;
-            color: #ffffff;
+            color: var(--primary-color, #8c73ff);
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
