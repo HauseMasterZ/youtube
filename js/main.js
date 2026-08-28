@@ -978,6 +978,91 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // --- Universal 10px Edge-Triggered Fast Scroller Engine ---
+    const fastScroller = document.getElementById("fast-scroller");
+    const fastThumb = document.getElementById("fast-scroll-thumb");
+    const fastBubble = document.getElementById("fast-scroll-bubble");
+    const fastBadge = document.getElementById("fast-scroll-badge");
+    const fastTitle = document.getElementById("fast-scroll-title");
+
+    let isFastScrolling = false;
+    let lastHapticTrack = -1;
+
+    function updateFastScrollPosition(clientY) {
+        if (!playlistContainer || !filteredIndices || filteredIndices.length === 0) return;
+        const rect = playlistContainer.getBoundingClientRect();
+        const relativeY = Math.max(0, Math.min(clientY - rect.top, rect.height));
+        const ratio = rect.height > 0 ? relativeY / rect.height : 0;
+
+        // 1. Instant Virtual Scroll Dispatch
+        const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
+        playlistContainer.scrollTop = ratio * maxScroll;
+
+        // 2. Track & Title Resolution
+        const trackIndex = Math.min(filteredIndices.length - 1, Math.max(0, Math.floor(ratio * filteredIndices.length)));
+        const targetItem = filteredIndices[trackIndex];
+        const track = currentPlaylistData ? currentPlaylistData[targetItem.index] : null;
+
+        if (track) {
+            const isFilterActive = searchInput && searchInput.value.trim().length > 0;
+            fastBadge.textContent = isFilterActive 
+                ? `MATCH #${trackIndex + 1} OF ${filteredIndices.length}`
+                : `#${trackIndex + 1} / ${filteredIndices.length}`;
+            fastTitle.textContent = track.title || "Unknown Title";
+
+            // Micro-haptic pulse on track step (mobile only)
+            if (trackIndex !== lastHapticTrack) {
+                lastHapticTrack = trackIndex;
+                if (typeof navigator.vibrate === 'function') navigator.vibrate(3);
+            }
+        }
+
+        // 3. Thumb & Bubble Alignment (with safety padding so bubble never clips viewport edges)
+        const parentRect = playlistContainer.offsetParent ? playlistContainer.offsetParent.getBoundingClientRect() : rect;
+        const topOffset = rect.top - parentRect.top;
+        const thumbHeight = 36;
+        const thumbTop = topOffset + Math.max(0, Math.min(relativeY - (thumbHeight / 2), rect.height - thumbHeight));
+        fastThumb.style.top = `${thumbTop}px`;
+
+        const bubbleClampY = topOffset + Math.max(30, Math.min(relativeY, rect.height - 30));
+        fastBubble.style.top = `${bubbleClampY}px`;
+    }
+
+    if (fastScroller) {
+        fastScroller.addEventListener("pointerdown", (e) => {
+            const rect = playlistContainer.getBoundingClientRect();
+            // Strict 10px edge hit-test gate
+            if (e.clientX >= rect.right - 10 && e.clientX <= rect.right + 2) {
+                isFastScrolling = true;
+                fastScroller.classList.add("active");
+                fastBubble.classList.add("active");
+                fastScroller.setPointerCapture(e.pointerId);
+                updateFastScrollPosition(e.clientY);
+                e.preventDefault();
+            }
+        });
+
+        fastScroller.addEventListener("pointermove", (e) => {
+            if (isFastScrolling) {
+                updateFastScrollPosition(e.clientY);
+                e.preventDefault();
+            }
+        });
+
+        const stopFastScroll = (e) => {
+            if (isFastScrolling) {
+                isFastScrolling = false;
+                fastScroller.classList.remove("active");
+                fastBubble.classList.remove("active");
+                try { fastScroller.releasePointerCapture(e.pointerId); } catch (err) {}
+                lastHapticTrack = -1;
+            }
+        };
+
+        fastScroller.addEventListener("pointerup", stopFastScroll);
+        fastScroller.addEventListener("pointercancel", stopFastScroll);
+    }
+
     // PWA Install Button Logic
     let deferredPrompt;
 
