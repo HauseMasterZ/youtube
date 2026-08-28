@@ -19,7 +19,6 @@
             this._streamAbortController = null;
             this._streamId = 0;
             this._streamDone = false;
-            this._seekAnchorTimer = null;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -184,7 +183,6 @@
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        this._startSeekAnchorTimer();
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -193,13 +191,11 @@
                     if (v > buffEnd + 0.5) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        this._startSeekAnchorTimer();
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
                 }
 
-                this._stopSeekAnchorTimer();
                 this._pendingSeek = null;
                 this.active.currentTime = v;
             } catch (e) {
@@ -290,27 +286,7 @@
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
-        _startSeekAnchorTimer() {
-            this._stopSeekAnchorTimer();
-            this._seekAnchorTimer = setInterval(() => {
-                if (this._pendingSeek !== null && typeof updateMediaSessionPosition === 'function') {
-                    const dur = this.duration || this._expectedDuration || (typeof seekBar !== 'undefined' ? parseFloat(seekBar.max) : 0);
-                    updateMediaSessionPosition(this._pendingSeek, dur);
-                } else {
-                    this._stopSeekAnchorTimer();
-                }
-            }, 250);
-        }
-
-        _stopSeekAnchorTimer() {
-            if (this._seekAnchorTimer) {
-                clearInterval(this._seekAnchorTimer);
-                this._seekAnchorTimer = null;
-            }
-        }
-
         instantPause() {
-            this._stopSeekAnchorTimer();
             window.wasPausedByUser = true;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'paused';
@@ -324,7 +300,6 @@
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
-            this._stopSeekAnchorTimer();
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
@@ -535,7 +510,6 @@
                             : 0;
                         if (buffEnd >= this._pendingSeek - 0.5) {
                             const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
-                            this._stopSeekAnchorTimer();
                             this._pendingSeek = null;
                             this._seekingTo = seekTarget;
                             this.active.currentTime = seekTarget;
@@ -589,7 +563,6 @@
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                                             const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
-                                            this._stopSeekAnchorTimer();
                                             this._pendingSeek = null;
                                             this._seekingTo = seekTarget;
                                             this.active.currentTime = seekTarget;
@@ -623,7 +596,6 @@
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                                             if (buffEnd >= this._pendingSeek - 0.5) {
                                                 const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
-                                                this._stopSeekAnchorTimer();
                                                 this._pendingSeek = null;
                                                 this._seekingTo = seekTarget;
                                                 this.active.currentTime = seekTarget;
