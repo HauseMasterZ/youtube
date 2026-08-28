@@ -398,11 +398,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        if (audioPlayer.switching) return;
-        setPlayUI(false);
-        updateMediaSessionPosition();
-        if (hasMediaSession && window.wasPausedByUser) {
-            navigator.mediaSession.playbackState = 'paused';
+        if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+        if (window.wasPausedByUser) {
+            setPlayUI(false);
+            updateMediaSessionPosition();
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
         }
     });
 
@@ -978,7 +980,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // --- Universal 10px Edge-Triggered Fast Scroller Engine ---
+    // --- Universal 15px Edge-Triggered Fast Scroller Engine ---
     const fastScroller = document.getElementById("fast-scroller");
     const fastThumb = document.getElementById("fast-scroll-thumb");
     const fastBubble = document.getElementById("fast-scroll-bubble");
@@ -998,21 +1000,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
         playlistContainer.scrollTop = ratio * maxScroll;
 
-        // 2. Track & Title Resolution
-        const trackIndex = Math.min(filteredIndices.length - 1, Math.max(0, Math.floor(ratio * filteredIndices.length)));
-        const targetItem = filteredIndices[trackIndex];
+        // 2. Track & Title Resolution (Topmost track currently in view)
+        const topTrackIndex = Math.min(filteredIndices.length - 1, Math.max(0, Math.floor(playlistContainer.scrollTop / ITEM_HEIGHT)));
+        const targetItem = filteredIndices[topTrackIndex];
         const track = currentPlaylistData ? currentPlaylistData[targetItem.index] : null;
 
         if (track) {
             const isFilterActive = searchInput && searchInput.value.trim().length > 0;
             fastBadge.textContent = isFilterActive 
-                ? `MATCH #${trackIndex + 1} OF ${filteredIndices.length}`
-                : `#${trackIndex + 1} / ${filteredIndices.length}`;
+                ? `MATCH #${topTrackIndex + 1} OF ${filteredIndices.length}`
+                : `#${topTrackIndex + 1} / ${filteredIndices.length}`;
             fastTitle.textContent = track.title || "Unknown Title";
 
             // Micro-haptic pulse on track step (mobile only)
-            if (trackIndex !== lastHapticTrack) {
-                lastHapticTrack = trackIndex;
+            if (topTrackIndex !== lastHapticTrack) {
+                lastHapticTrack = topTrackIndex;
                 if (typeof navigator.vibrate === 'function') navigator.vibrate(3);
             }
         }
@@ -1031,8 +1033,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fastScroller) {
         fastScroller.addEventListener("pointerdown", (e) => {
             const rect = playlistContainer.getBoundingClientRect();
-            // Strict 10px edge hit-test gate
-            if (e.clientX >= rect.right - 10 && e.clientX <= rect.right + 2) {
+            // Strict 15px edge hit-test gate
+            if (e.clientX >= rect.right - 15 && e.clientX <= rect.right + 2) {
                 isFastScrolling = true;
                 fastScroller.classList.add("active");
                 fastBubble.classList.add("active");
