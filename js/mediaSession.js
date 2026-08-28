@@ -1,16 +1,16 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
-                const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
-                let rate = forcedRate !== null ? forcedRate : (audioPlayer.playbackRate || 1.0);
-                
-                // If still buffering and audio has not started, freeze seekbar at current pos (rate: 0)
-                if (audioPlayer && (audioPlayer.switching || (audioPlayer.paused && !window.wasPausedByUser))) {
-                    rate = 0;
+                // While switching tracks and before any user seek, clear state to suppress speculative timer
+                if (audioPlayer && audioPlayer.switching && (audioPlayer._pendingSeek === null && forcedPosition === null)) {
+                    navigator.mediaSession.setPositionState(null);
+                    return;
                 }
 
-                const validRate = (typeof rate === 'number' && rate >= 0) ? rate : 1.0;
+                const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
+                const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
+                const rate = forcedRate !== null ? forcedRate : (audioPlayer.playbackRate || 1.0);
+                const validRate = (typeof rate === 'number' && rate > 0) ? rate : 1.0;
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
@@ -23,7 +23,7 @@
                     navigator.mediaSession.setPositionState(null);
                 }
             } catch (e) {
-                // Ignore transient position state errors during track swap
+                // Ignore transient errors
             }
         }
     }
