@@ -537,11 +537,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     let isRecoveringAudio = false;
-    let recoveryAttempts = 0;
-
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        window.wasPausedByUser = false;
+        window.wasInterrupted = false;
+        setPlayUI(true);
+        
+        // 🎯 Sync MediaSession with active playback position now that audio hardware is decoding
+        const ct = audioPlayer.currentTime;
+        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        updateMediaSessionPosition(ct, dur, audioPlayer.playbackRate || 1.0);
+        
+        if (hasMediaSession) {
+            navigator.mediaSession.playbackState = 'playing';
+        }
     });
 
     audioPlayer.addEventListener("error", () => {
@@ -982,7 +992,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // --- Universal 15px Edge-Triggered Fast Scroller Engine ---
+    // --- Universal 20px Edge-Triggered Fast Scroller Engine ---
     const fastScroller = document.getElementById("fast-scroller");
     const fastThumb = document.getElementById("fast-scroll-thumb");
     const fastBubble = document.getElementById("fast-scroll-bubble");
@@ -1035,8 +1045,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (fastScroller) {
         fastScroller.addEventListener("pointerdown", (e) => {
             const rect = playlistContainer.getBoundingClientRect();
-            // Strict 15px edge hit-test gate
-            if (e.clientX >= rect.right - 15 && e.clientX <= rect.right + 2) {
+            // Strict 20px edge hit-test gate
+            if (e.clientX >= rect.right - 20 && e.clientX <= rect.right + 2) {
                 isFastScrolling = true;
                 fastScroller.classList.add("active");
                 fastBubble.classList.add("active");
