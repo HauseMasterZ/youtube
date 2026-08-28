@@ -183,9 +183,6 @@
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
-                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -194,9 +191,6 @@
                     if (v > buffEnd + 0.5) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
-                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -591,6 +585,12 @@
                                         totalBytesAppended += nextChunk.length;
                                         await this._appendToSourceBuffer(nextChunk);
                                         this.dispatchEvent(new Event('progress'));
+
+                                        // 🔒 Re-anchor lock-screen seekbar baseline to target on each chunk to prevent drift
+                                        if (this._pendingSeek !== null && typeof updateMediaSessionPosition === 'function') {
+                                            const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                            updateMediaSessionPosition(this._pendingSeek, totalDur);
+                                        }
 
                                         // Auto-resume playback if paused/stalled due to buffer exhaustion
                                         if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
