@@ -404,15 +404,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        // 🎯 Ignore internal buffering pauses when user did not physically click pause
+        // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
-        
-        if (window.wasPausedByUser) {
-            setPlayUI(false);
-            updateMediaSessionPosition();
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
+
+        // Update both PWA UI and MediaSession notification for ANY real pause
+        // (user-initiated OR OS audio focus loss from phone calls)
+        setPlayUI(false);
+        updateMediaSessionPosition();
+        if (hasMediaSession) {
+            navigator.mediaSession.playbackState = 'paused';
         }
     });
 
