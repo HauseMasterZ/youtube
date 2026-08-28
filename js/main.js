@@ -398,11 +398,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        if (audioPlayer.switching) return;
-        setPlayUI(false);
-        updateMediaSessionPosition();
-        if (hasMediaSession && window.wasPausedByUser) {
-            navigator.mediaSession.playbackState = 'paused';
+        // 🎯 Ignore internal buffering pauses when user did not physically click pause
+        if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+        
+        if (window.wasPausedByUser) {
+            setPlayUI(false);
+            updateMediaSessionPosition();
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
         }
     });
 
