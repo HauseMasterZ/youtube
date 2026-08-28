@@ -365,13 +365,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (track && navigator.mediaSession.metadata) {
                 navigator.mediaSession.metadata.title = track.title;
                 navigator.mediaSession.metadata.artist = track.channel;
+                const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
                 if (!thumbsDisabled) {
-                    const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
                     if (rawArt) {
-                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
+                        const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
                         if (sqCached) {
                             navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
-                        } else {
+                        } else if (typeof getSquareArtwork === 'function') {
                             getSquareArtwork(rawArt, track.id, (sqUrl) => {
                                 if (hasMediaSession && navigator.mediaSession.metadata) {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -382,6 +382,12 @@ document.addEventListener("DOMContentLoaded", () => {
                                 }
                             });
                         }
+                    }
+                } else if (rawArt) {
+                    const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+                    const l2Cached = (typeof thumbCache !== 'undefined' && thumbCache.get(rawArt)?.status === 'loaded') ? rawArt : null;
+                    if (sqCached || l2Cached) {
+                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || l2Cached, sizes: '512x512', type: 'image/jpeg' }];
                     }
                 }
             }
@@ -744,35 +750,50 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (e.target.value === "HARD_RELOAD") {
+        if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
             playlistSelect.value = lastValidPlaylist;
-            
-            // 1. Clear all Service Worker / Cache API caches
-            if ('caches' in window) {
-                try {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map(k => caches.delete(k)));
-                } catch (err) {
-                    console.warn("Error clearing cache:", err);
-                }
-            }
-            
-            // 2. Unregister any active service workers
-            if ('serviceWorker' in navigator) {
-                try {
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map(r => r.unregister()));
-                } catch (err) {
-                    console.warn("Error unregistering SW:", err);
-                }
-            }
-            
-            // 3. Clear session storage
-            try { sessionStorage.clear(); } catch(err) {}
+            const currentPl = lastValidPlaylist;
+            const ts = Date.now();
 
-            // 4. Force hard reload with timestamp cache-busting
-            const cleanUrl = window.location.origin + window.location.pathname + '?reload=' + Date.now();
-            window.location.replace(cleanUrl);
+            if (btnSync) btnSync.classList.add("spinning");
+
+            (async () => {
+                try {
+                    // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
+                    await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
+                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
+                        const res = await fetch(`${dbUrl}?t=${ts}`);
+                        if (res.ok) {
+                            const rawData = await res.json();
+                            const freshData = normalizePlaylistData(rawData, pl);
+                            allDatabases[pl] = freshData;
+
+                            // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
+                            if ('caches' in window) {
+                                try {
+                                    const cache = await caches.open(CACHE_NAME);
+                                    await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
+                                } catch (e) {}
+                            }
+                        }
+                    }));
+
+                    // 3. Re-apply the active playlist in place (0ms re-render)
+                    if (allDatabases[currentPl]) {
+                        currentPlaylistData = allDatabases[currentPl];
+                        applyPlaylistData(currentPl, currentPlaylistData, false);
+                    }
+
+                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                        window.rebuildCrossShuffleDeck();
+                    }
+                } catch (err) {
+                    console.warn("Failed to reload playlist databases:", err);
+                } finally {
+                    if (btnSync) btnSync.classList.remove("spinning");
+                }
+            })();
+
             return;
         }
         
