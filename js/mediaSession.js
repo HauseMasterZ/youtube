@@ -19,8 +19,6 @@
                         playbackRate: validRate,
                         position: validPos
                     });
-                } else {
-                    navigator.mediaSession.setPositionState(null);
                 }
             } catch (e) {
                 // Ignore transient errors
