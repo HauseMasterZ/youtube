@@ -584,18 +584,10 @@
                 });
             }
 
-            // Pin seekbar to 0:00 with full duration and 0 playbackRate while buffering (Do NOT pass null)
+            // Clear position state during buffering (W3C standard method)
             if ('setPositionState' in navigator.mediaSession) {
                 try {
-                    if (parsedDuration > 0) {
-                        navigator.mediaSession.setPositionState({
-                            duration: parsedDuration,
-                            playbackRate: 0,
-                            position: 0
-                        });
-                    } else {
-                        navigator.mediaSession.setPositionState(null);
-                    }
+                    navigator.mediaSession.setPositionState(null);
                 } catch(e) {}
             }
         }
