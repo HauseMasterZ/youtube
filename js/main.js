@@ -258,14 +258,18 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return;
         }
-        if (audioPlayer.paused) {
+        
+        // 🎯 Toggle based on user playback intent (not physical audio pause state)
+        if (window.wasPausedByUser) {
             window.wasPausedByUser = false;
-            audioPlayer.play().catch(e => {
-                console.warn("Play blocked:", e);
-            });
+            setPlayUI(true);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+            audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
-            audioPlayer.pause();
+            setPlayUI(false);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+            audioPlayer.instantPause();
         }
     });
 
