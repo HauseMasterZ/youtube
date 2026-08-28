@@ -33,16 +33,16 @@
                             this._endedFired = false;
                         }
 
-                        // Calculate actual effective end time from demuxed buffer
+                        // 🎯 Use actual demuxed buffer end to eliminate 3:14 stall
                         let effectiveEnd = dur;
                         if (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                            if (buffEnd > 0 && this._streamDone) {
+                            if (buffEnd > 0) {
                                 effectiveEnd = Math.min(dur, buffEnd);
                             }
                         }
 
-                        // Trigger ended if within 0.6s of stream end (handles Opus timestamp variance)
+                        // Fire 'ended' as soon as the audio reaches the true buffer end
                         if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= effectiveEnd - 0.6) {
                                 this._endedFired = true;
@@ -62,8 +62,8 @@
                         return;
                     }
 
-                    // If browser stalls/waits at the end of an ingested stream, trigger ended
-                    if (e.type === 'waiting' && this._streamDone && !this._endedFired) {
+                    // Fallback: If browser stalls at the end of the buffer, trigger auto-advance
+                    if (e.type === 'waiting' && !this._endedFired) {
                         const ct = this.active.currentTime;
                         const dur = this.active.duration || this._expectedDuration || 0;
                         if (dur > 0 && ct >= dur - 1.5) {
