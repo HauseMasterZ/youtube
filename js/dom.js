@@ -34,16 +34,16 @@
                             this._endedFired = false;
                         }
 
-                        // 🎯 Use actual demuxed buffer end to eliminate 3:14 stall
+                        // 🎯 ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
                         let effectiveEnd = dur;
-                        if (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                        if (this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                             if (buffEnd > 0) {
                                 effectiveEnd = Math.min(dur, buffEnd);
                             }
                         }
 
-                        // Fire 'ended' as soon as the audio reaches the true buffer end
+                        // Fire 'ended' ONLY when playback reaches the end of the song
                         if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= effectiveEnd - 0.6) {
                                 this._endedFired = true;
@@ -67,8 +67,8 @@
                         return;
                     }
 
-                    // Fallback: If browser stalls at the end of the buffer, trigger auto-advance
-                    if (e.type === 'waiting' && !this._endedFired) {
+                    // Fallback: If browser stalls at the end of a COMPLETED stream, trigger auto-advance
+                    if (e.type === 'waiting' && this._streamDone && !this._endedFired) {
                         const ct = this.active.currentTime;
                         const dur = this.active.duration || this._expectedDuration || 0;
                         if (dur > 0 && ct >= dur - 1.5) {
