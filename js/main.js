@@ -401,7 +401,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.switching) return;
         setPlayUI(false);
         updateMediaSessionPosition();
-        if (hasMediaSession) {
+        if (hasMediaSession && window.wasPausedByUser) {
             navigator.mediaSession.playbackState = 'paused';
         }
     });

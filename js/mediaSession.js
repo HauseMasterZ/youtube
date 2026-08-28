@@ -1,9 +1,18 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                // If currently switching tracks, clear position state (W3C standard) to stop speculative OS seekbar timers
+                // Hold 0:00 position state with total duration while switching tracks instead of stripping it with null
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.switching) {
-                    navigator.mediaSession.setPositionState(null);
+                    const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
+                    if (!isNaN(dur) && dur > 0) {
+                        navigator.mediaSession.setPositionState({
+                            duration: dur,
+                            playbackRate: 0,
+                            position: 0
+                        });
+                    } else {
+                        navigator.mediaSession.setPositionState(null);
+                    }
                     return;
                 }
 
