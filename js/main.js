@@ -452,17 +452,15 @@ document.addEventListener("DOMContentLoaded", () => {
     let wasPlayingBeforeSeek = false;
     seekBar.addEventListener("pointerdown", () => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !audioPlayer.paused;
+            wasPlayingBeforeSeek = !window.wasPausedByUser;
             isSeeking = true;
-            audioPlayer.instantPause();
         }
     });
 
     seekBar.addEventListener("input", (e) => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !audioPlayer.paused;
+            wasPlayingBeforeSeek = !window.wasPausedByUser;
             isSeeking = true;
-            audioPlayer.instantPause();
         }
         const val = Number(e.target.value);
         currentTimeDisplay.textContent = formatTime(Math.floor(val));
@@ -473,6 +471,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking) return;
         isSeeking = false;
         const targetTime = Number(e.target.value);
+        
+        if (wasPlayingBeforeSeek) {
+            window.wasPausedByUser = false;
+        }
+
         try {
             audioPlayer.currentTime = targetTime;
         } catch (err) {
@@ -487,6 +490,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (wasPlayingBeforeSeek) {
             audioPlayer.play().catch(console.warn);
+            setPlayUI(true);
         }
     };
 
