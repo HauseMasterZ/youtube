@@ -17,6 +17,7 @@
             this._expectedDuration = 0;
             this._streamAbortController = null;
             this._streamId = 0;
+            this._streamDone = false;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -27,12 +28,23 @@
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
-                        const dur = this.active.duration;
+                        const dur = this.active.duration || this._expectedDuration || 0;
                         if (dur > 0 && ct < dur - 1.0) {
                             this._endedFired = false;
                         }
-                        if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
-                            if (!this._endedFired && ct >= dur - 0.25) {
+
+                        // Calculate actual effective end time from demuxed buffer
+                        let effectiveEnd = dur;
+                        if (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                            if (buffEnd > 0 && this._streamDone) {
+                                effectiveEnd = Math.min(dur, buffEnd);
+                            }
+                        }
+
+                        // Trigger ended if within 0.6s of stream end (handles Opus timestamp variance)
+                        if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
+                            if (!this._endedFired && ct >= effectiveEnd - 0.6) {
                                 this._endedFired = true;
                                 this.dispatchEvent(new Event('ended'));
                                 return;
@@ -40,6 +52,7 @@
                         }
                         this.lastKnownTime = ct;
                     }
+
                     if (e.type === 'ended') {
                         if (!this._endedFired) {
                             this._endedFired = true;
@@ -48,6 +61,18 @@
                         }
                         return;
                     }
+
+                    // If browser stalls/waits at the end of an ingested stream, trigger ended
+                    if (e.type === 'waiting' && this._streamDone && !this._endedFired) {
+                        const ct = this.active.currentTime;
+                        const dur = this.active.duration || this._expectedDuration || 0;
+                        if (dur > 0 && ct >= dur - 1.5) {
+                            this._endedFired = true;
+                            this.dispatchEvent(new Event('ended'));
+                            return;
+                        }
+                    }
+
                     this.dispatchEvent(new Event(e.type));
                 }
             };
@@ -272,17 +297,13 @@
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
+            this._streamDone = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
 
-            if (preventAutoplay) {
-                this.active.pause();
-            } else {
-                // Keeps Android AudioFocus locked in buffering state so OS never destroys notification
-                this.active.play().catch(() => {});
-            }
-
+            // Stop old playhead immediately before clearing buffer
+            this.active.pause();
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
@@ -356,6 +377,7 @@
                             if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                 try { this._mediaSource.endOfStream(); } catch (e) {}
                             }
+                            this._streamDone = true;
 
 
                             if (this._pendingSeek !== null) {
@@ -525,6 +547,7 @@
 
                                     if (done) {
                                         streamDone = true;
+                                        this._streamDone = true;
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
