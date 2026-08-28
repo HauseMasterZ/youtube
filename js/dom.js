@@ -586,12 +586,6 @@
                                         await this._appendToSourceBuffer(nextChunk);
                                         this.dispatchEvent(new Event('progress'));
 
-                                        // 🔒 Re-anchor lock-screen seekbar baseline to target on each chunk to prevent drift
-                                        if (this._pendingSeek !== null && typeof updateMediaSessionPosition === 'function') {
-                                            const totalDur = this.duration || parseFloat(seekBar.max) || 0;
-                                            updateMediaSessionPosition(this._pendingSeek, totalDur);
-                                        }
-
                                         // Auto-resume playback if paused/stalled due to buffer exhaustion
                                         if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
                                             this.active.play().catch(() => {});
