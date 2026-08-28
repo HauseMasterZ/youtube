@@ -14,6 +14,7 @@
             this._currentUrl = '';
             this._mseEnabled = false;
             this._pendingSeek = null;
+            this._seekingTo = null;
             this._expectedDuration = 0;
             this._streamAbortController = null;
             this._streamId = 0;
@@ -51,6 +52,10 @@
                             }
                         }
                         this.lastKnownTime = ct;
+                    }
+
+                    if (e.type === 'seeked') {
+                        this._seekingTo = null;
                     }
 
                     if (e.type === 'ended') {
@@ -163,6 +168,7 @@
 
         get currentTime() {
             if (this._pendingSeek !== null) return this._pendingSeek;
+            if (this._seekingTo !== null) return this._seekingTo;
             return this.active.currentTime;
         }
 
@@ -502,11 +508,12 @@
                         const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
                             ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
                             : 0;
-                        if (buffEnd >= this._pendingSeek) {
-                            const seekTarget = this._pendingSeek;
+                        if (buffEnd >= this._pendingSeek - 0.5) {
+                            const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                             this._pendingSeek = null;
+                            this._seekingTo = seekTarget;
                             this.active.currentTime = seekTarget;
-                            if (!preventAutoplay) {
+                            if (!preventAutoplay && !window.wasPausedByUser) {
                                 this.active.play().catch(e => console.warn("MSE play error:", e));
                             }
                         } else {
@@ -551,6 +558,22 @@
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
+
+                                        // 🎯 Fulfill any pending seek targeting the end of the song
+                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                            const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
+                                            this._pendingSeek = null;
+                                            this._seekingTo = seekTarget;
+                                            this.active.currentTime = seekTarget;
+                                            if (!preventAutoplay && !window.wasPausedByUser) {
+                                                this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
+                                                this.dispatchEvent(new Event('play'));
+                                                this.dispatchEvent(new Event('playing'));
+                                            }
+                                            this.dispatchEvent(new Event('seeked'));
+                                            this.dispatchEvent(new Event('timeupdate'));
+                                        }
                                         break;
                                     }
 
@@ -567,11 +590,12 @@
                                         // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                            if (buffEnd >= this._pendingSeek) {
-                                                const seekTarget = this._pendingSeek;
+                                            if (buffEnd >= this._pendingSeek - 0.5) {
+                                                const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                                 this._pendingSeek = null;
+                                                this._seekingTo = seekTarget;
                                                 this.active.currentTime = seekTarget;
-                                                if (!preventAutoplay) {
+                                                if (!preventAutoplay && !window.wasPausedByUser) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
                                                     this.dispatchEvent(new Event('play'));
                                                     this.dispatchEvent(new Event('playing'));
