@@ -258,18 +258,14 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return;
         }
-        
-        // 🎯 Toggle based on user playback intent (not physical audio pause state)
-        if (window.wasPausedByUser) {
+        if (audioPlayer.paused) {
             window.wasPausedByUser = false;
-            setPlayUI(true);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-            audioPlayer.play().catch(e => console.warn("Play blocked:", e));
+            audioPlayer.play().catch(e => {
+                console.warn("Play blocked:", e);
+            });
         } else {
             window.wasPausedByUser = true;
-            setPlayUI(false);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
-            audioPlayer.instantPause();
+            audioPlayer.pause();
         }
     });
 
@@ -460,15 +456,17 @@ document.addEventListener("DOMContentLoaded", () => {
     let wasPlayingBeforeSeek = false;
     seekBar.addEventListener("pointerdown", () => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !window.wasPausedByUser;
+            wasPlayingBeforeSeek = !audioPlayer.paused;
             isSeeking = true;
+            audioPlayer.instantPause();
         }
     });
 
     seekBar.addEventListener("input", (e) => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !window.wasPausedByUser;
+            wasPlayingBeforeSeek = !audioPlayer.paused;
             isSeeking = true;
+            audioPlayer.instantPause();
         }
         const val = Number(e.target.value);
         currentTimeDisplay.textContent = formatTime(Math.floor(val));
@@ -479,11 +477,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking) return;
         isSeeking = false;
         const targetTime = Number(e.target.value);
-        
-        if (wasPlayingBeforeSeek) {
-            window.wasPausedByUser = false;
-        }
-
         try {
             audioPlayer.currentTime = targetTime;
         } catch (err) {
@@ -498,7 +491,6 @@ document.addEventListener("DOMContentLoaded", () => {
         
         if (wasPlayingBeforeSeek) {
             audioPlayer.play().catch(console.warn);
-            setPlayUI(true);
         }
     };
 
@@ -545,21 +537,11 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     let isRecoveringAudio = false;
+    let recoveryAttempts = 0;
+
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
-        window.wasPausedByUser = false;
-        window.wasInterrupted = false;
-        setPlayUI(true);
-        
-        // 🎯 Sync MediaSession with active playback position now that audio hardware is decoding
-        const ct = audioPlayer.currentTime;
-        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-        updateMediaSessionPosition(ct, dur, audioPlayer.playbackRate || 1.0);
-        
-        if (hasMediaSession) {
-            navigator.mediaSession.playbackState = 'playing';
-        }
     });
 
     audioPlayer.addEventListener("error", () => {
