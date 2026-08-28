@@ -49,14 +49,18 @@
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
         navigator.mediaSession.setActionHandler('seekto', (details) => {
+            const seekTarget = details.seekTime;
             if (details.fastSeek && 'fastSeek' in audioPlayer) {
-                audioPlayer.fastSeek(details.seekTime);
+                audioPlayer.fastSeek(seekTarget);
             } else {
-                audioPlayer.currentTime = details.seekTime;
+                audioPlayer.currentTime = seekTarget;
             }
-            updateTimeUI(details.seekTime);
-            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(details.seekTime);
-            updateMediaSessionPosition();
+            updateTimeUI(seekTarget);
+            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
+            
+            // 🎯 Explicitly pass seek target and total duration to prevent 0:00 dip
+            const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(seekTarget, totalDur);
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const skipTime = details.seekOffset || 10;
@@ -64,16 +68,17 @@
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition();
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(newTime, dur);
         });
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const skipTime = details.seekOffset || 10;
-            const dur = audioPlayer.duration || Infinity;
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const newTime = Math.min(dur, (audioPlayer.currentTime || 0) + skipTime);
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition();
+            updateMediaSessionPosition(newTime, dur);
         });
         navigator.mediaSession.setActionHandler('stop', () => {
             audioPlayer.instantPause();
