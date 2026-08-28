@@ -183,9 +183,6 @@
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
-                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -194,9 +191,6 @@
                     if (v > buffEnd + 0.5) {
                         this._pendingSeek = v;
                         this.active.pause();
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
-                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -319,10 +313,6 @@
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
-
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
 
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition(0, expectedDuration || 0);
@@ -595,6 +585,16 @@
                                         totalBytesAppended += nextChunk.length;
                                         await this._appendToSourceBuffer(nextChunk);
                                         this.dispatchEvent(new Event('progress'));
+
+                                        // 🔒 Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing (⏸) and prevent timer drift
+                                        if (typeof updateMediaSessionPosition === 'function') {
+                                            const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                            if (this._pendingSeek !== null) {
+                                                updateMediaSessionPosition(this._pendingSeek, totalDur);
+                                            } else if (this.switching) {
+                                                updateMediaSessionPosition(0, totalDur);
+                                            }
+                                        }
 
                                         // Auto-resume playback if paused/stalled due to buffer exhaustion
                                         if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
