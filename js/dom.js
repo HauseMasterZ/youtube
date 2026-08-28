@@ -566,6 +566,7 @@
                                             this._pendingSeek = null;
                                             this._seekingTo = seekTarget;
                                             this.active.currentTime = seekTarget;
+                                            if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
                                             if (!preventAutoplay && !window.wasPausedByUser) {
                                                 this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
                                                 this.dispatchEvent(new Event('play'));
@@ -593,7 +594,7 @@
                                             if (buffEnd >= this._pendingSeek - 0.5) {
                                                 const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                                 this._pendingSeek = null;
-                                                this._seekingTo = null;
+                                                this._seekingTo = seekTarget;
                                                 this.active.currentTime = seekTarget;
                                                 if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
                                                 if (!preventAutoplay && !window.wasPausedByUser) {
