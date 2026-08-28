@@ -315,7 +315,7 @@
             } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
+                updateMediaSessionPosition(0, expectedDuration || 0);
             }
 
             if (typeof updateBufferProgress === 'function') updateBufferProgress();

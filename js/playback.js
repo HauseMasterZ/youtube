@@ -384,6 +384,7 @@
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
+        if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
         
         // 🎯 Set active playing intent on fresh track launch (fixes first-ever song load bug)
         if (!uiOnly) {
@@ -590,10 +591,14 @@
                 });
             }
 
-            // Clear position state during buffering (W3C standard method)
-            if ('setPositionState' in navigator.mediaSession) {
+            // 🎯 Initialize lock-screen seekbar with known metadata duration at 0:00
+            if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
-                    navigator.mediaSession.setPositionState(null);
+                    navigator.mediaSession.setPositionState({
+                        duration: parsedDuration,
+                        playbackRate: 1.0,
+                        position: 0
+                    });
                 } catch(e) {}
             }
         }
