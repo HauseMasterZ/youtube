@@ -1,12 +1,6 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                // While switching tracks and before any user seek, clear state to suppress speculative timer
-                if (audioPlayer && audioPlayer.switching && (audioPlayer._pendingSeek === null && forcedPosition === null)) {
-                    navigator.mediaSession.setPositionState(null);
-                    return;
-                }
-
                 const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
                 const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
                 const rate = forcedRate !== null ? forcedRate : (audioPlayer.playbackRate || 1.0);
@@ -19,8 +13,6 @@
                         playbackRate: validRate,
                         position: validPos
                     });
-                } else {
-                    navigator.mediaSession.setPositionState(null);
                 }
             } catch (e) {
                 // Ignore transient errors
