@@ -591,12 +591,12 @@
                 });
             }
 
-            // 🎯 Initialize lock-screen seekbar with known metadata duration at 0:00
+            // 🎯 Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
             if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: parsedDuration,
-                        playbackRate: 1.0,
+                        playbackRate: 0.00001,
                         position: 0
                     });
                 } catch(e) {}

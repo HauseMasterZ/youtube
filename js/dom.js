@@ -567,6 +567,10 @@
                                             this._seekingTo = seekTarget;
                                             this.active.currentTime = seekTarget;
                                             if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+                                            if (typeof updateMediaSessionPosition === 'function') {
+                                                const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                                updateMediaSessionPosition(seekTarget, totalDur, 1.0);
+                                            }
                                             if (!preventAutoplay && !window.wasPausedByUser) {
                                                 this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
                                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -610,6 +614,10 @@
                                                 this._seekingTo = seekTarget;
                                                 this.active.currentTime = seekTarget;
                                                 if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+                                                if (typeof updateMediaSessionPosition === 'function') {
+                                                    const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                                    updateMediaSessionPosition(seekTarget, totalDur, 1.0);
+                                                }
                                                 if (!preventAutoplay && !window.wasPausedByUser) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
                                                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {

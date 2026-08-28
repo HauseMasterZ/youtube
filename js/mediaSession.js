@@ -3,7 +3,11 @@
             try {
                 const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
                 const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
-                const rate = forcedRate !== null ? forcedRate : (audioPlayer.playbackRate || 1.0);
+                
+                // If buffering a seek or track switch, use micro-rate to freeze lock-screen seekbar without changing Play/Pause button
+                const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
+                const defaultRate = isBuffering ? 0.00001 : (audioPlayer.playbackRate || 1.0);
+                const rate = forcedRate !== null ? forcedRate : defaultRate;
                 const validRate = (typeof rate === 'number' && rate > 0) ? rate : 1.0;
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
