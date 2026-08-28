@@ -183,6 +183,9 @@
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
+                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = 'paused';
+                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -191,6 +194,9 @@
                     if (v > buffEnd + 0.5) {
                         this._pendingSeek = v;
                         this.active.pause();
+                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = 'paused';
+                        }
                         this.dispatchEvent(new Event('timeupdate'));
                         return;
                     }
@@ -313,6 +319,10 @@
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
+
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
 
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition(0, expectedDuration || 0);

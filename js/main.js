@@ -555,6 +555,9 @@ document.addEventListener("DOMContentLoaded", () => {
         lastRenderTime = -1;
         const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
         updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+        if (hasMediaSession) {
+            navigator.mediaSession.playbackState = 'playing';
+        }
     });
 
     audioPlayer.addEventListener("error", () => {
