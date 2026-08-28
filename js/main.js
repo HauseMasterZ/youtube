@@ -509,7 +509,7 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBar.addEventListener("pointercancel", endSeek);
 
     audioPlayer.addEventListener("timeupdate", () => {
-        if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity) {
+        if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
             if (roundedSec !== lastRenderTime) {
