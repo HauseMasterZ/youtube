@@ -623,13 +623,13 @@
             height: 0;
         }
 
-        /* 15px Edge Hit-Test Zone */
+        /* 20px Edge Hit-Test Zone */
         .fast-scroller {
             position: absolute;
             right: 0;
             top: 0;
             bottom: 0;
-            width: 15px;
+            width: 20px;
             z-index: 90;
             touch-action: none;
             user-select: none;
