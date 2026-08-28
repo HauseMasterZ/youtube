@@ -361,7 +361,9 @@ document.addEventListener("DOMContentLoaded", () => {
         window.wasPausedByUser = false;
         window.wasInterrupted = false;
         setPlayUI(true);
-        updateMediaSessionPosition();
+        lastRenderTime = -1;
+        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
             const track = currentPlaylistData[playQueue[queueIndex]] 
@@ -550,6 +552,9 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        lastRenderTime = -1;
+        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
     });
 
     audioPlayer.addEventListener("error", () => {
