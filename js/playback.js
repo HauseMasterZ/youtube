@@ -385,6 +385,12 @@
         const uiOnly = preventAutoplay;
         isSeeking = false;
         
+        // 🎯 Set active playing intent on fresh track launch (fixes first-ever song load bug)
+        if (!uiOnly) {
+            window.wasPausedByUser = false;
+            setPlayUI(true);
+        }
+        
         // Cancel any pending error auto-skip when user manually selects a track
         if (errorSkipTimer) {
             clearTimeout(errorSkipTimer);
