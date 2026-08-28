@@ -276,7 +276,12 @@
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
 
-            this.active.pause();
+            if (preventAutoplay) {
+                this.active.pause();
+            } else {
+                // Keeps Android AudioFocus locked in buffering state so OS never destroys notification
+                this.active.play().catch(() => {});
+            }
 
             try {
                 this.active.currentTime = 0;
