@@ -480,7 +480,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         updateTimeUI(targetTime);
         if (window.lyricsActive) updateLyricsUI(targetTime);
-        updateMediaSessionPosition();
+        
+        // 🎯 Explicitly pass target time and total duration
+        const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        updateMediaSessionPosition(targetTime, totalDur);
+        
         if (wasPlayingBeforeSeek) {
             audioPlayer.play().catch(console.warn);
         }
