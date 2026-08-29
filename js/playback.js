@@ -723,8 +723,11 @@
 
         // Cancel toggle
         if (isDownloadingPlaylist) {
-            if (playlistDownloadController) playlistDownloadController.abort();
             isDownloadingPlaylist = false;
+            if (playlistDownloadController) {
+                playlistDownloadController.abort();
+                playlistDownloadController = null;
+            }
             if (iconIdle) iconIdle.style.display = "block";
             if (iconActive) iconActive.style.display = "none";
             if (iconDone) iconDone.style.display = "none";
@@ -758,7 +761,7 @@
             let trackIndex = 0;
 
             const worker = async () => {
-                while (trackIndex < tracks.length && !signal.aborted) {
+                while (trackIndex < tracks.length && !signal.aborted && isDownloadingPlaylist) {
                     const track = tracks[trackIndex++];
                     if (!track) continue;
                     
@@ -808,6 +811,8 @@
                         // Ignore aborted fetches
                     }
 
+                    if (signal.aborted || !isDownloadingPlaylist) break;
+
                     completed++;
                     if (btn) btn.title = `Downloading: ${completed} / ${total} - Click to cancel`;
                     showDownloadToast(`Downloading "${currentPl}" - ${completed} / ${total}`);
@@ -816,7 +821,7 @@
 
             await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-            if (!signal.aborted) {
+            if (!signal.aborted && isDownloadingPlaylist) {
                 showDownloadToast(`Verifying "${currentPl}" offline storage...`);
                 let verifiedCount = 0;
                 for (const t of tracks) {

@@ -1487,7 +1487,7 @@ button:focus { outline: none !important; }
         font-size: 13px;
         font-weight: 600;
         letter-spacing: 0.2px;
-        z-index: 1000;
+        z-index: 9999;
         display: flex;
         align-items: center;
         gap: 8px;
