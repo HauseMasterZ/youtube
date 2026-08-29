@@ -177,6 +177,9 @@
                                     if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                         thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
                                     }
+                                    if (typeof getSquareArtwork === 'function' && track && track.id) {
+                                        getSquareArtwork(thumbUrl, track.id, () => {});
+                                    }
                                 })
                                 .catch(() => {
                                     thumbCache.set(thumbUrl, { status: 'failed' });
@@ -189,6 +192,9 @@
                                 thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
                                 if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                     thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
+                                }
+                                if (typeof getSquareArtwork === 'function' && track && track.id) {
+                                    getSquareArtwork(thumbUrl, track.id, () => {});
                                 }
                             };
                             loader.onerror = () => {

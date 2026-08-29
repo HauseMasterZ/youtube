@@ -129,7 +129,7 @@
     async function getSquareArtwork(url, trackId, callback) {
         if (!url) return;
         if (artworkSquareCache.has(trackId)) {
-            callback(artworkSquareCache.get(trackId));
+            if (typeof callback === 'function') callback(artworkSquareCache.get(trackId));
             return;
         }
         try {
@@ -147,7 +147,7 @@
             ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
             const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
             setCachedSquareArtwork(trackId, dataUrl);
-            callback(dataUrl);
+            if (typeof callback === 'function') callback(dataUrl);
         } catch (err) {
             const img = new Image();
             img.crossOrigin = "anonymous";
@@ -163,12 +163,14 @@
                     ctx.drawImage(img, sx, sy, size, size, 0, 0, 512, 512);
                     const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
                     setCachedSquareArtwork(trackId, dataUrl);
-                    callback(dataUrl);
+                    if (typeof callback === 'function') callback(dataUrl);
                 } catch(e) {
-                    callback(url);
+                    if (typeof callback === 'function') callback(null);
                 }
             };
-            img.onerror = () => callback(url);
+            img.onerror = () => {
+                if (typeof callback === 'function') callback(null);
+            };
             img.src = url;
         }
     }
