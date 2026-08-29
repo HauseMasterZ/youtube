@@ -22,6 +22,7 @@
     
     let shuffleMode = 0;
     let repeatMode = 0; 
+    let autoplayEnabled = true; 
     
     const dominantColorCache = new Map();
 

@@ -331,6 +331,15 @@
 
         if (playQueue.length === 0) return;
         
+        // 🎯 If autoplay is disabled, strictly stop playback
+        if (!autoplayEnabled) {
+            setPlayUI(false);
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            return;
+        }
+
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
             executePlayback();
@@ -339,6 +348,7 @@
             executePlayback();
         } else {
             setPlayUI(false);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
         }
     }
 
@@ -482,8 +492,8 @@
                 navigator.mediaSession.playbackState = "playing";
             }
 
-            if (!uiOnly) {
-                // Instantly auto-skip to the next track if we are actively playing
+            if (!uiOnly && autoplayEnabled) {
+                // Instantly auto-skip to the next track if we are actively playing and autoplay is enabled
                 errorSkipTimer = setTimeout(() => {
                     if (window.lastPlaybackDirection === -1) {
                         playPrev();

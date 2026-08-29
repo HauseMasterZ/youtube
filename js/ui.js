@@ -24,6 +24,18 @@
         }
     }
 
+    function applyAutoplayUI() {
+        const btnAutoplay = document.getElementById("btn-autoplay");
+        if (!btnAutoplay) return;
+        if (autoplayEnabled) {
+            btnAutoplay.classList.add("active-state");
+            btnAutoplay.setAttribute("aria-label", "Autoplay (On)");
+        } else {
+            btnAutoplay.classList.remove("active-state");
+            btnAutoplay.setAttribute("aria-label", "Autoplay (Off)");
+        }
+    }
+
     const GRAY_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23222226'/%3E%3C/svg%3E";
     const thumbCache = new Map();
     let isScrollingFast = false;

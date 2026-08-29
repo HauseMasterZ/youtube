@@ -321,6 +321,14 @@ document.addEventListener("DOMContentLoaded", () => {
         repeatMode = (repeatMode + 1) % 3;
         applyRepeatUI();
     });
+
+    const btnAutoplay = document.getElementById("btn-autoplay");
+    if (btnAutoplay) {
+        btnAutoplay.addEventListener("click", () => {
+            autoplayEnabled = !autoplayEnabled;
+            applyAutoplayUI();
+        });
+    }
     function syncDuration() {
         const dur = audioPlayer.duration;
         if (!isNaN(dur) && dur > 0 && dur !== Infinity) {
@@ -533,6 +541,15 @@ document.addEventListener("DOMContentLoaded", () => {
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
+
+        // 🎯 If autoplay is disabled, strictly stop and retain end position
+        if (!autoplayEnabled) {
+            setPlayUI(false);
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            return;
+        }
 
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
