@@ -403,7 +403,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
-            navigator.mediaSession.playbackState = 'paused';
+            if (window.wasPausedByUser) {
+                navigator.mediaSession.playbackState = 'paused';
+            } else {
+                navigator.mediaSession.playbackState = 'playing';
+            }
         }
     });
 
