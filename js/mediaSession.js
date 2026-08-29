@@ -1,15 +1,13 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                // If currently switching tracks, clear position state (W3C standard) to stop speculative OS seekbar timers
-                if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.switching) {
-                    navigator.mediaSession.setPositionState(null);
-                    return;
-                }
-
                 const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
                 const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
-                const rate = forcedRate !== null ? forcedRate : (audioPlayer.playbackRate || 1.0);
+                
+                // If buffering a seek or track switch or paused, strictly enforce micro-rate so seekbar freezes instantly
+                const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
+                const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+                const rate = forcedRate !== null ? forcedRate : ((isBuffering || isPaused) ? 0.00001 : (audioPlayer.playbackRate || 1.0));
                 const validRate = (typeof rate === 'number' && rate > 0) ? rate : 1.0;
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
@@ -19,11 +17,9 @@
                         playbackRate: validRate,
                         position: validPos
                     });
-                } else {
-                    navigator.mediaSession.setPositionState(null);
                 }
             } catch (e) {
-                // Ignore transient position state errors during track swap
+                // Ignore transient errors
             }
         }
     }
@@ -40,6 +36,14 @@
                 return;
             }
             window.wasPausedByUser = false;
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                audioPlayer.currentTime = 0;
+                updateTimeUI(0);
+                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {
+                    updateLyricsUI(0);
+                }
+            }
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
@@ -49,14 +53,18 @@
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
         navigator.mediaSession.setActionHandler('seekto', (details) => {
+            const seekTarget = details.seekTime;
             if (details.fastSeek && 'fastSeek' in audioPlayer) {
-                audioPlayer.fastSeek(details.seekTime);
+                audioPlayer.fastSeek(seekTarget);
             } else {
-                audioPlayer.currentTime = details.seekTime;
+                audioPlayer.currentTime = seekTarget;
             }
-            updateTimeUI(details.seekTime);
-            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(details.seekTime);
-            updateMediaSessionPosition();
+            updateTimeUI(seekTarget);
+            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
+            
+            // Explicitly pass seek target and total duration to prevent 0:00 dip
+            const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(seekTarget, totalDur);
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const skipTime = details.seekOffset || 10;
@@ -64,19 +72,17 @@
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition();
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(newTime, dur);
         });
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const skipTime = details.seekOffset || 10;
-            const dur = audioPlayer.duration || Infinity;
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const newTime = Math.min(dur, (audioPlayer.currentTime || 0) + skipTime);
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition();
-        });
-        navigator.mediaSession.setActionHandler('stop', () => {
-            audioPlayer.instantPause();
+            updateMediaSessionPosition(newTime, dur);
         });
     }
 
