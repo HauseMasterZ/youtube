@@ -378,10 +378,10 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(true);
         lastRenderTime = -1;
 
-        // Lightweight: just set state, don't cycle through 'none' or create metadata
-        // The 'playing' event will handle full session re-creation once audio is stable
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
         }
 
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
@@ -391,30 +391,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("playing", () => {
         clearTimeout(pauseDebounceTimer);
-
-        // 'playing' fires when audio output is actually flowing (past all buffering)
-        // This is the stable moment to create/re-create the notification
+        setPlayUI(true);
         if (hasMediaSession) {
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-
-            const track = currentPlaylistData[playQueue[queueIndex]] 
-                       || currentPlaylistData[globalActiveOriginalIndex];
-            if (track) {
-                const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
-                const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-                const l2Cached = rawArt && (typeof thumbCache !== 'undefined' && thumbCache.get(rawArt)?.status === 'loaded') ? rawArt : null;
-                const bestArt = sqCached || l2Cached || rawArt;
-                const artworkArr = bestArt && !thumbsDisabled ? [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }] : [];
-
-                navigator.mediaSession.metadata = new MediaMetadata({
-                    title: track.title,
-                    artist: track.channel,
-                    artwork: artworkArr
-                });
-                navigator.mediaSession.playbackState = 'playing';
-            }
-
-            updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+            navigator.mediaSession.playbackState = 'playing';
         }
     });
 
