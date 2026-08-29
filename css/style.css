@@ -1465,4 +1465,40 @@
 button:focus { outline: none !important; }
 .control-btn:focus { outline: none !important; }
 
+/* Mobile-Only Dominant-Themed Download Toast */
+.download-toast {
+    display: none;
+}
+
+@media (max-width: 800px) {
+    .download-toast {
+        position: fixed;
+        bottom: 74px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(18, 18, 24, 0.88);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid var(--primary-color, #8c73ff);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(140, 115, 255, 0.25);
+        color: #ffffff;
+        padding: 8px 16px;
+        border-radius: 24px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        z-index: 1000;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        pointer-events: none;
+        transition: opacity 0.3s ease, transform 0.3s ease;
+    }
+    
+    .download-toast.success {
+        border-color: #00ff88;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 255, 136, 0.3);
+    }
+}
+
 

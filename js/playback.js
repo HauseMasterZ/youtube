@@ -698,6 +698,23 @@
     let isDownloadingPlaylist = false;
     let playlistDownloadController = null;
 
+    function showDownloadToast(text, isSuccess = false) {
+        const toast = document.getElementById("download-toast");
+        const toastText = document.getElementById("download-toast-text");
+        if (!toast || !toastText) return;
+
+        toastText.textContent = text;
+        if (isSuccess) toast.classList.add("success");
+        else toast.classList.remove("success");
+
+        toast.style.display = "flex";
+    }
+
+    function hideDownloadToast() {
+        const toast = document.getElementById("download-toast");
+        if (toast) toast.style.display = "none";
+    }
+
     async function downloadActivePlaylist() {
         const btn = document.getElementById("btn-download-playlist");
         const iconIdle = document.getElementById("icon-download-idle");
@@ -712,6 +729,8 @@
             if (iconActive) iconActive.style.display = "none";
             if (iconDone) iconDone.style.display = "none";
             if (btn) btn.title = "Download playlist for offline playback";
+            showDownloadToast("Download cancelled");
+            setTimeout(hideDownloadToast, 2000);
             return;
         }
 
@@ -727,8 +746,10 @@
         if (iconActive) iconActive.style.display = "block";
         if (iconDone) iconDone.style.display = "none";
 
+        showDownloadToast(`Downloading "${currentPl}" - 0 / ${tracks.length}`);
+
         try {
-            const mediaCache = await caches.open('yt-player-media');
+            const thumbsCache = await caches.open('yt-thumbs-cache');
             const thumbsCache = await caches.open('yt-player-thumbs');
 
             let completed = 0;
@@ -788,24 +809,39 @@
                     }
 
                     completed++;
-                    if (btn) btn.title = `Downloading: ${completed}/${total} (${Math.round((completed/total)*100)}%) - Click to cancel`;
+                    if (btn) btn.title = `Downloading: ${completed} / ${total} - Click to cancel`;
+                    showDownloadToast(`Downloading "${currentPl}" - ${completed} / ${total}`);
                 }
             };
 
             await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
             if (!signal.aborted) {
+                showDownloadToast(`Verifying "${currentPl}" offline storage...`);
+                let verifiedCount = 0;
+                for (const t of tracks) {
+                    const aUrl = getAudioUrl(t);
+                    const hasA = await mediaCache.match(aUrl);
+                    if (hasA && hasA.headers.get('X-Partial-Cached') !== 'true') {
+                        verifiedCount++;
+                    }
+                }
+
                 if (iconActive) iconActive.style.display = "none";
                 if (iconDone) iconDone.style.display = "block";
                 if (btn) btn.title = "Playlist fully downloaded for offline playback!";
+
+                showDownloadToast(`[✓] "${currentPl}" verified (${verifiedCount}/${total} saved offline)`, true);
+
                 setTimeout(() => {
                     if (iconDone) iconDone.style.display = "none";
                     if (iconIdle) iconIdle.style.display = "block";
                     if (btn) btn.title = "Download playlist for offline playback";
-                }, 4000);
+                    hideDownloadToast();
+                }, 3500);
             }
         } catch (e) {
-            // Fallback
+            hideDownloadToast();
         } finally {
             isDownloadingPlaylist = false;
         }
