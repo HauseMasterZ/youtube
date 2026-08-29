@@ -445,7 +445,7 @@
                                     off += c.length;
                                 }
                                 const responseToCache = new Response(combined.buffer, {
-                                    status: isComplete ? 200 : 206,
+                                    status: 200,
                                     headers: {
                                         'Content-Type': 'audio/webm',
                                         'Content-Length': totalBytesAppended.toString(),
