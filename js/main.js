@@ -372,6 +372,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
+        clearTimeout(pauseDebounceTimer);
         window.wasPausedByUser = false;
         window.wasInterrupted = false;
         setPlayUI(true);
@@ -422,16 +423,36 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    let pauseDebounceTimer = null;
+
     audioPlayer.addEventListener("pause", () => {
         // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
-        // Update both PWA UI and MediaSession notification for ANY real pause
-        // (user-initiated OR OS audio focus loss from phone calls)
+        // Always update PWA UI immediately
         setPlayUI(false);
-        updateMediaSessionPosition();
-        if (hasMediaSession) {
-            navigator.mediaSession.playbackState = 'paused';
+
+        // Debounce the MediaSession update to avoid tearing down a notification
+        // that Chrome is about to resume (audio focus recovery, buffer catchup)
+        clearTimeout(pauseDebounceTimer);
+
+        if (window.wasPausedByUser) {
+            // User explicitly paused — update MediaSession immediately, no debounce
+            updateMediaSessionPosition();
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+        } else {
+            // OS-initiated pause (phone call, audio focus loss) — debounce
+            // If play() fires within 800ms (focus recovery), cancel the update
+            pauseDebounceTimer = setTimeout(() => {
+                if (audioPlayer.paused && !audioPlayer.switching) {
+                    updateMediaSessionPosition();
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
+                }
+            }, 800);
         }
     });
 
