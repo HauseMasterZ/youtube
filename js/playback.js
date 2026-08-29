@@ -815,7 +815,7 @@
 
                     completed++;
                     if (btn) btn.title = `${completed} / ${total} - Click to cancel`;
-                    showDownloadToast(`Downloading "${currentPl}" - ${completed} / ${total}`);
+                    showDownloadToast(`"${currentPl}" - ${completed} / ${total}`);
                 }
             };
 
