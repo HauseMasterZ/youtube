@@ -83,9 +83,6 @@
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
             updateMediaSessionPosition(newTime, dur);
         });
-        navigator.mediaSession.setActionHandler('stop', () => {
-            audioPlayer.instantPause();
-        });
     }
 
 
