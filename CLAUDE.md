@@ -1,130 +1,372 @@
-# CLAUDE.md — Frontend PWA Architecture & Technical Memory
+# CLAUDE.md — Frontend Development Guidelines
 
-This document serves as the comprehensive, authoritative technical memory for AI coding assistants working on the Web Music Player Progressive Web App (PWA). It details the core audio engine, virtual DOM recycling, W3C MediaSession constraints, and zero GPU desktop architecture.
+This document contains frontend-only coding guidelines for the Web Music Player Progressive Web App (PWA). It focuses on user interface, interaction patterns, performance optimization, and frontend best practices. Backend infrastructure (GCP, Hugging Face, ngrok, Cloudflare) and deployment logic are not documented here.
 
 ---
 
-## 1. Zero-GPU Desktop & Core Audio Engine ([`js/dom.js`](js/dom.js))
+## 1. Audio Engine & Zero-GPU Desktop Constraint
 
-> **CRITICAL ARCHITECTURAL CONSTRAINTS**:
-> 1. **Zero Desktop GPU Overhead**: `AudioContext` and Web Audio graphs are **strictly disabled on Desktop**. Connecting `<audio>` to `createMediaElementSource` forces Chromium's Direct3D compositor process to stay active (~1% GPU usage). Desktop playback relies exclusively on native `<audio>.volume` to guarantee continuous **0.0% GPU load**.
-> 2. **MSE on Mobile for Notification Survival**: Media Source Extensions (MSE) are used on Android to keep `<audio>.src` permanently bound to `URL.createObjectURL(mediaSource)`. Changing `audio.src` directly triggers native `emptied` events which deallocate Android's `AudioTrack` and kill the lock screen notification widget when the device is locked.
+### Desktop vs. Mobile Audio Routing
+- **Desktop**: Use native `<audio>.volume` exclusively. **Never** connect `<audio>` to `AudioContext.createMediaElementSource()` as this forces Chromium's GPU compositor to stay active (~1% GPU overhead). Maintain **0.0% GPU load** on desktop by avoiding Web Audio graphs.
+- **Mobile (Android)**: Use **Media Source Extensions (MSE)** with a permanent `<audio>.src` bound to `URL.createObjectURL(mediaSource)`. Changing `audio.src` directly triggers Android's `AudioTrack` deallocation, which kills the lock screen media notification when the device is locked. **`audio.src` must never be reassigned after initialization.**
 
-### The 4 Invariants ([`js/dom.js`](js/dom.js))
-
-#### Invariant 1: Permanent MediaSource Object URL (Mobile)
+### Track Switching on Mobile (MSE)
 - `<audio id="audio-player-1">.src` is attached **once on startup** to `URL.createObjectURL(mediaSource)`.
-- **`audio.src` is NEVER reassigned, deleted, or reloaded on mobile.**
-- Track switching occurs entirely inside the `SourceBuffer`:
-  ```javascript
-  await this._clearSourceBuffer(); // removes old buffer
-  await this._appendToSourceBuffer(firstChunk); // appends new WebM/Opus track
-  ```
+- Track switches occur entirely inside the `SourceBuffer`:
+  1. `await _clearSourceBuffer()` removes old audio frames.
+  2. `await _appendToSourceBuffer(arrayBuffer)` appends new WebM/Opus track data.
+  3. `mediaSource.endOfStream()` signals track completion.
+- **Result**: Zero `emptied` events, zero `AudioTrack` deallocations, and lock screen notification remains pinned.
 
-#### Invariant 2: Progressive Fragmented MSE Ingestion & Catch-Up Seeking
-- **Initial Safety Cushion**: Ingests ~768KB (~40s of Opus audio) upfront as a combined contiguous buffer before `this.active.play()` begins to prevent mid-stream decoder packet dropouts.
-- **Progressive Background Ingestion**: Remaining chunks stream continuously in the background, firing `'progress'` events with signature caching to avoid layout thrashing.
-- **Start-to-Target Catch-Up Seeking**: When seeking into unbuffered audio (`target > buffEnd`), `this._pendingSeek` holds physical playback while the thumb sits at the target timestamp. Playback auto-resumes smoothly as soon as ingestion reaches the target.
-- **In-Memory Scrubbing**: Seeking within already-buffered ranges is **100% instant 0ms local playback**.
-
-#### Invariant 3: Canonical W3C Position Lifecycle & Zero-Bleed Rules ([`js/mediaSession.js`](js/mediaSession.js))
-- **Position Bleed Prevention**: In `executePlayback()`, immediately invoke **`navigator.mediaSession.setPositionState(null)`** when `new MediaMetadata` is created to stop speculative OS seekbar timers from previous tracks.
-- **Mandatory `<audio>` Playhead Pause**: Inside `switchTrack()`, **`this.active.pause()` and `this.active.currentTime = 0` MUST be called** to prevent Chromium's hardware clock from advancing during network fetches.
-- **Auto-Advance Watchdog**: In `forwardEvent`, near-end watchdog (`ct >= dur - 0.25`) must ALWAYS read physical **`this.active.currentTime`**, never virtual `this.currentTime`.
-- **Non-User Pause Instant Auto-Resume**: In `main.js` `pause` handler, if `window.wasPausedByUser === false`, immediately call `audioPlayer.play()`.
+### W3C MediaSession Lifecycle
+- **On track transition**: Set `navigator.mediaSession.metadata`, then **immediately call `setPositionState(null)`** to clear old seekbar timers.
+- **On playback start**: Call `setPositionState({ duration, position, playbackRate: 1.0 })` to sync the OS lock screen seekbar.
+- **Critical**: Always read physical `audioElement.currentTime` from the DOM, never cache virtual positions.
 
 ---
 
 ## 2. Lighthouse CI & 95+ Performance Architecture Protocols
 
-> **STRICT INVARIANT FOR ALL AI AGENTS & DEVELOPERS**:
-> Every commit is automatically audited by Lighthouse CI in GitHub Actions under **Simulated Mobile Slow 4G (1.6 Mbps download, 750 Kbps upload, 150ms RTT)** on an emulated Moto G Power device. The production build MUST achieve **95–100 Performance Score**:
-> - **First Contentful Paint (FCP)**: $< 1.2\text{s}$
-> - **Largest Contentful Paint (LCP)**: $< 2.3\text{s}$ (Target $\le 1.3\text{s}$)
-> - **Total Blocking Time (TBT)**: $< 150\text{ms}$
-> - **Cumulative Layout Shift (CLS)**: $0.00$
+> **STRICT FRONTEND INVARIANT**:
+> Every commit is audited by Lighthouse CI under **Simulated Mobile Slow 4G (1.6 Mbps, 750 Kbps up, 150ms RTT)** on emulated Moto G Power. The production build MUST achieve **95–100 Performance Score**:
+> - **First Contentful Paint (FCP)**: < 1.2s
+> - **Largest Contentful Paint (LCP)**: < 2.3s (Target ≤ 1.3s)
+> - **Total Blocking Time (TBT)**: < 150ms
+> - **Cumulative Layout Shift (CLS)**: 0.00
 
-### The 5 Performance Guardrails
+### Critical Path Performance Rules
 
-#### Guardrail 1: Critical Path `<head>` Budget ($< 60\text{ KB}$ Total)
-- **Zero Heavy Font Preloads**: Never preload multi-megabyte variable font tables. All `.woff2` font files in `assets/fonts/` must be micro-subsetted to the Latin glyph range ($< 50\text{ KB}$).
-- **Preconnect & DNS-Prefetch**: `<link rel="preconnect">` and `<link rel="dns-prefetch">` for `__API_GATEWAY_URL__` and `__UPSTREAM_ORIGIN_URL__` must stay intact in `index.html` to eliminate $250\text{--}350\text{ms}$ of TCP/TLS handshake latency.
-- **Inlined Critical CSS**: `deploy.yaml` inlines minified `style.css` directly into `<head>` to achieve zero-RTT first paint.
+#### Rule 1: Synchronous Playlist Fetch
+- `loadPlaylist()` must fire `fetch(dbUrl)` immediately at t=0, **not** wrapped in `requestAnimationFrame`.
+- Never block behind `await caches.open()` on initial load.
+- Synchronous `normalizePlaylistData()` must complete in < 1ms across 1,000 tracks.
 
-#### Guardrail 2: W3C LCP Text Bounding Box Invariant ([`js/playback.js`](js/playback.js))
-- **Direct Synchronous Fetch**: `loadPlaylist()` must fire `fetch(dbUrl)` immediately at $t=0$. Never wrap initial loading in `requestAnimationFrame` or block behind `await caches.open()`.
-- **Zero LCP Bounding-Box Resets**: Never insert temporary skeleton text rows that get replaced later by real titles; replacing smaller placeholder boxes with 78-character song titles resets Chromium's LCP candidate to the late timestamp. Render directly in a single paint or use fixed geometric background blocks.
-- **Immediate $O(N)$ Normalization**: `normalizePlaylistData()` must run in a single synchronous pass ($< 1\text{ms}$ across 1,000 tracks) without asynchronous idle-chunk slicing.
+#### Rule 2: Zero LCP Bounding Box Resets
+- Never insert temporary skeleton placeholder rows that get replaced by real track titles later.
+- Replacing small 20px skeleton boxes with 78-character titles causes Chromium to reset LCP candidate timestamp.
+- Either render directly in single paint or use fixed-height background blocks.
 
-#### Guardrail 3: Total Blocking Time (TBT $< 150\text{ms}$) & Zero Reflow ([`js/dom.js`](js/dom.js), [`js/ui.js`](js/ui.js))
-- **Lazy Media Engine Initialization**: `DualAudioPingPong` must NOT call `_initMSE()`, create `MediaSource`, or attach `URL.createObjectURL` during constructor or module evaluation. Blink media pipelines and audio decoders are initialized strictly on-demand on the first `play()` or `switchTrack()`.
-- **Zero Top-Level DOM Instantiation**: Never create DOM nodes, SVG elements, or run `innerHTML` at the JavaScript module top-level. `trackTemplate` must be initialized lazily (`getTrackTemplate()`) on first render.
-- **Fast Template Node Cloning**: Virtual scroller pool uses `getTrackTemplate().cloneNode(true)` directly in C++ rather than JS element construction.
-- **Flat CSS Specificity**: Never introduce complex compound selectors with deep `:not()` chains or `!important` overrides into `css/style.css`. Deep CSS rules stall Blink's HTML & CSS parser during initial inlined document parsing.
+#### Rule 3: Total Blocking Time (TBT < 150ms)
+- **Lazy MSE Initialization**: `DualAudioPingPong` must NOT call `_initMSE()` or `createMediaSource()` at module top-level or constructor. Initialize strictly on first `play()` or `switchTrack()`.
+- **Zero Top-Level DOM**: Never create DOM nodes, SVG elements, or run `innerHTML` at module scope. `trackTemplate` must be initialized lazily via `getTrackTemplate()` on first render.
+- **Flat CSS Specificity**: Avoid deep `:not()` chains or `!important` in `css/style.css`; deep CSS rules stall Blink's parser during inlined document parse.
 
-#### Guardrail 4: Deferred Service Worker Registration ([`js/playback.js`](js/playback.js))
-- `navigator.serviceWorker.register('sw.js')` must strictly run inside `requestIdleCallback({ timeout: 5000 })` (or `setTimeout(1000)`).
-- **Rationale**: `cache.addAll(CORE_ASSETS)` must never compete for Slow 4G bandwidth or CPU cycles against the primary `_Playlist_Database.json` fetch during initial paint.
+#### Rule 4: GPU Layer Discipline
+- **Never** use `will-change: transform` or `transform: translateZ(0)` on static elements; only animate/scroll layers get promotion.
+- Avoid `transform: translate3d()` on elements that don't animate; use `margin` or `position` instead.
+- Remove `will-change` from static content after animation completes to prevent compositor memory leaks.
 
-#### Guardrail 5: Automated Workflow Cache Management ([`deploy.yaml`](.github/workflows/deploy.yaml))
-- **Never Manually Bust Caches**: Do not manually change `CACHE_NAME` in `sw.js` or `?v=` in `index.html`. The GitHub Actions CI/CD workflow automatically handles asset hashing, bundling, and Cloudflare edge cache purges.
-
----
-
-## 3. Zero-GPU Desktop & Core Audio Engine ([`js/dom.js`](js/dom.js))
-
-### Virtual Scroller & Buffer DOM Caching ([`js/ui.js`](js/ui.js))
-- Handles playlists with thousands of tracks using a fixed `48px` (`ITEM_HEIGHT`) DOM recycling virtual scroller.
-- **Signature-Cached Buffer Updates**: `updateBufferProgress()` computes a buffer signature (`start-end|...`) and skips DOM mutations when buffered ranges are unchanged, eliminating layout thrashing during playback.
-
-### Fast $12\times 12$ Chroma-Saturation Color Quantization ([`js/ui.js`](js/ui.js))
-- Reuses a persistent $12\times 12$ offscreen canvas context to sample the center 70% of artwork.
-- Directly evaluates chroma ($\Delta = \max(r,g,b) - \min(r,g,b)$) and brightness to score vibrant accent colors with high contrast on dark themes in **$<0.02\text{ms}$** (zero HSL conversion loops).
-- Stores extracted colors in `dominantColorCache` and `artworkSquareCache`.
-
-### Unified Playlist Normalization ([`js/utils.js`](js/utils.js))
-- All playlist ingestion across initial load, desktop parallel preloading, and sync updates routes through `normalizePlaylistData(data, folderName)`.
-- Automatically strips `Deleted/Private Video` tracks and transforms array schemas into unified track objects.
-
-### Clean CSS Layering ([`css/style.css`](css/style.css))
-- Zero GPU layer forcing (`will-change: transform` and `transform: translateZ(0)` are removed from non-animated layers).
-- Purged all legacy `.ai-lyrics-badge` keyframe animations to eliminate compositor memory leaks.
+#### Rule 5: Font Loading
+- Use WOFF2 format only; micro-subset to **Latin characters only** (< 50KB per file).
+- Load fonts asynchronously via `@font-face` with `font-display: swap` to avoid render-blocking delays.
 
 ---
 
-## 3. Search Engine & Crawler Policy ([`robots.txt`](robots.txt))
-- **Allowed**: `Googlebot`, `Bingbot`, `DuckDuckBot` for full web search indexing.
-- **Blocked**: All major LLM training scrapers (`GPTBot`, `ClaudeBot`, `Google-Extended`, `Applebot-Extended`, `CCBot`, `Meta-ExternalAgent`, `Diffbot`, `PerplexityBot`).
-- **Page Metadata**: `<meta name="robots" content="index, follow">` in [`index.html`](index.html).
+## 3. Frontend Architecture Overview
+
+### Core Modules
+
+| Module | File | Responsibility |
+|--------|------|---|
+| **UI Engine** | `js/ui.js` | Virtual scroller, layout rendering, theme injection, touch handlers |
+| **Playback Logic** | `js/playback.js` | Queue management, shuffle/repeat modes, track transitions |
+| **Audio Control** | `js/dom.js` | Audio playback, buffering, volume control |
+| **Media Controls** | `js/mediaSession.js` | Lock screen metadata, OS media button integration |
+| **Lyrics** | `js/lyrics.js` | LRC parser, synchronized timestamp display |
+| **State** | `js/state.js` | Global app state, playlist registry |
+| **Utilities** | `js/utils.js` | Time formatting, color extraction, helpers |
+| **Entry Point** | `js/main.js` | App initialization, event wiring, keyboard shortcuts |
 
 ---
 
-## 4. Service Worker & Caching Strategy ([`sw.js`](sw.js))
+## 4. Frontend Design Patterns
 
-### Dual-Cache Architecture
-1. **App Shell Cache (`yt-player-cache-v118`)**:
-   - Stores `index.html`, CSS, modular JS scripts, and SVG assets.
-   - Updated by incrementing `CACHE_NAME` in `sw.js` and query strings in `index.html` (`?v=24.95`).
-2. **Media Chunk Cache (`yt-player-media`)**:
-   - Dedicated persistent cache for audio streams (`.webm`) and album artwork (`.webp`).
-   - Strips HTTP `Range` headers from origin fetches to store full `200` responses.
-   - **Strict Invariant**: `activate` handler in `sw.js` must NEVER delete `yt-player-media` during app shell cache updates.
+### Virtual Scroller Pattern (`js/ui.js`)
+- Use fixed `48px` item height for consistent DOM recycling.
+- Never create/destroy DOM nodes dynamically during scroll; reuse a fixed pool.
+- Keep scroll position in sync with playback state; update UI only when playlist changes.
+- **Why**: Prevents layout thrashing and jank on large playlists (1000+ tracks).
+
+### Playback State Management (`js/state.js`)
+- Maintain single source of truth for:
+  - `allDatabases`: All loaded playlists
+  - `playQueue`: Current play order (possibly shuffled)
+  - `queueIndex`: Current track index
+  - `repeatMode`: "none" | "all" | "one"
+  - `shuffleMode`: "off" | "playlist" | "global"
+- Always update state before dispatching UI updates; UI is derived from state, never the inverse.
+
+### Lock Screen Integration (`js/mediaSession.js`)
+- Set `navigator.mediaSession.metadata` with artwork, title, and artist whenever a track changes.
+- Always call `setPositionState(null)` when transitioning between tracks to clear old seekbar timers.
+- Update `setPositionState({ duration, position, playbackRate: 1.0 })` once playback starts.
+- Handle media button actions (play, pause, skip) via `mediaSession.setActionHandler()`.
+
+### Audio Playback Flow (`js/dom.js`)
+- Fetch and buffer audio chunks progressively.
+- Pause playback before switching tracks to prevent audio overlap.
+- Reset `currentTime = 0` on every track switch.
+- Emit custom events (`'playing'`, `'ended'`) to signal playback state to the UI and media session.
 
 ---
 
-## 5. Codebase File Map
+## 5. UI Component Guidelines
 
-| File | Subsystem | Responsibility |
-|---|---|---|
-| [`index.html`](index.html) | Shell | HTML layout, circular YT logo, audio element, versioned script imports (`v24.95`), robots meta. |
-| [`robots.txt`](robots.txt) | SEO / Security | Crawler policy allowing search engines and disallowing AI scrapers. |
-| [`js/dom.js`](js/dom.js) | Audio Engine | `DualAudioPingPong` MSE engine, `SourceBuffer` pipeline, 0% GPU desktop volume routing. |
-| [`js/mediaSession.js`](js/mediaSession.js) | OS Integration | Native `MediaMetadata`, W3C `setPositionState(null)` lifecycle, lock screen action handlers. |
-| [`js/playback.js`](js/playback.js) | Playback Logic | Queue orchestration, cross-playlist/single-playlist shuffle, repeat modes, visual preloading. |
-| [`js/main.js`](js/main.js) | App Controller | Event bus, search indexing, virtual track rendering, VPS sync polling. |
-| [`js/ui.js`](js/ui.js) | Presentation | Virtual scroller, $12\times 12$ fast chroma color extractor, signature-cached buffer bar. |
-| [`js/lyrics.js`](js/lyrics.js) | Lyrics | Synchronized `.lrc` timestamp parser, auto-scroll animation loop. |
-| [`js/state.js`](js/state.js) | State Store | Global state registry (`allDatabases`, `playQueue`, `queueIndex`, `repeatMode`, `shuffleMode`). |
-| [`js/utils.js`](js/utils.js) | Utilities | ISO duration parser, time formatter, unified `normalizePlaylistData()`. |
-| [`sw.js`](sw.js) | Service Worker | App shell cache manager (`yt-player-cache-v118`) and persistent media cache (`yt-player-media`). |
+### Accessibility
+- All clickable elements must be keyboard-accessible.
+- Use semantic HTML5 elements (`<button>`, `<input>`, `<nav>`).
+- Provide `aria-label` for icon-only buttons.
+- Ensure color contrast meets WCAG AA standards (4.5:1 for text, 3:1 for graphics).
 
+### Responsive Design
+- Test layouts on:
+  - **Mobile**: 375px (iPhone 12 mini), 812px (iPhone 12), 360px (Android small)
+  - **Tablet**: 768px (iPad), 1024px (iPad Pro)
+  - **Desktop**: 1920px (full HD), 2560px (4K)
+- Use `@media (max-width: ...)` breakpoints, not device detection.
+- Font sizes scale with viewport; no fixed pixel sizes on mobile.
+
+### Touch Gestures
+- **Swipe Left/Right**: Skip to next/previous track.
+- **Swipe Up/Down**: Open/close lyrics panel.
+- **Long Press**: Show track menu (e.g., delete from queue).
+- **Double Tap**: Play/pause.
+- Ensure touch targets are at least 44px × 44px for accessibility.
+
+### Theme & Colors
+- Extract dominant color from album artwork using `js/ui.js` color quantization.
+- Use CSS custom properties (CSS variables) to apply accent colors dynamically.
+- Dark theme only; light backgrounds should have high contrast.
+- Avoid pure black (#000000); use #1a1a1a or similar for reduced eye strain.
+
+---
+
+## 6. Performance Best Practices
+
+### Scroll Performance
+- **Never** force synchronous DOM layout during scroll events; batch updates with `requestAnimationFrame`.
+- Use `transform: translate3d()` for smooth 60fps scrolling, never top/left.
+- Limit DOM nodes to ~50 visible + 20 off-screen buffered (100 total max).
+
+### Render Optimization
+- Avoid repainting the entire DOM during track transitions.
+- Use signature caching (`updateBufferProgress()`) to skip unnecessary DOM mutations.
+- Example signature: `"0-500|500-1000|1500-2000"` only updates if buffer ranges change.
+
+### Font Loading
+- Use WOFF2 format only; micro-subset to Latin characters only.
+- Font file size must stay under 50KB.
+- Load fonts asynchronously via `@font-face` with `font-display: swap`.
+
+### Color Extraction
+- Reuse a persistent 12×12 offscreen canvas to sample artwork.
+- Compute chroma (Δ = max(r,g,b) - min(r,g,b)) and brightness in under 0.02ms.
+- Cache results in `dominantColorCache` and `artworkSquareCache` to avoid re-processing.
+
+---
+
+## 7. Input Handling
+
+### Keyboard Shortcuts
+- **Space**: Toggle play/pause
+- **→ (Right Arrow)**: Skip to next track
+- **← (Left Arrow)**: Skip to previous track
+- **L**: Toggle lyrics panel
+- All shortcuts must have visual indicator (e.g., key hint in tooltips)
+
+### Seek Bar Interaction
+- Allow scrubbing (dragging) on the seek bar.
+- Show tooltip with timestamp on hover (e.g., "1:23").
+- Clamp seek position to buffered ranges on mobile; allow seeking into unbuffered ranges on desktop.
+
+### Volume Control
+- Expose volume slider for desktop only.
+- On mobile, volume is controlled by hardware buttons; do not override system volume.
+- Always sync `<audio>.volume` with UI slider state after user interaction.
+
+---
+
+## 8. Lyrics Display (`js/lyrics.js`)
+
+### LRC Format Support
+- Parse timestamps in format: `[MM:SS.ms] Lyric text`
+- Handle edge cases:
+  - Empty lines (treat as blank lyric)
+  - Duplicate timestamps (show all in same frame)
+  - Out-of-order timestamps (sort internally)
+- Display current + next 2-3 lines to preview upcoming lyrics.
+
+### Auto-Scroll Behavior
+- Scroll to center the current lyric on screen during playback.
+- Use `requestAnimationFrame` for smooth 60fps scroll animation.
+- Stop scrolling if user manually scrolls the lyrics panel (pause auto-scroll).
+- Resume auto-scroll 3 seconds after user releases the panel.
+
+---
+
+## 9. Error Handling & User Feedback
+
+### Network Errors
+- Show toast notification: "⚠️ Failed to load track. Retrying..."
+- Auto-retry with exponential backoff (100ms, 300ms, 1s).
+- After 3 retries, show: "⚠️ Track unavailable. Skipping..."
+
+### Playback Errors
+- If audio codec is unsupported, show: "❌ Audio format not supported"
+- Log error to console with timestamp and track ID.
+- Skip to next track automatically after 2 seconds.
+
+### UI State Feedback
+- **Loading**: Pulse/fade animation on album artwork.
+- **Buffering**: Show buffered progress as fade overlay on seek bar.
+- **Error**: Red tint on current track in playlist; strikethrough text.
+
+---
+
+## 10. CSS Guidelines (`css/style.css`)
+
+### Specificity
+- Avoid deep nested selectors (max 3 levels: `.class > .child > .grandchild`).
+- Never use `!important` unless absolutely unavoidable.
+- Use BEM naming convention: `.player__track`, `.player__track--playing`.
+
+### GPU Performance
+- Do NOT use `will-change: transform` or `transform: translateZ(0)` on non-animated elements.
+- Only promote layers that animate or scroll: virtual scroller and lyrics drawer.
+- Remove `will-change` from static content to prevent compositor memory waste.
+
+### Layout Shift Prevention
+- All major sections must have fixed or constrained dimensions.
+- Skeleton loaders should match final content dimensions exactly.
+- Never replace small placeholder text with larger real content; use fixed-height boxes.
+
+---
+
+## 11. Mobile-Specific Considerations
+
+### Lock Screen on Android
+- Track metadata, artwork, and playback state updates must happen before playback starts.
+- Ensure media session is properly configured or lock screen controls won't appear.
+- Test on actual device or emulator; Chrome DevTools simulation is incomplete.
+
+### Battery & Thermal
+- Minimize wake locks; avoid `requestAnimationFrame` loops when app is hidden (`document.hidden = true`).
+- Stop animation loops and clear `setInterval`/`setTimeout` when app is backgrounded.
+- Use `visibilitychange` event to pause animations and defer heavy work.
+
+### Touch & Gestures
+- Avoid hover states on mobile; use active (`:active`) and focus (`:focus`) states.
+- Ensure buttons have clear visual feedback (color change, scale).
+- Use `touch-action: manipulation` on interactive elements to prevent double-tap delays.
+
+---
+
+## 12. Testing Checklist
+
+### Before Committing
+- [ ] Keyboard shortcuts work on desktop (Space, ↑/↓, L, etc.)
+- [ ] Virtual scroller scrolls smoothly at 60fps (use DevTools Rendering > FPS meter)
+- [ ] Lyrics auto-scroll and stay centered during playback
+- [ ] Lock screen shows correct track metadata (test on mobile device)
+- [ ] Seek bar works; clicking/dragging updates playback position
+- [ ] Volume slider responds to input (desktop)
+- [ ] Shuffle/repeat buttons toggle states visually
+- [ ] Playlists switch without audio glitches
+- [ ] Offline mode works; cached tracks play without network
+- [ ] No console errors in DevTools
+
+### Mobile Testing
+- [ ] Layout is responsive at 375px, 768px, and 1920px
+- [ ] Touch targets are at least 44px × 44px
+- [ ] Swipe gestures (next/prev, open lyrics) work smoothly
+- [ ] No unwanted zoom-on-tap or double-tap delays
+- [ ] Lock screen shows media controls with correct artwork
+- [ ] App works with device orientation changes (portrait ↔ landscape)
+
+---
+
+## 13. Common Pitfalls & Solutions
+
+### Problem: Seek Bar Jumps Erratically
+**Cause**: Reading virtual `this.currentTime` instead of physical `this.active.currentTime`.  
+**Fix**: Always read `audioElement.currentTime` directly from the DOM; never cache it.
+
+### Problem: Audio Leaks When Skipping
+**Cause**: Not pausing or resetting playback before switching tracks.  
+**Fix**: Call `audio.pause()` and `audio.currentTime = 0` before starting a new track fetch.
+
+### Problem: Lyrics Don't Sync
+**Cause**: Timestamp parsing is off, or requestAnimationFrame is not being called continuously.  
+**Fix**: Debug by logging parsed timestamps; ensure `updateLyrics()` runs on every playback tick.
+
+### Problem: Virtual Scroller Stutters on Scroll
+**Cause**: DOM mutations or layout calculations inside scroll event handler.  
+**Fix**: Batch all DOM updates inside a single `requestAnimationFrame` call after scroll ends.
+
+### Problem: Lock Screen Notification Disappears
+**Cause**: Calling `audio.pause()` or setting `muted = true` on mobile.  
+**Fix**: Use Web Audio `GainNode` for silence instead; keep `<audio>` playing and `muted = false`.
+
+---
+
+## 14. Frontend Code Example: Track Switching
+
+```javascript
+// BAD: Direct mutation causes audio leaks and state thrashing
+function switchTrack(newTrack) {
+  audio.src = newTrack.url;  // ❌ Triggers emptied event on mobile
+  audio.play();
+}
+
+// GOOD: Proper state reset before buffering
+async function switchTrack(newTrack) {
+  // 1. Silence the old track immediately
+  gainNode.gain.value = 0;
+  
+  // 2. Pause and reset playback position
+  audio.pause();
+  audio.currentTime = 0;
+  
+  // 3. Update UI state
+  updatePlaylistHighlight(newTrack.id);
+  
+  // 4. Update lock screen metadata
+  updateMediaSessionMetadata(newTrack);
+  clearMediaSessionPosition(); // setPositionState(null)
+  
+  // 5. Fetch and buffer audio
+  const buffer = await fetchAudioBuffer(newTrack.url);
+  await appendToSourceBuffer(buffer);
+  
+  // 6. Resume playback
+  gainNode.gain.value = 1.0;
+  audio.play();
+}
+```
+
+---
+
+## 15. Frontend Coding Standards
+
+### Variable Naming
+- Use camelCase for variables and functions: `currentTrackId`, `fetchPlaylist()`
+- Use UPPER_CASE for constants: `ITEM_HEIGHT = 48`, `MAX_QUEUE_SIZE = 5000`
+- Use prefixes for private methods: `_updateBuffer()`, `_syncScrollPosition()`
+
+### Comments
+- Comment the *why*, not the *what*. The code already shows what it does.
+- Example good comment: `// Reset currentTime before SourceBuffer append to prevent decoder artifact`
+- Example bad comment: `// Set the current time to 0` (obvious from code)
+
+### Error Messages
+- Make error messages actionable and user-friendly.
+- Include context: `"Failed to load 'Song Title' (Network timeout)"`
+- Avoid internal jargon: ❌ `MSE appendError`, ✅ `Couldn't load this track`
+
+---
+
+## 16. Documentation & Comments
+
+- **Frontend-only docs**: This file covers user features, UI, and frontend code patterns only.
+- **No backend infrastructure here**: GCP, Hugging Face, ngrok, Cloudflare, and deployment logic belong in separate backend documentation.
+- **Update docs when**: Adding new keyboard shortcuts, changing UI components, or introducing new playback modes.
