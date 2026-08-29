@@ -749,7 +749,7 @@
         if (iconActive) iconActive.style.display = "block";
         if (iconDone) iconDone.style.display = "none";
 
-        showDownloadToast(`"${currentPl}" - 0 / ${tracks.length}`);
+        showDownloadToast(`${currentPl} - 0 / ${tracks.length}`);
 
         try {
             const mediaCache = await caches.open('yt-player-media');
@@ -815,14 +815,14 @@
 
                     completed++;
                     if (btn) btn.title = `${completed} / ${total} - Click to cancel`;
-                    showDownloadToast(`"${currentPl}" - ${completed} / ${total}`);
+                    showDownloadToast(`${currentPl} - ${completed} / ${total}`);
                 }
             };
 
             await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
             if (!signal.aborted && isDownloadingPlaylist) {
-                showDownloadToast(`Verifying "${currentPl}" offline storage...`);
+                showDownloadToast(`Verifying ${currentPl} offline storage...`);
                 let verifiedCount = 0;
                 for (const t of tracks) {
                     const aUrl = getAudioUrl(t);
@@ -836,7 +836,7 @@
                 if (iconDone) iconDone.style.display = "block";
                 if (btn) btn.title = "Playlist fully downloaded for offline playback!";
 
-                showDownloadToast(`[✓] "${currentPl}" verified (${verifiedCount}/${total} saved offline)`, true);
+                showDownloadToast(`[✓] ${currentPl} verified (${verifiedCount}/${total} saved offline)`, true);
 
                 setTimeout(() => {
                     if (iconDone) iconDone.style.display = "none";
