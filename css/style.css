@@ -323,7 +323,10 @@
             transition: color 0.2s ease;
         }
 
-        #current-channel.autoplay-off {
+        #current-channel.autoplay-off,
+        .now-playing #current-channel.autoplay-off,
+        .now-playing.expanded #current-channel.autoplay-off,
+        .now-playing:not(.expanded) #current-channel.autoplay-off {
             color: var(--text-primary, #ffffff);
         }
 
@@ -1193,7 +1196,7 @@
                 font-size: 12px;
                 margin: 0;
                 display: block;
-                color: var(--text-secondary);
+                color: var(--primary-color);
                 text-align: left;
             }
             
