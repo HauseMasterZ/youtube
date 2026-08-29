@@ -439,7 +439,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container')) return;
+            if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container, #current-channel')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
         }
