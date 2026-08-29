@@ -330,25 +330,13 @@
         }
 
         if (playQueue.length === 0) return;
-        
-        // If autoplay is disabled, strictly stop playback
-        if (!autoplayEnabled) {
-            setPlayUI(false);
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
-            return;
-        }
 
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
             executePlayback();
-        } else if (repeatMode === 1) { 
+        } else {
             queueIndex = 0;
             executePlayback();
-        } else {
-            setPlayUI(false);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
         }
     }
 
