@@ -258,14 +258,26 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             return;
         }
-        if (audioPlayer.paused) {
+        
+        // Toggle based on user playback intent to prevent ghost state during initial buffering
+        if (window.wasPausedByUser) {
             window.wasPausedByUser = false;
-            audioPlayer.play().catch(e => {
-                console.warn("Play blocked:", e);
-            });
+            setPlayUI(true);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                audioPlayer.currentTime = 0;
+                updateTimeUI(0);
+                if (window.lyricsActive && typeof updateLyricsUI === 'function') {
+                    updateLyricsUI(0);
+                }
+            }
+            audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
-            audioPlayer.pause();
+            setPlayUI(false);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+            audioPlayer.instantPause();
         }
     });
 
@@ -317,6 +329,14 @@ document.addEventListener("DOMContentLoaded", () => {
         repeatMode = (repeatMode + 1) % 3;
         applyRepeatUI();
     });
+
+    const currentChannelEl = document.getElementById("current-channel");
+    if (currentChannelEl) {
+        currentChannelEl.addEventListener("click", () => {
+            autoplayEnabled = !autoplayEnabled;
+            applyAutoplayUI();
+        });
+    }
     function syncDuration() {
         const dur = audioPlayer.duration;
         if (!isNaN(dur) && dur > 0 && dur !== Infinity) {
@@ -327,7 +347,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (currentMax !== roundedDur) {
                     seekBar.max = roundedDur;
                     totalTimeDisplay.textContent = formatTime(roundedDur);
-                    if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
                     if (typeof updateBufferProgress === 'function') updateBufferProgress();
                     updateMediaSessionPosition();
                 }
@@ -340,7 +359,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("seeked", () => {
         updateMediaSessionPosition();
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
     });
     audioPlayer.addEventListener("ratechange", updateMediaSessionPosition);
     
@@ -357,59 +375,59 @@ document.addEventListener("DOMContentLoaded", () => {
         window.wasPausedByUser = false;
         window.wasInterrupted = false;
         setPlayUI(true);
-        updateMediaSessionPosition();
+        lastRenderTime = -1;
+
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
-            const track = currentPlaylistData[playQueue[queueIndex]] 
-                       || currentPlaylistData[globalActiveOriginalIndex];
-            if (track && navigator.mediaSession.metadata) {
-                navigator.mediaSession.metadata.title = track.title;
-                navigator.mediaSession.metadata.artist = track.channel;
-                if (!thumbsDisabled) {
-                    const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
-                    if (rawArt) {
-                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        if (sqCached) {
-                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
-                        } else {
-                            getSquareArtwork(rawArt, track.id, (sqUrl) => {
-                                if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: track.title,
-                                        artist: track.channel,
-                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-            }
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
         }
+
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
             updateLyricsUI(audioPlayer.currentTime);
         }
     });
 
-    audioPlayer.addEventListener("pause", () => {
-        if (audioPlayer.switching) return;
-        setPlayUI(false);
-        updateMediaSessionPosition();
+    audioPlayer.addEventListener("playing", () => {
+        setPlayUI(true);
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = 'paused';
+            navigator.mediaSession.playbackState = 'playing';
+        }
+    });
+
+    audioPlayer.addEventListener("pause", () => {
+        // Ignore internal buffering pauses (MSE pending seek / track switch)
+        if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+
+        setPlayUI(false);
+        if (hasMediaSession) {
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
+            if (window.wasPausedByUser) {
+                navigator.mediaSession.playbackState = 'paused';
+            } else {
+                navigator.mediaSession.playbackState = 'playing';
+            }
         }
     });
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));
+
+            // Re-sync MediaSession state when PWA is foregrounded
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
+                const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+            }
         }
     });
 
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
-            if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container')) return;
+            if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container, #current-channel')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
         }
@@ -446,27 +464,29 @@ document.addEventListener("DOMContentLoaded", () => {
     let wasPlayingBeforeSeek = false;
     seekBar.addEventListener("pointerdown", () => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !audioPlayer.paused;
+            wasPlayingBeforeSeek = !window.wasPausedByUser;
             isSeeking = true;
-            audioPlayer.instantPause();
         }
     });
 
     seekBar.addEventListener("input", (e) => {
         if (!isSeeking) {
-            wasPlayingBeforeSeek = !audioPlayer.paused;
+            wasPlayingBeforeSeek = !window.wasPausedByUser;
             isSeeking = true;
-            audioPlayer.instantPause();
         }
         const val = Number(e.target.value);
         currentTimeDisplay.textContent = formatTime(Math.floor(val));
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
     });
 
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
         const targetTime = Number(e.target.value);
+        
+        if (wasPlayingBeforeSeek) {
+            window.wasPausedByUser = false;
+        }
+
         try {
             audioPlayer.currentTime = targetTime;
         } catch (err) {
@@ -474,9 +494,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         updateTimeUI(targetTime);
         if (window.lyricsActive) updateLyricsUI(targetTime);
-        updateMediaSessionPosition();
+        
+        // Explicitly pass target time and total duration
+        const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        updateMediaSessionPosition(targetTime, totalDur);
+        
         if (wasPlayingBeforeSeek) {
             audioPlayer.play().catch(console.warn);
+            setPlayUI(true);
         }
     };
 
@@ -485,7 +510,7 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBar.addEventListener("pointercancel", endSeek);
 
     audioPlayer.addEventListener("timeupdate", () => {
-        if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity) {
+        if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
             if (roundedSec !== lastRenderTime) {
@@ -509,6 +534,16 @@ document.addEventListener("DOMContentLoaded", () => {
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
+
+        // If autoplay is disabled, strictly stop and retain end position
+        if (!autoplayEnabled) {
+            window.wasPausedByUser = true;
+            setPlayUI(false);
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            return;
+        }
 
         if (repeatMode === 2) { 
             audioPlayer.currentTime = 0;
@@ -744,35 +779,50 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (e.target.value === "HARD_RELOAD") {
+        if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
             playlistSelect.value = lastValidPlaylist;
-            
-            // 1. Clear all Service Worker / Cache API caches
-            if ('caches' in window) {
-                try {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map(k => caches.delete(k)));
-                } catch (err) {
-                    console.warn("Error clearing cache:", err);
-                }
-            }
-            
-            // 2. Unregister any active service workers
-            if ('serviceWorker' in navigator) {
-                try {
-                    const registrations = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(registrations.map(r => r.unregister()));
-                } catch (err) {
-                    console.warn("Error unregistering SW:", err);
-                }
-            }
-            
-            // 3. Clear session storage
-            try { sessionStorage.clear(); } catch(err) {}
+            const currentPl = lastValidPlaylist;
+            const ts = Date.now();
 
-            // 4. Force hard reload with timestamp cache-busting
-            const cleanUrl = window.location.origin + window.location.pathname + '?reload=' + Date.now();
-            window.location.replace(cleanUrl);
+            if (btnSync) btnSync.classList.add("spinning");
+
+            (async () => {
+                try {
+                    // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
+                    await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
+                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
+                        const res = await fetch(`${dbUrl}?t=${ts}`);
+                        if (res.ok) {
+                            const rawData = await res.json();
+                            const freshData = normalizePlaylistData(rawData, pl);
+                            allDatabases[pl] = freshData;
+
+                            // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
+                            if ('caches' in window) {
+                                try {
+                                    const cache = await caches.open(CACHE_NAME);
+                                    await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
+                                } catch (e) {}
+                            }
+                        }
+                    }));
+
+                    // 3. Re-apply the active playlist in place (0ms re-render)
+                    if (allDatabases[currentPl]) {
+                        currentPlaylistData = allDatabases[currentPl];
+                        applyPlaylistData(currentPl, currentPlaylistData, false);
+                    }
+
+                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                        window.rebuildCrossShuffleDeck();
+                    }
+                } catch (err) {
+                    console.warn("Failed to reload playlist databases:", err);
+                } finally {
+                    if (btnSync) btnSync.classList.remove("spinning");
+                }
+            })();
+
             return;
         }
         
@@ -783,6 +833,46 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         loadPlaylist(e.target.value);
     });
+
+    // --- Mobile Horizontal Swipe on Playlist Panel to Switch Playlists ---
+    const playlistPanel = document.querySelector('.playlist-panel');
+    if (hasTouch && playlistPanel) {
+        let plTouchStartX = 0;
+        let plTouchStartY = 0;
+        let plTouchStartTime = 0;
+
+        playlistPanel.addEventListener("touchstart", (e) => {
+            if (e.target.closest('input, #fast-scroller, #fast-scroll-thumb')) return;
+            plTouchStartX = e.changedTouches[0].clientX;
+            plTouchStartY = e.changedTouches[0].clientY;
+            plTouchStartTime = Date.now();
+        }, { passive: true });
+
+        playlistPanel.addEventListener("touchend", (e) => {
+            if (window.innerWidth > 800) return;
+            if (document.activeElement === searchInput) return;
+            if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
+
+            const deltaX = e.changedTouches[0].clientX - plTouchStartX;
+            const deltaY = e.changedTouches[0].clientY - plTouchStartY;
+            const elapsed = Date.now() - plTouchStartTime;
+
+            if (Math.abs(deltaX) >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2 && elapsed < 600) {
+                let curIndex = ALL_PLAYLISTS.indexOf(playlistSelect.value);
+                if (curIndex === -1) curIndex = 0;
+
+                const targetIndex = deltaX < 0 
+                    ? (curIndex + 1) % ALL_PLAYLISTS.length 
+                    : (curIndex - 1 + ALL_PLAYLISTS.length) % ALL_PLAYLISTS.length;
+
+                const nextPl = ALL_PLAYLISTS[targetIndex];
+                if (nextPl && nextPl !== playlistSelect.value) {
+                    playlistSelect.value = nextPl;
+                    playlistSelect.dispatchEvent(new Event('change'));
+                }
+            }
+        }, { passive: true });
+    }
 
     // --- On-Demand YouTube Playlist Sync Button & Autonomous Poller ---
     const btnSync = document.getElementById("btn-sync");
@@ -929,7 +1019,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range')) return;
+        if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
         
         if (e.key === ':' || (e.key === ';' && e.shiftKey)) {
             btnPrev.click();
@@ -948,10 +1038,101 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             btnPlayPause.click();
             e.preventDefault();
+        } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            btnRepeat.click();
+            e.preventDefault();
+        } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            btnShuffle.click();
+            e.preventDefault();
         } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
             searchInput.focus();
         }
     });
+
+    // --- Universal 20px Edge-Triggered Fast Scroller Engine ---
+    const fastScroller = document.getElementById("fast-scroller");
+    const fastThumb = document.getElementById("fast-scroll-thumb");
+    const fastBubble = document.getElementById("fast-scroll-bubble");
+    const fastBadge = document.getElementById("fast-scroll-badge");
+    const fastTitle = document.getElementById("fast-scroll-title");
+
+    let isFastScrolling = false;
+    let lastHapticTrack = -1;
+
+    function updateFastScrollPosition(clientY) {
+        if (!playlistContainer || !filteredIndices || filteredIndices.length === 0) return;
+        const rect = playlistContainer.getBoundingClientRect();
+        const relativeY = Math.max(0, Math.min(clientY - rect.top, rect.height));
+        const ratio = rect.height > 0 ? relativeY / rect.height : 0;
+
+        // 1. Instant Virtual Scroll Dispatch
+        const maxScroll = playlistContainer.scrollHeight - playlistContainer.clientHeight;
+        playlistContainer.scrollTop = ratio * maxScroll;
+
+        // 2. Track & Title Resolution (Topmost track currently in view)
+        const topTrackIndex = Math.min(filteredIndices.length - 1, Math.max(0, Math.floor(playlistContainer.scrollTop / ITEM_HEIGHT)));
+        const targetItem = filteredIndices[topTrackIndex];
+        const track = currentPlaylistData ? currentPlaylistData[targetItem.index] : null;
+
+        if (track) {
+            const isFilterActive = searchInput && searchInput.value.trim().length > 0;
+            fastBadge.textContent = isFilterActive 
+                ? `MATCH #${topTrackIndex + 1} OF ${filteredIndices.length}`
+                : `#${topTrackIndex + 1} / ${filteredIndices.length}`;
+            fastTitle.textContent = track.title || "Unknown Title";
+
+            // Micro-haptic pulse on track step (mobile only)
+            if (topTrackIndex !== lastHapticTrack) {
+                lastHapticTrack = topTrackIndex;
+                if (typeof navigator.vibrate === 'function') navigator.vibrate(3);
+            }
+        }
+
+        // 3. Thumb & Bubble Alignment (with safety padding so bubble never clips viewport edges)
+        const parentRect = playlistContainer.offsetParent ? playlistContainer.offsetParent.getBoundingClientRect() : rect;
+        const topOffset = rect.top - parentRect.top;
+        const thumbHeight = 36;
+        const thumbTop = topOffset + Math.max(0, Math.min(relativeY - (thumbHeight / 2), rect.height - thumbHeight));
+        fastThumb.style.top = `${thumbTop}px`;
+
+        const bubbleClampY = topOffset + Math.max(30, Math.min(relativeY, rect.height - 30));
+        fastBubble.style.top = `${bubbleClampY}px`;
+    }
+
+    if (fastScroller) {
+        fastScroller.addEventListener("pointerdown", (e) => {
+            const rect = playlistContainer.getBoundingClientRect();
+            // Strict 20px edge hit-test gate
+            if (e.clientX >= rect.right - 20 && e.clientX <= rect.right + 2) {
+                isFastScrolling = true;
+                fastScroller.classList.add("active");
+                fastBubble.classList.add("active");
+                fastScroller.setPointerCapture(e.pointerId);
+                updateFastScrollPosition(e.clientY);
+                e.preventDefault();
+            }
+        });
+
+        fastScroller.addEventListener("pointermove", (e) => {
+            if (isFastScrolling) {
+                updateFastScrollPosition(e.clientY);
+                e.preventDefault();
+            }
+        });
+
+        const stopFastScroll = (e) => {
+            if (isFastScrolling) {
+                isFastScrolling = false;
+                fastScroller.classList.remove("active");
+                fastBubble.classList.remove("active");
+                try { fastScroller.releasePointerCapture(e.pointerId); } catch (err) {}
+                lastHapticTrack = -1;
+            }
+        };
+
+        fastScroller.addEventListener("pointerup", stopFastScroll);
+        fastScroller.addEventListener("pointercancel", stopFastScroll);
+    }
 
     // PWA Install Button Logic
     let deferredPrompt;

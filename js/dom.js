@@ -14,9 +14,11 @@
             this._currentUrl = '';
             this._mseEnabled = false;
             this._pendingSeek = null;
+            this._seekingTo = null;
             this._expectedDuration = 0;
             this._streamAbortController = null;
             this._streamId = 0;
+            this._streamDone = false;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -27,12 +29,23 @@
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
-                        const dur = this.active.duration;
+                        const dur = this.active.duration || this._expectedDuration || 0;
                         if (dur > 0 && ct < dur - 1.0) {
                             this._endedFired = false;
                         }
-                        if (dur > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
-                            if (!this._endedFired && ct >= dur - 0.25) {
+
+                        // ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
+                        let effectiveEnd = dur;
+                        if (this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                            if (buffEnd > 0) {
+                                effectiveEnd = Math.min(dur, buffEnd);
+                            }
+                        }
+
+                        // Fire 'ended' ONLY when playback reaches the end of the song
+                        if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
+                            if (!this._endedFired && ct >= effectiveEnd - 0.6) {
                                 this._endedFired = true;
                                 this.dispatchEvent(new Event('ended'));
                                 return;
@@ -40,6 +53,11 @@
                         }
                         this.lastKnownTime = ct;
                     }
+
+                    if (e.type === 'seeked') {
+                        this._seekingTo = null;
+                    }
+
                     if (e.type === 'ended') {
                         if (!this._endedFired) {
                             this._endedFired = true;
@@ -48,6 +66,18 @@
                         }
                         return;
                     }
+
+                    // Fallback: If browser stalls at the end of a COMPLETED stream, trigger auto-advance
+                    if (e.type === 'waiting' && this._streamDone && !this._endedFired) {
+                        const ct = this.active.currentTime;
+                        const dur = this.active.duration || this._expectedDuration || 0;
+                        if (dur > 0 && ct >= dur - 1.5) {
+                            this._endedFired = true;
+                            this.dispatchEvent(new Event('ended'));
+                            return;
+                        }
+                    }
+
                     this.dispatchEvent(new Event(e.type));
                 }
             };
@@ -138,6 +168,7 @@
 
         get currentTime() {
             if (this._pendingSeek !== null) return this._pendingSeek;
+            if (this._seekingTo !== null) return this._seekingTo;
             return this.active.currentTime;
         }
 
@@ -272,18 +303,19 @@
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
+            this._streamDone = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
 
+            // Stop old playhead immediately before clearing buffer
             this.active.pause();
-
             try {
                 this.active.currentTime = 0;
             } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
+                updateMediaSessionPosition(0, expectedDuration || 0);
             }
 
             if (typeof updateBufferProgress === 'function') updateBufferProgress();
@@ -351,6 +383,7 @@
                             if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                 try { this._mediaSource.endOfStream(); } catch (e) {}
                             }
+                            this._streamDone = true;
 
 
                             if (this._pendingSeek !== null) {
@@ -475,11 +508,12 @@
                         const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
                             ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
                             : 0;
-                        if (buffEnd >= this._pendingSeek) {
-                            const seekTarget = this._pendingSeek;
+                        if (buffEnd >= this._pendingSeek - 0.5) {
+                            const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                             this._pendingSeek = null;
+                            this._seekingTo = seekTarget;
                             this.active.currentTime = seekTarget;
-                            if (!preventAutoplay) {
+                            if (!preventAutoplay && !window.wasPausedByUser) {
                                 this.active.play().catch(e => console.warn("MSE play error:", e));
                             }
                         } else {
@@ -520,8 +554,33 @@
 
                                     if (done) {
                                         streamDone = true;
+                                        this._streamDone = true;
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
+                                        }
+
+                                        // Fulfill any pending seek targeting the end of the song
+                                        if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                                            const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                                            const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
+                                            this._pendingSeek = null;
+                                            this._seekingTo = seekTarget;
+                                            this.active.currentTime = seekTarget;
+                                            if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+                                            if (typeof updateMediaSessionPosition === 'function') {
+                                                const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                                updateMediaSessionPosition(seekTarget, totalDur, 1.0);
+                                            }
+                                            if (!preventAutoplay && !window.wasPausedByUser) {
+                                                this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
+                                                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                                    navigator.mediaSession.playbackState = 'playing';
+                                                }
+                                                this.dispatchEvent(new Event('play'));
+                                                this.dispatchEvent(new Event('playing'));
+                                            }
+                                            this.dispatchEvent(new Event('seeked'));
+                                            this.dispatchEvent(new Event('timeupdate'));
                                         }
                                         break;
                                     }
@@ -531,6 +590,16 @@
                                         await this._appendToSourceBuffer(nextChunk);
                                         this.dispatchEvent(new Event('progress'));
 
+                                        // Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing and prevent timer drift
+                                        if (typeof updateMediaSessionPosition === 'function') {
+                                            const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                            if (this._pendingSeek !== null) {
+                                                updateMediaSessionPosition(this._pendingSeek, totalDur);
+                                            } else if (this.switching) {
+                                                updateMediaSessionPosition(0, totalDur);
+                                            }
+                                        }
+
                                         // Auto-resume playback if paused/stalled due to buffer exhaustion
                                         if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
                                             this.active.play().catch(() => {});
@@ -539,12 +608,21 @@
                                         // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                            if (buffEnd >= this._pendingSeek) {
-                                                const seekTarget = this._pendingSeek;
+                                            if (buffEnd >= this._pendingSeek - 0.5) {
+                                                const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                                 this._pendingSeek = null;
+                                                this._seekingTo = seekTarget;
                                                 this.active.currentTime = seekTarget;
-                                                if (!preventAutoplay) {
+                                                if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+                                                if (typeof updateMediaSessionPosition === 'function') {
+                                                    const totalDur = this.duration || parseFloat(seekBar.max) || 0;
+                                                    updateMediaSessionPosition(seekTarget, totalDur, 1.0);
+                                                }
+                                                if (!preventAutoplay && !window.wasPausedByUser) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
+                                                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                                        navigator.mediaSession.playbackState = 'playing';
+                                                    }
                                                     this.dispatchEvent(new Event('play'));
                                                     this.dispatchEvent(new Event('playing'));
                                                 }
