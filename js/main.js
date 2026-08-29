@@ -834,6 +834,50 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
+    // --- Mobile Horizontal Swipe on Playlist to Switch Playlists ---
+    if (hasTouch && playlistContainer) {
+        let plTouchStartX = 0;
+        let plTouchStartY = 0;
+        let plTouchStartTime = 0;
+
+        playlistContainer.addEventListener("touchstart", (e) => {
+            if (e.target.closest('input, select, button, #fast-scroller, #fast-scroll-thumb')) return;
+            plTouchStartX = e.changedTouches[0].clientX;
+            plTouchStartY = e.changedTouches[0].clientY;
+            plTouchStartTime = Date.now();
+        }, { passive: true });
+
+        playlistContainer.addEventListener("touchend", (e) => {
+            if (window.innerWidth > 800) return;
+            if (document.activeElement === searchInput) return;
+            if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
+
+            const deltaX = e.changedTouches[0].clientX - plTouchStartX;
+            const deltaY = e.changedTouches[0].clientY - plTouchStartY;
+            const elapsed = Date.now() - plTouchStartTime;
+
+            if (Math.abs(deltaX) >= 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 600) {
+                let curIndex = ALL_PLAYLISTS.indexOf(playlistSelect.value);
+                if (curIndex === -1) curIndex = 0;
+
+                const targetIndex = deltaX < 0 
+                    ? (curIndex + 1) % ALL_PLAYLISTS.length 
+                    : (curIndex - 1 + ALL_PLAYLISTS.length) % ALL_PLAYLISTS.length;
+
+                const nextPl = ALL_PLAYLISTS[targetIndex];
+                if (nextPl && nextPl !== playlistSelect.value) {
+                    playlistSelect.value = nextPl;
+                    lastValidPlaylist = nextPl;
+                    if (shuffleMode !== 1) {
+                        crossShuffleHistory = [];
+                        crossShufflePos = -1;
+                    }
+                    loadPlaylist(nextPl);
+                }
+            }
+        }, { passive: true });
+    }
+
     // --- On-Demand YouTube Playlist Sync Button & Autonomous Poller ---
     const btnSync = document.getElementById("btn-sync");
     let isSyncPolling = false;
