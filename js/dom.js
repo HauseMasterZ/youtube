@@ -515,9 +515,7 @@
 
                             try {
                                 if (!response || !reader) {
-                                    const fetchUrl = initialBytes > 0
-                                        ? (url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`)
-                                        : url;
+                                    const fetchUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
                                     const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
 
                                     response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
@@ -529,7 +527,7 @@
                                 const { value: chunk, done } = await reader.read();
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                     try { reader.cancel(); } catch (e) {}
-                                    saveProgress(false);
+                                    await saveProgress(false);
                                     this.switching = false;
                                     return Promise.resolve();
                                 }
@@ -544,7 +542,7 @@
                                 }
                             } catch (initErr) {
                                 if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
-                                    saveProgress(false);
+                                    await saveProgress(false);
                                     this.switching = false;
                                     return Promise.resolve();
                                 }
@@ -567,7 +565,7 @@
                         await this._clearSourceBuffer();
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                             try { reader.cancel(); } catch (e) {}
-                            saveProgress(false);
+                            await saveProgress(false);
                             this.switching = false;
                             return Promise.resolve();
                         }
@@ -581,7 +579,7 @@
 
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                             try { reader.cancel(); } catch (e) {}
-                            saveProgress(false);
+                            await saveProgress(false);
                             this.switching = false;
                             return Promise.resolve();
                         }
