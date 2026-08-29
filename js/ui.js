@@ -253,27 +253,21 @@
     function updateBufferProgress() {
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
-        const buffered = audioPlayer ? audioPlayer.buffered : null;
-        if (audioPlayer && audioPlayer.switching && (!buffered || buffered.length === 0)) {
-            if (lastBufferSignature !== 'empty') {
-                container.innerHTML = '';
-                lastBufferSignature = 'empty';
-            }
+        if (audioPlayer && audioPlayer.switching) {
+            container.innerHTML = '';
+            lastBufferSignature = 'empty';
             return;
         }
         const max = parseFloat(seekBar.max) || 0;
         if (max <= 0) {
-            if (lastBufferSignature !== 'empty') {
-                container.innerHTML = '';
-                lastBufferSignature = 'empty';
-            }
+            container.innerHTML = '';
+            lastBufferSignature = 'empty';
             return;
         }
+        const buffered = audioPlayer ? audioPlayer.buffered : null;
         if (!buffered || buffered.length === 0) {
-            if (lastBufferSignature !== 'empty') {
-                container.innerHTML = '';
-                lastBufferSignature = 'empty';
-            }
+            container.innerHTML = '';
+            lastBufferSignature = 'empty';
             return;
         }
 
