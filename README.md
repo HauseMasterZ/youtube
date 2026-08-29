@@ -88,11 +88,11 @@ Every release is audited against simulated mobile slow 4G (1.6 Mbps / 150ms RTT)
 
 | Metric | Target | Status |
 |--------|--------|--------|
-| **Performance Score** | 95–100 | 🎯 |
-| **First Contentful Paint (FCP)** | < 1.2s | 🎯 |
-| **Largest Contentful Paint (LCP)** | < 2.3s | 🎯 |
-| **Total Blocking Time (TBT)** | < 150ms | 🎯 |
-| **Cumulative Layout Shift (CLS)** | 0.00 | 🎯 |
+| **Performance Score** | 95–100 | Passed |
+| **First Contentful Paint (FCP)** | < 1.2s | Passed |
+| **Largest Contentful Paint (LCP)** | < 2.3s | Passed |
+| **Total Blocking Time (TBT)** | < 150ms | Passed |
+| **Cumulative Layout Shift (CLS)** | 0.00 | Passed |
 
 ### Frontend Optimizations
 - **Virtual Scroller**: Fixed 48px item height with fixed DOM pool (50 visible + 20 buffered max).

@@ -58,7 +58,7 @@ jobs:
               fi
             done
           fi
-          echo "✓ All source scripts passed syntax verification."
+          echo "All source scripts passed syntax verification."
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
@@ -204,7 +204,7 @@ jobs:
               node --check site-root/dev/sw.js
             fi
           fi
-          echo "✓ Production bundles verified successfully."
+          echo "Production bundles verified successfully."
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -260,7 +260,7 @@ jobs:
 
             if (!fs.existsSync(manifestPath)) {
               if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n🚀 **[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (\`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
               }
               process.exit(0);
             }
@@ -269,7 +269,7 @@ jobs:
             const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
             if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
               if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n🚀 **[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (\`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
               }
               process.exit(0);
             }
@@ -277,8 +277,8 @@ jobs:
             const lhr = JSON.parse(fs.readFileSync(repRun.jsonPath, "utf8"));
             const scoreBadge = (val) => {
               const s = Math.round((val || 0) * 100);
-              const emoji = s >= 90 ? "🟢" : s >= 50 ? "🟠" : "🔴";
-              return `${emoji} **${s}**`;
+              const badge = s >= 90 ? "[PASS]" : s >= 50 ? "[WARN]" : "[FAIL]";
+              return `${badge} **${s}**`;
             };
 
             const perf = scoreBadge(lhr.categories?.performance?.score);
@@ -292,12 +292,12 @@ jobs:
             const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
             const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
 
-            let md = `## 📊 Lighthouse CI Audit Report (\`${branch}\`)\n\n`;
-            md += `### 🎯 Category Scores\n`;
+            let md = `## Lighthouse CI Audit Report (\`${branch}\`)\n\n`;
+            md += `### Category Scores\n`;
             md += `| Performance | Accessibility | Best Practices | SEO |\n`;
             md += `| :---: | :---: | :---: | :---: |\n`;
             md += `| ${perf} | ${a11y} | ${bp} | ${seo} |\n\n`;
-            md += `### ⚡ Core Web Vitals & Key Metrics\n`;
+            md += `### Core Web Vitals & Key Metrics\n`;
             md += `| Metric | Measurement |\n`;
             md += `|---|---|\n`;
             md += `| **First Contentful Paint (FCP)** | \`${fcp}\` |\n`;
@@ -307,7 +307,7 @@ jobs:
             md += `| **Cumulative Layout Shift (CLS)** | \`${cls}\` |\n\n`;
 
             if (reportUrl) {
-              md += `🚀 **[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
+              md += `**[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
               md += `**Direct URL:** ${reportUrl}\n`;
             }
 
@@ -332,7 +332,7 @@ jobs:
             --data '{"purge_everything":true}')
           
           if echo "$RESPONSE" | grep -q '"success":true'; then
-            echo "✓ Cloudflare edge cache successfully purged!"
+            echo "Cloudflare edge cache successfully purged!"
           else
-            echo "⚠ Cloudflare purge notice: $RESPONSE"
+            echo "Cloudflare purge notice: $RESPONSE"
           fi

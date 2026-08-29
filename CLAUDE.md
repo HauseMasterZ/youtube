@@ -207,12 +207,12 @@ This document contains frontend-only coding guidelines for the Web Music Player 
 ## 9. Error Handling & User Feedback
 
 ### Network Errors
-- Show toast notification: "⚠️ Failed to load track. Retrying..."
+- Show toast notification: "Failed to load track. Retrying..."
 - Auto-retry with exponential backoff (100ms, 300ms, 1s).
-- After 3 retries, show: "⚠️ Track unavailable. Skipping..."
+- After 3 retries, show: "Track unavailable. Skipping..."
 
 ### Playback Errors
-- If audio codec is unsupported, show: "❌ Audio format not supported"
+- If audio codec is unsupported, show: "Audio format not supported"
 - Log error to console with timestamp and track ID.
 - Skip to next track automatically after 2 seconds.
 
@@ -314,7 +314,7 @@ This document contains frontend-only coding guidelines for the Web Music Player 
 ```javascript
 // BAD: Direct mutation causes audio leaks and state thrashing
 function switchTrack(newTrack) {
-  audio.src = newTrack.url;  // ❌ Triggers emptied event on mobile
+  audio.src = newTrack.url;  // Triggers emptied event on mobile
   audio.play();
 }
 
@@ -361,7 +361,7 @@ async function switchTrack(newTrack) {
 ### Error Messages
 - Make error messages actionable and user-friendly.
 - Include context: `"Failed to load 'Song Title' (Network timeout)"`
-- Avoid internal jargon: ❌ `MSE appendError`, ✅ `Couldn't load this track`
+- Avoid internal jargon: [Bad] `MSE appendError`, [Good] `Couldn't load this track`
 
 ---
 
