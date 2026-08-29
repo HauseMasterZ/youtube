@@ -722,7 +722,9 @@
                                     }
                                 }
                             } catch (streamErr) {
-                                if (!currentAbortSignal.aborted && this._streamId === activeStreamId && !streamDone) {
+                                if (currentAbortSignal.aborted || this._streamId !== activeStreamId) {
+                                    await saveProgress(false);
+                                } else if (!streamDone) {
                                     console.warn("Background MSE stream interrupted (network switch). Triggering recovery...");
                                     attemptRecovery();
                                 }
