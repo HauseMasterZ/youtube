@@ -399,14 +399,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
-        // ONLY update MediaSession to 'paused' when user explicitly pauses or track ends
-        // Never strip or alter MediaSession state on OS transient focus losses (phone calls)
-        if (window.wasPausedByUser) {
-            setPlayUI(false);
-            updateMediaSessionPosition();
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
+        setPlayUI(false);
+        if (hasMediaSession) {
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
+            navigator.mediaSession.playbackState = 'paused';
         }
     });
 
