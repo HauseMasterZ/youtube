@@ -749,7 +749,7 @@
         if (iconActive) iconActive.style.display = "block";
         if (iconDone) iconDone.style.display = "none";
 
-        showDownloadToast(`Downloading "${currentPl}" - 0 / ${tracks.length}`);
+        showDownloadToast(`"${currentPl}" - 0 / ${tracks.length}`);
 
         try {
             const mediaCache = await caches.open('yt-player-media');
