@@ -957,6 +957,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    const btnDownloadPlaylist = document.getElementById("btn-download-playlist");
+    if (btnDownloadPlaylist) {
+        btnDownloadPlaylist.addEventListener("click", () => {
+            if (typeof downloadActivePlaylist === 'function') downloadActivePlaylist();
+        });
+    }
+
 
 
     // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
