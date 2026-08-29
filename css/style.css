@@ -156,7 +156,8 @@
             border: none;
         }
 
-        .sync-btn.spinning svg {
+        .sync-btn.spinning svg,
+        .spin-animation {
             animation: sync-spin 0.8s linear infinite;
         }
 
