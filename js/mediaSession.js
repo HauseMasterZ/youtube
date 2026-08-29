@@ -53,7 +53,7 @@
             updateTimeUI(seekTarget);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
             
-            // 🎯 Explicitly pass seek target and total duration to prevent 0:00 dip
+            // Explicitly pass seek target and total duration to prevent 0:00 dip
             const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             updateMediaSessionPosition(seekTarget, totalDur);
         });
