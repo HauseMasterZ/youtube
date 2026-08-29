@@ -834,20 +834,21 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
-    // --- Mobile Horizontal Swipe on Playlist to Switch Playlists ---
-    if (hasTouch && playlistContainer) {
+    // --- Mobile Horizontal Swipe on Playlist Panel to Switch Playlists ---
+    const playlistPanel = document.querySelector('.playlist-panel');
+    if (hasTouch && playlistPanel) {
         let plTouchStartX = 0;
         let plTouchStartY = 0;
         let plTouchStartTime = 0;
 
-        playlistContainer.addEventListener("touchstart", (e) => {
-            if (e.target.closest('input, select, button, #fast-scroller, #fast-scroll-thumb')) return;
+        playlistPanel.addEventListener("touchstart", (e) => {
+            if (e.target.closest('input, #fast-scroller, #fast-scroll-thumb')) return;
             plTouchStartX = e.changedTouches[0].clientX;
             plTouchStartY = e.changedTouches[0].clientY;
             plTouchStartTime = Date.now();
         }, { passive: true });
 
-        playlistContainer.addEventListener("touchend", (e) => {
+        playlistPanel.addEventListener("touchend", (e) => {
             if (window.innerWidth > 800) return;
             if (document.activeElement === searchInput) return;
             if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
@@ -856,7 +857,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const deltaY = e.changedTouches[0].clientY - plTouchStartY;
             const elapsed = Date.now() - plTouchStartTime;
 
-            if (Math.abs(deltaX) >= 50 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 600) {
+            if (Math.abs(deltaX) >= 40 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2 && elapsed < 600) {
                 let curIndex = ALL_PLAYLISTS.indexOf(playlistSelect.value);
                 if (curIndex === -1) curIndex = 0;
 
@@ -867,12 +868,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const nextPl = ALL_PLAYLISTS[targetIndex];
                 if (nextPl && nextPl !== playlistSelect.value) {
                     playlistSelect.value = nextPl;
-                    lastValidPlaylist = nextPl;
-                    if (shuffleMode !== 1) {
-                        crossShuffleHistory = [];
-                        crossShufflePos = -1;
-                    }
-                    loadPlaylist(nextPl);
+                    playlistSelect.dispatchEvent(new Event('change'));
                 }
             }
         }, { passive: true });
