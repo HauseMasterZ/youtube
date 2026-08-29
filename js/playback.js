@@ -814,7 +814,7 @@
                     if (signal.aborted || !isDownloadingPlaylist) break;
 
                     completed++;
-                    if (btn) btn.title = `Downloading: ${completed} / ${total} - Click to cancel`;
+                    if (btn) btn.title = `${completed} / ${total} - Click to cancel`;
                     showDownloadToast(`Downloading "${currentPl}" - ${completed} / ${total}`);
                 }
             };
