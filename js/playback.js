@@ -331,6 +331,15 @@
 
         if (playQueue.length === 0) return;
         
+        // If autoplay is disabled, strictly stop playback
+        if (!autoplayEnabled) {
+            setPlayUI(false);
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+            }
+            return;
+        }
+
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
             executePlayback();
@@ -339,6 +348,7 @@
             executePlayback();
         } else {
             setPlayUI(false);
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
         }
     }
 
@@ -384,6 +394,13 @@
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
+        if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+        
+        // Set active playing intent on fresh track launch (fixes first-ever song load bug)
+        if (!uiOnly) {
+            window.wasPausedByUser = false;
+            setPlayUI(true);
+        }
         
         // Cancel any pending error auto-skip when user manually selects a track
         if (errorSkipTimer) {
@@ -475,8 +492,8 @@
                 navigator.mediaSession.playbackState = "playing";
             }
 
-            if (!uiOnly) {
-                // Instantly auto-skip to the next track if we are actively playing
+            if (!uiOnly && autoplayEnabled) {
+                // Instantly auto-skip to the next track if we are actively playing and autoplay is enabled
                 errorSkipTimer = setTimeout(() => {
                     if (window.lastPlaybackDirection === -1) {
                         playPrev();
@@ -511,8 +528,6 @@
             totalTimeDisplay.textContent = "0:00";
         }
         seekBar.value = 0;
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
-        if (typeof bufferBar !== 'undefined' && bufferBar) bufferBar.style.width = '0%';
 
         let audioUrl = getAudioUrl(track);
         const thumbUrl = getThumbUrl(track);
@@ -532,9 +547,17 @@
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
-            // Instant Phase 1: Use cached 1:1 square, or instant raw thumb (0ms delay)
+            // 1. Check in-memory caches (0ms)
             const squareCached = (thumbUrl && typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-            const initialArtwork = (!thumbsDisabled && (squareCached || thumbUrl)) ? (squareCached || thumbUrl) : fallbackIcon;
+            const l2Cached = (thumbUrl && typeof thumbCache !== 'undefined' && thumbCache.get(thumbUrl)?.status === 'loaded') ? thumbUrl : null;
+            
+            // 2. Select initial artwork (override fallback icon if cached even when thumbsDisabled is true)
+            let initialArtwork = fallbackIcon;
+            if (!thumbsDisabled) {
+                initialArtwork = squareCached || thumbUrl || fallbackIcon;
+            } else if (squareCached || l2Cached) {
+                initialArtwork = squareCached || l2Cached;
+            }
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
@@ -542,7 +565,32 @@
                 artwork: [{ src: initialArtwork, sizes: '512x512', type: 'image/jpeg' }]
             });
 
-            // Async Phase 2: Compute 1:1 square crop in background and update metadata
+            // PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
+            navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
+
+            // 3. If thumbsDisabled is true but image is in persistent CacheStorage, load offline without network fetch
+            if (thumbsDisabled && thumbUrl && !squareCached && !l2Cached && 'caches' in window) {
+                caches.match(thumbUrl).then(cachedRes => {
+                    if (cachedRes && hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                        cachedRes.blob().then(blob => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const dataUrl = reader.result;
+                                if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: track.title,
+                                        artist: track.channel,
+                                        artwork: [{ src: dataUrl, sizes: '512x512', type: 'image/jpeg' }]
+                                    });
+                                }
+                            };
+                            reader.readAsDataURL(blob);
+                        }).catch(() => {});
+                    }
+                }).catch(() => {});
+            }
+
+            // 4. Standard active square crop when thumbs are enabled
             if (!thumbsDisabled && thumbUrl && !squareCached && typeof getSquareArtwork === 'function') {
                 getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
                     if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
@@ -555,10 +603,14 @@
                 });
             }
 
-            // Clear position state during buffering (W3C standard method)
-            if ('setPositionState' in navigator.mediaSession) {
+            // Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
+            if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
-                    navigator.mediaSession.setPositionState(null);
+                    navigator.mediaSession.setPositionState({
+                        duration: parsedDuration,
+                        playbackRate: 0.00001,
+                        position: 0
+                    });
                 } catch(e) {}
             }
         }

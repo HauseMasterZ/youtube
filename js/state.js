@@ -22,6 +22,7 @@
     
     let shuffleMode = 0;
     let repeatMode = 0; 
+    let autoplayEnabled = true; 
     
     const dominantColorCache = new Map();
 
@@ -43,12 +44,8 @@
     let errorSkipTimer = null;
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
-    window.wasPausedByUser = false;
+    window.wasPausedByUser = true;
     const preloadedFetches = new Map(); // audioUrl -> Promise
-
-
-    
-    // Android Chrome Lock-Screen Notification Teardown Bypass
 
     // Virtual Scroller state
     const ITEM_HEIGHT = 48;
@@ -56,8 +53,6 @@
     let lastEndIndex = -1;
     let isRendering = false;
     let poolInitialized = false;
-
-    window.wasPausedByUser = true;
 
     window.rebuildCrossShuffleDeck = function() {
         if (shuffleMode !== 1) return;

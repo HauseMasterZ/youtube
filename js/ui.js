@@ -24,6 +24,20 @@
         }
     }
 
+    function applyAutoplayUI() {
+        const currentChannelEl = document.getElementById("current-channel");
+        if (!currentChannelEl) return;
+        if (autoplayEnabled) {
+            currentChannelEl.classList.remove("autoplay-off");
+            currentChannelEl.setAttribute("aria-label", "Autoplay (On) - Click to toggle off");
+            currentChannelEl.title = "Autoplay (On) - Click to toggle off";
+        } else {
+            currentChannelEl.classList.add("autoplay-off");
+            currentChannelEl.setAttribute("aria-label", "Autoplay (Off) - Click to toggle on");
+            currentChannelEl.title = "Autoplay (Off) - Click to toggle on";
+        }
+    }
+
     const GRAY_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'%3E%3Crect width='1' height='1' fill='%23222226'/%3E%3C/svg%3E";
     const thumbCache = new Map();
     let isScrollingFast = false;
@@ -234,10 +248,6 @@
             iconPause.style.display = 'none';
         }
     }
-    function updateSeekBarProgress() {
-        // Trailing played seek bar region removed to expose the full buffer track behind the thumb
-    }
-    window.updateSeekBarProgress = updateSeekBarProgress;
 
     let lastBufferSignature = '';
     function updateBufferProgress() {
@@ -304,7 +314,6 @@
             currentTimeDisplay.textContent = formatTime(roundedSec);
             lastRenderTime = roundedSec;
         }
-        updateSeekBarProgress();
     }
 
     const PURPLE_NOTE_SVG_DATA_URI = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
