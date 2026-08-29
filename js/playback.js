@@ -694,3 +694,119 @@
             }
         }
     }
+
+    let isDownloadingPlaylist = false;
+    let playlistDownloadController = null;
+
+    async function downloadActivePlaylist() {
+        const btn = document.getElementById("btn-download-playlist");
+        const iconIdle = document.getElementById("icon-download-idle");
+        const iconActive = document.getElementById("icon-download-active");
+        const iconDone = document.getElementById("icon-download-done");
+
+        // Cancel toggle
+        if (isDownloadingPlaylist) {
+            if (playlistDownloadController) playlistDownloadController.abort();
+            isDownloadingPlaylist = false;
+            if (iconIdle) iconIdle.style.display = "block";
+            if (iconActive) iconActive.style.display = "none";
+            if (iconDone) iconDone.style.display = "none";
+            if (btn) btn.title = "Download playlist for offline playback";
+            return;
+        }
+
+        const currentPl = playlistSelect.value;
+        const tracks = (allDatabases && allDatabases[currentPl]) || currentPlaylistData || [];
+        if (tracks.length === 0) return;
+
+        isDownloadingPlaylist = true;
+        playlistDownloadController = new AbortController();
+        const signal = playlistDownloadController.signal;
+
+        if (iconIdle) iconIdle.style.display = "none";
+        if (iconActive) iconActive.style.display = "block";
+        if (iconDone) iconDone.style.display = "none";
+
+        try {
+            const mediaCache = await caches.open('yt-player-media');
+            const thumbsCache = await caches.open('yt-player-thumbs');
+
+            let completed = 0;
+            const total = tracks.length;
+            const CONCURRENCY = 2;
+            let trackIndex = 0;
+
+            const worker = async () => {
+                while (trackIndex < tracks.length && !signal.aborted) {
+                    const track = tracks[trackIndex++];
+                    if (!track) continue;
+                    
+                    const audioUrl = getAudioUrl(track);
+                    const thumbUrl = getThumbUrl(track);
+
+                    try {
+                        // 1. Audio Cache (Store full response with status 200)
+                        const existingAudio = await mediaCache.match(audioUrl);
+                        const isPartial = existingAudio && (existingAudio.headers.get('X-Partial-Cached') === 'true');
+                        if (!existingAudio || isPartial) {
+                            const res = await fetch(audioUrl, { signal });
+                            if (res.ok) {
+                                const buf = await res.arrayBuffer();
+                                const fullRes = new Response(buf, {
+                                    status: 200,
+                                    headers: {
+                                        'Content-Type': 'audio/webm',
+                                        'Content-Length': buf.byteLength.toString(),
+                                        'X-Partial-Cached': 'false'
+                                    }
+                                });
+                                await mediaCache.put(audioUrl, fullRes);
+                            }
+                        }
+
+                        // 2. Thumbnail Cache
+                        if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
+                            const res = await fetch(thumbUrl, { signal }).catch(() => {});
+                            if (res && (res.ok || res.type === 'opaque')) {
+                                await thumbsCache.put(thumbUrl, res);
+                            }
+                        }
+
+                        // 3. Lyrics Cache
+                        if (track.file_path && track.id) {
+                            const parts = track.file_path.split('/');
+                            const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
+                            if (!(await mediaCache.match(lyricsUrl))) {
+                                const res = await fetch(lyricsUrl, { signal }).catch(() => {});
+                                if (res && res.ok) {
+                                    await mediaCache.put(lyricsUrl, res);
+                                }
+                            }
+                        }
+                    } catch (err) {
+                        // Ignore aborted fetches
+                    }
+
+                    completed++;
+                    if (btn) btn.title = `Downloading: ${completed}/${total} (${Math.round((completed/total)*100)}%) - Click to cancel`;
+                }
+            };
+
+            await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+            if (!signal.aborted) {
+                if (iconActive) iconActive.style.display = "none";
+                if (iconDone) iconDone.style.display = "block";
+                if (btn) btn.title = "Playlist fully downloaded for offline playback!";
+                setTimeout(() => {
+                    if (iconDone) iconDone.style.display = "none";
+                    if (iconIdle) iconIdle.style.display = "block";
+                    if (btn) btn.title = "Download playlist for offline playback";
+                }, 4000);
+            }
+        } catch (e) {
+            // Fallback
+        } finally {
+            isDownloadingPlaylist = false;
+        }
+    }
