@@ -406,8 +406,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 const bestArt = sqCached || l2Cached || rawArt;
                 const artworkArr = bestArt && !thumbsDisabled ? [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }] : [];
 
-                // Cycle none->playing to force Chrome to re-register torn-down sessions
-                navigator.mediaSession.playbackState = 'none';
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
