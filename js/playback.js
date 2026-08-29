@@ -573,14 +573,18 @@
                 caches.match(thumbUrl).then(cachedRes => {
                     if (cachedRes && hasMediaSession && globalActiveOriginalIndex === originalIndex) {
                         cachedRes.blob().then(blob => {
-                            const blobUrl = URL.createObjectURL(blob);
-                            if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
-                                navigator.mediaSession.metadata = new MediaMetadata({
-                                    title: track.title,
-                                    artist: track.channel,
-                                    artwork: [{ src: blobUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                });
-                            }
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                                const dataUrl = reader.result;
+                                if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: track.title,
+                                        artist: track.channel,
+                                        artwork: [{ src: dataUrl, sizes: '512x512', type: 'image/jpeg' }]
+                                    });
+                                }
+                            };
+                            reader.readAsDataURL(blob);
                         }).catch(() => {});
                     }
                 }).catch(() => {});
