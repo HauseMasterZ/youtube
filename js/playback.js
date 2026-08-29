@@ -749,8 +749,8 @@
         showDownloadToast(`Downloading "${currentPl}" - 0 / ${tracks.length}`);
 
         try {
+            const mediaCache = await caches.open('yt-player-media');
             const thumbsCache = await caches.open('yt-thumbs-cache');
-            const thumbsCache = await caches.open('yt-player-thumbs');
 
             let completed = 0;
             const total = tracks.length;
