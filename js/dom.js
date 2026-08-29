@@ -4,6 +4,105 @@
     const playlistMessage = document.getElementById("playlist-message");
     const trackList = document.getElementById("track-list");
 
+    // --- IndexedDB Resumable Audio Chunk Caching Engine ---
+    const AUDIO_DB_NAME = 'yt-audio-chunks-db';
+    const AUDIO_DB_VERSION = 1;
+    let audioDBPromise = null;
+
+    function openAudioDB() {
+        if (audioDBPromise) return audioDBPromise;
+        audioDBPromise = new Promise((resolve) => {
+            if (typeof indexedDB === 'undefined') {
+                resolve(null);
+                return;
+            }
+            try {
+                const req = indexedDB.open(AUDIO_DB_NAME, AUDIO_DB_VERSION);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('metadata')) {
+                        db.createObjectStore('metadata', { keyPath: 'url' });
+                    }
+                    if (!db.objectStoreNames.contains('chunks')) {
+                        db.createObjectStore('chunks', { keyPath: ['url', 'index'] });
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            } catch (e) {
+                resolve(null);
+            }
+        });
+        return audioDBPromise;
+    }
+
+    async function getCachedTrackData(url) {
+        const db = await openAudioDB();
+        if (!db) return { meta: null, chunks: [], totalBytes: 0 };
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction(['metadata', 'chunks'], 'readonly');
+                const metaReq = tx.objectStore('metadata').get(url);
+
+                metaReq.onsuccess = () => {
+                    const meta = metaReq.result;
+                    if (!meta || !meta.downloadedBytes) {
+                        resolve({ meta: null, chunks: [], totalBytes: 0 });
+                        return;
+                    }
+                    const chunkStore = tx.objectStore('chunks');
+                    const range = IDBKeyRange.bound([url, 0], [url, Infinity]);
+                    const chunkReq = chunkStore.getAll(range);
+
+                    chunkReq.onsuccess = () => {
+                        const chunks = chunkReq.result || [];
+                        resolve({ meta, chunks, totalBytes: meta.downloadedBytes });
+                    };
+                    chunkReq.onerror = () => resolve({ meta: null, chunks: [], totalBytes: 0 });
+                };
+                metaReq.onerror = () => resolve({ meta: null, chunks: [], totalBytes: 0 });
+            } catch (e) {
+                resolve({ meta: null, chunks: [], totalBytes: 0 });
+            }
+        });
+    }
+
+    async function saveAudioChunk(url, chunkIndex, chunkData, totalAppended, isComplete = false) {
+        const db = await openAudioDB();
+        if (!db) return;
+        try {
+            const tx = db.transaction(['metadata', 'chunks'], 'readwrite');
+            if (chunkData) {
+                let bufferToStore = null;
+                let size = 0;
+                if (chunkData instanceof ArrayBuffer) {
+                    bufferToStore = chunkData;
+                    size = chunkData.byteLength;
+                } else if (chunkData.buffer) {
+                    bufferToStore = chunkData.buffer.slice(chunkData.byteOffset, chunkData.byteOffset + chunkData.byteLength);
+                    size = chunkData.byteLength;
+                }
+                if (bufferToStore && size > 0) {
+                    tx.objectStore('chunks').put({
+                        url,
+                        index: chunkIndex,
+                        data: bufferToStore,
+                        size: size
+                    });
+                }
+            }
+            tx.objectStore('metadata').put({
+                url,
+                downloadedBytes: totalAppended,
+                chunkCount: chunkIndex + 1,
+                isComplete: Boolean(isComplete),
+                updatedAt: Date.now()
+            });
+        } catch (e) {
+            // Non-blocking catch
+        }
+    }
+
     class DualAudioPingPong extends EventTarget {
         constructor() {
             super();
@@ -360,180 +459,216 @@
                     }
                 }
 
-                // 1. FAST PATH: If full track is already cached in CacheStorage, load instantly (0ms)
+                // 1. FAST PATH: Check IndexedDB for complete or partial cached chunks
+                let totalBytesAppended = 0;
+                let chunkIndexOffset = 0;
+                let streamDone = false;
+
                 try {
-                    if (window.caches) {
-                        const mediaCache = await caches.open('yt-player-media');
-                        const cachedRes = await mediaCache.match(url);
-                        if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
-                            const fullBuffer = await cachedRes.arrayBuffer();
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+                    const cachedData = await getCachedTrackData(url);
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                        this.switching = false;
+                        return Promise.resolve();
+                    }
+
+                    if (cachedData && cachedData.chunks && cachedData.chunks.length > 0) {
+                        const totalCachedLength = cachedData.chunks.reduce((acc, c) => acc + (c.size || 0), 0);
+                        if (totalCachedLength > 0) {
+                            const cachedCombined = new Uint8Array(totalCachedLength);
+                            let offset = 0;
+                            for (const c of cachedData.chunks) {
+                                const u8 = new Uint8Array(c.data);
+                                cachedCombined.set(u8, offset);
+                                offset += u8.byteLength;
+                            }
 
                             await this._clearSourceBuffer();
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
 
                             try {
                                 this._sourceBuffer.abort();
                                 this._sourceBuffer.timestampOffset = 0;
                             } catch (e) {}
 
-                            await this._appendToSourceBuffer(fullBuffer);
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+                            await this._appendToSourceBuffer(cachedCombined.buffer);
+                            totalBytesAppended = totalCachedLength;
+                            chunkIndexOffset = cachedData.chunks.length;
 
-                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                            if (this._gainNode) {
+                                this._gainNode.gain.value = 1.0;
                             }
-                            this._streamDone = true;
-
 
                             if (this._pendingSeek !== null) {
-                                const target = this._pendingSeek;
-                                this._pendingSeek = null;
-                                this.active.currentTime = target;
+                                const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                    ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                    : 0;
+                                if (buffEnd >= this._pendingSeek - 0.5) {
+                                    const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
+                                    this._pendingSeek = null;
+                                    this._seekingTo = seekTarget;
+                                    this.active.currentTime = seekTarget;
+                                    if (!preventAutoplay && !window.wasPausedByUser) {
+                                        this.active.play().catch(e => console.warn("MSE play error:", e));
+                                    }
+                                } else {
+                                    this.active.pause();
+                                }
                             } else {
                                 this.active.currentTime = 0;
-                            }
-
-                            if (!preventAutoplay) {
-                                this.active.play().catch(e => console.warn("Cached play error:", e));
+                                if (!preventAutoplay && !window.wasPausedByUser) {
+                                    this.active.play().catch(e => console.warn("MSE play error:", e));
+                                }
                             }
 
                             this.switching = false;
                             this.dispatchEvent(new Event('loadedmetadata'));
                             this.dispatchEvent(new Event('canplay'));
-                            this.dispatchEvent(new Event('play'));
-                            this.dispatchEvent(new Event('playing'));
+                            if (this._pendingSeek === null) {
+                                this.dispatchEvent(new Event('play'));
+                                this.dispatchEvent(new Event('playing'));
+                            }
                             this.dispatchEvent(new Event('progress'));
-                            return Promise.resolve();
+
+                            // If track is 100% complete in IndexedDB, finish immediately (0ms, 0 network)
+                            if (cachedData.meta && cachedData.meta.isComplete) {
+                                this._streamDone = true;
+                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                }
+                                return Promise.resolve();
+                            }
                         }
                     }
-                } catch (e) {
-                    console.warn("Cache fast-path fallback:", e);
+                } catch (dbErr) {
+                    console.warn("IndexedDB cache read fallback:", dbErr);
                 }
 
-                // 2. NETWORK PATH: Stream uncached audio with optimized ~192KB safety cushion (~12s audio) & resilient auto-recovery
+                // 2. NETWORK PATH: Stream uncached/remaining audio with resilient auto-recovery
                 try {
-                    let totalBytesAppended = 0;
-                    let streamDone = false;
-
-                    const initialChunks = [];
-                    let initialBytes = 0;
-                    const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
-
-                    let fetchBackoff = 300;
                     let response = null;
                     let reader = null;
 
-                    // Initial buffer fetch retry loop for network handoffs / session switches
-                    while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
-                        if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                    if (totalBytesAppended === 0) {
+                        const initialChunks = [];
+                        let initialBytes = 0;
+                        const INITIAL_TARGET_BYTES = 196608; // 192KB (~12s Opus, ultra fast initial start)
+                        let fetchBackoff = 300;
+
+                        // Initial buffer fetch retry loop for network handoffs / session switches
+                        while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
+                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                this.switching = false;
+                                return Promise.resolve();
+                            }
+
+                            try {
+                                if (!response || !reader) {
+                                    const fetchUrl = initialBytes > 0 
+                                        ? (url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`)
+                                        : url;
+                                    const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
+                                    
+                                    response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
+                                    if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
+                                    if (!response.body) throw new Error("ReadableStream not supported");
+                                    reader = response.body.getReader();
+                                }
+
+                                const { value: chunk, done } = await reader.read();
+                                if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                    try { reader.cancel(); } catch (e) {}
+                                    this.switching = false;
+                                    return Promise.resolve();
+                                }
+                                if (done) {
+                                    streamDone = true;
+                                    break;
+                                }
+                                if (chunk && chunk.length > 0) {
+                                    initialChunks.push(chunk);
+                                    initialBytes += chunk.length;
+                                }
+                            } catch (initErr) {
+                                if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
+                                    this.switching = false;
+                                    return Promise.resolve();
+                                }
+                                reader = null;
+                                response = null;
+                                await new Promise(r => setTimeout(r, fetchBackoff));
+                                fetchBackoff = Math.min(fetchBackoff * 1.5, 2000);
+                            }
+                        }
+
+                        if (initialChunks.length === 0) throw new Error("Empty audio stream");
+
+                        // Combine initial chunks into a single contiguous Uint8Array to prevent partial block slicing
+                        const initialCombined = new Uint8Array(initialBytes);
+                        let offset = 0;
+                        for (const c of initialChunks) {
+                            initialCombined.set(c, offset);
+                            offset += c.length;
+                        }
+
+                        await this._clearSourceBuffer();
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                            try { reader.cancel(); } catch (e) {}
                             this.switching = false;
                             return Promise.resolve();
                         }
 
                         try {
-                            if (!response || !reader) {
-                                const fetchUrl = initialBytes > 0 
-                                    ? (url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`)
-                                    : url;
-                                const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
-                                
-                                response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
-                                if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
-                                if (!response.body) throw new Error("ReadableStream not supported");
-                                reader = response.body.getReader();
-                            }
+                            this._sourceBuffer.abort();
+                            this._sourceBuffer.timestampOffset = 0;
+                        } catch (e) {}
+                        await this._appendToSourceBuffer(initialCombined.buffer);
+                        totalBytesAppended += initialCombined.byteLength;
+                        saveAudioChunk(url, chunkIndexOffset++, initialCombined.buffer, totalBytesAppended, streamDone);
 
-                            const { value: chunk, done } = await reader.read();
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                try { reader.cancel(); } catch (e) {}
-                                this.switching = false;
-                                return Promise.resolve();
-                            }
-                            if (done) {
-                                streamDone = true;
-                                break;
-                            }
-                            if (chunk && chunk.length > 0) {
-                                initialChunks.push(chunk);
-                                initialBytes += chunk.length;
-                            }
-                        } catch (initErr) {
-                            if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
-                                this.switching = false;
-                                return Promise.resolve();
-                            }
-                            reader = null;
-                            response = null;
-                            await new Promise(r => setTimeout(r, fetchBackoff));
-                            fetchBackoff = Math.min(fetchBackoff * 1.5, 2000);
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId) {
+                            try { reader.cancel(); } catch (e) {}
+                            this.switching = false;
+                            return Promise.resolve();
                         }
-                    }
 
-                    if (initialChunks.length === 0) throw new Error("Empty audio stream");
+                        if (this._gainNode) {
+                            this._gainNode.gain.value = 1.0;
+                        }
 
-                    // Combine initial chunks into a single contiguous Uint8Array to prevent partial block slicing
-                    const initialCombined = new Uint8Array(initialBytes);
-                    let offset = 0;
-                    for (const c of initialChunks) {
-                        initialCombined.set(c, offset);
-                        offset += c.length;
-                    }
-
-                    await this._clearSourceBuffer();
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-
-                    try {
-                        this._sourceBuffer.abort();
-                        this._sourceBuffer.timestampOffset = 0;
-                    } catch (e) {}
-                    await this._appendToSourceBuffer(initialCombined.buffer);
-                    totalBytesAppended += initialCombined.byteLength;
-
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId) {
-                        try { reader.cancel(); } catch (e) {}
-                        this.switching = false;
-                        return Promise.resolve();
-                    }
-
-                    if (this._gainNode) {
-                        this._gainNode.gain.value = 1.0;
-                    }
-
-                    if (this._pendingSeek !== null) {
-                        const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
-                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
-                            : 0;
-                        if (buffEnd >= this._pendingSeek - 0.5) {
-                            const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
-                            this._pendingSeek = null;
-                            this._seekingTo = seekTarget;
-                            this.active.currentTime = seekTarget;
-                            if (!preventAutoplay && !window.wasPausedByUser) {
-                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                        if (this._pendingSeek !== null) {
+                            const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) 
+                                ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1) 
+                                : 0;
+                            if (buffEnd >= this._pendingSeek - 0.5) {
+                                const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
+                                this._pendingSeek = null;
+                                this._seekingTo = seekTarget;
+                                this.active.currentTime = seekTarget;
+                                if (!preventAutoplay && !window.wasPausedByUser) {
+                                    this.active.play().catch(e => console.warn("MSE play error:", e));
+                                }
+                            } else {
+                                this.active.pause();
                             }
                         } else {
-                            this.active.pause();
+                            this.active.currentTime = 0;
+                            if (!preventAutoplay) {
+                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                            }
                         }
-                    } else {
-                        this.active.currentTime = 0;
-                        if (!preventAutoplay) {
-                            this.active.play().catch(e => console.warn("MSE play error:", e));
-                        }
-                    }
 
-                    this.switching = false;
-                    this.dispatchEvent(new Event('loadedmetadata'));
-                    this.dispatchEvent(new Event('canplay'));
-                    if (this._pendingSeek === null) {
-                        this.dispatchEvent(new Event('play'));
-                        this.dispatchEvent(new Event('playing'));
+                        this.switching = false;
+                        this.dispatchEvent(new Event('loadedmetadata'));
+                        this.dispatchEvent(new Event('canplay'));
+                        if (this._pendingSeek === null) {
+                            this.dispatchEvent(new Event('play'));
+                            this.dispatchEvent(new Event('playing'));
+                        }
+                        this.dispatchEvent(new Event('progress'));
                     }
-                    this.dispatchEvent(new Event('progress'));
 
                     // Resilient background ingestion stream with network-switch / Range auto-recovery
                     (async () => {
@@ -558,6 +693,7 @@
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
+                                        saveAudioChunk(url, chunkIndexOffset, null, totalBytesAppended, true);
 
                                         // Fulfill any pending seek targeting the end of the song
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
@@ -588,6 +724,7 @@
                                     if (nextChunk && nextChunk.length > 0) {
                                         totalBytesAppended += nextChunk.length;
                                         await this._appendToSourceBuffer(nextChunk);
+                                        saveAudioChunk(url, chunkIndexOffset++, nextChunk, totalBytesAppended, false);
                                         this.dispatchEvent(new Event('progress'));
 
                                         // Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing and prevent timer drift
@@ -709,8 +846,11 @@
                             if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                 try { this._mediaSource.endOfStream(); } catch (e) {}
                             }
-                        } else {
+                            saveAudioChunk(url, chunkIndexOffset, null, totalBytesAppended, true);
+                        } else if (reader) {
                             readStream(reader);
+                        } else {
+                            attemptRecovery();
                         }
                     })();
                 } catch (e) {
