@@ -318,11 +318,10 @@
                 updateMediaSessionPosition(0, expectedDuration || 0);
             }
 
+            const bc = document.getElementById("buffer-container");
+            if (bc) bc.innerHTML = '';
+            if (typeof lastBufferSignature !== 'undefined') lastBufferSignature = 'empty';
             if (typeof updateBufferProgress === 'function') updateBufferProgress();
-            else {
-                const bc = document.getElementById("buffer-container");
-                if (bc) bc.innerHTML = '';
-            }
 
             if (!url) {
                 this.switching = false;
