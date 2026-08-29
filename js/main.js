@@ -377,12 +377,25 @@ document.addEventListener("DOMContentLoaded", () => {
         window.wasInterrupted = false;
         setPlayUI(true);
         lastRenderTime = -1;
-        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
 
+        // Lightweight: just set state, don't cycle through 'none' or create metadata
+        // The 'playing' event will handle full session re-creation once audio is stable
         if (hasMediaSession) {
-            // Force Chrome to re-register a torn-down session by cycling through 'none'
-            // This makes the browser process treat it as a new session, not a dead resume
-            navigator.mediaSession.playbackState = 'none';
+            navigator.mediaSession.playbackState = 'playing';
+        }
+
+        if (window.lyricsActive && typeof updateLyricsUI === 'function') {
+            updateLyricsUI(audioPlayer.currentTime);
+        }
+    });
+
+    audioPlayer.addEventListener("playing", () => {
+        clearTimeout(pauseDebounceTimer);
+
+        // 'playing' fires when audio output is actually flowing (past all buffering)
+        // This is the stable moment to create/re-create the notification
+        if (hasMediaSession) {
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
 
             const track = currentPlaylistData[playQueue[queueIndex]] 
                        || currentPlaylistData[globalActiveOriginalIndex];
@@ -393,12 +406,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 const bestArt = sqCached || l2Cached || rawArt;
                 const artworkArr = bestArt && !thumbsDisabled ? [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }] : [];
 
+                // Cycle none->playing to force Chrome to re-register torn-down sessions
+                navigator.mediaSession.playbackState = 'none';
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.channel,
                     artwork: artworkArr
                 });
+                navigator.mediaSession.playbackState = 'playing';
 
+                // Async upgrade artwork if not cached
                 if (!sqCached && rawArt && !thumbsDisabled && typeof getSquareArtwork === 'function') {
                     getSquareArtwork(rawArt, track.id, (sqUrl) => {
                         if (hasMediaSession && navigator.mediaSession.metadata) {
@@ -412,14 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
-            // Set 'playing' AFTER metadata so Chrome has everything it needs to create the notification
-            navigator.mediaSession.playbackState = 'playing';
-        }
-
-        updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-
-        if (window.lyricsActive && typeof updateLyricsUI === 'function') {
-            updateLyricsUI(audioPlayer.currentTime);
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
         }
     });
 
@@ -459,28 +469,12 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));
-            
-            // Re-establish media session when PWA is foregrounded while playing
-            // Catches edge cases where notification was torn down but play event didn't re-create it
-            if (hasMediaSession) {
-                const track = currentPlaylistData[playQueue[queueIndex]]
-                           || currentPlaylistData[globalActiveOriginalIndex];
-                if (track) {
-                    const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
-                    const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-                    const bestArt = sqCached || rawArt;
-                    const artworkArr = bestArt && !thumbsDisabled ? [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }] : [];
 
-                    navigator.mediaSession.playbackState = 'none';
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: track.title,
-                        artist: track.channel,
-                        artwork: artworkArr
-                    });
-                    navigator.mediaSession.playbackState = 'playing';
-                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-                }
+            // Re-sync MediaSession state when PWA is foregrounded
+            if (hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
+                const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
             }
         }
     });
