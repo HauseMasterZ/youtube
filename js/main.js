@@ -412,19 +412,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     artwork: artworkArr
                 });
                 navigator.mediaSession.playbackState = 'playing';
-
-                // Async upgrade artwork if not cached
-                if (!sqCached && rawArt && !thumbsDisabled && typeof getSquareArtwork === 'function') {
-                    getSquareArtwork(rawArt, track.id, (sqUrl) => {
-                        if (hasMediaSession && navigator.mediaSession.metadata) {
-                            navigator.mediaSession.metadata = new MediaMetadata({
-                                title: track.title,
-                                artist: track.channel,
-                                artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                            });
-                        }
-                    });
-                }
             }
 
             updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
@@ -616,12 +603,6 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
-        lastRenderTime = -1;
-        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-        updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-        if (hasMediaSession) {
-            navigator.mediaSession.playbackState = 'playing';
-        }
     });
 
     audioPlayer.addEventListener("error", () => {

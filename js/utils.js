@@ -145,17 +145,9 @@
             const sx = (bitmap.width - size) / 2;
             const sy = (bitmap.height - size) / 2;
             ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
-            canvas.toBlob((squareBlob) => {
-                if (squareBlob) {
-                    const blobUrl = URL.createObjectURL(squareBlob);
-                    setCachedSquareArtwork(trackId, blobUrl);
-                    callback(blobUrl);
-                } else {
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-                    setCachedSquareArtwork(trackId, dataUrl);
-                    callback(dataUrl);
-                }
-            }, 'image/jpeg', 0.92);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            setCachedSquareArtwork(trackId, dataUrl);
+            callback(dataUrl);
         } catch (err) {
             const img = new Image();
             img.crossOrigin = "anonymous";
