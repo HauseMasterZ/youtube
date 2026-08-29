@@ -259,7 +259,7 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         
-        // 🎯 Toggle based on user playback intent to prevent ghost state during initial buffering
+        // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser) {
             window.wasPausedByUser = false;
             setPlayUI(true);
@@ -322,9 +322,9 @@ document.addEventListener("DOMContentLoaded", () => {
         applyRepeatUI();
     });
 
-    const btnAutoplay = document.getElementById("btn-autoplay");
-    if (btnAutoplay) {
-        btnAutoplay.addEventListener("click", () => {
+    const currentChannelEl = document.getElementById("current-channel");
+    if (currentChannelEl) {
+        currentChannelEl.addEventListener("click", () => {
             autoplayEnabled = !autoplayEnabled;
             applyAutoplayUI();
         });
@@ -339,7 +339,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (currentMax !== roundedDur) {
                     seekBar.max = roundedDur;
                     totalTimeDisplay.textContent = formatTime(roundedDur);
-                    if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
                     if (typeof updateBufferProgress === 'function') updateBufferProgress();
                     updateMediaSessionPosition();
                 }
@@ -352,7 +351,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("seeked", () => {
         updateMediaSessionPosition();
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
     });
     audioPlayer.addEventListener("ratechange", updateMediaSessionPosition);
     
@@ -376,33 +374,33 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.mediaSession.playbackState = 'playing';
             const track = currentPlaylistData[playQueue[queueIndex]] 
                        || currentPlaylistData[globalActiveOriginalIndex];
-            if (track && navigator.mediaSession.metadata) {
-                navigator.mediaSession.metadata.title = track.title;
-                navigator.mediaSession.metadata.artist = track.channel;
+            if (track) {
+                // Resolve artwork: prefer square-cached > thumb-cached > raw URL > empty
                 const rawArt = typeof getThumbUrl === 'function' ? getThumbUrl(track) : null;
-                if (!thumbsDisabled) {
-                    if (rawArt) {
-                        const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-                        if (sqCached) {
-                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
-                        } else if (typeof getSquareArtwork === 'function') {
-                            getSquareArtwork(rawArt, track.id, (sqUrl) => {
-                                if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: track.title,
-                                        artist: track.channel,
-                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                    });
-                                }
+                const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+                const l2Cached = rawArt && (typeof thumbCache !== 'undefined' && thumbCache.get(rawArt)?.status === 'loaded') ? rawArt : null;
+                const bestArt = sqCached || l2Cached || rawArt;
+                const artworkArr = bestArt && !thumbsDisabled ? [{ src: bestArt, sizes: '512x512', type: 'image/jpeg' }] : [];
+
+                // Always create a NEW MediaMetadata to force Chrome to re-register
+                // with Android's MediaSessionCompat (re-creates notification after teardown)
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: artworkArr
+                });
+
+                // Async upgrade: if square artwork wasn't cached, resolve it and update
+                if (!sqCached && rawArt && !thumbsDisabled && typeof getSquareArtwork === 'function') {
+                    getSquareArtwork(rawArt, track.id, (sqUrl) => {
+                        if (hasMediaSession && navigator.mediaSession.metadata) {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: track.title,
+                                artist: track.channel,
+                                artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
                             });
                         }
-                    }
-                } else if (rawArt) {
-                    const sqCached = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-                    const l2Cached = (typeof thumbCache !== 'undefined' && thumbCache.get(rawArt)?.status === 'loaded') ? rawArt : null;
-                    if (sqCached || l2Cached) {
-                        navigator.mediaSession.metadata.artwork = [{ src: sqCached || l2Cached, sizes: '512x512', type: 'image/jpeg' }];
-                    }
+                    });
                 }
             }
         }
@@ -482,7 +480,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const val = Number(e.target.value);
         currentTimeDisplay.textContent = formatTime(Math.floor(val));
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
     });
 
     const endSeek = (e) => {
@@ -502,7 +499,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateTimeUI(targetTime);
         if (window.lyricsActive) updateLyricsUI(targetTime);
         
-        // 🎯 Explicitly pass target time and total duration
+        // Explicitly pass target time and total duration
         const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
         updateMediaSessionPosition(targetTime, totalDur);
         
@@ -542,7 +539,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
 
-        // 🎯 If autoplay is disabled, strictly stop and retain end position
+        // If autoplay is disabled, strictly stop and retain end position
         if (!autoplayEnabled) {
             setPlayUI(false);
             if (hasMediaSession) {
@@ -991,7 +988,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
-        if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range')) return;
+        if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
         
         if (e.key === ':' || (e.key === ';' && e.shiftKey)) {
             btnPrev.click();
@@ -1009,6 +1006,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 return;
             }
             btnPlayPause.click();
+            e.preventDefault();
+        } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            btnRepeat.click();
+            e.preventDefault();
+        } else if ((e.key === 's' || e.key === 'S') && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            btnShuffle.click();
             e.preventDefault();
         } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
             searchInput.focus();
