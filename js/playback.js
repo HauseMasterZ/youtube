@@ -466,16 +466,21 @@
             }
 
             if (hasMediaSession) {
+                const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
+                    ? getPurpleNoteArtwork() 
+                    : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
+                const sqCached = (typeof artworkSquareCache !== 'undefined' && track && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : fallbackIcon;
+
                 if (!navigator.mediaSession.metadata) {
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: "err " + track.title + " skipping...",
                         artist: track.channel,
-                        artwork: (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '512x512', type: 'image/jpeg' }] : [{ src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', sizes: '512x512', type: 'image/png' }]
+                        artwork: [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }]
                     });
                 } else {
                     navigator.mediaSession.metadata.title = "err " + track.title + " skipping...";
                     navigator.mediaSession.metadata.artist = track.channel;
-                    navigator.mediaSession.metadata.artwork = (!thumbsDisabled && getThumbUrl(track)) ? [{ src: getThumbUrl(track), sizes: '512x512', type: 'image/jpeg' }] : [{ src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', sizes: '512x512', type: 'image/png' }];
+                    navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
                 }
                 navigator.mediaSession.playbackState = "playing";
             }
@@ -535,17 +540,11 @@
                 ? getPurpleNoteArtwork() 
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
-            // 1. Check in-memory caches (0ms)
+            // 1. Strict 1:1 Square Cache Check (0ms)
             const squareCached = (thumbUrl && typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
-            const l2Cached = (thumbUrl && typeof thumbCache !== 'undefined' && thumbCache.get(thumbUrl)?.status === 'loaded') ? thumbUrl : null;
-            
-            // 2. Select initial artwork (override fallback icon if cached even when thumbsDisabled is true)
-            let initialArtwork = fallbackIcon;
-            if (!thumbsDisabled) {
-                initialArtwork = squareCached || thumbUrl || fallbackIcon;
-            } else if (squareCached || l2Cached) {
-                initialArtwork = squareCached || l2Cached;
-            }
+
+            // 2. Select initial artwork (STRICTLY 1:1 square crop or fallback icon - NEVER raw 16:9 thumbUrl)
+            const initialArtwork = squareCached || fallbackIcon;
 
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: track.title,
@@ -556,37 +555,13 @@
             // PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
             navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
 
-            // 3. If thumbsDisabled is true but image is in persistent CacheStorage, load offline without network fetch
-            if (thumbsDisabled && thumbUrl && !squareCached && !l2Cached && 'caches' in window) {
-                caches.match(thumbUrl).then(cachedRes => {
-                    if (cachedRes && hasMediaSession && globalActiveOriginalIndex === originalIndex) {
-                        cachedRes.blob().then(blob => {
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                                const dataUrl = reader.result;
-                                if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: track.title,
-                                        artist: track.channel,
-                                        artwork: [{ src: dataUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                    });
-                                }
-                            };
-                            reader.readAsDataURL(blob);
-                        }).catch(() => {});
-                    }
-                }).catch(() => {});
-            }
-
-            // 4. Standard active square crop when thumbs are enabled
-            if (!thumbsDisabled && thumbUrl && !squareCached && typeof getSquareArtwork === 'function') {
+            // 3. If square artwork is not yet cached, generate 1:1 center-crop immediately and update MediaSession
+            if (!squareCached && thumbUrl && typeof getSquareArtwork === 'function') {
                 getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
-                    if (hasMediaSession && globalActiveOriginalIndex === originalIndex) {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: track.title,
-                            artist: track.channel,
-                            artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                        });
+                    if (hasMediaSession && globalActiveOriginalIndex === originalIndex && sqUrl) {
+                        if (navigator.mediaSession.metadata) {
+                            navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+                        }
                     }
                 });
             }
