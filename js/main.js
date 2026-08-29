@@ -372,7 +372,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
-        clearTimeout(pauseDebounceTimer);
         window.wasPausedByUser = false;
         window.wasInterrupted = false;
         setPlayUI(true);
@@ -390,43 +389,24 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
-        clearTimeout(pauseDebounceTimer);
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
         }
     });
 
-    let pauseDebounceTimer = null;
-
     audioPlayer.addEventListener("pause", () => {
         // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
-        // Always update PWA UI immediately
-        setPlayUI(false);
-
-        // Debounce the MediaSession update to avoid tearing down a notification
-        // that Chrome is about to resume (audio focus recovery, buffer catchup)
-        clearTimeout(pauseDebounceTimer);
-
+        // ONLY update MediaSession to 'paused' when user explicitly pauses or track ends
+        // Never strip or alter MediaSession state on OS transient focus losses (phone calls)
         if (window.wasPausedByUser) {
-            // User explicitly paused — update MediaSession immediately, no debounce
+            setPlayUI(false);
             updateMediaSessionPosition();
             if (hasMediaSession) {
                 navigator.mediaSession.playbackState = 'paused';
             }
-        } else {
-            // OS-initiated pause (phone call, audio focus loss) — debounce
-            // If play() fires within 800ms (focus recovery), cancel the update
-            pauseDebounceTimer = setTimeout(() => {
-                if (audioPlayer.paused && !audioPlayer.switching) {
-                    updateMediaSessionPosition();
-                    if (hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                    }
-                }
-            }, 800);
         }
     });
 
