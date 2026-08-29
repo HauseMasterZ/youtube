@@ -387,6 +387,12 @@
                                 await this._appendToSourceBuffer(cachedArrayBuffer);
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
+                                // Unlock switching flag immediately so the buffer bar can render the cached portion in 0ms
+                                this.switching = false;
+                                this.dispatchEvent(new Event('loadedmetadata'));
+                                this.dispatchEvent(new Event('canplay'));
+                                this.dispatchEvent(new Event('progress'));
+
                                 if (!isPartial) {
                                     if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                         try { this._mediaSource.endOfStream(); } catch (e) {}
@@ -403,15 +409,17 @@
 
                                     if (!preventAutoplay && !window.wasPausedByUser) {
                                         this.active.play().catch(e => console.warn("Cached play error:", e));
+                                        this.dispatchEvent(new Event('play'));
+                                        this.dispatchEvent(new Event('playing'));
                                     }
+                                    return Promise.resolve();
+                                }
 
-                                    this.switching = false;
-                                    this.dispatchEvent(new Event('loadedmetadata'));
-                                    this.dispatchEvent(new Event('canplay'));
+                                // If partial, start playing cached portion in 0ms while resuming background download
+                                if (!preventAutoplay && !window.wasPausedByUser) {
+                                    this.active.play().catch(e => console.warn("Partial play error:", e));
                                     this.dispatchEvent(new Event('play'));
                                     this.dispatchEvent(new Event('playing'));
-                                    this.dispatchEvent(new Event('progress'));
-                                    return Promise.resolve();
                                 }
                             }
                         }
@@ -621,7 +629,7 @@
                                 while (true) {
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                         try { activeReader.cancel(); } catch (e) {}
-                                        saveProgress(false);
+                                        await saveProgress(false);
                                         break;
                                     }
 
@@ -629,7 +637,7 @@
 
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                         try { activeReader.cancel(); } catch (e) {}
-                                        saveProgress(false);
+                                        await saveProgress(false);
                                         break;
                                     }
 
@@ -639,7 +647,7 @@
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
-                                        saveProgress(true);
+                                        await saveProgress(true);
 
                                         // Fulfill any pending seek targeting the end of the song
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
