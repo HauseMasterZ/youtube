@@ -34,7 +34,7 @@
                             this._endedFired = false;
                         }
 
-                        // 🎯 ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
+                        // ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
                         let effectiveEnd = dur;
                         if (this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
@@ -559,7 +559,7 @@
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
 
-                                        // 🎯 Fulfill any pending seek targeting the end of the song
+                                        // Fulfill any pending seek targeting the end of the song
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                                             const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
@@ -590,7 +590,7 @@
                                         await this._appendToSourceBuffer(nextChunk);
                                         this.dispatchEvent(new Event('progress'));
 
-                                        // 🔒 Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing (⏸) and prevent timer drift
+                                        // Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing and prevent timer drift
                                         if (typeof updateMediaSessionPosition === 'function') {
                                             const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                             if (this._pendingSeek !== null) {

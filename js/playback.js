@@ -331,7 +331,7 @@
 
         if (playQueue.length === 0) return;
         
-        // 🎯 If autoplay is disabled, strictly stop playback
+        // If autoplay is disabled, strictly stop playback
         if (!autoplayEnabled) {
             setPlayUI(false);
             if (hasMediaSession) {
@@ -396,7 +396,7 @@
         isSeeking = false;
         if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
         
-        // 🎯 Set active playing intent on fresh track launch (fixes first-ever song load bug)
+        // Set active playing intent on fresh track launch (fixes first-ever song load bug)
         if (!uiOnly) {
             window.wasPausedByUser = false;
             setPlayUI(true);
@@ -528,8 +528,6 @@
             totalTimeDisplay.textContent = "0:00";
         }
         seekBar.value = 0;
-        if (typeof updateSeekBarProgress === 'function') updateSeekBarProgress();
-        if (typeof bufferBar !== 'undefined' && bufferBar) bufferBar.style.width = '0%';
 
         let audioUrl = getAudioUrl(track);
         const thumbUrl = getThumbUrl(track);
@@ -567,7 +565,7 @@
                 artwork: [{ src: initialArtwork, sizes: '512x512', type: 'image/jpeg' }]
             });
 
-            // 🔒 PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
+            // PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
             navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
 
             // 3. If thumbsDisabled is true but image is in persistent CacheStorage, load offline without network fetch
@@ -601,7 +599,7 @@
                 });
             }
 
-            // 🎯 Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
+            // Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
             if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
                     navigator.mediaSession.setPositionState({
