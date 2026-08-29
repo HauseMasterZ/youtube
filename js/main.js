@@ -264,6 +264,14 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = false;
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                audioPlayer.currentTime = 0;
+                updateTimeUI(0);
+                if (window.lyricsActive && typeof updateLyricsUI === 'function') {
+                    updateLyricsUI(0);
+                }
+            }
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
@@ -541,6 +549,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // If autoplay is disabled, strictly stop and retain end position
         if (!autoplayEnabled) {
+            window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
                 navigator.mediaSession.playbackState = 'paused';

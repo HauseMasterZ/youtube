@@ -35,6 +35,14 @@
                 return;
             }
             window.wasPausedByUser = false;
+            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                audioPlayer.currentTime = 0;
+                updateTimeUI(0);
+                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {
+                    updateLyricsUI(0);
+                }
+            }
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
         navigator.mediaSession.setActionHandler('pause', () => {
