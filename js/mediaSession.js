@@ -175,14 +175,18 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                const dur = forcedDuration !== null ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || parseFloat(seekBar.max) || 0);
-                const pos = forcedPosition !== null ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
+                const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
+                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration);
+                const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate);
+
+                const dur = isForcedDurValid ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || parseFloat(seekBar.max) || 0);
+                const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
 
                 let rate;
-                if (forcedRate !== null) {
+                if (isForcedRateValid) {
                     rate = forcedRate;
                 } else if (window.playbackMode === 'mode2') {
                     rate = (isBuffering || isPaused) ? 0 : ((audioPlayer && audioPlayer.playbackRate) || 1.0);
