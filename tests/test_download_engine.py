@@ -59,5 +59,20 @@ class TestDownloadEngine(unittest.TestCase):
         self.assertRegex(self.css_content, r'\.download-toast\s*\{[^}]*contain:\s*layout\s+paint;')
         self.assertRegex(self.css_content, r'\.download-toast\s*\{[^}]*background:\s*#141418;')
 
+    def test_thumbs_download_unconditional(self):
+        """downloadActivePlaylist unconditionally downloads thumbnails without thumbsDisabled gating"""
+        d_match = re.search(r'async function downloadActivePlaylist\s*\(\)\s*\{([\s\S]*)', self.playback_content)
+        self.assertIsNotNone(d_match, "Could not find downloadActivePlaylist")
+        d_body = d_match.group(1)
+        self.assertNotIn('!thumbsDisabled && thumbUrl', d_body)
+        self.assertIn('thumbsCache.put(thumbUrl', d_body)
+
+    def test_recovery_pass_retries_all_assets(self):
+        """Recovery loop in downloadActivePlaylist retries audio, thumbnail, and lyrics"""
+        d_match = re.search(r'async function downloadActivePlaylist\s*\(\)\s*\{([\s\S]*)', self.playback_content)
+        self.assertIsNotNone(d_match, "Could not find downloadActivePlaylist")
+        d_body = d_match.group(1)
+        self.assertRegex(d_body, r'missingTracks[\s\S]*?mediaCache\.put\(audioUrl[\s\S]*?thumbsCache\.put\(thumbUrl[\s\S]*?mediaCache\.put\(lyricsUrl')
+
 if __name__ == '__main__':
     unittest.main()
