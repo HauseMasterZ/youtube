@@ -123,57 +123,48 @@
     window.armAutoKillWatchdog = armAutoKillWatchdog;
     window.cancelAutoKillWatchdog = cancelAutoKillWatchdog;
 
-    // 4-Tap Hardware Shortcut Detector
-    function detectPlaybackModeShortcut() {
-        const now = Date.now();
-        if (!Array.isArray(window.lastPlaybackModeTransitions)) {
-            window.lastPlaybackModeTransitions = [];
+    // Unified Playback Mode Toggle Engine
+    function togglePlaybackMode(targetMode = null) {
+        const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
+        window.playbackMode = newMode;
+
+        if (typeof window.setStoredSetting === 'function') {
+            window.setStoredSetting('yt_playback_mode', newMode);
+        } else if (typeof setStoredSetting === 'function') {
+            setStoredSetting('yt_playback_mode', newMode);
         }
-        window.lastPlaybackModeTransitions.push(now);
-        window.lastPlaybackModeTransitions = window.lastPlaybackModeTransitions.filter(t => (now - t) <= 1500);
 
-        if (window.lastPlaybackModeTransitions.length >= 4) {
-            window.lastPlaybackModeTransitions = [];
-            const newMode = (window.playbackMode === 'mode1') ? 'mode2' : 'mode1';
-            window.playbackMode = newMode;
+        const mode1Radio = document.getElementById("mode-1-radio");
+        const mode2Radio = document.getElementById("mode-2-radio");
+        if (mode1Radio && mode2Radio) {
+            mode1Radio.checked = (newMode === 'mode1');
+            mode2Radio.checked = (newMode === 'mode2');
+        }
 
-            if (typeof window.setStoredSetting === 'function') {
-                window.setStoredSetting('yt_playback_mode', newMode);
-            } else if (typeof setStoredSetting === 'function') {
-                setStoredSetting('yt_playback_mode', newMode);
+        const btTimeoutContainer = document.getElementById("bt-timeout-container");
+        if (btTimeoutContainer) {
+            btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
+        }
+
+        showModeToast(newMode === 'mode2' ? "Mode Switched: Car & Bluetooth Mode" : "Mode Switched: Standard Mode");
+
+        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+        if (newMode === 'mode2') {
+            if (isPaused) {
+                startLiveAudioAnchor();
+                armAutoKillWatchdog();
             }
+        } else {
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
+        }
 
-            const mode1Radio = document.getElementById("mode-1-radio");
-            const mode2Radio = document.getElementById("mode-2-radio");
-            if (mode1Radio && mode2Radio) {
-                mode1Radio.checked = (newMode === 'mode1');
-                mode2Radio.checked = (newMode === 'mode2');
-            }
-
-            const btTimeoutContainer = document.getElementById("bt-timeout-container");
-            if (btTimeoutContainer) {
-                btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
-            }
-
-            showModeToast(newMode === 'mode2' ? "Mode Switched: Car & Bluetooth Mode" : "Mode Switched: Standard Mode");
-
-            const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
-            if (newMode === 'mode2') {
-                if (isPaused) {
-                    startLiveAudioAnchor();
-                    armAutoKillWatchdog();
-                }
-            } else {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
-            }
-
-            if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
-            }
+        if (typeof updateMediaSessionPosition === 'function') {
+            updateMediaSessionPosition();
         }
     }
-    window.detectPlaybackModeShortcut = detectPlaybackModeShortcut;
+    window.togglePlaybackMode = togglePlaybackMode;
+    window.detectPlaybackModeShortcut = togglePlaybackMode; // Backward compatibility alias
 
     // MediaSession Position State Management
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
@@ -232,7 +223,6 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
-            detectPlaybackModeShortcut();
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -260,7 +250,6 @@
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
-            detectPlaybackModeShortcut();
             if (window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused) {
                 // TWS Single-Button Resume
                 window.wasPausedByUser = false;
@@ -299,7 +288,6 @@
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
-                detectPlaybackModeShortcut();
                 if (audioPlayer && audioPlayer.paused) {
                     if (!audioPlayer.src) {
                         if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
@@ -342,8 +330,34 @@
             // playpause action not supported in all browsers
         }
 
-        navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
-        navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
+        let lastTrackActionTime = 0;
+        let lastTrackAction = null;
+
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+            const now = Date.now();
+            if (lastTrackAction === 'next' && (now - lastTrackActionTime) <= 1200) {
+                lastTrackAction = null;
+                lastTrackActionTime = 0;
+                togglePlaybackMode();
+                return;
+            }
+            lastTrackAction = 'prev';
+            lastTrackActionTime = now;
+            playPrev();
+        });
+
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+            const now = Date.now();
+            if (lastTrackAction === 'prev' && (now - lastTrackActionTime) <= 1200) {
+                lastTrackAction = null;
+                lastTrackActionTime = 0;
+                togglePlaybackMode();
+                return;
+            }
+            lastTrackAction = 'next';
+            lastTrackActionTime = now;
+            playNext();
+        });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
             const seekTarget = details.seekTime;
             if (details.fastSeek && 'fastSeek' in audioPlayer) {
