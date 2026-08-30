@@ -819,6 +819,22 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function updatePlaylistSelectOptions() {
+        if (!playlistSelect) return;
+        const currentVal = playlistSelect.value || (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS[0]) || "Gym";
+        const playlistOptions = (typeof ALL_PLAYLISTS !== 'undefined' ? ALL_PLAYLISTS : ["Gym", "Driving", "Songs"]).map(pl => `<option value="${pl}">${pl}</option>`).join('');
+        if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
+            playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option>`;
+        } else {
+            playlistSelect.innerHTML = `${playlistOptions}<option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option>`;
+        }
+        if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(currentVal)) {
+            playlistSelect.value = currentVal;
+        }
+    }
+
+    updatePlaylistSelectOptions();
+
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
         if (e.target.value === "INSTALL_APP") {
