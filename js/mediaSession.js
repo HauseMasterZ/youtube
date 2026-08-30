@@ -37,7 +37,7 @@
             liveAudioOscillator = liveAudioContext.createOscillator();
             liveAudioGain = liveAudioContext.createGain();
 
-            liveAudioGain.gain.value = 0.0001;
+            liveAudioGain.gain.value = 0;
             liveAudioOscillator.connect(liveAudioGain);
             liveAudioGain.connect(liveAudioDestination);
             liveAudioOscillator.start();
@@ -188,15 +188,13 @@
                 let rate;
                 if (isForcedRateValid) {
                     rate = forcedRate;
-                } else if (window.playbackMode === 'mode2') {
-                    rate = (isBuffering || isPaused) ? 0 : ((audioPlayer && audioPlayer.playbackRate) || 1.0);
                 } else {
-                    rate = (isBuffering || isPaused) ? 0.00001 : ((audioPlayer && audioPlayer.playbackRate) || 1.0);
+                    rate = (isBuffering || isPaused) ? 0.00001 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
-                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate >= 0) ? rate : 1.0;
+                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate > 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
