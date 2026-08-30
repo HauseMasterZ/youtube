@@ -1466,6 +1466,307 @@
 button:focus { outline: none !important; }
 .control-btn:focus { outline: none !important; }
 
+/* Settings Backdrop */
+#settings-backdrop,
+.settings-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 10000;
+    transition: opacity 0.2s ease;
+}
+
+/* Settings Modal */
+#settings-modal,
+.settings-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10001;
+    width: 90%;
+    max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: rgba(18, 18, 24, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+    color: var(--text-primary);
+    box-sizing: border-box;
+}
+
+#settings-modal::-webkit-scrollbar,
+.settings-modal::-webkit-scrollbar {
+    width: 6px;
+}
+
+#settings-modal::-webkit-scrollbar-thumb,
+.settings-modal::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* Settings Header & Title */
+.settings-header {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+#settings-title,
+.settings-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+/* Settings Close Button */
+#btn-close-settings,
+.settings-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 22px;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 6px;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, background 0.2s ease;
+}
+
+@media (hover: hover) {
+    #btn-close-settings:hover,
+    .settings-close-btn:hover {
+        color: var(--text-primary);
+        background: rgba(255, 255, 255, 0.08);
+    }
+}
+
+/* Settings Section */
+.settings-section,
+#bt-timeout-container {
+    margin-bottom: 18px;
+}
+
+.settings-section-title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+    display: block;
+}
+
+/* Settings Radio Group & Cards */
+.settings-radio-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.settings-radio-card,
+.settings-radio-label {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease;
+    box-sizing: border-box;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+@media (hover: hover) {
+    .settings-radio-card:hover,
+    .settings-radio-label:hover {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+}
+
+.settings-radio-card:has(input[type="radio"]:checked),
+.settings-radio-label:has(input[type="radio"]:checked),
+.settings-radio-card.active,
+.settings-radio-label.active {
+    border-color: var(--primary-color, #8c73ff);
+    background: rgba(140, 115, 255, 0.08);
+}
+
+.settings-radio-card input[type="radio"],
+.settings-radio-label input[type="radio"] {
+    margin: 2px 0 0 0;
+    cursor: pointer;
+    accent-color: var(--primary-color, #8c73ff);
+    flex-shrink: 0;
+}
+
+.settings-radio-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+}
+
+.settings-radio-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+    cursor: pointer;
+}
+
+.settings-subtext,
+.settings-radio-subtext {
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-top: 3px;
+}
+
+/* Settings Controls (Select, Input, Action Buttons) */
+.settings-timeout-controls {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.settings-select,
+#bt-timeout-select {
+    width: 100%;
+    background: #000000;
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+}
+
+.settings-select:focus,
+#bt-timeout-select:focus {
+    border-color: var(--primary-color, #8c73ff);
+    outline: none;
+}
+
+.settings-input,
+#bt-timeout-custom {
+    width: 100%;
+    box-sizing: border-box;
+    background: #000000;
+    color: var(--text-primary);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 14px;
+    margin-top: 8px;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+}
+
+.settings-input:focus,
+#bt-timeout-custom:focus {
+    border-color: var(--primary-color, #8c73ff);
+    outline: none;
+}
+
+.settings-actions-group {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+.settings-action-btn,
+#btn-modal-reload,
+#btn-modal-install {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text-primary);
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    box-sizing: border-box;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+@media (hover: hover) {
+    .settings-action-btn:hover,
+    #btn-modal-reload:hover,
+    #btn-modal-install:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: var(--primary-color, #8c73ff);
+    }
+}
+
+.settings-action-btn:active,
+#btn-modal-reload:active,
+#btn-modal-install:active {
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.settings-action-btn:last-child {
+    margin-bottom: 0;
+}
+
+/* Mode Toast */
+#mode-toast,
+.mode-toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(18, 18, 24, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--primary-color, #8c73ff);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(140, 115, 255, 0.3);
+    color: #ffffff;
+    padding: 10px 20px;
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    z-index: 10002;
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
 /* Mobile-Only Dominant-Themed Download Toast */
 .download-toast {
     display: none;
@@ -1499,6 +1800,33 @@ button:focus { outline: none !important; }
     .download-toast.success {
         border-color: #00ff88;
         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(0, 255, 136, 0.3);
+    }
+
+    #settings-modal,
+    .settings-modal {
+        width: 92%;
+        max-width: 380px;
+        padding: 16px;
+    }
+
+    .settings-radio-card,
+    .settings-radio-label {
+        min-height: 44px;
+        padding: 12px;
+    }
+
+    .settings-action-btn,
+    #btn-modal-reload,
+    #btn-modal-install {
+        min-height: 44px;
+        padding: 12px;
+    }
+
+    .settings-select,
+    #bt-timeout-select,
+    .settings-input,
+    #bt-timeout-custom {
+        min-height: 44px;
     }
 }
 
