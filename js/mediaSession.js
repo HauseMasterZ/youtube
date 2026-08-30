@@ -53,6 +53,7 @@
     }
 
     function startLiveAudioAnchor() {
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (!liveAudioContext) {
             initLiveAudioAnchor();
@@ -183,13 +184,15 @@
                 let rate;
                 if (isForcedRateValid) {
                     rate = forcedRate;
-                } else {
+                } else if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
                     rate = (isBuffering || isPaused) ? 0.00001 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                } else {
+                    rate = (isBuffering || isPaused) ? 0 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
-                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate > 0) ? rate : 1.0;
+                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate >= 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
@@ -335,7 +338,8 @@
 
         navigator.mediaSession.setActionHandler('previoustrack', () => {
             const now = Date.now();
-            if (lastTrackAction === 'next' && (now - lastTrackActionTime) <= 1200) {
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (isMobile && lastTrackAction === 'next' && (now - lastTrackActionTime) <= 1200) {
                 lastTrackAction = null;
                 lastTrackActionTime = 0;
                 togglePlaybackMode();
@@ -348,7 +352,8 @@
 
         navigator.mediaSession.setActionHandler('nexttrack', () => {
             const now = Date.now();
-            if (lastTrackAction === 'prev' && (now - lastTrackActionTime) <= 1200) {
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (isMobile && lastTrackAction === 'prev' && (now - lastTrackActionTime) <= 1200) {
                 lastTrackAction = null;
                 lastTrackActionTime = 0;
                 togglePlaybackMode();
