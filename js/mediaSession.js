@@ -1,17 +1,198 @@
-    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
-        if (hasMediaSession && 'setPositionState' in navigator.mediaSession) {
+    // Toast notification singleton for mode changes and auto-kill events
+    let modeToastTimer = null;
+    function showModeToast(text) {
+        const toast = document.getElementById("mode-toast");
+        const toastText = document.getElementById("mode-toast-text");
+        if (!toast || !toastText) return;
+
+        if (modeToastTimer) {
+            clearTimeout(modeToastTimer);
+            modeToastTimer = null;
+        }
+
+        toastText.textContent = text;
+        toast.style.display = "block";
+
+        modeToastTimer = setTimeout(() => {
+            toast.style.display = "none";
+            modeToastTimer = null;
+        }, 2500);
+    }
+    window.showModeToast = showModeToast;
+
+    // Live Audio Anchor Singleton for Mode 2 (Hands-Free Bluetooth)
+    let liveAudioContext = null;
+    let liveAudioDestination = null;
+    let liveAudioOscillator = null;
+    let liveAudioGain = null;
+
+    function initLiveAudioAnchor() {
+        if (liveAudioContext) return liveAudioContext;
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+
+        try {
+            liveAudioContext = new AudioCtx();
+            liveAudioDestination = liveAudioContext.createMediaStreamDestination();
+            liveAudioOscillator = liveAudioContext.createOscillator();
+            liveAudioGain = liveAudioContext.createGain();
+
+            liveAudioGain.gain.value = 0.0001;
+            liveAudioOscillator.connect(liveAudioGain);
+            liveAudioGain.connect(liveAudioDestination);
+            liveAudioOscillator.start();
+
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && liveAudioDestination.stream) {
+                anchorEl.srcObject = liveAudioDestination.stream;
+            }
+        } catch (e) {
+            console.warn("Live audio anchor init error:", e);
+        }
+        return liveAudioContext;
+    }
+
+    function startLiveAudioAnchor() {
+        if (window.playbackMode !== 'mode2') return;
+        if (!liveAudioContext) {
+            initLiveAudioAnchor();
+        }
+        if (liveAudioContext && liveAudioContext.state === 'suspended') {
+            liveAudioContext.resume().catch(() => {});
+        }
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (anchorEl) {
+            if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
+                anchorEl.srcObject = liveAudioDestination.stream;
+            }
+            anchorEl.play().catch(e => console.warn("Live anchor play error:", e));
+        }
+    }
+
+    function stopLiveAudioAnchor() {
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (anchorEl) {
             try {
-                const dur = forcedDuration !== null ? forcedDuration : (audioPlayer.duration || parseFloat(seekBar.max) || 0);
-                const pos = forcedPosition !== null ? forcedPosition : (audioPlayer.currentTime || 0);
+                anchorEl.pause();
+            } catch (e) {}
+        }
+    }
+
+    window.initLiveAudioAnchor = initLiveAudioAnchor;
+    window.startLiveAudioAnchor = startLiveAudioAnchor;
+    window.stopLiveAudioAnchor = stopLiveAudioAnchor;
+
+    // Auto-Kill Watchdog Lifecycle
+    function cancelAutoKillWatchdog() {
+        if (window.btSleepTimer !== null) {
+            clearTimeout(window.btSleepTimer);
+            window.btSleepTimer = null;
+        }
+    }
+
+    function armAutoKillWatchdog() {
+        cancelAutoKillWatchdog();
+        if (window.playbackMode !== 'mode2') return;
+
+        const rawTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
+            ? String(window.btTimeoutMins).trim()
+            : '30';
+
+        if (rawTimeout === 'never') return;
+
+        const mins = parseFloat(rawTimeout);
+        if (isNaN(mins) || mins <= 0) return;
+
+        const ms = mins * 60 * 1000;
+        window.btSleepTimer = setTimeout(() => {
+            stopLiveAudioAnchor();
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
+                try {
+                    navigator.mediaSession.playbackState = 'none';
+                } catch (e) {}
+            }
+            showModeToast("Auto-kill: Inactivity timeout reached");
+            window.btSleepTimer = null;
+        }, ms);
+    }
+
+    window.armAutoKillWatchdog = armAutoKillWatchdog;
+    window.cancelAutoKillWatchdog = cancelAutoKillWatchdog;
+
+    // 4-Tap Hardware Shortcut Detector
+    function detectPlaybackModeShortcut() {
+        const now = Date.now();
+        if (!Array.isArray(window.lastPlaybackModeTransitions)) {
+            window.lastPlaybackModeTransitions = [];
+        }
+        window.lastPlaybackModeTransitions.push(now);
+        window.lastPlaybackModeTransitions = window.lastPlaybackModeTransitions.filter(t => (now - t) <= 1500);
+
+        if (window.lastPlaybackModeTransitions.length >= 4) {
+            window.lastPlaybackModeTransitions = [];
+            const newMode = (window.playbackMode === 'mode1') ? 'mode2' : 'mode1';
+            window.playbackMode = newMode;
+
+            if (typeof window.setStoredSetting === 'function') {
+                window.setStoredSetting('yt_playback_mode', newMode);
+            } else if (typeof setStoredSetting === 'function') {
+                setStoredSetting('yt_playback_mode', newMode);
+            }
+
+            const mode1Radio = document.getElementById("mode-1-radio");
+            const mode2Radio = document.getElementById("mode-2-radio");
+            if (mode1Radio && mode2Radio) {
+                mode1Radio.checked = (newMode === 'mode1');
+                mode2Radio.checked = (newMode === 'mode2');
+            }
+
+            const btTimeoutContainer = document.getElementById("bt-timeout-container");
+            if (btTimeoutContainer) {
+                btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
+            }
+
+            showModeToast(newMode === 'mode2' ? "Mode Switched: Hands-Free Bluetooth" : "Mode Switched: Persistent Notification");
+
+            const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+            if (newMode === 'mode2') {
+                if (isPaused) {
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
+                }
+            } else {
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+            }
+
+            if (typeof updateMediaSessionPosition === 'function') {
+                updateMediaSessionPosition();
+            }
+        }
+    }
+    window.detectPlaybackModeShortcut = detectPlaybackModeShortcut;
+
+    // MediaSession Position State Management
+    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
+        if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
+            try {
+                const dur = forcedDuration !== null ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || parseFloat(seekBar.max) || 0);
+                const pos = forcedPosition !== null ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
-                // If buffering a seek or track switch or paused, strictly enforce micro-rate so seekbar freezes instantly
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
-                const rate = forcedRate !== null ? forcedRate : ((isBuffering || isPaused) ? 0.00001 : (audioPlayer.playbackRate || 1.0));
-                const validRate = (typeof rate === 'number' && rate > 0) ? rate : 1.0;
+
+                let rate;
+                if (forcedRate !== null) {
+                    rate = forcedRate;
+                } else if (window.playbackMode === 'mode2') {
+                    rate = (isBuffering || isPaused) ? 0 : ((audioPlayer && audioPlayer.playbackRate) || 1.0);
+                } else {
+                    rate = (isBuffering || isPaused) ? 0.00001 : ((audioPlayer && audioPlayer.playbackRate) || 1.0);
+                }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
+                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate >= 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
@@ -23,9 +204,29 @@
             }
         }
     }
+    window.updateMediaSessionPosition = updateMediaSessionPosition;
+
+    // Connect audioPlayer play/pause events to anchor and watchdog
+    if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
+        audioPlayer.addEventListener('play', () => {
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
+        });
+        audioPlayer.addEventListener('pause', () => {
+            if (window.playbackMode === 'mode2') {
+                startLiveAudioAnchor();
+                armAutoKillWatchdog();
+            } else {
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+            }
+        });
+    }
+
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
-    if (hasMediaSession) {
+    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            detectPlaybackModeShortcut();
             if (!audioPlayer.src) {
                 if (playQueue.length > 0 && queueIndex !== -1) {
                     executePlayback(false);
@@ -45,11 +246,64 @@
                 }
             }
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
         });
+
         navigator.mediaSession.setActionHandler('pause', () => {
+            detectPlaybackModeShortcut();
             window.wasPausedByUser = true;
             audioPlayer.instantPause();
+            if (window.playbackMode === 'mode2') {
+                startLiveAudioAnchor();
+                armAutoKillWatchdog();
+            } else {
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+            }
         });
+
+        try {
+            navigator.mediaSession.setActionHandler('playpause', () => {
+                detectPlaybackModeShortcut();
+                if (audioPlayer.paused) {
+                    if (!audioPlayer.src) {
+                        if (playQueue.length > 0 && queueIndex !== -1) {
+                            executePlayback(false);
+                        } else if (playQueue.length > 0) {
+                            queueIndex = 0;
+                            executePlayback(false);
+                        }
+                        return;
+                    }
+                    window.wasPausedByUser = false;
+                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                    if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                        audioPlayer.currentTime = 0;
+                        updateTimeUI(0);
+                        if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {
+                            updateLyricsUI(0);
+                        }
+                    }
+                    audioPlayer.play().catch(e => console.warn("MediaSession playpause error:", e));
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                } else {
+                    window.wasPausedByUser = true;
+                    audioPlayer.instantPause();
+                    if (window.playbackMode === 'mode2') {
+                        startLiveAudioAnchor();
+                        armAutoKillWatchdog();
+                    } else {
+                        stopLiveAudioAnchor();
+                        cancelAutoKillWatchdog();
+                    }
+                }
+            });
+        } catch (e) {
+            // playpause action not supported in all browsers
+        }
+
         navigator.mediaSession.setActionHandler('previoustrack', () => playPrev());
         navigator.mediaSession.setActionHandler('nexttrack', () => playNext());
         navigator.mediaSession.setActionHandler('seekto', (details) => {
@@ -85,6 +339,3 @@
             updateMediaSessionPosition(newTime, dur);
         });
     }
-
-
-
