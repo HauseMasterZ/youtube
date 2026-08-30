@@ -44,6 +44,20 @@ class TestSettingsUI(unittest.TestCase):
         matches = emoji_pattern.findall(self.test_content)
         self.assertEqual(matches, [], f"Found emojis in test_settings_ui.py: {matches}")
 
+    def test_playlist_select_options_configuration(self):
+        """updatePlaylistSelectOptions defines HARD_RELOAD/INSTALL_APP for desktop and __settings__ for mobile"""
+        self.assertRegex(self.main_content, r'function\s+updatePlaylistSelectOptions\s*\(\s*\)')
+        self.assertIn('HARD_RELOAD', self.main_content)
+        self.assertIn('INSTALL_APP', self.main_content)
+        self.assertIn('Reload Playlists', self.main_content)
+        self.assertIn('Install App', self.main_content)
+        self.assertIn('Settings', self.main_content)
+        self.assertIn('__settings__', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?__settings__[\s\S]*?\}\s*else\s*\{[\s\S]*?HARD_RELOAD[\s\S]*?INSTALL_APP[\s\S]*?\}'
+        )
+
     def test_playlist_select_settings_interceptor(self):
         """playlistSelect change event intercepts __settings__, reverts select value, opens modal, and returns early"""
         self.assertIn('__settings__', self.main_content)
