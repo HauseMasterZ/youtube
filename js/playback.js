@@ -555,8 +555,8 @@
             // PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
             navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
 
-            // 3. If square artwork is not yet cached, generate 1:1 center-crop immediately and update MediaSession
-            if (!squareCached && thumbUrl && typeof getSquareArtwork === 'function') {
+            // 3. If square artwork is not yet cached and thumbnails are enabled, generate 1:1 center-crop
+            if (!thumbsDisabled && !squareCached && thumbUrl && typeof getSquareArtwork === 'function') {
                 getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
                     if (hasMediaSession && globalActiveOriginalIndex === originalIndex && sqUrl) {
                         if (navigator.mediaSession.metadata) {
@@ -763,8 +763,8 @@
                             }
                         }
 
-                        // 2. Thumbnail Cache
-                        if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
+                        // 2. Thumbnail Cache (only fetch if thumbnails are enabled)
+                        if (!thumbsDisabled && thumbUrl && !(await thumbsCache.match(thumbUrl))) {
                             const res = await fetch(thumbUrl, { signal }).catch(() => {});
                             if (res && (res.ok || res.type === 'opaque')) {
                                 await thumbsCache.put(thumbUrl, res);

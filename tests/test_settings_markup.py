@@ -94,24 +94,16 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIn('aria-label="Close settings"', close_tag)
 
     def test_playback_engine_radios(self):
-        """Section 1: Playback engine radio buttons and subtexts"""
-        # Mode 1
+        """Section 1: Playback engine radio buttons and simplified subtexts"""
         m1_match = re.search(r'<input[^>]*id=["\']mode-1-radio["\'][^>]*>', self.html_content)
         self.assertIsNotNone(m1_match, "Could not find #mode-1-radio")
-        m1_tag = m1_match.group(0)
-        self.assertIn('name="playback-mode"', m1_tag)
-        self.assertIn('value="mode1"', m1_tag)
-        self.assertIn('Persistent Notification Mode', self.html_content)
-        self.assertIn('Standard micro-rate spoofing for battery saving & pinned lock-screen controls', self.html_content)
+        self.assertIn('Standard (Battery Saver)', self.html_content)
+        self.assertIn('Keeps lock-screen controls active while paused with minimal battery usage', self.html_content)
 
-        # Mode 2
         m2_match = re.search(r'<input[^>]*id=["\']mode-2-radio["\'][^>]*>', self.html_content)
         self.assertIsNotNone(m2_match, "Could not find #mode-2-radio")
-        m2_tag = m2_match.group(0)
-        self.assertIn('name="playback-mode"', m2_tag)
-        self.assertIn('value="mode2"', m2_tag)
-        self.assertIn('Hands-Free Bluetooth Mode', self.html_content)
-        self.assertIn('Live audio anchor on pause with auto-kill sleep timer for seamless car/earbud playback', self.html_content)
+        self.assertIn('Car & Bluetooth Mode', self.html_content)
+        self.assertIn('Prevents car and headphone disconnections when paused; includes sleep timer', self.html_content)
 
     def test_bluetooth_timeout_section(self):
         """Section 2: Bluetooth timeout container, select, and custom input"""

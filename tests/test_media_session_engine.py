@@ -78,8 +78,8 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-1-radio', self.ms_content)
         self.assertIn('mode-2-radio', self.ms_content)
         self.assertIn('bt-timeout-container', self.ms_content)
-        self.assertIn('Mode Switched: Hands-Free Bluetooth', self.ms_content)
-        self.assertIn('Mode Switched: Persistent Notification', self.ms_content)
+        self.assertIn('Mode Switched: Car & Bluetooth Mode', self.ms_content)
+        self.assertIn('Mode Switched: Standard Mode', self.ms_content)
 
     def test_four_tap_detector_resets_transitions(self):
         """4-tap detector resets window.lastPlaybackModeTransitions after triggering switch"""
@@ -137,6 +137,23 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window.wasPausedByUser = true;", pause_code)
         self.assertIn("startLiveAudioAnchor()", pause_code)
         self.assertIn("armAutoKillWatchdog()", pause_code)
+
+    def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
+        """Ensure getSquareArtwork in playback.js is guarded by !thumbsDisabled"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            content = f.read()
+        self.assertRegex(content, r'!thumbsDisabled\s*&&\s*!squareCached\s*&&\s*thumbUrl\s*&&\s*typeof\s+getSquareArtwork')
+
+    def test_play_action_stops_live_anchor_before_play(self):
+        """Verify play handler stops anchor and sets playbackState to playing"""
+        play_handler_match = re.search(
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+            self.ms_content
+        )
+        self.assertIsNotNone(play_handler_match, "Could not find play action handler in mediaSession.js")
+        play_code = play_handler_match.group(1)
+        self.assertIn("stopLiveAudioAnchor()", play_code)
+        self.assertIn("navigator.mediaSession.playbackState = 'playing'", play_code)
 
 if __name__ == '__main__':
     unittest.main()

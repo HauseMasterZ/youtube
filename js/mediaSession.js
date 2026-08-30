@@ -65,7 +65,11 @@
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
-            anchorEl.play().catch(e => console.warn("Live anchor play error:", e));
+            anchorEl.play().then(() => {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
+            }).catch(e => console.warn("Live anchor play error:", e));
         }
     }
 
@@ -151,7 +155,7 @@
                 btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
             }
 
-            showModeToast(newMode === 'mode2' ? "Mode Switched: Hands-Free Bluetooth" : "Mode Switched: Persistent Notification");
+            showModeToast(newMode === 'mode2' ? "Mode Switched: Car & Bluetooth Mode" : "Mode Switched: Standard Mode");
 
             const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
             if (newMode === 'mode2') {
@@ -229,6 +233,11 @@
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
             detectPlaybackModeShortcut();
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
+            }
             if (!audioPlayer.src) {
                 if (playQueue.length > 0 && queueIndex !== -1) {
                     executePlayback(false);
@@ -248,8 +257,6 @@
                 }
             }
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
-            stopLiveAudioAnchor();
-            cancelAutoKillWatchdog();
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
@@ -257,6 +264,11 @@
             if (window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused) {
                 // TWS Single-Button Resume
                 window.wasPausedByUser = false;
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
                 const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
                     audioPlayer.currentTime = 0;
@@ -264,11 +276,12 @@
                     if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                 }
                 audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
             } else {
                 // Standard Pause
                 window.wasPausedByUser = true;
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
                 if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                     audioPlayer.instantPause();
                 } else if (audioPlayer) {
