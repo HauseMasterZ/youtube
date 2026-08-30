@@ -69,21 +69,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('Auto-kill: Inactivity timeout reached', self.ms_content)
         self.assertIn("'none'", self.ms_content)
 
-    def test_four_tap_detector_implementation(self):
-        """4-tap detector checks lastPlaybackModeTransitions within 1500ms, toggles mode, updates UI and toast"""
-        self.assertIn('window.lastPlaybackModeTransitions', self.ms_content)
-        self.assertRegex(self.ms_content, r'1500')
-        self.assertRegex(self.ms_content, r'length\s*>=\s*4')
-        self.assertIn('yt_playback_mode', self.ms_content)
-        self.assertIn('mode-1-radio', self.ms_content)
-        self.assertIn('mode-2-radio', self.ms_content)
-        self.assertIn('bt-timeout-container', self.ms_content)
-        self.assertIn('Mode Switched: Car & Bluetooth Mode', self.ms_content)
-        self.assertIn('Mode Switched: Standard Mode', self.ms_content)
+    def test_toggle_playback_mode_defined(self):
+        """Verify togglePlaybackMode exists and is exposed globally"""
+        self.assertRegex(self.ms_content, r'function\s+togglePlaybackMode\s*\(')
+        self.assertIn('window.togglePlaybackMode = togglePlaybackMode;', self.ms_content)
 
-    def test_four_tap_detector_resets_transitions(self):
-        """4-tap detector resets window.lastPlaybackModeTransitions after triggering switch"""
-        self.assertRegex(self.ms_content, r'window\.lastPlaybackModeTransitions\s*=\s*\[\s*\]')
+    def test_no_detect_shortcut_in_play_pause_handlers(self):
+        """Ensure detectPlaybackModeShortcut is not called on routine play/pause actions"""
+        play_match = re.search(r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);", self.ms_content)
+        self.assertIsNotNone(play_match)
+        self.assertNotIn("detectPlaybackModeShortcut()", play_match.group(1))
 
     def test_show_mode_toast_function(self):
         """showModeToast function is defined, exposed, and updates DOM elements"""
@@ -154,6 +149,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         play_code = play_handler_match.group(1)
         self.assertIn("stopLiveAudioAnchor()", play_code)
         self.assertIn("navigator.mediaSession.playbackState = 'playing'", play_code)
+
+    def test_hardware_combo_shortcut(self):
+        """Ensure nexttrack and previoustrack handlers detect rapid combo and call togglePlaybackMode"""
+        self.assertIn("lastTrackActionTime", self.ms_content)
+        self.assertIn("lastTrackAction", self.ms_content)
+        self.assertIn("togglePlaybackMode()", self.ms_content)
 
 if __name__ == '__main__':
     unittest.main()
