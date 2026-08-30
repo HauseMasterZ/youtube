@@ -10,3 +10,5 @@ archive/
 .DS_Store
 .vscode/
 worker.js
+__pycache__/
+*.pyc
