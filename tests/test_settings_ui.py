@@ -169,12 +169,35 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_pause_listener_media_session_position(self):
-        """audioPlayer pause event listener calls updateMediaSessionPosition without hardcoded 0.00001"""
+        """audioPlayer pause event listener calls updateMediaSessionPosition with 0.00001 micro-rate"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertNotIn('0.00001', pause_block)
-        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*\)')
+        self.assertIn('0.00001', pause_block)
+        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*0\.00001\s*\)')
+
+    def test_pause_listener_mode2_and_mode1_playback_state(self):
+        """audioPlayer pause event listener sets playing for Mode 2 and checks wasPausedByUser for Mode 1"""
+        pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
+        self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
+        pause_block = pause_block_match.group(0)
+        self.assertRegex(
+            pause_block,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*window\.wasPausedByUser\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}'
+        )
+
+    def test_media_session_pause_handler_lyrics_reset(self):
+        """MediaSession pause action handler resets lyrics UI on near-end rewind"""
+        pause_handler_match = re.search(
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+            self.ms_content
+        )
+        self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
+        pause_code = pause_handler_match.group(1)
+        self.assertRegex(
+            pause_code,
+            r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*updateLyricsUI\(0\);'
+        )
 
 if __name__ == '__main__':
     unittest.main()
