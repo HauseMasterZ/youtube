@@ -49,12 +49,17 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertEqual(matches, [], f"Found emojis in HTML: {matches}")
 
     def test_playlist_select_settings_option(self):
-        """Option value='__settings__' exists at the bottom of playlist-select"""
+        """Option value='__settings__' exists at the bottom of playlist-select and obsolete options are removed"""
         select_match = re.search(r'<select[^>]*id=["\']playlist-select["\'][^>]*>(.*?)</select>', self.html_content, re.DOTALL)
         self.assertIsNotNone(select_match, "Could not find #playlist-select")
         select_body = select_match.group(1)
         options = re.findall(r'<option[^>]*value=["\']([^"\']*)["\'][^>]*>(.*?)</option>', select_body, re.DOTALL)
         self.assertTrue(len(options) > 0, "No options in #playlist-select")
+        
+        option_values = [opt[0] for opt in options]
+        self.assertNotIn("INSTALL_APP", option_values, "INSTALL_APP should not be in #playlist-select")
+        self.assertNotIn("HARD_RELOAD", option_values, "HARD_RELOAD should not be in #playlist-select")
+        
         last_option_value, last_option_text = options[-1]
         self.assertEqual(last_option_value, "__settings__")
         self.assertEqual(last_option_text.strip(), "Settings")
@@ -150,14 +155,18 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIn('display: none', custom_tag)
 
     def test_app_action_buttons(self):
-        """Section 3: App action buttons"""
-        reload_match = re.search(r'<button[^>]*id=["\']btn-modal-reload["\'][^>]*>(.*?)</button>', self.html_content, re.DOTALL)
-        self.assertIsNotNone(reload_match, "Could not find #btn-modal-reload")
+        """Section 3: App action buttons inside settings modal"""
+        modal_match = re.search(r'<div[^>]*id=["\']settings-modal["\'][^>]*>([\s\S]*?)</div>\s*<div[^>]*id=["\']mode-toast["\']', self.html_content)
+        self.assertIsNotNone(modal_match, "Could not find #settings-modal")
+        modal_content = modal_match.group(1)
+
+        reload_match = re.search(r'<button[^>]*id=["\']btn-modal-reload["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
+        self.assertIsNotNone(reload_match, "Could not find #btn-modal-reload inside #settings-modal")
         self.assertIn('class="settings-action-btn"', reload_match.group(0))
         self.assertIn('Reload Playlists', reload_match.group(1))
 
-        install_match = re.search(r'<button[^>]*id=["\']btn-modal-install["\'][^>]*>(.*?)</button>', self.html_content, re.DOTALL)
-        self.assertIsNotNone(install_match, "Could not find #btn-modal-install")
+        install_match = re.search(r'<button[^>]*id=["\']btn-modal-install["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
+        self.assertIsNotNone(install_match, "Could not find #btn-modal-install inside #settings-modal")
         self.assertIn('class="settings-action-btn"', install_match.group(0))
         self.assertIn('Install App', install_match.group(1))
 
