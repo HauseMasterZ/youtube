@@ -42,11 +42,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.stopLiveAudioAnchor = stopLiveAudioAnchor;', self.ms_content)
 
     def test_live_audio_anchor_implementation(self):
-        """Live audio anchor creates AudioContext and destination node for #live-stream-anchor in mode2"""
+        """Live audio anchor creates AudioContext and destination node with gain.value = 0 for pure silence"""
         self.assertRegex(self.ms_content, r'(AudioContext|webkitAudioContext)')
         self.assertIn('createMediaStreamDestination', self.ms_content)
         self.assertIn('live-stream-anchor', self.ms_content)
         self.assertIn('srcObject', self.ms_content)
+        self.assertRegex(self.ms_content, r'liveAudioGain\.gain\.value\s*=\s*0;')
+        self.assertNotIn('liveAudioGain.gain.value = 0.0001;', self.ms_content)
         # startLiveAudioAnchor checks mode2
         self.assertRegex(self.ms_content, r'window\.playbackMode\s*!==?\s*[\'"]mode2[\'"]')
 
@@ -90,11 +92,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast', self.ms_content)
         self.assertIn('mode-toast-text', self.ms_content)
 
-    def test_update_media_session_position_dual_engine(self):
-        """updateMediaSessionPosition handles Mode 1 micro-rate and Mode 2 accurate rate"""
-        self.assertIn('window.playbackMode', self.ms_content)
+    def test_update_media_session_position_w3c_compliance(self):
+        """updateMediaSessionPosition ensures paused/buffering rate is 0.00001 for W3C setPositionState compliance"""
         self.assertIn('0.00001', self.ms_content)
-        self.assertIn('mode2', self.ms_content)
+        self.assertRegex(self.ms_content, r'\(isBuffering\s*\|\|\s*isPaused\)\s*\?\s*0\.00001')
+        self.assertNotIn('(isBuffering || isPaused) ? 0 :', self.ms_content)
         self.assertIn('setPositionState', self.ms_content)
 
     def test_action_handlers_include_playpause_and_taps(self):
