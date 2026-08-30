@@ -254,35 +254,53 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             detectPlaybackModeShortcut();
-            window.wasPausedByUser = true;
-            audioPlayer.instantPause();
-            if (window.playbackMode === 'mode2') {
-                startLiveAudioAnchor();
-                armAutoKillWatchdog();
-            } else {
+            if (window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused) {
+                // TWS Single-Button Resume
+                window.wasPausedByUser = false;
+                const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                    audioPlayer.currentTime = 0;
+                    if (typeof updateTimeUI === 'function') updateTimeUI(0);
+                }
+                audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
+            } else {
+                // Standard Pause
+                window.wasPausedByUser = true;
+                if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
+                    audioPlayer.instantPause();
+                } else if (audioPlayer) {
+                    audioPlayer.pause();
+                }
+                if (window.playbackMode === 'mode2') {
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
+                } else {
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                }
             }
         });
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
                 detectPlaybackModeShortcut();
-                if (audioPlayer.paused) {
+                if (audioPlayer && audioPlayer.paused) {
                     if (!audioPlayer.src) {
-                        if (playQueue.length > 0 && queueIndex !== -1) {
+                        if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
                             executePlayback(false);
-                        } else if (playQueue.length > 0) {
+                        } else if (typeof playQueue !== 'undefined' && playQueue.length > 0) {
                             queueIndex = 0;
                             executePlayback(false);
                         }
                         return;
                     }
                     window.wasPausedByUser = false;
-                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                    const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
                         audioPlayer.currentTime = 0;
-                        updateTimeUI(0);
+                        if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {
                             updateLyricsUI(0);
                         }
@@ -292,7 +310,11 @@
                     cancelAutoKillWatchdog();
                 } else {
                     window.wasPausedByUser = true;
-                    audioPlayer.instantPause();
+                    if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
+                        audioPlayer.instantPause();
+                    } else if (audioPlayer) {
+                        audioPlayer.pause();
+                    }
                     if (window.playbackMode === 'mode2') {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
