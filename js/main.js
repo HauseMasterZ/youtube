@@ -402,11 +402,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(audioPlayer.currentTime, dur);
-            if (window.wasPausedByUser) {
-                navigator.mediaSession.playbackState = 'paused';
-            } else {
+            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
+            if (window.playbackMode === 'mode2') {
                 navigator.mediaSession.playbackState = 'playing';
+            } else {
+                navigator.mediaSession.playbackState = window.wasPausedByUser ? 'paused' : 'playing';
             }
         }
     });
