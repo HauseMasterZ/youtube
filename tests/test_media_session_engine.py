@@ -87,12 +87,20 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast', self.ms_content)
         self.assertIn('mode-toast-text', self.ms_content)
 
-    def test_update_media_session_position_w3c_compliance(self):
-        """updateMediaSessionPosition ensures paused/buffering rate is 0.00001 for W3C setPositionState compliance"""
-        self.assertIn('0.00001', self.ms_content)
-        self.assertRegex(self.ms_content, r'\(isBuffering\s*\|\|\s*isPaused\)\s*\?\s*0\.00001')
-        self.assertNotIn('(isBuffering || isPaused) ? 0 :', self.ms_content)
-        self.assertIn('setPositionState', self.ms_content)
+    def test_micro_rate_scoped_to_mobile(self):
+        """Ensure 0.00001 micro-rate spoof is guarded by isMobileDevice check"""
+        self.assertIn("isMobileDevice", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'isMobileDevice\s*\)\s*\{[\s\S]*?0\.00001[\s\S]*?\}\s*else\s*\{[\s\S]*?\(isBuffering\s*\|\|\s*isPaused\)\s*\?\s*0\s*:'
+        )
+
+    def test_start_live_anchor_scoped_to_mobile(self):
+        """Ensure startLiveAudioAnchor exits early on desktop"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*!isMobileDevice\s*\)\s*return;'
+        )
 
     def test_action_handlers_include_playpause_and_taps(self):
         """Action handlers handle play, pause, playpause, nexttrack, previoustrack, seekto, seekbackward, seekforward"""
@@ -155,6 +163,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("lastTrackActionTime", self.ms_content)
         self.assertIn("lastTrackAction", self.ms_content)
         self.assertIn("togglePlaybackMode()", self.ms_content)
+
+    def test_hardware_combo_scoped_to_mobile(self):
+        """Ensure Next ↔ Prev combo shortcut is only active on mobile devices"""
+        self.assertRegex(
+            self.ms_content,
+            r'isMobile\s*&&\s*lastTrackAction\s*===\s*[\'"]next[\'"]'
+        )
 
 if __name__ == '__main__':
     unittest.main()
