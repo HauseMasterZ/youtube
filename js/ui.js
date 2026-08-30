@@ -131,7 +131,8 @@
             const isCurrentPlaylist = (item.playlist === currentPl);
             
             li.classList.remove("active", "search-highlight");
-            if (i === selectedSearchIndex) {
+            const isSearching = (selectedSearchIndex >= 0 && typeof searchInput !== 'undefined' && searchInput && searchInput.value.trim() !== "");
+            if (isSearching && i === selectedSearchIndex) {
                 li.classList.add("search-highlight");
             } else if (item.playlist === globalActivePlaylist && item.index === globalActiveOriginalIndex) {
                 li.classList.add('active');

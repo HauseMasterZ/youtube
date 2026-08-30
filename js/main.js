@@ -92,6 +92,20 @@ document.addEventListener("DOMContentLoaded", () => {
                 playTrackSelection(item.playlist, item.index);
                 searchInput.blur();
             }
+        } else if (e.key === "Escape") {
+            e.preventDefault();
+            searchInput.value = "";
+            selectedSearchIndex = -1;
+            const currentPl = playlistSelect.value;
+            filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i })) : [];
+            if (filteredIndices.length > 0) {
+                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                trackList.style.display = 'block';
+                playlistMessage.style.display = 'none';
+            }
+            lastStartIndex = -1;
+            renderVirtualTracks();
+            searchInput.blur();
         }
     });
 
