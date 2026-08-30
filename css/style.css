@@ -1767,6 +1767,12 @@ button:focus { outline: none !important; }
     box-sizing: border-box;
 }
 
+#mode-toast-text {
+    color: inherit;
+    font-weight: inherit;
+    font-size: inherit;
+}
+
 /* Mobile-Only Dominant-Themed Download Toast */
 .download-toast {
     display: none;
