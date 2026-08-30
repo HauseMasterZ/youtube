@@ -174,6 +174,43 @@
             img.src = url;
         }
     }
+    async function getCachedSquareArtwork(trackId, thumbUrl, callback) {
+        if (!trackId) {
+            if (typeof callback === 'function') callback(null);
+            return;
+        }
+        if (artworkSquareCache.has(trackId)) {
+            if (typeof callback === 'function') callback(artworkSquareCache.get(trackId));
+            return;
+        }
+        if (!thumbUrl || !('caches' in window)) {
+            if (typeof callback === 'function') callback(null);
+            return;
+        }
+        try {
+            const cache = await caches.open('yt-player-thumbs');
+            const cachedResp = await cache.match(thumbUrl);
+            if (!cachedResp) {
+                if (typeof callback === 'function') callback(null);
+                return;
+            }
+            const blob = await cachedResp.blob();
+            const bitmap = await createImageBitmap(blob);
+            const canvas = document.createElement('canvas');
+            canvas.width = 512;
+            canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            const size = Math.min(bitmap.width, bitmap.height);
+            const sx = (bitmap.width - size) / 2;
+            const sy = (bitmap.height - size) / 2;
+            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            setCachedSquareArtwork(trackId, dataUrl);
+            if (typeof callback === 'function') callback(dataUrl);
+        } catch (e) {
+            if (typeof callback === 'function') callback(null);
+        }
+    }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
     function formatTime(seconds) {
         if (isNaN(seconds) || seconds === Infinity) return "0:00";

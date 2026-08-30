@@ -10,6 +10,10 @@ class TestDownloadEngine(unittest.TestCase):
         with open(playback_path, 'r', encoding='utf-8') as f:
             cls.playback_content = f.read()
 
+        utils_path = os.path.join(base_dir, 'js', 'utils.js')
+        with open(utils_path, 'r', encoding='utf-8') as f:
+            cls.utils_content = f.read()
+
         css_path = os.path.join(base_dir, 'css', 'style.css')
         with open(css_path, 'r', encoding='utf-8') as f:
             cls.css_content = f.read()
@@ -73,6 +77,23 @@ class TestDownloadEngine(unittest.TestCase):
         self.assertIsNotNone(d_match, "Could not find downloadActivePlaylist")
         d_body = d_match.group(1)
         self.assertRegex(d_body, r'missingTracks[\s\S]*?mediaCache\.put\(audioUrl[\s\S]*?thumbsCache\.put\(thumbUrl[\s\S]*?mediaCache\.put\(lyricsUrl')
+
+    def test_get_cached_square_artwork_defined(self):
+        """getCachedSquareArtwork exists in utils.js, inspects yt-player-thumbs, and contains no network fetch or new Image"""
+        self.assertRegex(self.utils_content, r'async\s+function\s+getCachedSquareArtwork\s*\(')
+        self.assertIn("caches.open('yt-player-thumbs')", self.utils_content)
+        fn_match = re.search(r'async\s+function\s+getCachedSquareArtwork\s*\([\s\S]*?\n\s*\}', self.utils_content)
+        self.assertIsNotNone(fn_match, "Could not find getCachedSquareArtwork function body")
+        fn_body = fn_match.group(0)
+        self.assertNotIn('fetch(', fn_body)
+        self.assertNotIn('new Image', fn_body)
+
+    def test_playback_uses_get_cached_square_artwork_when_thumbs_disabled(self):
+        """playTrack calls getCachedSquareArtwork when thumbsDisabled is true"""
+        self.assertRegex(
+            self.playback_content,
+            r'thumbsDisabled[\s\S]*?getCachedSquareArtwork\s*\(\s*track\.id'
+        )
 
 if __name__ == '__main__':
     unittest.main()

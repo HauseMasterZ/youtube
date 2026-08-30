@@ -7,10 +7,16 @@ class TestMediaSessionEngine(unittest.TestCase):
     def setUpClass(cls):
         base_dir = os.path.dirname(os.path.dirname(__file__))
         media_session_path = os.path.join(base_dir, 'js', 'mediaSession.js')
+        dom_path = os.path.join(base_dir, 'js', 'dom.js')
+        main_path = os.path.join(base_dir, 'js', 'main.js')
         test_path = os.path.join(base_dir, 'tests', 'test_media_session_engine.py')
 
         with open(media_session_path, 'r', encoding='utf-8') as f:
             cls.ms_content = f.read()
+        with open(dom_path, 'r', encoding='utf-8') as f:
+            cls.dom_content = f.read()
+        with open(main_path, 'r', encoding='utf-8') as f:
+            cls.main_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -159,17 +165,29 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("navigator.mediaSession.playbackState = 'playing'", play_code)
 
     def test_hardware_combo_shortcut(self):
-        """Ensure nexttrack and previoustrack handlers detect rapid combo and call togglePlaybackMode"""
-        self.assertIn("lastTrackActionTime", self.ms_content)
-        self.assertIn("lastTrackAction", self.ms_content)
+        """Ensure nexttrack, previoustrack, seekforward, and seekbackward handlers detect combo and call togglePlaybackMode"""
+        self.assertIn("lastPlaybackModeTransitions", self.ms_content)
+        self.assertIn("2500", self.ms_content)
         self.assertIn("togglePlaybackMode()", self.ms_content)
 
     def test_hardware_combo_scoped_to_mobile(self):
-        """Ensure Next ↔ Prev combo shortcut is only active on mobile devices"""
+        """Ensure combo shortcut is only active on mobile devices"""
         self.assertRegex(
             self.ms_content,
-            r'isMobile\s*&&\s*lastTrackAction\s*===\s*[\'"]next[\'"]'
+            r'isMobile\s*&&\s*window\.lastPlaybackModeTransitions\.action\s*===\s*[\'"]next[\'"]'
         )
+    def test_buffer_stalled_guard_in_dom_js(self):
+        """DualAudioPingPong in dom.js guards auto-resume with _isBufferStalled"""
+        self.assertIn("this._isBufferStalled = false;", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*this\._isBufferStalled\s*&&\s*!window\.wasPausedByUser\s*&&\s*this\.active\.paused\s*&&\s*this\._pendingSeek\s*===\s*null\s*\)'
+        )
+
+    def test_focus_and_visibility_resume_in_main_js(self):
+        """main.js defines attemptFocusResume on visibilitychange and focus events"""
+        self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
+        self.assertRegex(self.main_content, r'window\.addEventListener\(\s*[\'"]focus[\'"]\s*,\s*attemptFocusResume\s*\)')
 
 if __name__ == '__main__':
     unittest.main()

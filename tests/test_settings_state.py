@@ -33,13 +33,12 @@ class TestSettingsState(unittest.TestCase):
         self.assertEqual(matches, [], f"Found emojis in test_settings_state.py: {matches}")
 
     def test_playback_mode_initialization(self):
-        """window.playbackMode is initialized from localStorage key 'yt_playback_mode' with default 'mode1'"""
+        """window.playbackMode is initialized to in-memory default 'mode1' on startup"""
         self.assertIn('window.playbackMode', self.state_content)
-        self.assertIn('yt_playback_mode', self.state_content)
         self.assertIn('mode1', self.state_content)
         self.assertRegex(
             self.state_content,
-            r'window\.playbackMode\s*=\s*(getStoredSetting\(\s*[\'"]yt_playback_mode[\'"],\s*[\'"]mode1[\'"]\s*\)|\(typeof localStorage[^\n]+\|\|\s*[\'"]mode1[\'"]\));'
+            r'window\.playbackMode\s*=\s*[\'"]mode1[\'"];'
         )
 
     def test_bt_timeout_mins_initialization(self):

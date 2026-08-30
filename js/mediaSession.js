@@ -333,34 +333,35 @@
             // playpause action not supported in all browsers
         }
 
-        let lastTrackActionTime = 0;
-        let lastTrackAction = null;
+        if (!window.lastPlaybackModeTransitions || typeof window.lastPlaybackModeTransitions !== 'object') {
+            window.lastPlaybackModeTransitions = { time: 0, action: null };
+        }
 
         navigator.mediaSession.setActionHandler('previoustrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
-            if (isMobile && lastTrackAction === 'next' && (now - lastTrackActionTime) <= 1200) {
-                lastTrackAction = null;
-                lastTrackActionTime = 0;
+            if (isMobile && window.lastPlaybackModeTransitions.action === 'next' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
+                window.lastPlaybackModeTransitions.action = null;
+                window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
                 return;
             }
-            lastTrackAction = 'prev';
-            lastTrackActionTime = now;
+            window.lastPlaybackModeTransitions.action = 'prev';
+            window.lastPlaybackModeTransitions.time = now;
             playPrev();
         });
 
         navigator.mediaSession.setActionHandler('nexttrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
-            if (isMobile && lastTrackAction === 'prev' && (now - lastTrackActionTime) <= 1200) {
-                lastTrackAction = null;
-                lastTrackActionTime = 0;
+            if (isMobile && window.lastPlaybackModeTransitions.action === 'prev' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
+                window.lastPlaybackModeTransitions.action = null;
+                window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
                 return;
             }
-            lastTrackAction = 'next';
-            lastTrackActionTime = now;
+            window.lastPlaybackModeTransitions.action = 'next';
+            window.lastPlaybackModeTransitions.time = now;
             playNext();
         });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
@@ -378,6 +379,17 @@
             updateMediaSessionPosition(seekTarget, totalDur);
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+            const now = Date.now();
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (isMobile && window.lastPlaybackModeTransitions.action === 'seekfwd' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
+                window.lastPlaybackModeTransitions.action = null;
+                window.lastPlaybackModeTransitions.time = 0;
+                togglePlaybackMode();
+                return;
+            }
+            window.lastPlaybackModeTransitions.action = 'seekback';
+            window.lastPlaybackModeTransitions.time = now;
+
             const skipTime = details.seekOffset || 10;
             const newTime = Math.max(0, (audioPlayer.currentTime || 0) - skipTime);
             audioPlayer.currentTime = newTime;
@@ -387,6 +399,17 @@
             updateMediaSessionPosition(newTime, dur);
         });
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
+            const now = Date.now();
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (isMobile && window.lastPlaybackModeTransitions.action === 'seekback' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
+                window.lastPlaybackModeTransitions.action = null;
+                window.lastPlaybackModeTransitions.time = 0;
+                togglePlaybackMode();
+                return;
+            }
+            window.lastPlaybackModeTransitions.action = 'seekfwd';
+            window.lastPlaybackModeTransitions.time = now;
+
             const skipTime = details.seekOffset || 10;
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const newTime = Math.min(dur, (audioPlayer.currentTime || 0) + skipTime);

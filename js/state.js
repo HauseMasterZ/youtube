@@ -80,7 +80,7 @@
     window.getStoredSetting = getStoredSetting;
     window.setStoredSetting = setStoredSetting;
 
-    window.playbackMode = getStoredSetting('yt_playback_mode', 'mode1');
+    window.playbackMode = 'mode1';
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '30');
     window.btSleepTimer = null;
     window.lastPlaybackModeTransitions = [];

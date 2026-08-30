@@ -425,6 +425,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    function attemptFocusResume() {
+        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+            audioPlayer.play().catch(() => {});
+        }
+    }
+    document.addEventListener("visibilitychange", attemptFocusResume);
+    window.addEventListener("focus", attemptFocusResume);
+
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));

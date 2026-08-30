@@ -19,6 +19,7 @@
             this._streamAbortController = null;
             this._streamId = 0;
             this._streamDone = false;
+            this._isBufferStalled = false;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -26,6 +27,15 @@
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
+                    if (e.type === 'waiting') {
+                        if (!this.active.paused) {
+                            this._isBufferStalled = true;
+                        }
+                    }
+
+                    if (e.type === 'playing' || e.type === 'play') {
+                        this._isBufferStalled = false;
+                    }
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
@@ -304,6 +314,7 @@
             this.switching = true;
             this._endedFired = false;
             this._streamDone = false;
+            this._isBufferStalled = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
@@ -689,7 +700,8 @@
                                         }
 
                                         // Auto-resume playback if paused/stalled due to buffer exhaustion
-                                        if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
+                                        if (this._isBufferStalled && !window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
+                                            this._isBufferStalled = false;
                                             this.active.play().catch(() => {});
                                         }
 
