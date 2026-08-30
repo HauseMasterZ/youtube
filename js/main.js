@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
+            updateMediaSessionPosition(audioPlayer.currentTime, dur);
             if (window.wasPausedByUser) {
                 navigator.mediaSession.playbackState = 'paused';
             } else {
@@ -765,64 +765,77 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+    let deferredPrompt;
+
+    async function reloadPlaylistDatabases() {
+        const currentPl = playlistSelect.value;
+        const ts = Date.now();
+
+        if (btnSync) btnSync.classList.add("spinning");
+
+        try {
+            // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
+            await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
+                const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
+                const res = await fetch(`${dbUrl}?t=${ts}`);
+                if (res.ok) {
+                    const rawData = await res.json();
+                    const freshData = normalizePlaylistData(rawData, pl);
+                    allDatabases[pl] = freshData;
+
+                    // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
+                    if ('caches' in window) {
+                        try {
+                            const cache = await caches.open(CACHE_NAME);
+                            await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
+                        } catch (e) {}
+                    }
+                }
+            }));
+
+            // 3. Re-apply the active playlist in place (0ms re-render)
+            if (allDatabases[currentPl]) {
+                currentPlaylistData = allDatabases[currentPl];
+                applyPlaylistData(currentPl, currentPlaylistData, false);
+            }
+
+            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                window.rebuildCrossShuffleDeck();
+            }
+        } catch (err) {
+            console.warn("Failed to reload playlist databases:", err);
+        } finally {
+            if (btnSync) btnSync.classList.remove("spinning");
+        }
+    }
+
+    async function installPwaApp() {
+        if (deferredPrompt) {
+            deferredPrompt.prompt();
+            const { outcome } = await deferredPrompt.userChoice;
+            deferredPrompt = null;
+        } else {
+            alert("App is already installed or your browser doesn't support PWA installation!");
+        }
+    }
+
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
         if (e.target.value === "INSTALL_APP") {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                deferredPrompt = null;
-            } else {
-                alert("App is already installed or your browser doesn't support PWA installation!");
-            }
             playlistSelect.value = lastValidPlaylist;
+            await installPwaApp();
+            return;
+        }
+
+        if (e.target.value === "__settings__") {
+            playlistSelect.value = lastValidPlaylist;
+            openSettingsModal();
             return;
         }
 
         if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
             playlistSelect.value = lastValidPlaylist;
-            const currentPl = lastValidPlaylist;
-            const ts = Date.now();
-
-            if (btnSync) btnSync.classList.add("spinning");
-
-            (async () => {
-                try {
-                    // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
-                    await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
-                        const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                        const res = await fetch(`${dbUrl}?t=${ts}`);
-                        if (res.ok) {
-                            const rawData = await res.json();
-                            const freshData = normalizePlaylistData(rawData, pl);
-                            allDatabases[pl] = freshData;
-
-                            // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
-                            if ('caches' in window) {
-                                try {
-                                    const cache = await caches.open(CACHE_NAME);
-                                    await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
-                                } catch (e) {}
-                            }
-                        }
-                    }));
-
-                    // 3. Re-apply the active playlist in place (0ms re-render)
-                    if (allDatabases[currentPl]) {
-                        currentPlaylistData = allDatabases[currentPl];
-                        applyPlaylistData(currentPl, currentPlaylistData, false);
-                    }
-
-                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                        window.rebuildCrossShuffleDeck();
-                    }
-                } catch (err) {
-                    console.warn("Failed to reload playlist databases:", err);
-                } finally {
-                    if (btnSync) btnSync.classList.remove("spinning");
-                }
-            })();
-
+            await reloadPlaylistDatabases();
             return;
         }
         
@@ -1026,6 +1039,11 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && settingsModal && settingsModal.style.display !== 'none') {
+            closeSettingsModal();
+            return;
+        }
+
         if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
         
         if (e.key === ':' || (e.key === ';' && e.shiftKey)) {
@@ -1055,6 +1073,165 @@ document.addEventListener("DOMContentLoaded", () => {
             searchInput.focus();
         }
     });
+
+    // --- Settings Modal & Playback Engine Controls ---
+    const settingsModal = document.getElementById("settings-modal");
+    const settingsBackdrop = document.getElementById("settings-backdrop");
+    const btnCloseSettings = document.getElementById("btn-close-settings");
+    const mode1Radio = document.getElementById("mode-1-radio");
+    const mode2Radio = document.getElementById("mode-2-radio");
+    const btTimeoutContainer = document.getElementById("bt-timeout-container");
+    const btTimeoutSelect = document.getElementById("bt-timeout-select");
+    const btTimeoutCustom = document.getElementById("bt-timeout-custom");
+    const btnModalReload = document.getElementById("btn-modal-reload");
+    const btnModalInstall = document.getElementById("btn-modal-install");
+
+    function openSettingsModal() {
+        const currentMode = window.playbackMode || 'mode1';
+        if (currentMode === 'mode2') {
+            if (mode2Radio) mode2Radio.checked = true;
+            if (btTimeoutContainer) btTimeoutContainer.style.display = 'block';
+        } else {
+            if (mode1Radio) mode1Radio.checked = true;
+            if (btTimeoutContainer) btTimeoutContainer.style.display = 'none';
+        }
+
+        const standardTimeouts = ['15', '30', '60', '120', 'never'];
+        const currentTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
+            ? String(window.btTimeoutMins).trim()
+            : '30';
+
+        if (standardTimeouts.includes(currentTimeout)) {
+            if (btTimeoutSelect) btTimeoutSelect.value = currentTimeout;
+            if (btTimeoutCustom) btTimeoutCustom.style.display = 'none';
+        } else {
+            if (btTimeoutSelect) btTimeoutSelect.value = 'custom';
+            if (btTimeoutCustom) {
+                btTimeoutCustom.style.display = 'block';
+                btTimeoutCustom.value = currentTimeout;
+            }
+        }
+
+        if (settingsModal) settingsModal.style.display = 'block';
+        if (settingsBackdrop) settingsBackdrop.style.display = 'block';
+    }
+
+    function closeSettingsModal() {
+        if (settingsModal) settingsModal.style.display = 'none';
+        if (settingsBackdrop) settingsBackdrop.style.display = 'none';
+    }
+
+    window.openSettingsModal = openSettingsModal;
+    window.closeSettingsModal = closeSettingsModal;
+
+    if (btnCloseSettings) {
+        btnCloseSettings.addEventListener("click", closeSettingsModal);
+    }
+
+    if (settingsBackdrop) {
+        settingsBackdrop.addEventListener("click", closeSettingsModal);
+    }
+
+    const modeRadios = document.querySelectorAll('input[name="playback-mode"]');
+    modeRadios.forEach(radio => {
+        radio.addEventListener("change", () => {
+            const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
+            const newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            window.playbackMode = newMode;
+
+            if (typeof window.setStoredSetting === 'function') {
+                window.setStoredSetting('yt_playback_mode', newMode);
+            } else if (typeof setStoredSetting === 'function') {
+                setStoredSetting('yt_playback_mode', newMode);
+            }
+
+            if (btTimeoutContainer) {
+                btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
+            }
+
+            const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+            if (isPaused) {
+                if (newMode === 'mode2') {
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                } else {
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                    if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
+                }
+            }
+
+            if (typeof updateMediaSessionPosition === 'function') {
+                updateMediaSessionPosition();
+            }
+        });
+    });
+
+    if (btTimeoutSelect) {
+        btTimeoutSelect.addEventListener("change", (e) => {
+            if (e.target.value === 'custom') {
+                if (btTimeoutCustom) {
+                    btTimeoutCustom.style.display = 'block';
+                    btTimeoutCustom.focus();
+                    const M = parseInt(btTimeoutCustom.value, 10);
+                    if (!isNaN(M) && M >= 1 && M <= 1440) {
+                        window.btTimeoutMins = String(M);
+                        if (typeof window.setStoredSetting === 'function') {
+                            window.setStoredSetting('yt_bt_timeout_mins', String(M));
+                        } else if (typeof setStoredSetting === 'function') {
+                            setStoredSetting('yt_bt_timeout_mins', String(M));
+                        }
+                        if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                            if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                        }
+                    }
+                }
+            } else {
+                if (btTimeoutCustom) btTimeoutCustom.style.display = 'none';
+                window.btTimeoutMins = e.target.value;
+                if (typeof window.setStoredSetting === 'function') {
+                    window.setStoredSetting('yt_bt_timeout_mins', e.target.value);
+                } else if (typeof setStoredSetting === 'function') {
+                    setStoredSetting('yt_bt_timeout_mins', e.target.value);
+                }
+                if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                }
+            }
+        });
+    }
+
+    if (btTimeoutCustom) {
+        const handleCustomTimeoutInput = (e) => {
+            const M = parseInt(e.target.value, 10);
+            if (!isNaN(M) && M >= 1 && M <= 1440) {
+                window.btTimeoutMins = String(M);
+                if (typeof window.setStoredSetting === 'function') {
+                    window.setStoredSetting('yt_bt_timeout_mins', String(M));
+                } else if (typeof setStoredSetting === 'function') {
+                    setStoredSetting('yt_bt_timeout_mins', String(M));
+                }
+                if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                }
+            }
+        };
+        btTimeoutCustom.addEventListener("input", handleCustomTimeoutInput);
+        btTimeoutCustom.addEventListener("change", handleCustomTimeoutInput);
+    }
+
+    if (btnModalReload) {
+        btnModalReload.addEventListener("click", () => {
+            reloadPlaylistDatabases();
+            closeSettingsModal();
+        });
+    }
+
+    if (btnModalInstall) {
+        btnModalInstall.addEventListener("click", () => {
+            installPwaApp();
+            closeSettingsModal();
+        });
+    }
 
     // --- Universal 20px Edge-Triggered Fast Scroller Engine ---
     const fastScroller = document.getElementById("fast-scroller");
@@ -1141,9 +1318,7 @@ document.addEventListener("DOMContentLoaded", () => {
         fastScroller.addEventListener("pointercancel", stopFastScroll);
     }
 
-    // PWA Install Button Logic
-    let deferredPrompt;
-
+    // PWA Install Prompt Listener
     window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
