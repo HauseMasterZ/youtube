@@ -213,5 +213,14 @@ class TestSettingsUI(unittest.TestCase):
             r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*updateLyricsUI\(0\);'
         )
 
+    def test_no_desktop_m_key_shortcut(self):
+        """Ensure desktop 'm' / 'M' shortcut is absent from main.js"""
+        self.assertNotRegex(self.main_content, r"e\.key\s*===\s*['\"]m['\"]\s*\|\|\s*e\.key\s*===\s*['\"]M['\"]")
+
+    def test_no_play_pause_long_press_listeners(self):
+        """Ensure btnPlayPause does not have pointerdown hold listeners"""
+        self.assertNotIn("playPauseHoldTimer", self.main_content)
+        self.assertNotIn("playPauseSuppressClick", self.main_content)
+
 if __name__ == '__main__':
     unittest.main()
