@@ -8,12 +8,18 @@ class TestSettingsUI(unittest.TestCase):
         base_dir = os.path.dirname(os.path.dirname(__file__))
         main_path = os.path.join(base_dir, 'js', 'main.js')
         ms_path = os.path.join(base_dir, 'js', 'mediaSession.js')
+        playback_path = os.path.join(base_dir, 'js', 'playback.js')
+        ui_path = os.path.join(base_dir, 'js', 'ui.js')
         test_path = os.path.join(base_dir, 'tests', 'test_settings_ui.py')
 
         with open(main_path, 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
         with open(ms_path, 'r', encoding='utf-8') as f:
             cls.ms_content = f.read()
+        with open(playback_path, 'r', encoding='utf-8') as f:
+            cls.playback_content = f.read()
+        with open(ui_path, 'r', encoding='utf-8') as f:
+            cls.ui_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -221,6 +227,34 @@ class TestSettingsUI(unittest.TestCase):
         """Ensure btnPlayPause does not have pointerdown hold listeners"""
         self.assertNotIn("playPauseHoldTimer", self.main_content)
         self.assertNotIn("playPauseSuppressClick", self.main_content)
+
+    def test_search_selection_reset_on_playback(self):
+        """playTrackSelection resets selectedSearchIndex to -1"""
+        self.assertRegex(
+            self.playback_content,
+            r'function playTrackSelection\s*\([\s\S]*?selectedSearchIndex\s*=\s*-1;'
+        )
+
+    def test_search_highlight_requires_active_search(self):
+        """renderVirtualTracks in ui.js only adds search-highlight when active search query is present"""
+        self.assertRegex(
+            self.ui_content,
+            r'isSearching[\s\S]*?&&[\s\S]*?i\s*===\s*selectedSearchIndex'
+        )
+
+    def test_search_selection_reset_on_playlist_load(self):
+        """loadPlaylist resets selectedSearchIndex to -1"""
+        self.assertRegex(
+            self.playback_content,
+            r'function loadPlaylist\s*\([\s\S]*?selectedSearchIndex\s*=\s*-1;'
+        )
+
+    def test_search_escape_key_clears_search_and_resets_selection(self):
+        """searchInput keydown handles Escape to clear search and reset selection"""
+        self.assertRegex(
+            self.main_content,
+            r'e\.key\s*===\s*[\'"]Escape[\'"][\s\S]*?selectedSearchIndex\s*=\s*-1;'
+        )
 
 if __name__ == '__main__':
     unittest.main()

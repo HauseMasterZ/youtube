@@ -68,6 +68,7 @@
     }
 
     function loadPlaylist(folderName) {
+        selectedSearchIndex = -1;
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
@@ -265,6 +266,7 @@
             crossShufflePos++;
         }
 
+        selectedSearchIndex = -1;
         // If we are playing from a search, clear search input and reset list view
         if (searchInput.value.trim() !== "") {
             searchInput.value = "";
