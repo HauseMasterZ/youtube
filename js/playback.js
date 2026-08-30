@@ -728,12 +728,41 @@
 
         try {
             const mediaCache = await caches.open('yt-player-media');
-            const thumbsCache = await caches.open('yt-thumbs-cache');
+            const thumbsCache = await caches.open('yt-player-thumbs');
 
-            let completed = 0;
+            const fetchWithRetry = async (url, options = {}, maxRetries = 3) => {
+                let delay = 300;
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        const res = await fetch(url, options);
+                        if (res && (res.ok || res.type === 'opaque')) return res;
+                        if (attempt === maxRetries) return res;
+                    } catch (err) {
+                        if (options.signal && options.signal.aborted) throw err;
+                        if (attempt === maxRetries) return null;
+                    }
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+                return null;
+            };
+
+            let savedCount = 0;
+            let failedCount = 0;
             const total = tracks.length;
             const CONCURRENCY = 2;
             let trackIndex = 0;
+
+            const updateDownloadProgressUI = () => {
+                const titleText = failedCount > 0 
+                    ? `${savedCount} / ${total} (${failedCount} failed) - Click to cancel`
+                    : `${savedCount} / ${total} - Click to cancel`;
+                if (btn) btn.title = titleText;
+                const toastText = failedCount > 0 
+                    ? `${currentPl} - ${savedCount} / ${total} (${failedCount} failed)`
+                    : `${currentPl} - ${savedCount} / ${total}`;
+                showDownloadToast(toastText);
+            };
 
             const worker = async () => {
                 while (trackIndex < tracks.length && !signal.aborted && isDownloadingPlaylist) {
@@ -742,14 +771,16 @@
                     
                     const audioUrl = getAudioUrl(track);
                     const thumbUrl = getThumbUrl(track);
+                    let audioSuccess = false;
 
                     try {
-                        // 1. Audio Cache (Store full response with status 200)
+                        // 1. Audio Cache (Store full response with status 200, bypassing SW double buffering)
                         const existingAudio = await mediaCache.match(audioUrl);
                         const isPartial = existingAudio && (existingAudio.headers.get('X-Partial-Cached') === 'true');
                         if (!existingAudio || isPartial) {
-                            const res = await fetch(audioUrl, { signal });
-                            if (res.ok) {
+                            const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
+                            const res = await fetchWithRetry(fetchUrl, { signal }, 3);
+                            if (res && res.ok) {
                                 const buf = await res.arrayBuffer();
                                 const fullRes = new Response(buf, {
                                     status: 200,
@@ -760,12 +791,15 @@
                                     }
                                 });
                                 await mediaCache.put(audioUrl, fullRes);
+                                audioSuccess = true;
                             }
+                        } else {
+                            audioSuccess = true;
                         }
 
                         // 2. Thumbnail Cache (only fetch if thumbnails are enabled)
                         if (!thumbsDisabled && thumbUrl && !(await thumbsCache.match(thumbUrl))) {
-                            const res = await fetch(thumbUrl, { signal }).catch(() => {});
+                            const res = await fetchWithRetry(thumbUrl, { signal }, 2).catch(() => {});
                             if (res && (res.ok || res.type === 'opaque')) {
                                 await thumbsCache.put(thumbUrl, res);
                             }
@@ -776,7 +810,7 @@
                             const parts = track.file_path.split('/');
                             const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
                             if (!(await mediaCache.match(lyricsUrl))) {
-                                const res = await fetch(lyricsUrl, { signal }).catch(() => {});
+                                const res = await fetchWithRetry(lyricsUrl, { signal }, 2).catch(() => {});
                                 if (res && res.ok) {
                                     await mediaCache.put(lyricsUrl, res);
                                 }
@@ -788,9 +822,12 @@
 
                     if (signal.aborted || !isDownloadingPlaylist) break;
 
-                    completed++;
-                    if (btn) btn.title = `${completed} / ${total} - Click to cancel`;
-                    showDownloadToast(`${currentPl} - ${completed} / ${total}`);
+                    if (audioSuccess) {
+                        savedCount++;
+                    } else {
+                        failedCount++;
+                    }
+                    updateDownloadProgressUI();
                 }
             };
 
@@ -799,11 +836,38 @@
             if (!signal.aborted && isDownloadingPlaylist) {
                 showDownloadToast(`Verifying ${currentPl} offline storage...`);
                 let verifiedCount = 0;
+                const missingTracks = [];
                 for (const t of tracks) {
                     const aUrl = getAudioUrl(t);
                     const hasA = await mediaCache.match(aUrl);
                     if (hasA && hasA.headers.get('X-Partial-Cached') !== 'true') {
                         verifiedCount++;
+                    } else {
+                        missingTracks.push(t);
+                    }
+                }
+
+                // Automatic single retry pass for missing tracks
+                if (missingTracks.length > 0 && !signal.aborted && isDownloadingPlaylist) {
+                    showDownloadToast(`Retrying ${missingTracks.length} missing tracks...`);
+                    for (const track of missingTracks) {
+                        if (signal.aborted || !isDownloadingPlaylist) break;
+                        const audioUrl = getAudioUrl(track);
+                        const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
+                        const res = await fetchWithRetry(fetchUrl, { signal }, 2).catch(() => {});
+                        if (res && res.ok) {
+                            const buf = await res.arrayBuffer();
+                            const fullRes = new Response(buf, {
+                                status: 200,
+                                headers: {
+                                    'Content-Type': 'audio/webm',
+                                    'Content-Length': buf.byteLength.toString(),
+                                    'X-Partial-Cached': 'false'
+                                }
+                            });
+                            await mediaCache.put(audioUrl, fullRes);
+                            verifiedCount++;
+                        }
                     }
                 }
 
@@ -811,7 +875,7 @@
                 if (iconDone) iconDone.style.display = "block";
                 if (btn) btn.title = "Playlist fully downloaded for offline playback!";
 
-                showDownloadToast(`[✓] ${currentPl} verified (${verifiedCount}/${total} saved offline)`, true);
+                showDownloadToast(`[OK] ${currentPl} verified (${verifiedCount}/${total} saved offline)`, true);
 
                 setTimeout(() => {
                     if (iconDone) iconDone.style.display = "none";
