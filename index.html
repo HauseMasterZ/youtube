@@ -106,6 +106,7 @@
                     <option value="Songs">Songs</option>
                     <option value="INSTALL_APP">Install App...</option>
                     <option value="HARD_RELOAD">Reload Playlists</option>
+                    <option value="__settings__">Settings</option>
                 </select>
                 <button id="btn-download-playlist" class="sync-btn" aria-label="Download Playlist" title="Download playlist for offline playback">
                     <svg id="icon-download-idle" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
@@ -150,6 +151,62 @@
             <span id="download-toast-text">Downloading...</span>
         </div>
     </div>
+</div>
+
+<div id="settings-backdrop" class="settings-backdrop" style="display: none;"></div>
+<div id="settings-modal" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" style="display: none;">
+    <div class="settings-header">
+        <h2 id="settings-title">Settings</h2>
+        <button id="btn-close-settings" class="settings-close-btn" aria-label="Close settings">&times;</button>
+    </div>
+    <div class="settings-body">
+        <div class="settings-section">
+            <h3 class="settings-section-title">Playback Engine</h3>
+            <div class="settings-radio-group">
+                <label class="settings-radio-label" for="mode-1-radio">
+                    <input type="radio" id="mode-1-radio" name="playback-mode" value="mode1" checked>
+                    <div class="settings-radio-text">
+                        <span class="settings-radio-title">Persistent Notification Mode</span>
+                        <span class="settings-radio-subtext">Standard micro-rate spoofing for battery saving & pinned lock-screen controls</span>
+                    </div>
+                </label>
+                <label class="settings-radio-label" for="mode-2-radio">
+                    <input type="radio" id="mode-2-radio" name="playback-mode" value="mode2">
+                    <div class="settings-radio-text">
+                        <span class="settings-radio-title">Hands-Free Bluetooth Mode</span>
+                        <span class="settings-radio-subtext">Live audio anchor on pause with auto-kill sleep timer for seamless car/earbud playback</span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div id="bt-timeout-container" class="settings-section">
+            <label for="bt-timeout-select" class="settings-section-title">Inactivity Auto-Kill Timeout</label>
+            <div class="settings-timeout-controls">
+                <select id="bt-timeout-select" aria-label="Inactivity Auto-Kill Timeout">
+                    <option value="15">15 Minutes</option>
+                    <option value="30" selected>30 Minutes</option>
+                    <option value="60">1 Hour</option>
+                    <option value="120">2 Hours</option>
+                    <option value="never">Never (Stay Alive)</option>
+                    <option value="custom">Custom...</option>
+                </select>
+                <input type="number" id="bt-timeout-custom" min="1" max="1440" placeholder="Minutes" aria-label="Custom timeout in minutes" style="display: none;">
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3 class="settings-section-title">App Actions</h3>
+            <div class="settings-actions-group">
+                <button id="btn-modal-reload" class="settings-action-btn">Reload Playlists</button>
+                <button id="btn-modal-install" class="settings-action-btn">Install App</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="mode-toast" class="mode-toast" aria-live="polite" style="display: none;"><span id="mode-toast-text"></span></div>
+<audio id="live-stream-anchor" preload="none" style="display:none;"></audio>
 
 
 <script src="js/state.js?v=25.08"></script>
@@ -161,17 +218,4 @@
 <script src="js/playback.js?v=25.08"></script>
 <script src="js/main.js?v=25.08"></script>
 </body>
-
-
-
-
-
-
-
-
-
-
-
-
-
-<!-- Trigger redeploy -->
+</html>
