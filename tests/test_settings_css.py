@@ -19,16 +19,16 @@ class TestSettingsCSS(unittest.TestCase):
         self.assertEqual(matches, [], f"Found emojis in CSS: {matches}")
 
     def test_settings_backdrop_styles(self):
-        """Settings backdrop glassmorphic overlay rules"""
+        """Settings backdrop overlay rules"""
         self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*position:\s*fixed;')
-        self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*background:\s*rgba\(\s*0,\s*0,\s*0,\s*0\.6\s*\);')
-        self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*backdrop-filter:\s*blur\(8px\);')
-        self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*-webkit-backdrop-filter:\s*blur\(8px\);')
+        self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*background:\s*rgba\(\s*0,\s*0,\s*0,\s*0\.75\s*\);')
+        self.assertNotRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*backdrop-filter:')
+        self.assertNotRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*-webkit-backdrop-filter:')
         self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*z-index:\s*10000;')
         self.assertRegex(self.css_content, r'(#settings-backdrop|\.settings-backdrop)[^{]*\{[^}]*transition:\s*opacity\s*0\.2s\s*ease;')
 
     def test_settings_modal_styles(self):
-        """Settings modal glassmorphic window rules"""
+        """Settings modal window rules"""
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*position:\s*fixed;')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*top:\s*50%;')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*left:\s*50%;')
@@ -38,9 +38,9 @@ class TestSettingsCSS(unittest.TestCase):
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*max-width:\s*420px;')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*max-height:\s*85vh;')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*overflow-y:\s*auto;')
-        self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*background:\s*rgba\(\s*18,\s*18,\s*24,\s*0\.95\s*\);')
-        self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*backdrop-filter:\s*blur\(20px\);')
-        self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*-webkit-backdrop-filter:\s*blur\(20px\);')
+        self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*background:\s*#121218;')
+        self.assertNotRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*backdrop-filter:')
+        self.assertNotRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*-webkit-backdrop-filter:')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*border:\s*1px\s*solid\s*rgba\(\s*255,\s*255,\s*255,\s*0\.1\s*\);')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*border-radius:\s*16px;')
         self.assertRegex(self.css_content, r'(#settings-modal|\.settings-modal)[^{]*\{[^}]*padding:\s*20px;')
