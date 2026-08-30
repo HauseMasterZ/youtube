@@ -54,6 +54,37 @@
     let isRendering = false;
     let poolInitialized = false;
 
+    // Settings State & Persistence
+    function getStoredSetting(key, defaultValue) {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage !== null) {
+                const val = localStorage.getItem(key);
+                return (val !== null && val !== '') ? val : defaultValue;
+            }
+        } catch (e) {
+            // Fallback if localStorage is restricted or throws
+        }
+        return defaultValue;
+    }
+
+    function setStoredSetting(key, value) {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage !== null) {
+                localStorage.setItem(key, value);
+            }
+        } catch (e) {
+            // Silently fail if localStorage is restricted
+        }
+    }
+
+    window.getStoredSetting = getStoredSetting;
+    window.setStoredSetting = setStoredSetting;
+
+    window.playbackMode = getStoredSetting('yt_playback_mode', 'mode1');
+    window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '30');
+    window.btSleepTimer = null;
+    window.lastPlaybackModeTransitions = [];
+
     window.rebuildCrossShuffleDeck = function() {
         if (shuffleMode !== 1) return;
         
