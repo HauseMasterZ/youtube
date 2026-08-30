@@ -797,8 +797,8 @@
                             audioSuccess = true;
                         }
 
-                        // 2. Thumbnail Cache (only fetch if thumbnails are enabled)
-                        if (!thumbsDisabled && thumbUrl && !(await thumbsCache.match(thumbUrl))) {
+                        // 2. Thumbnail Cache (unconditionally download for complete offline availability)
+                        if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
                             const res = await fetchWithRetry(thumbUrl, { signal }, 2).catch(() => {});
                             if (res && (res.ok || res.type === 'opaque')) {
                                 await thumbsCache.put(thumbUrl, res);
@@ -847,12 +847,13 @@
                     }
                 }
 
-                // Automatic single retry pass for missing tracks
+                // Automatic single retry pass for missing tracks (retries audio, thumbnail, and lyrics)
                 if (missingTracks.length > 0 && !signal.aborted && isDownloadingPlaylist) {
                     showDownloadToast(`Retrying ${missingTracks.length} missing tracks...`);
                     for (const track of missingTracks) {
                         if (signal.aborted || !isDownloadingPlaylist) break;
                         const audioUrl = getAudioUrl(track);
+                        const thumbUrl = getThumbUrl(track);
                         const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
                         const res = await fetchWithRetry(fetchUrl, { signal }, 2).catch(() => {});
                         if (res && res.ok) {
@@ -867,6 +868,24 @@
                             });
                             await mediaCache.put(audioUrl, fullRes);
                             verifiedCount++;
+                        }
+
+                        if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
+                            const tRes = await fetchWithRetry(thumbUrl, { signal }, 2).catch(() => {});
+                            if (tRes && (tRes.ok || tRes.type === 'opaque')) {
+                                await thumbsCache.put(thumbUrl, tRes);
+                            }
+                        }
+
+                        if (track.file_path && track.id) {
+                            const parts = track.file_path.split('/');
+                            const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
+                            if (!(await mediaCache.match(lyricsUrl))) {
+                                const lRes = await fetchWithRetry(lyricsUrl, { signal }, 2).catch(() => {});
+                                if (lRes && lRes.ok) {
+                                    await mediaCache.put(lyricsUrl, lRes);
+                                }
+                            }
                         }
                     }
                 }
