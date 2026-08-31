@@ -125,7 +125,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]pause['\"]")
 
     def test_mode2_was_paused_by_user_resume_and_disconnect_silence(self):
-        """Pause action handler resumes in Mode 2 when wasPausedByUser is true and pauses during disconnect"""
+        """Pause action handler resumes in Mode 2 when !isOSDisconnect and pauses during disconnect"""
         pause_handler_match = re.search(
             r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
             self.ms_content
@@ -133,11 +133,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
         pause_code = pause_handler_match.group(1)
 
-        self.assertIn("audioPlayer && audioPlayer.paused && window.wasPausedByUser", pause_code)
+        self.assertIn("audioPlayer && audioPlayer.paused && !isOSDisconnect", pause_code)
         self.assertIn("audioPlayer.play()", pause_code)
-        self.assertIn("isUserPause", pause_code)
+        self.assertIn("window.wasPausedByUser = true;", pause_code)
         self.assertIn("audioPlayer.pause()", pause_code)
-        self.assertIn("stopLiveAudioAnchor()", pause_code)
+        self.assertIn("isOSDisconnect", pause_code)
 
     def test_dual_audio_play_clean_execution_in_dom_js(self):
         """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play()"""

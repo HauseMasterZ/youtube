@@ -207,11 +207,20 @@
 
     // BT disconnect detection: track device changes to prevent speaker bleed
     let anchorStartTimer = null;
-    let lastDeviceChangeTime = 0;
+    let isOSDisconnect = false;
+    let osDisconnectTimer = null;
+
+    function flagOSDisconnect() {
+        isOSDisconnect = true;
+        clearTimeout(osDisconnectTimer);
+        osDisconnectTimer = setTimeout(() => {
+            isOSDisconnect = false;
+        }, 600);
+    }
 
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
-            lastDeviceChangeTime = Date.now();
+            flagOSDisconnect();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -219,7 +228,6 @@
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
-                window.wasPausedByUser = true;
                 if (typeof audioPlayer.instantPause === 'function') {
                     audioPlayer.instantPause();
                 } else {
@@ -242,13 +250,16 @@
         });
         audioPlayer.addEventListener('pause', () => {
             lastAudioPlayerPauseTime = Date.now();
+            if (!window.wasPausedByUser) {
+                flagOSDisconnect();
+            }
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isOSDisconnect) {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && (Date.now() - lastDeviceChangeTime >= 1500)) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && !isOSDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
@@ -291,7 +302,7 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             if (window.playbackMode === 'mode2') {
-                if (audioPlayer && audioPlayer.paused && window.wasPausedByUser) {
+                if (audioPlayer && audioPlayer.paused && !isOSDisconnect) {
                     // User intentionally resuming from paused state
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
@@ -307,9 +318,8 @@
                     }
                     audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
                 } else {
-                    // User intentionally pausing (or OS Bluetooth disconnect where wasPausedByUser is false)
-                    const isUserPause = !audioPlayer.paused;
-                    window.wasPausedByUser = isUserPause;
+                    // User intentionally pausing (or OS Bluetooth disconnect where isOSDisconnect is true)
+                    window.wasPausedByUser = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -318,7 +328,7 @@
                     } else if (audioPlayer) {
                         audioPlayer.pause();
                     }
-                    if (!isUserPause) {
+                    if (isOSDisconnect) {
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
                     }
