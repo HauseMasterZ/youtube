@@ -66,11 +66,7 @@
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
-            anchorEl.play().then(() => {
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
-            }).catch(e => console.warn("Live anchor play error:", e));
+            anchorEl.play().catch(e => console.warn("Live anchor play error:", e));
         }
     }
 
