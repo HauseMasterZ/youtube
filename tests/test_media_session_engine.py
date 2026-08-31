@@ -125,7 +125,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]pause['\"]")
 
     def test_mode2_was_paused_by_user_resume_and_disconnect_silence(self):
-        """Pause action handler resumes in Mode 2 when isPausedByIntent and !isOSDisconnect and pauses during disconnect"""
+        """Pause action handler resumes in Mode 2 when !isOSDisconnect and pauses during disconnect"""
         pause_handler_match = re.search(
             r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
             self.ms_content
@@ -133,7 +133,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
         pause_code = pause_handler_match.group(1)
 
-        self.assertIn("audioPlayer && audioPlayer.paused && isPausedByIntent && !isOSDisconnect", pause_code)
+        self.assertIn("audioPlayer && audioPlayer.paused && !isOSDisconnect", pause_code)
         self.assertIn("audioPlayer.play()", pause_code)
         self.assertIn("window.wasPausedByUser = true;", pause_code)
         self.assertIn("audioPlayer.pause()", pause_code)
@@ -207,6 +207,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\)'
         )
+
+    def test_next_song_buffering_threshold(self):
+        """main.js progress listener checks 85 percent threshold and _streamDone before triggering preloads"""
+        self.assertIn("0.85", self.main_content)
+        self.assertIn("_streamDone", self.main_content)
+        self.assertIn("triggerPreloads()", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

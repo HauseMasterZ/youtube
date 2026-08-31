@@ -319,10 +319,8 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             if (window.playbackMode === 'mode2') {
-                const now = Date.now();
-                if (audioPlayer && audioPlayer.paused && isPausedByIntent && !isOSDisconnect && (now - userPauseTimestamp >= 300)) {
-                    // User intentionally resuming from paused state
-                    isPausedByIntent = false;
+                if (audioPlayer && audioPlayer.paused && !isOSDisconnect) {
+                    // Deliberate user resume tap from lockscreen / notification
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
@@ -338,27 +336,22 @@
                     audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
                 } else {
                     // User intentionally pausing (or OS Bluetooth disconnect where isOSDisconnect is true)
-                    const isUserPause = (!audioPlayer.paused && !isOSDisconnect);
-                    isPausedByIntent = isUserPause;
-                    userPauseTimestamp = now;
                     window.wasPausedByUser = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'playing';
+                        navigator.mediaSession.playbackState = (window.playbackMode === 'mode2' && !isOSDisconnect) ? 'playing' : 'paused';
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
                         audioPlayer.pause();
                     }
-                    if (!isUserPause || isOSDisconnect) {
+                    if (isOSDisconnect) {
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
                     }
                 }
             } else {
                 // Mode 1: Standard pause
-                isPausedByIntent = true;
-                userPauseTimestamp = Date.now();
                 window.wasPausedByUser = true;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';

@@ -659,6 +659,7 @@
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
                                         await saveProgress(true);
+                                        this.dispatchEvent(new Event('progress'));
 
                                         // Fulfill any pending seek targeting the end of the song
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {

@@ -382,8 +382,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof updateBufferProgress === 'function') updateBufferProgress();
         if (!audioPlayer.duration || audioPlayer.duration === Infinity) return;
         const buffered = audioPlayer.buffered;
-        if (buffered.length > 0 && buffered.end(buffered.length - 1) >= audioPlayer.duration - 0.5) {
-            if (typeof triggerPreloads === 'function') triggerPreloads();
+        if (buffered.length > 0) {
+            const buffEnd = buffered.end(buffered.length - 1);
+            if (buffEnd >= audioPlayer.duration * 0.85 || audioPlayer._streamDone || buffEnd >= audioPlayer.duration - 2) {
+                if (typeof triggerPreloads === 'function') triggerPreloads();
+            }
         }
     });
     
