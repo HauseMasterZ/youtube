@@ -148,10 +148,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", pause_code)
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
-        """Ensure playback.js uses direct thumbUrl when !thumbsDisabled and getCachedSquareArtwork when thumbsDisabled"""
+        """Ensure playback.js uses direct thumbUrl when !thumbsDisabled and checks offline cache when thumbsDisabled"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertRegex(content, r'if\s*\(\s*!thumbsDisabled\s*&&\s*thumbUrl\s*\)[\s\S]*?\{ src:\s*thumbUrl[\s\S]*?else\s*\{[\s\S]*?getCachedSquareArtwork')
+        self.assertRegex(content, r'if\s*\(\s*!thumbsDisabled\s*&&\s*thumbUrl\s*\)[\s\S]*?\{ src:\s*thumbUrl[\s\S]*?else\s*\{[\s\S]*?caches\.open\(\s*[\'"]yt-player-thumbs[\'"]\s*\)')
 
     def test_play_action_stops_live_anchor_before_play(self):
         """Verify play handler stops anchor and sets playbackState to playing"""
@@ -186,11 +186,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
-        """main.js defines debounced attemptFocusResume on visibilitychange and pointerdown resume"""
+        """main.js defines debounced attemptFocusResume on visibilitychange event without pointerdown capture interference"""
         self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
         self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*attemptFocusResume\s*\)')
         self.assertIn("_focusResumeTimer", self.main_content)
-        self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]pointerdown[\'"][\s\S]*?capture:\s*true')
+        self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_anchor_debouncing(self):
         """mediaSession.js queues Mode 2 anchor behind anchorStartTimer and cancels on devicechange"""
