@@ -677,7 +677,7 @@
                                                 const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                                 updateMediaSessionPosition(seekTarget, totalDur, 1.0);
                                             }
-                                            if (!preventAutoplay && !window.wasPausedByUser) {
+                                            if (!preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
                                                 this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
                                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                                     navigator.mediaSession.playbackState = 'playing';
@@ -707,8 +707,8 @@
                                             }
                                         }
 
-                                        // Auto-resume playback if paused/stalled due to buffer exhaustion
-                                        if (this._isBufferStalled && !window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
+                                        // Auto-resume playback ONLY if paused due to actual buffer exhaustion underrun
+                                        if (this._isBufferStalled && !window.wasPausedByUser && this.active.paused && this._pendingSeek === null && this.active.readyState >= 3) {
                                             this._isBufferStalled = false;
                                             this.active.play().catch(() => {});
                                         }
@@ -726,7 +726,7 @@
                                                     const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                                     updateMediaSessionPosition(seekTarget, totalDur, 1.0);
                                                 }
-                                                if (!preventAutoplay && !window.wasPausedByUser) {
+                                                if (!preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
                                                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                                         navigator.mediaSession.playbackState = 'playing';

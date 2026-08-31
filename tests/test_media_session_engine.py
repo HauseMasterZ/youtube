@@ -177,11 +177,15 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_buffer_stalled_guard_in_dom_js(self):
-        """DualAudioPingPong in dom.js guards auto-resume with _isBufferStalled"""
+        """DualAudioPingPong in dom.js guards auto-resume with _isBufferStalled, readyState >= 3, and !this.active.paused"""
         self.assertIn("this._isBufferStalled = false;", self.dom_content)
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*this\._isBufferStalled\s*&&\s*!window\.wasPausedByUser\s*&&\s*this\.active\.paused\s*&&\s*this\._pendingSeek\s*===\s*null\s*\)'
+            r'if\s*\(\s*this\._isBufferStalled\s*&&\s*!window\.wasPausedByUser\s*&&\s*this\.active\.paused\s*&&\s*this\._pendingSeek\s*===\s*null\s*&&\s*this\.active\.readyState\s*>=\s*3\s*\)'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*!preventAutoplay\s*&&\s*!window\.wasPausedByUser\s*&&\s*!this\.active\.paused\s*\)'
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
