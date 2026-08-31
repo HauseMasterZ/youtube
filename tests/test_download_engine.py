@@ -89,10 +89,14 @@ class TestDownloadEngine(unittest.TestCase):
         self.assertNotIn('new Image', fn_body)
 
     def test_playback_uses_get_cached_square_artwork_when_thumbs_disabled(self):
-        """playTrack checks yt-player-thumbs cache for direct zero-network artwork when thumbsDisabled is true"""
+        """playTrack checks yt-player-thumbs cache for direct zero-network square artwork when thumbsDisabled is true"""
         self.assertRegex(
             self.playback_content,
-            r'thumbsDisabled[\s\S]*?caches\.open\(\s*[\'"]yt-player-thumbs[\'"]\s*\)'
+            r'thumbsDisabled[\s\S]*?getCachedSquareArtwork\(\s*track\.id\s*,\s*thumbUrl'
+        )
+        self.assertRegex(
+            self.playback_content,
+            r'getSquareArtwork\(\s*thumbUrl\s*,\s*track\.id'
         )
 
 if __name__ == '__main__':

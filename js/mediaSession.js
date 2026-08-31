@@ -275,6 +275,10 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
+            if (!window.wasPausedByUser) {
+                window.wasDeviceDisconnect = true;
+                window.wasPausedByUser = true;
+            }
             if (window.wasDeviceDisconnect) {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
@@ -327,6 +331,21 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             if (window.playbackMode === 'mode2') {
+                const isImmediateOSPause = (Date.now() - lastAudioPlayerPauseTime < 350) && window.wasDeviceDisconnect;
+                if (isImmediateOSPause) {
+                    window.wasPausedByUser = true;
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        updateMediaSessionPosition(audioPlayer ? audioPlayer.currentTime : 0, dur, 0);
+                    }
+                    return;
+                }
+
                 if (audioPlayer && audioPlayer.paused) {
                     // User intentionally resuming from paused state in Mode 2
                     window.wasDeviceDisconnect = false;

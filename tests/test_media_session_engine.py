@@ -146,10 +146,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
-        """Ensure playback.js uses direct thumbUrl when !thumbsDisabled and checks offline cache when thumbsDisabled"""
+        """Ensure playback.js uses 1:1 square artwork when !thumbsDisabled and checks offline square cache when thumbsDisabled"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertRegex(content, r'if\s*\(\s*!thumbsDisabled\s*&&\s*thumbUrl\s*\)[\s\S]*?\{ src:\s*thumbUrl[\s\S]*?else\s*\{[\s\S]*?caches\.open\(\s*[\'"]yt-player-thumbs[\'"]\s*\)')
+        self.assertRegex(content, r'if\s*\(\s*!thumbsDisabled\s*&&\s*thumbUrl\s*\)[\s\S]*?getSquareArtwork\(\s*thumbUrl\s*,\s*track\.id[\s\S]*?else\s+if\s*\(\s*thumbsDisabled\s*&&\s*thumbUrl\s*\)[\s\S]*?getCachedSquareArtwork\(\s*track\.id\s*,\s*thumbUrl')
 
     def test_play_action_stops_live_anchor_before_play(self):
         """Verify play handler stops anchor and sets playbackState to playing"""
@@ -242,12 +242,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_device_disconnect_anchor_guard(self):
-        """devicechange sets wasDeviceDisconnect to guard anchor re-activation and pause state"""
+        """devicechange and natural OS pause set wasDeviceDisconnect and guard pause action handler"""
         self.assertIn("window.wasDeviceDisconnect = true;", self.ms_content)
+        self.assertIn("if (!window.wasPausedByUser)", self.ms_content)
         self.assertRegex(
             self.ms_content,
             r'if\s*\(\s*window\.wasDeviceDisconnect\s*\)\s*\{[\s\S]*?stopLiveAudioAnchor\(\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?return;\s*\}'
         )
+        self.assertIn("const isImmediateOSPause = (Date.now() - lastAudioPlayerPauseTime < 350) && window.wasDeviceDisconnect;", self.ms_content)
         self.assertIn("window.wasDeviceDisconnect = false;", self.main_content)
 
 if __name__ == '__main__':
