@@ -206,17 +206,17 @@ class TestSettingsUI(unittest.TestCase):
             r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*window\.wasPausedByUser\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}'
         )
 
-    def test_media_session_pause_handler_lyrics_reset(self):
-        """MediaSession pause action handler resets lyrics UI on near-end rewind"""
-        pause_handler_match = re.search(
-            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+    def test_media_session_play_handler_lyrics_reset(self):
+        """MediaSession play action handler resets lyrics UI on near-end rewind"""
+        play_handler_match = re.search(
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
             self.ms_content
         )
-        self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
-        pause_code = pause_handler_match.group(1)
+        self.assertIsNotNone(play_handler_match, "Could not find play action handler in mediaSession.js")
+        play_code = play_handler_match.group(1)
         self.assertRegex(
-            pause_code,
-            r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*updateLyricsUI\(0\);'
+            play_code,
+            r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*\{?\s*updateLyricsUI\(0\)'
         )
 
     def test_no_desktop_m_key_shortcut(self):

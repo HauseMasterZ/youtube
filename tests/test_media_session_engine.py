@@ -124,8 +124,8 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]play['\"]")
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]pause['\"]")
 
-    def test_mode2_tws_single_button_resume(self):
-        """Pause action handler resumes playback when paused in mode2 for TWS single-button earbuds"""
+    def test_pause_action_handler_strictly_pauses(self):
+        """Pause action handler strictly pauses and sets wasPausedByUser = true without resume hijack"""
         pause_handler_match = re.search(
             r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
             self.ms_content
@@ -133,19 +133,17 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
         pause_code = pause_handler_match.group(1)
 
-        # Check condition for Mode 2 paused state
-        self.assertRegex(pause_code, r"window\.playbackMode\s*===\s*['\"]mode2['\"]\s*&&\s*audioPlayer\s*&&\s*audioPlayer\.paused")
-
-        # Check resume branch
-        self.assertIn("window.wasPausedByUser = false;", pause_code)
-        self.assertIn("audioPlayer.play()", pause_code)
-        self.assertIn("stopLiveAudioAnchor()", pause_code)
-        self.assertIn("cancelAutoKillWatchdog()", pause_code)
-
-        # Check standard pause branch
         self.assertIn("window.wasPausedByUser = true;", pause_code)
-        self.assertIn("startLiveAudioAnchor()", pause_code)
-        self.assertIn("armAutoKillWatchdog()", pause_code)
+        self.assertIn("navigator.mediaSession.playbackState = 'paused'", pause_code)
+        self.assertIn("audioPlayer.pause()", pause_code)
+        self.assertNotIn("audioPlayer.play()", pause_code)
+
+    def test_mse_audio_track_clock_unfreeze_in_dom_js(self):
+        """DualAudioPingPong play() unfreezes stalled Android AudioTrack clock via micro-seek"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*this\.active\.paused\s*&&\s*this\.active\.currentTime\s*>\s*0\s*\)\s*\{\s*this\.active\.currentTime\s*=\s*this\.active\.currentTime;'
+        )
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
         """Ensure playback.js uses direct thumbUrl when !thumbsDisabled and checks offline cache when thumbsDisabled"""
