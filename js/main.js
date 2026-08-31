@@ -419,7 +419,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
+            if (window.playbackMode === 'mode2') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
             } else {

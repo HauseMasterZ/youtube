@@ -249,9 +249,9 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
+            if (window.playbackMode === 'mode2') {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
