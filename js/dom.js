@@ -254,6 +254,16 @@
             if (this._pendingSeek !== null) {
                 return Promise.resolve();
             }
+
+            if (this._mseEnabled && this._sourceBuffer) {
+                const ct = this.active.currentTime;
+                if (ct > 0 && Number.isFinite(ct)) {
+                    try {
+                        this.active.currentTime = ct;
+                    } catch (e) {}
+                }
+            }
+
             return this.active.play();
         }
 

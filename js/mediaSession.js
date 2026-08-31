@@ -27,7 +27,16 @@
     let liveAudioGain = null;
 
     function initLiveAudioAnchor() {
-        if (liveAudioContext) return liveAudioContext;
+        if (liveAudioContext) {
+            if (liveAudioContext.state === 'suspended') {
+                liveAudioContext.resume().catch(() => {});
+            }
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
+                anchorEl.srcObject = liveAudioDestination.stream;
+            }
+            return liveAudioContext;
+        }
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return null;
 
@@ -55,12 +64,7 @@
     function startLiveAudioAnchor() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
-        if (!liveAudioContext) {
-            initLiveAudioAnchor();
-        }
-        if (liveAudioContext && liveAudioContext.state === 'suspended') {
-            liveAudioContext.resume().catch(() => {});
-        }
+        initLiveAudioAnchor();
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
@@ -79,9 +83,25 @@
         }
     }
 
+    function teardownLiveAudioAnchor() {
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (anchorEl) {
+            try {
+                anchorEl.pause();
+                anchorEl.srcObject = null;
+            } catch (e) {}
+        }
+        if (liveAudioContext && liveAudioContext.state === 'running') {
+            try {
+                liveAudioContext.suspend().catch(() => {});
+            } catch (e) {}
+        }
+    }
+
     window.initLiveAudioAnchor = initLiveAudioAnchor;
     window.startLiveAudioAnchor = startLiveAudioAnchor;
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
+    window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
 
     // Auto-Kill Watchdog Lifecycle
     function cancelAutoKillWatchdog() {
@@ -167,7 +187,7 @@
                     navigator.mediaSession.playbackState = 'paused';
                 }
             }
-            stopLiveAudioAnchor();
+            teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
         }
 

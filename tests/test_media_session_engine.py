@@ -140,10 +140,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("startLiveAudioAnchor()", pause_code)
 
     def test_dual_audio_play_clean_execution_in_dom_js(self):
-        """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play() without seek collisions"""
+        """DualAudioPingPong play() sets volume, unsets muted, un-stalls MSE clock, and directly invokes active.play()"""
         self.assertIn("this.active.muted = false;", self.dom_content)
         self.assertIn("return this.active.play();", self.dom_content)
-        self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*this\._mseEnabled\s*&&\s*this\._sourceBuffer\s*\)\s*\{[\s\S]*?this\.active\.currentTime\s*=\s*ct;'
+        )
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
         """Ensure playback.js uses 1:1 square artwork when !thumbsDisabled and checks offline square cache when thumbsDisabled"""
@@ -231,12 +234,20 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_stop_live_audio_anchor_teardown(self):
-        """stopLiveAudioAnchor cleanly pauses anchorEl while keeping MediaStream intact"""
+        """stopLiveAudioAnchor cleanly pauses anchorEl and teardownLiveAudioAnchor completely cleans up on Mode 1"""
         self.assertRegex(
             self.ms_content,
             r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.pause\(\);'
         )
-        self.assertNotIn("anchorEl.srcObject = null;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
+        )
+        self.assertIn("teardownLiveAudioAnchor()", self.ms_content)
 
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
