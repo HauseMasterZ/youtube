@@ -264,9 +264,6 @@
                     audioPlayer.pause();
                 }
             }
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-            }
         });
     }
 
@@ -325,7 +322,14 @@
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
             }
-            audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
+            audioPlayer.play().catch(e => {
+                console.warn("MediaSession play error:", e);
+                setTimeout(() => {
+                    if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                        audioPlayer.play().catch(() => {});
+                    }
+                }, 50);
+            });
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
@@ -344,7 +348,14 @@
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
-                    audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
+                    audioPlayer.play().catch(e => {
+                        console.warn("MediaSession play error:", e);
+                        setTimeout(() => {
+                            if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                                audioPlayer.play().catch(() => {});
+                            }
+                        }, 50);
+                    });
                 } else {
                     // User intentionally pausing in Mode 2
                     window.wasPausedByUser = true;
@@ -401,7 +412,14 @@
                             updateLyricsUI(0);
                         }
                     }
-                    audioPlayer.play().catch(e => console.warn("MediaSession playpause error:", e));
+                    audioPlayer.play().catch(e => {
+                        console.warn("MediaSession playpause error:", e);
+                        setTimeout(() => {
+                            if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                                audioPlayer.play().catch(() => {});
+                            }
+                        }, 50);
+                    });
                 } else {
                     window.wasPausedByUser = true;
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
