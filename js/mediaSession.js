@@ -304,13 +304,8 @@
                 } else if (audioPlayer) {
                     audioPlayer.pause();
                 }
-                if (window.playbackMode === 'mode2') {
-                    startLiveAudioAnchor();
-                    armAutoKillWatchdog();
-                } else {
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                }
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
             }
         });
 

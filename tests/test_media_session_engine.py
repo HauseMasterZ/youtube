@@ -139,12 +139,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("audioPlayer.pause()", pause_code)
         self.assertIn("navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused'", pause_code)
 
-    def test_mse_audio_track_clock_unfreeze_in_dom_js(self):
-        """DualAudioPingPong play() unfreezes stalled Android AudioTrack clock via micro-seek"""
-        self.assertRegex(
-            self.dom_content,
-            r'if\s*\(\s*this\.active\.paused\s*&&\s*this\.active\.currentTime\s*>\s*0\s*\)\s*\{\s*this\.active\.currentTime\s*=\s*this\.active\.currentTime;'
-        )
+    def test_dual_audio_play_clean_execution_in_dom_js(self):
+        """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play()"""
+        self.assertIn("this.active.muted = false;", self.dom_content)
+        self.assertIn("return this.active.play();", self.dom_content)
+        self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
         """Ensure playback.js uses direct thumbUrl when !thumbsDisabled and checks offline cache when thumbsDisabled"""

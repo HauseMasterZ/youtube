@@ -251,13 +251,6 @@
             }
             this.active.muted = false;
 
-            // Unfreeze stalled Android AudioTrack clock after external focus loss
-            try {
-                if (this.active.paused && this.active.currentTime > 0) {
-                    this.active.currentTime = this.active.currentTime;
-                }
-            } catch (e) {}
-
             if (this._pendingSeek !== null) {
                 return Promise.resolve();
             }
