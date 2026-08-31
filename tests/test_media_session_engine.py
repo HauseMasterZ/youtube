@@ -225,6 +225,30 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\?\s*0\.00001\s*:\s*0\s*\)'
         )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*anchorStartTimer\s*\)\s*\{\s*clearTimeout\(\s*anchorStartTimer\s*\);\s*anchorStartTimer\s*=\s*null;\s*\}'
+        )
+
+    def test_stop_live_audio_anchor_teardown(self):
+        """stopLiveAudioAnchor clears srcObject and suspends liveAudioContext"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
+        )
+
+    def test_device_disconnect_anchor_guard(self):
+        """devicechange sets wasDeviceDisconnect to guard anchor re-activation and pause state"""
+        self.assertIn("window.wasDeviceDisconnect = true;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*window\.wasDeviceDisconnect\s*\)\s*\{[\s\S]*?stopLiveAudioAnchor\(\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?return;\s*\}'
+        )
+        self.assertIn("window.wasDeviceDisconnect = false;", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

@@ -205,7 +205,7 @@ class TestSettingsUI(unittest.TestCase):
         pause_block = pause_block_match.group(0)
         self.assertRegex(
             pause_block,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]\s*;?[\s\S]*?\}'
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"](?:\s*&&\s*!window\.wasDeviceDisconnect)?\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]\s*;?[\s\S]*?\}'
         )
 
     def test_media_session_play_handler_lyrics_reset(self):
