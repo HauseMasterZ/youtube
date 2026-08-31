@@ -72,15 +72,9 @@
 
     function stopLiveAudioAnchor() {
         const anchorEl = document.getElementById("live-stream-anchor");
-        if (anchorEl) {
+        if (anchorEl && !anchorEl.paused) {
             try {
                 anchorEl.pause();
-                anchorEl.srcObject = null;
-            } catch (e) {}
-        }
-        if (liveAudioContext && liveAudioContext.state === 'running') {
-            try {
-                liveAudioContext.suspend().catch(() => {});
             } catch (e) {}
         }
     }

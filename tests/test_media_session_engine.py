@@ -231,15 +231,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_stop_live_audio_anchor_teardown(self):
-        """stopLiveAudioAnchor clears srcObject and suspends liveAudioContext"""
+        """stopLiveAudioAnchor cleanly pauses anchorEl while keeping MediaStream intact"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
+            r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.pause\(\);'
         )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
-        )
+        self.assertNotIn("anchorEl.srcObject = null;", self.ms_content)
 
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
