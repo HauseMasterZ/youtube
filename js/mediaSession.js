@@ -207,35 +207,9 @@
 
     // BT disconnect detection: track device changes to prevent speaker bleed
     let anchorStartTimer = null;
-    let isOSDisconnect = false;
-    let osDisconnectTimer = null;
-    let isPausedByIntent = false;
-    let userPauseTimestamp = 0;
-
-    function setPausedByIntent(val) {
-        isPausedByIntent = !!val;
-        if (val) {
-            userPauseTimestamp = Date.now();
-        }
-    }
-    window.setPausedByIntent = setPausedByIntent;
-
-    function flagOSDisconnect() {
-        isOSDisconnect = true;
-        isPausedByIntent = false;
-        clearTimeout(osDisconnectTimer);
-        osDisconnectTimer = setTimeout(() => {
-            isOSDisconnect = false;
-            if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-                isPausedByIntent = true;
-                userPauseTimestamp = Date.now();
-            }
-        }, 600);
-    }
 
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
-            flagOSDisconnect();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -243,11 +217,15 @@
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+                window.wasPausedByUser = true;
                 if (typeof audioPlayer.instantPause === 'function') {
                     audioPlayer.instantPause();
                 } else {
                     audioPlayer.pause();
                 }
+            }
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
             }
         });
     }
@@ -256,7 +234,6 @@
     let lastAudioPlayerPauseTime = 0;
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
-            isPausedByIntent = false;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -266,16 +243,13 @@
         });
         audioPlayer.addEventListener('pause', () => {
             lastAudioPlayerPauseTime = Date.now();
-            if (!isPausedByIntent) {
-                flagOSDisconnect();
-            }
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2' && isPausedByIntent && !isOSDisconnect) {
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && isPausedByIntent && !isOSDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
@@ -290,7 +264,6 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
-            isPausedByIntent = false;
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -309,18 +282,16 @@
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
                 audioPlayer.currentTime = 0;
-                updateTimeUI(0);
-                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {
-                    updateLyricsUI(0);
-                }
+                if (typeof updateTimeUI === 'function') updateTimeUI(0);
+                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
             }
             audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
             if (window.playbackMode === 'mode2') {
-                if (audioPlayer && audioPlayer.paused && !isOSDisconnect) {
-                    // Deliberate user resume tap from lockscreen / notification
+                if (audioPlayer && audioPlayer.paused) {
+                    // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
@@ -335,20 +306,18 @@
                     }
                     audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
                 } else {
-                    // User intentionally pausing (or OS Bluetooth disconnect where isOSDisconnect is true)
+                    // User intentionally pausing in Mode 2
                     window.wasPausedByUser = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = (window.playbackMode === 'mode2' && !isOSDisconnect) ? 'playing' : 'paused';
+                        navigator.mediaSession.playbackState = 'playing';
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
                         audioPlayer.pause();
                     }
-                    if (isOSDisconnect) {
-                        stopLiveAudioAnchor();
-                        cancelAutoKillWatchdog();
-                    }
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
                 }
             } else {
                 // Mode 1: Standard pause
