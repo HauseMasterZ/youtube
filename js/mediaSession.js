@@ -128,6 +128,7 @@
     function togglePlaybackMode(targetMode = null) {
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
+        lastAudioPlayerPauseTime = Date.now() - 1000;
 
         if (typeof window.setStoredSetting === 'function') {
             window.setStoredSetting('yt_playback_mode', newMode);
@@ -151,7 +152,7 @@
 
         const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
         if (newMode === 'mode2') {
-            if (isPaused) {
+            if (isPaused && window.wasPausedByUser) {
                 startLiveAudioAnchor();
                 armAutoKillWatchdog();
             }
@@ -239,9 +240,9 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2') {
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && (Date.now() - lastDeviceChangeTime >= 1500)) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && (Date.now() - lastDeviceChangeTime >= 1500)) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }

@@ -1176,31 +1176,8 @@ document.addEventListener("DOMContentLoaded", () => {
         radio.addEventListener("change", () => {
             const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
             const newMode = checkedRadio ? checkedRadio.value : 'mode1';
-            window.playbackMode = newMode;
-
-            if (typeof window.setStoredSetting === 'function') {
-                window.setStoredSetting('yt_playback_mode', newMode);
-            } else if (typeof setStoredSetting === 'function') {
-                setStoredSetting('yt_playback_mode', newMode);
-            }
-
-            if (btTimeoutContainer) {
-                btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
-            }
-
-            const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
-            if (isPaused) {
-                if (newMode === 'mode2') {
-                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
-                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
-                } else {
-                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                    if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
-                }
-            }
-
-            if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
+            if (typeof togglePlaybackMode === 'function') {
+                togglePlaybackMode(newMode);
             }
         });
     });

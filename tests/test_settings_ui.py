@@ -133,17 +133,17 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_mode_radio_change_listener(self):
-        """Radio inputs change listener updates mode, storage, display, anchor/watchdog on pause, and media session"""
+        """Radio inputs change listener delegates to togglePlaybackMode which handles state, anchor, and watchdog"""
         self.assertIn('name="playback-mode"', self.main_content)
-        self.assertIn('yt_playback_mode', self.main_content)
-        self.assertIn('startLiveAudioAnchor', self.main_content)
-        self.assertIn('stopLiveAudioAnchor', self.main_content)
-        self.assertIn('armAutoKillWatchdog', self.main_content)
-        self.assertIn('cancelAutoKillWatchdog', self.main_content)
         self.assertRegex(
             self.main_content,
-            r'input\[name=["\']playback-mode["\']\][\s\S]*?addEventListener\(\s*[\'"]change[\'"]'
+            r'input\[name=["\']playback-mode["\']\][\s\S]*?addEventListener\(\s*[\'"]change[\'"][\s\S]*?togglePlaybackMode\s*\('
         )
+        self.assertIn('startLiveAudioAnchor', self.ms_content)
+        self.assertIn('stopLiveAudioAnchor', self.ms_content)
+        self.assertIn('armAutoKillWatchdog', self.ms_content)
+        self.assertIn('cancelAutoKillWatchdog', self.ms_content)
+        self.assertIn('yt_playback_mode', self.ms_content)
 
     def test_timeout_select_change_listener(self):
         """bt-timeout-select change listener toggles custom input and updates window.btTimeoutMins and storage"""
