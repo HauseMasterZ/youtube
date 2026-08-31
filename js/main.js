@@ -276,7 +276,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
-            if (typeof window.setPausedByIntent === 'function') window.setPausedByIntent(false);
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -290,7 +289,6 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
-            if (typeof window.setPausedByIntent === 'function') window.setPausedByIntent(true);
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             audioPlayer.instantPause();
@@ -438,10 +436,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
                     audioPlayer.play().catch(() => {});
                 }
-            }, 500);
+            }, 100);
         }
     }
     document.addEventListener("visibilitychange", attemptFocusResume);
+    window.addEventListener("focus", attemptFocusResume);
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {

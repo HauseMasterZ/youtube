@@ -188,9 +188,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
-        """main.js defines debounced attemptFocusResume on visibilitychange event without pointerdown capture interference"""
+        """main.js defines debounced attemptFocusResume on visibilitychange and focus events without pointerdown capture interference"""
         self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
         self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*attemptFocusResume\s*\)')
+        self.assertRegex(self.main_content, r'window\.addEventListener\(\s*[\'"]focus[\'"]\s*,\s*attemptFocusResume\s*\)')
         self.assertIn("_focusResumeTimer", self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
