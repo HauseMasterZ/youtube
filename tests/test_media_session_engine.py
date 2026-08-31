@@ -124,8 +124,8 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]play['\"]")
         self.assertRegex(self.ms_content, r"audioPlayer\.addEventListener\(\s*['\"]pause['\"]")
 
-    def test_mode2_lockscreen_resume_with_800ms_lockout(self):
-        """Pause action handler resumes in Mode 2 after 800ms lockout and pauses during disconnect"""
+    def test_mode2_was_paused_by_user_resume_and_disconnect_silence(self):
+        """Pause action handler resumes in Mode 2 when wasPausedByUser is true and pauses during disconnect"""
         pause_handler_match = re.search(
             r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
             self.ms_content
@@ -133,11 +133,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
         pause_code = pause_handler_match.group(1)
 
-        self.assertIn("timeSincePause >= 800", pause_code)
+        self.assertIn("window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused && window.wasPausedByUser", pause_code)
         self.assertIn("audioPlayer.play()", pause_code)
         self.assertIn("window.wasPausedByUser = true;", pause_code)
         self.assertIn("audioPlayer.pause()", pause_code)
-        self.assertIn("lastAudioPlayerPauseTime", self.ms_content)
+        self.assertIn("navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused'", pause_code)
 
     def test_mse_audio_track_clock_unfreeze_in_dom_js(self):
         """DualAudioPingPong play() unfreezes stalled Android AudioTrack clock via micro-seek"""

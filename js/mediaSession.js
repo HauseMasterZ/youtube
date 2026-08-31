@@ -148,8 +148,6 @@
             btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
         }
 
-        showModeToast(newMode === 'mode2' ? "Mode Switched: Car & Bluetooth Mode" : "Mode Switched: Standard Mode");
-
         const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
         if (newMode === 'mode2') {
             if (isPaused && window.wasPausedByUser) {
@@ -284,9 +282,8 @@
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
-            const timeSincePause = Date.now() - lastAudioPlayerPauseTime;
-            if (window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused && timeSincePause >= 800) {
-                // Deliberate user resume tap from lockscreen/notification in Mode 2
+            if (window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused && window.wasPausedByUser) {
+                // Deliberate user resume tap while in paused state
                 window.wasPausedByUser = false;
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
@@ -301,10 +298,10 @@
                 }
                 audioPlayer.play().catch(e => console.warn("MediaSession play error:", e));
             } else {
-                // Standard pause (or OS Becoming Noisy disconnect event within 800ms)
+                // Standard pause (or OS Bluetooth disconnect event where wasPausedByUser was false)
                 window.wasPausedByUser = true;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+                    navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
                 }
                 if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                     audioPlayer.instantPause();
