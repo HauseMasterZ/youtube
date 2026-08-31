@@ -33,7 +33,7 @@
                         }
                     }
 
-                    if (e.type === 'playing' || e.type === 'play') {
+                    if (e.type === 'playing' || e.type === 'play' || e.type === 'pause') {
                         this._isBufferStalled = false;
                     }
                     if (e.type === 'timeupdate') {
@@ -262,6 +262,7 @@
         }
 
         pause() {
+            this._isBufferStalled = false;
             window.wasPausedByUser = true;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'paused';
@@ -298,6 +299,7 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
         instantPause() {
+            this._isBufferStalled = false;
             window.wasPausedByUser = true;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'paused';
@@ -700,10 +702,9 @@
                                             }
                                         }
 
-                                        // Auto-resume playback ONLY if paused due to actual buffer exhaustion underrun
-                                        if (this._isBufferStalled && !window.wasPausedByUser && this.active.paused && this._pendingSeek === null && this.active.readyState >= 3) {
+                                        // Auto-resume playback ONLY if playback stalled due to buffer underrun and player is not paused
+                                        if (this._isBufferStalled && !window.wasPausedByUser && !this.active.paused && this._pendingSeek === null && this.active.readyState >= 3) {
                                             this._isBufferStalled = false;
-                                            this.active.play().catch(() => {});
                                         }
 
                                         // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
