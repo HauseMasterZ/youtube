@@ -20,56 +20,23 @@
     }
     window.showModeToast = showModeToast;
 
-    // Live Audio Anchor Singleton for Mode 2 (Hands-Free Bluetooth)
-    let liveAudioContext = null;
-    let liveAudioDestination = null;
-    let liveAudioOscillator = null;
-    let liveAudioGain = null;
+    // Native Silent Audio Anchor for Mode 2 (Hands-Free Bluetooth)
+    const SILENT_AUDIO_URI = "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
 
     function initLiveAudioAnchor() {
-        if (liveAudioContext) {
-            if (liveAudioContext.state === 'suspended') {
-                liveAudioContext.resume().catch(() => {});
-            }
-            const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
-                anchorEl.srcObject = liveAudioDestination.stream;
-            }
-            return liveAudioContext;
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (anchorEl && !anchorEl.src) {
+            anchorEl.src = SILENT_AUDIO_URI;
+            anchorEl.loop = true;
         }
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return null;
-
-        try {
-            liveAudioContext = new AudioCtx();
-            liveAudioDestination = liveAudioContext.createMediaStreamDestination();
-            liveAudioOscillator = liveAudioContext.createOscillator();
-            liveAudioGain = liveAudioContext.createGain();
-
-            liveAudioGain.gain.value = 0;
-            liveAudioOscillator.connect(liveAudioGain);
-            liveAudioGain.connect(liveAudioDestination);
-            liveAudioOscillator.start();
-
-            const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination.stream) {
-                anchorEl.srcObject = liveAudioDestination.stream;
-            }
-        } catch (e) {
-            console.warn("Live audio anchor init error:", e);
-        }
-        return liveAudioContext;
+        return anchorEl;
     }
 
     function startLiveAudioAnchor() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
-        initLiveAudioAnchor();
-        const anchorEl = document.getElementById("live-stream-anchor");
+        const anchorEl = initLiveAudioAnchor();
         if (anchorEl) {
-            if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
-                anchorEl.srcObject = liveAudioDestination.stream;
-            }
             anchorEl.play().catch(e => console.warn("Live anchor play error:", e));
         }
     }
@@ -84,18 +51,7 @@
     }
 
     function teardownLiveAudioAnchor() {
-        const anchorEl = document.getElementById("live-stream-anchor");
-        if (anchorEl) {
-            try {
-                anchorEl.pause();
-                anchorEl.srcObject = null;
-            } catch (e) {}
-        }
-        if (liveAudioContext && liveAudioContext.state === 'running') {
-            try {
-                liveAudioContext.suspend().catch(() => {});
-            } catch (e) {}
-        }
+        stopLiveAudioAnchor();
     }
 
     window.initLiveAudioAnchor = initLiveAudioAnchor;

@@ -48,13 +48,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.stopLiveAudioAnchor = stopLiveAudioAnchor;', self.ms_content)
 
     def test_live_audio_anchor_implementation(self):
-        """Live audio anchor creates AudioContext and destination node with gain.value = 0 for pure silence"""
-        self.assertRegex(self.ms_content, r'(AudioContext|webkitAudioContext)')
-        self.assertIn('createMediaStreamDestination', self.ms_content)
+        """Live audio anchor uses native silent WAV data URI with loop=true for pure silence"""
+        self.assertIn('SILENT_AUDIO_URI', self.ms_content)
+        self.assertIn('data:audio/wav;base64', self.ms_content)
         self.assertIn('live-stream-anchor', self.ms_content)
-        self.assertIn('srcObject', self.ms_content)
-        self.assertRegex(self.ms_content, r'liveAudioGain\.gain\.value\s*=\s*0;')
-        self.assertNotIn('liveAudioGain.gain.value = 0.0001;', self.ms_content)
+        self.assertRegex(self.ms_content, r'anchorEl\.loop\s*=\s*true;')
         # startLiveAudioAnchor checks mode2
         self.assertRegex(self.ms_content, r'window\.playbackMode\s*!==?\s*[\'"]mode2[\'"]')
 
@@ -127,7 +125,7 @@ class TestMediaSessionEngine(unittest.TestCase):
     def test_mode2_was_paused_by_user_resume_and_disconnect_silence(self):
         """Pause action handler resumes in Mode 2 when audioPlayer.paused and pauses when !audioPlayer.paused"""
         pause_handler_match = re.search(
-            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);\s*(?:try|navigator|\/\*)",
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\s*\);\s*(?:\n\s*try|\n\s*navigator)",
             self.ms_content
         )
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
@@ -232,18 +230,15 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_stop_live_audio_anchor_teardown(self):
-        """stopLiveAudioAnchor cleanly pauses anchorEl and teardownLiveAudioAnchor completely cleans up on Mode 1"""
+        """initLiveAudioAnchor sets native silent WAV and stopLiveAudioAnchor cleanly pauses anchorEl"""
+        self.assertIn("SILENT_AUDIO_URI", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+initLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.src\s*=\s*SILENT_AUDIO_URI;'
+        )
         self.assertRegex(
             self.ms_content,
             r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.pause\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
         )
         self.assertIn("teardownLiveAudioAnchor()", self.ms_content)
 
