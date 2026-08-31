@@ -207,29 +207,43 @@
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
     // BT disconnect detection: track device changes to prevent speaker bleed
+    let anchorStartTimer = null;
     let lastDeviceChangeTime = 0;
+
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
             lastDeviceChangeTime = Date.now();
+            if (anchorStartTimer) {
+                clearTimeout(anchorStartTimer);
+                anchorStartTimer = null;
+            }
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
         });
     }
 
     // Connect audioPlayer play/pause events to anchor and watchdog
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
+            if (anchorStartTimer) {
+                clearTimeout(anchorStartTimer);
+                anchorStartTimer = null;
+            }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
         });
         audioPlayer.addEventListener('pause', () => {
+            if (anchorStartTimer) {
+                clearTimeout(anchorStartTimer);
+                anchorStartTimer = null;
+            }
             if (window.playbackMode === 'mode2') {
-                if (Date.now() - lastDeviceChangeTime < 1500) {
-                    // Audio device just disconnected - don't play anchor on speaker
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                } else {
-                    startLiveAudioAnchor();
-                    armAutoKillWatchdog();
-                }
+                anchorStartTimer = setTimeout(() => {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && (Date.now() - lastDeviceChangeTime >= 1500)) {
+                        startLiveAudioAnchor();
+                        armAutoKillWatchdog();
+                    }
+                }, 800);
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();

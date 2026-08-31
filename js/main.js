@@ -438,6 +438,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     document.addEventListener("visibilitychange", attemptFocusResume);
 
+    // Resume on first user touch upon returning to tab
+    document.addEventListener("pointerdown", () => {
+        if (!window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+            audioPlayer.play().catch(() => {});
+        }
+    }, { capture: true });
+
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));
