@@ -413,7 +413,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
-        window.wasPausedByUser = true;
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;

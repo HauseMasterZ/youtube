@@ -33,12 +33,9 @@ class TestLyricsAutoScroll(unittest.TestCase):
         )
 
     def test_screen_chunk_scrolling_boundary_check(self):
-        """Verify updateLyricsUI only shifts scroll when lineBottom > visibleBottom or lineTop < visibleTop"""
+        """Verify updateLyricsUI instantly snaps scroll position when lineBottom > visibleBottom or lineTop < visibleTop"""
         self.assertIn("lineBottom > visibleBottom || lineTop < visibleTop", self.lyrics_content)
-        self.assertRegex(
-            self.lyrics_content,
-            r'lyricsContent\.scrollTo\(\s*\{[\s\S]*?top:\s*Math\.max\(\s*0\s*,\s*lineTop\s*-\s*20\s*\)[\s\S]*?behavior:\s*[\'"]smooth[\'"][\s\S]*?\}\s*\);'
-        )
+        self.assertIn("lyricsContent.scrollTop = Math.max(0, lineTop - 20);", self.lyrics_content)
 
     def test_autoscroll_reset_on_load_and_close(self):
         """Verify isAutoScrollActive resets to true on lyrics load and UI close"""

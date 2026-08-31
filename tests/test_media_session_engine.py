@@ -133,11 +133,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
         pause_code = pause_handler_match.group(1)
 
-        self.assertIn("window.playbackMode === 'mode2' && audioPlayer && audioPlayer.paused && window.wasPausedByUser", pause_code)
+        self.assertIn("audioPlayer && audioPlayer.paused && window.wasPausedByUser", pause_code)
         self.assertIn("audioPlayer.play()", pause_code)
-        self.assertIn("window.wasPausedByUser = true;", pause_code)
+        self.assertIn("isUserPause", pause_code)
         self.assertIn("audioPlayer.pause()", pause_code)
-        self.assertIn("navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused'", pause_code)
+        self.assertIn("stopLiveAudioAnchor()", pause_code)
 
     def test_dual_audio_play_clean_execution_in_dom_js(self):
         """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play()"""

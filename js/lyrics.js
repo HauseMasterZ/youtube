@@ -240,13 +240,10 @@
                     if (lineBottom > visibleBottom || lineTop < visibleTop) {
                         isProgrammaticScroll = true;
                         clearTimeout(programmaticScrollTimer);
-                        lyricsContent.scrollTo({
-                            top: Math.max(0, lineTop - 20),
-                            behavior: 'smooth'
-                        });
+                        lyricsContent.scrollTop = Math.max(0, lineTop - 20);
                         programmaticScrollTimer = setTimeout(() => {
                             isProgrammaticScroll = false;
-                        }, 500);
+                        }, 50);
                     }
                 }
             }
