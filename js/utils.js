@@ -14,8 +14,6 @@
         artworkSquareCache.set(trackId, url);
     }
 
-    function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
-
     function damerauLevenshtein(s1, s2) {
         const m = s1.length, n = s2.length;
         if (Math.abs(m - n) > 2) return 99;

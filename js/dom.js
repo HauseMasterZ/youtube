@@ -474,9 +474,6 @@
                     let response = null;
 
                     if (cachedPartialBytes > 0) {
-                        if (this._gainNode) {
-                            this._gainNode.gain.value = 1.0;
-                        }
                         if (this._pendingSeek !== null) {
                             const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
                                 ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
@@ -595,10 +592,6 @@
                             await saveProgress(false);
                             this.switching = false;
                             return Promise.resolve();
-                        }
-
-                        if (this._gainNode) {
-                            this._gainNode.gain.value = 1.0;
                         }
 
                         if (this._pendingSeek !== null) {

@@ -201,15 +201,3 @@ self.addEventListener('fetch', (event) => {
         })
     );
 });
-
-
-
-
-
-
-
-
-
-
-
-

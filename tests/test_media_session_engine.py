@@ -215,5 +215,17 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("_streamDone", self.main_content)
         self.assertIn("triggerPreloads()", self.main_content)
 
+    def test_toggle_playback_mode_synchronizes_paused_state(self):
+        """togglePlaybackMode synchronizes playbackState and position rate when switched while paused"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\?\s*0\.00001\s*:\s*0\s*\)'
+        )
+
 if __name__ == '__main__':
     unittest.main()
+

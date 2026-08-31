@@ -150,17 +150,31 @@
 
         const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
         if (newMode === 'mode2') {
-            if (isPaused && window.wasPausedByUser) {
+            if (isPaused) {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
                 startLiveAudioAnchor();
                 armAutoKillWatchdog();
             }
         } else {
+            if (isPaused) {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
+            }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
         }
 
         if (typeof updateMediaSessionPosition === 'function') {
-            updateMediaSessionPosition();
+            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
+            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+            if (isPaused) {
+                updateMediaSessionPosition(pos, dur, newMode === 'mode2' ? 0.00001 : 0);
+            } else {
+                updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+            }
         }
     }
     window.togglePlaybackMode = togglePlaybackMode;

@@ -390,7 +390,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
-        window.wasInterrupted = false;
         setPlayUI(true);
         lastRenderTime = -1;
 
@@ -814,14 +813,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     const rawData = await res.json();
                     const freshData = normalizePlaylistData(rawData, pl);
                     allDatabases[pl] = freshData;
-
-                    // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
-                    if ('caches' in window) {
-                        try {
-                            const cache = await caches.open(CACHE_NAME);
-                            await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
-                        } catch (e) {}
-                    }
                 }
             }));
 
