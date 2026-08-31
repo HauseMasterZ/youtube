@@ -148,10 +148,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", pause_code)
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
-        """Ensure getSquareArtwork in playback.js is guarded by !thumbsDisabled"""
+        """Ensure getSquareArtwork in playback.js is guarded against thumbsDisabled"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             content = f.read()
-        self.assertRegex(content, r'!thumbsDisabled\s*&&\s*!squareCached\s*&&\s*thumbUrl\s*&&\s*typeof\s+getSquareArtwork')
+        self.assertRegex(content, r'if\s*\(\s*thumbsDisabled\s*\)[\s\S]*?else if\s*\(\s*!squareCached\s*&&\s*thumbUrl\s*&&\s*typeof\s+getSquareArtwork')
 
     def test_play_action_stops_live_anchor_before_play(self):
         """Verify play handler stops anchor and sets playbackState to playing"""
@@ -176,6 +176,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'isMobile\s*&&\s*window\.lastPlaybackModeTransitions\.action\s*===\s*[\'"]next[\'"]'
         )
+
     def test_buffer_stalled_guard_in_dom_js(self):
         """DualAudioPingPong in dom.js guards auto-resume with _isBufferStalled"""
         self.assertIn("this._isBufferStalled = false;", self.dom_content)
@@ -185,9 +186,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
-        """main.js defines attemptFocusResume on visibilitychange and focus events"""
+        """main.js defines debounced attemptFocusResume on visibilitychange event"""
         self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
-        self.assertRegex(self.main_content, r'window\.addEventListener\(\s*[\'"]focus[\'"]\s*,\s*attemptFocusResume\s*\)')
+        self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*attemptFocusResume\s*\)')
+        self.assertIn("_focusResumeTimer", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

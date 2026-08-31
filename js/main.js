@@ -425,13 +425,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    let _focusResumeTimer = null;
     function attemptFocusResume() {
-        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-            audioPlayer.play().catch(() => {});
+        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+            clearTimeout(_focusResumeTimer);
+            _focusResumeTimer = setTimeout(() => {
+                if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                    audioPlayer.play().catch(() => {});
+                }
+            }, 500);
         }
     }
     document.addEventListener("visibilitychange", attemptFocusResume);
-    window.addEventListener("focus", attemptFocusResume);
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {

@@ -206,6 +206,14 @@
     }
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
+    // BT disconnect detection: track device changes to prevent speaker bleed
+    let lastDeviceChangeTime = 0;
+    if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
+        navigator.mediaDevices.addEventListener('devicechange', () => {
+            lastDeviceChangeTime = Date.now();
+        });
+    }
+
     // Connect audioPlayer play/pause events to anchor and watchdog
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
@@ -214,8 +222,14 @@
         });
         audioPlayer.addEventListener('pause', () => {
             if (window.playbackMode === 'mode2') {
-                startLiveAudioAnchor();
-                armAutoKillWatchdog();
+                if (Date.now() - lastDeviceChangeTime < 1500) {
+                    // Audio device just disconnected - don't play anchor on speaker
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                } else {
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
+                }
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();

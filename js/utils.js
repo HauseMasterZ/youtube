@@ -138,14 +138,14 @@
             const blob = await resp.blob();
             const bitmap = await createImageBitmap(blob);
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 256;
+            canvas.height = 256;
             const ctx = canvas.getContext('2d');
             const size = Math.min(bitmap.width, bitmap.height);
             const sx = (bitmap.width - size) / 2;
             const sy = (bitmap.height - size) / 2;
-            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 256, 256);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
             setCachedSquareArtwork(trackId, dataUrl);
             if (typeof callback === 'function') callback(dataUrl);
         } catch (err) {
@@ -154,14 +154,14 @@
             img.onload = function() {
                 try {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 512;
-                    canvas.height = 512;
+                    canvas.width = 256;
+                    canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     const size = Math.min(img.naturalWidth, img.naturalHeight);
                     const sx = (img.naturalWidth - size) / 2;
                     const sy = (img.naturalHeight - size) / 2;
-                    ctx.drawImage(img, sx, sy, size, size, 0, 0, 512, 512);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                    ctx.drawImage(img, sx, sy, size, size, 0, 0, 256, 256);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
                     setCachedSquareArtwork(trackId, dataUrl);
                     if (typeof callback === 'function') callback(dataUrl);
                 } catch(e) {
@@ -197,14 +197,14 @@
             const blob = await cachedResp.blob();
             const bitmap = await createImageBitmap(blob);
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 256;
+            canvas.height = 256;
             const ctx = canvas.getContext('2d');
             const size = Math.min(bitmap.width, bitmap.height);
             const sx = (bitmap.width - size) / 2;
             const sy = (bitmap.height - size) / 2;
-            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 256, 256);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
             setCachedSquareArtwork(trackId, dataUrl);
             if (typeof callback === 'function') callback(dataUrl);
         } catch (e) {
