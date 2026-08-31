@@ -390,7 +390,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
-        window.wasDeviceDisconnect = false;
         setPlayUI(true);
         lastRenderTime = -1;
 
@@ -419,7 +418,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            if (window.playbackMode === 'mode2' && !window.wasDeviceDisconnect) {
+            if (window.playbackMode === 'mode2') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
             } else {

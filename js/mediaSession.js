@@ -236,7 +236,6 @@
 
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
-            window.wasDeviceDisconnect = true;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -261,7 +260,6 @@
     let lastAudioPlayerPauseTime = 0;
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
-            window.wasDeviceDisconnect = false;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -275,21 +273,9 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (!window.wasPausedByUser) {
-                window.wasDeviceDisconnect = true;
-                window.wasPausedByUser = true;
-            }
-            if (window.wasDeviceDisconnect) {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
-                return;
-            }
             if (window.playbackMode === 'mode2') {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.wasDeviceDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
@@ -304,7 +290,6 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
-            window.wasDeviceDisconnect = false;
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -331,24 +316,8 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             if (window.playbackMode === 'mode2') {
-                const isImmediateOSPause = (Date.now() - lastAudioPlayerPauseTime < 350) && window.wasDeviceDisconnect;
-                if (isImmediateOSPause) {
-                    window.wasPausedByUser = true;
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                    }
-                    if (typeof updateMediaSessionPosition === 'function') {
-                        const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        updateMediaSessionPosition(audioPlayer ? audioPlayer.currentTime : 0, dur, 0);
-                    }
-                    return;
-                }
-
                 if (audioPlayer && audioPlayer.paused) {
                     // User intentionally resuming from paused state in Mode 2
-                    window.wasDeviceDisconnect = false;
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
@@ -378,7 +347,6 @@
                 }
             } else {
                 // Mode 1: Standard pause
-                window.wasDeviceDisconnect = false;
                 window.wasPausedByUser = true;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
@@ -396,7 +364,6 @@
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
                 if (audioPlayer && audioPlayer.paused) {
-                    window.wasDeviceDisconnect = false;
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();

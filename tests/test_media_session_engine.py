@@ -241,16 +241,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
         )
 
-    def test_device_disconnect_anchor_guard(self):
-        """devicechange and natural OS pause set wasDeviceDisconnect and guard pause action handler"""
-        self.assertIn("window.wasDeviceDisconnect = true;", self.ms_content)
-        self.assertIn("if (!window.wasPausedByUser)", self.ms_content)
+    def test_mode2_anchor_scheduling_on_pause(self):
+        """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*window\.wasDeviceDisconnect\s*\)\s*\{[\s\S]*?stopLiveAudioAnchor\(\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?return;\s*\}'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?800\s*\)'
         )
-        self.assertIn("const isImmediateOSPause = (Date.now() - lastAudioPlayerPauseTime < 350) && window.wasDeviceDisconnect;", self.ms_content)
-        self.assertIn("window.wasDeviceDisconnect = false;", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()
