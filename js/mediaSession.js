@@ -183,6 +183,8 @@
                 let rate;
                 if (isForcedRateValid) {
                     rate = forcedRate;
+                } else if (navigator.mediaSession.playbackState === 'paused') {
+                    rate = 0;
                 } else if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
                     rate = (isBuffering || isPaused) ? 0.00001 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 } else {

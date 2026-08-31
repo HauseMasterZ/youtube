@@ -419,10 +419,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
             if (window.playbackMode === 'mode2' && window.wasPausedByUser) {
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
             } else {
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0);
                 navigator.mediaSession.playbackState = 'paused';
             }
         }

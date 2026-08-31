@@ -140,7 +140,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("startLiveAudioAnchor()", pause_code)
 
     def test_dual_audio_play_clean_execution_in_dom_js(self):
-        """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play()"""
+        """DualAudioPingPong play() sets volume, unsets muted, and directly invokes active.play() without seek collisions"""
         self.assertIn("this.active.muted = false;", self.dom_content)
         self.assertIn("return this.active.play();", self.dom_content)
         self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
