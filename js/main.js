@@ -1181,6 +1181,9 @@ document.addEventListener("DOMContentLoaded", () => {
         radio.addEventListener("change", () => {
             const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
             const newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
+            }
             if (typeof togglePlaybackMode === 'function') {
                 togglePlaybackMode(newMode);
             }

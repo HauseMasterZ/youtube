@@ -195,10 +195,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_anchor_debouncing(self):
-        """mediaSession.js queues Mode 2 anchor behind anchorStartTimer and cancels on devicechange"""
+        """mediaSession.js pauses audioPlayer, cancels timers, and stops anchor on devicechange"""
         self.assertIn("anchorStartTimer", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertIn("800", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?audioPlayer\.(instantPause|pause)\(\)'
+        )
         self.assertRegex(
             self.ms_content,
             r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\)'

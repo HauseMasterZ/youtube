@@ -126,6 +126,10 @@
         window.playbackMode = newMode;
         lastAudioPlayerPauseTime = Date.now() - 1000;
 
+        if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+            initLiveAudioAnchor();
+        }
+
         if (typeof window.setStoredSetting === 'function') {
             window.setStoredSetting('yt_playback_mode', newMode);
         } else if (typeof setStoredSetting === 'function') {
@@ -214,6 +218,14 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+                window.wasPausedByUser = true;
+                if (typeof audioPlayer.instantPause === 'function') {
+                    audioPlayer.instantPause();
+                } else {
+                    audioPlayer.pause();
+                }
+            }
         });
     }
 

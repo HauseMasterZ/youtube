@@ -43,6 +43,7 @@
         currentLyrics = [];
         currentLyricsIsUnsynced = false;
         fetchingLyrics = true;
+        isAutoScrollActive = true;
         
         try {
             const parts = track.file_path.split('/');
@@ -54,7 +55,7 @@
             let text = await res.text();
             
             // If the cached response was an old dummy placeholder, re-verify with a fresh network request
-            if (text.trim() === '[00:00.00] ♪' || text.trim().length <= 25) {
+            if (text.trim() === '[00:00.00] \u266a' || text.trim().length <= 25) {
                 try {
                     const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
                     if (freshRes.ok) {
@@ -130,6 +131,10 @@
     
     let activeLyricIndex = -1;
     let lyricsLayoutCache = [];
+    let isAutoScrollActive = true;
+    let isProgrammaticScroll = false;
+    let programmaticScrollTimer = null;
+    let scrollStopTimer = null;
 
     function buildLyricsCache() {
         lyricsLayoutCache = [];
@@ -144,6 +149,32 @@
                 text: p.textContent
             });
         }
+    }
+
+    function checkAutoScrollTriggerOnStop() {
+        if (!lyricsContent || activeLyricIndex < 0 || activeLyricIndex >= lyricsLayoutCache.length) return;
+        const cache = lyricsLayoutCache[activeLyricIndex];
+        const visibleTop = lyricsContent.scrollTop;
+        const visibleBottom = lyricsContent.scrollTop + lyricsContent.clientHeight;
+        const lineTop = cache.top;
+        const lineBottom = cache.top + cache.height;
+
+        // Active line is visible within viewport (with small tolerance)
+        if (lineBottom >= visibleTop && lineTop <= visibleBottom) {
+            isAutoScrollActive = true;
+        } else {
+            isAutoScrollActive = false;
+        }
+    }
+
+    if (typeof lyricsContent !== 'undefined' && lyricsContent) {
+        lyricsContent.addEventListener('scroll', () => {
+            if (isProgrammaticScroll) return;
+            clearTimeout(scrollStopTimer);
+            scrollStopTimer = setTimeout(() => {
+                checkAutoScrollTriggerOnStop();
+            }, 150);
+        }, { passive: true });
     }
 
     let resizeTimer;
@@ -198,6 +229,26 @@
                         highlightLayer.style.display = 'block';
                     }
                 }
+
+                // Screen-chunk auto-scroll: only shift page when active line exceeds current visible bounds
+                if (isAutoScrollActive && lyricsContent) {
+                    const visibleTop = lyricsContent.scrollTop;
+                    const visibleBottom = lyricsContent.scrollTop + lyricsContent.clientHeight;
+                    const lineTop = cache.top;
+                    const lineBottom = cache.top + cache.height;
+
+                    if (lineBottom > visibleBottom || lineTop < visibleTop) {
+                        isProgrammaticScroll = true;
+                        clearTimeout(programmaticScrollTimer);
+                        lyricsContent.scrollTo({
+                            top: Math.max(0, lineTop - 20),
+                            behavior: 'smooth'
+                        });
+                        programmaticScrollTimer = setTimeout(() => {
+                            isProgrammaticScroll = false;
+                        }, 500);
+                    }
+                }
             }
         }
     }
@@ -208,6 +259,7 @@
 
     function closeLyricsUI() {
         window.lyricsActive = false;
+        isAutoScrollActive = true;
         lyricsToggleHint.style.color = 'var(--text-secondary)';
         lyricsContainer.style.display = 'none';
     }

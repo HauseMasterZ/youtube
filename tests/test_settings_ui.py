@@ -133,12 +133,14 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_mode_radio_change_listener(self):
-        """Radio inputs change listener delegates to togglePlaybackMode which handles state, anchor, and watchdog"""
+        """Radio inputs change listener delegates to togglePlaybackMode and eagerly initializes anchor for Mode 2"""
         self.assertIn('name="playback-mode"', self.main_content)
         self.assertRegex(
             self.main_content,
             r'input\[name=["\']playback-mode["\']\][\s\S]*?addEventListener\(\s*[\'"]change[\'"][\s\S]*?togglePlaybackMode\s*\('
         )
+        self.assertIn('initLiveAudioAnchor', self.main_content)
+        self.assertIn('initLiveAudioAnchor', self.ms_content)
         self.assertIn('startLiveAudioAnchor', self.ms_content)
         self.assertIn('stopLiveAudioAnchor', self.ms_content)
         self.assertIn('armAutoKillWatchdog', self.ms_content)
