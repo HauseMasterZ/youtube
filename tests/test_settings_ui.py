@@ -196,15 +196,12 @@ class TestSettingsUI(unittest.TestCase):
         self.assertIn('0.00001', pause_block)
         self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*0\.00001\s*\)')
 
-    def test_pause_listener_mode2_and_mode1_playback_state(self):
-        """audioPlayer pause event listener sets playing for Mode 2 and checks wasPausedByUser for Mode 1"""
+    def test_pause_listener_playback_state_paused(self):
+        """audioPlayer pause event listener unifies mediaSession.playbackState to paused"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertRegex(
-            pause_block,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*window\.wasPausedByUser\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}'
-        )
+        self.assertIn("navigator.mediaSession.playbackState = 'paused'", pause_block)
 
     def test_media_session_play_handler_lyrics_reset(self):
         """MediaSession play action handler resets lyrics UI on near-end rewind"""
