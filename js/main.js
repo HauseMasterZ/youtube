@@ -393,8 +393,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
-        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;
 
@@ -410,8 +408,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
-        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
@@ -428,11 +424,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.playbackMode === 'mode2') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
-                setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
-                }, 100);
             } else {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
@@ -583,7 +574,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
-                navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                navigator.mediaSession.playbackState = 'paused';
             }
             return;
         }
@@ -649,7 +640,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+            navigator.mediaSession.playbackState = "paused";
         }
         
         errorSkipTimer = setTimeout(() => {
