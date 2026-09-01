@@ -393,18 +393,17 @@
             }
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
+                // Mode 2 non-BT pause: ALWAYS start anchor (regardless of wasPausedByUser)
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
                 }, 800);
-            } else {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
             }
+            // BT disconnect: devicechange handler already manages state — do nothing here
         });
     }
 

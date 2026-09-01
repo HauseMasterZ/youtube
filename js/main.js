@@ -421,7 +421,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         setPlayUI(false);
@@ -429,16 +428,22 @@ document.addEventListener("DOMContentLoaded", () => {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
+                // Mode 2 non-BT pause: keep 'playing' for notification (anchor will start)
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
                 setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && window.wasPausedByUser && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
+            } else if (window.playbackMode === 'mode2' && isRecentBtDisconnect) {
+                // Mode 2 BT disconnect: set 'paused' (no anchor on speaker)
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                navigator.mediaSession.playbackState = 'paused';
             } else {
+                // Mode 1: standard pause
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
