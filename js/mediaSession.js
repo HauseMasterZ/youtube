@@ -157,7 +157,7 @@
 
         const rawTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
             ? String(window.btTimeoutMins).trim()
-            : '30';
+            : '5';
 
         if (rawTimeout === 'never') return;
 
@@ -166,10 +166,12 @@
 
         const ms = mins * 60 * 1000;
         window.btSleepTimer = setTimeout(() => {
+            teardownLiveAudioAnchor();
             stopLiveAudioAnchor();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                 try {
                     navigator.mediaSession.playbackState = 'none';
+                    navigator.mediaSession.metadata = null;
                 } catch (e) {}
             }
             showModeToast("Auto-kill: Inactivity timeout reached");

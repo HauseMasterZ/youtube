@@ -117,12 +117,15 @@ class TestSettingsMarkup(unittest.TestCase):
         options = re.findall(r'<option[^>]*value=["\']([^"\']*)["\']([^>]*)>(.*?)</option>', select_body, re.DOTALL)
         options_dict = {val: (attrs, text.strip()) for val, attrs, text in options}
         
+        self.assertIn("5", options_dict)
+        self.assertEqual(options_dict["5"][1], "5 Minutes")
+        self.assertIn("selected", options_dict["5"][0])
+        
         self.assertIn("15", options_dict)
         self.assertEqual(options_dict["15"][1], "15 Minutes")
         
         self.assertIn("30", options_dict)
         self.assertEqual(options_dict["30"][1], "30 Minutes")
-        self.assertIn("selected", options_dict["30"][0])
         
         self.assertIn("60", options_dict)
         self.assertEqual(options_dict["60"][1], "1 Hour")

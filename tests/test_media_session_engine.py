@@ -73,7 +73,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.cancelAutoKillWatchdog = cancelAutoKillWatchdog;', self.ms_content)
 
     def test_watchdog_lifecycle_implementation(self):
-        """Watchdog checks playbackMode, btTimeoutMins, sets sleep timer, stops anchor and sets playbackState none"""
+        """Watchdog checks playbackMode, btTimeoutMins, sets sleep timer, stops anchor, nulls metadata, and sets playbackState none"""
         self.assertIn('window.btSleepTimer', self.ms_content)
         self.assertIn('window.btTimeoutMins', self.ms_content)
         self.assertIn('cancelAutoKillWatchdog()', self.ms_content)
@@ -81,6 +81,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('60 * 1000', self.ms_content)
         self.assertIn('Auto-kill: Inactivity timeout reached', self.ms_content)
         self.assertIn("'none'", self.ms_content)
+        self.assertIn('navigator.mediaSession.metadata = null;', self.ms_content)
 
     def test_toggle_playback_mode_defined(self):
         """Verify togglePlaybackMode exists and is exposed globally"""
