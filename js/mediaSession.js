@@ -27,15 +27,10 @@
     let liveAudioGain = null;
 
     function initLiveAudioAnchor() {
-        if (liveAudioContext) {
-            if (liveAudioContext.state === 'suspended') {
-                liveAudioContext.resume().catch(() => {});
-            }
+        if (liveAudioContext && liveAudioContext.state !== 'closed') {
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
+            if (anchorEl && anchorEl.paused && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
-            }
-            if (anchorEl && anchorEl.paused) {
                 anchorEl.play().then(() => {
                     if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
                         anchorEl.pause();
@@ -393,10 +388,10 @@
             }
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
