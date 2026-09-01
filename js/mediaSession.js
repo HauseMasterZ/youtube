@@ -431,22 +431,14 @@
             cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
-                playPromise.then(() => {
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                }).catch(e => {
+                playPromise.catch(e => {
                     console.warn("MediaSession play error:", e);
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
                     Promise.resolve().then(() => {
                         if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                             audioPlayer.play().catch(() => {});
                         }
                     });
                 });
-            } else {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
             }
         });
 
@@ -467,24 +459,18 @@
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.then(() => {
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
-                        }).catch(e => {
+                        playPromise.catch(e => {
                             console.warn("MediaSession play error:", e);
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
                             Promise.resolve().then(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
                             });
                         });
-                    } else {
-                        stopLiveAudioAnchor();
-                        cancelAutoKillWatchdog();
                     }
                 } else {
                     // User intentionally pausing in Mode 2
@@ -569,24 +555,18 @@
                             updateLyricsUI(0);
                         }
                     }
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.then(() => {
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
-                        }).catch(e => {
+                        playPromise.catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
                             Promise.resolve().then(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
                             });
                         });
-                    } else {
-                        stopLiveAudioAnchor();
-                        cancelAutoKillWatchdog();
                     }
                 } else {
                     window.wasPausedByUser = true;
