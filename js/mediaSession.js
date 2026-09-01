@@ -320,6 +320,22 @@
     let anchorStartTimer = null;
     window.lastBtDisconnectTime = 0;
 
+    const anchorEl = document.getElementById("live-stream-anchor");
+    if (anchorEl) {
+        anchorEl.addEventListener('pause', () => {
+            if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession.playbackState === 'playing') {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 1.0);
+                    }
+                }
+            }
+        });
+    }
+
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
             window.lastBtDisconnectTime = Date.now();
@@ -376,7 +392,12 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            const isExternalDisconnect = !window.wasPausedByUser;
+            if (isExternalDisconnect) {
+                window.lastBtDisconnectTime = Date.now();
+                window.wasPausedByUser = true;
+            }
+            const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
@@ -396,6 +417,7 @@
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
             window.wasPausedByUser = false;
+            window.lastBtDisconnectTime = 0;
             if (typeof setPlayUI === 'function') setPlayUI(true);
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';
@@ -436,6 +458,7 @@
                 if (isActuallyPaused) {
                     // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
+                    window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
@@ -479,6 +502,7 @@
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
                     window.wasPausedByUser = false;
+                    window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
@@ -519,6 +543,7 @@
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
                     window.wasPausedByUser = false;
+                    window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';

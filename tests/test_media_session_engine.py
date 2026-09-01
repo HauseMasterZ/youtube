@@ -283,6 +283,31 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("isRecentBtDisconnect", self.main_content)
         self.assertIn("2500", self.ms_content)
 
+    def test_external_bt_disconnect_pause_detection(self):
+        """main.js and mediaSession.js detect external pause when !window.wasPausedByUser and set lastBtDisconnectTime"""
+        self.assertRegex(
+            self.main_content,
+            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
+        )
+
+    def test_live_stream_anchor_pause_listener(self):
+        """mediaSession.js syncs paused playbackState when live-stream-anchor element is paused by OS"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]'
+        )
+
+    def test_action_handlers_clear_last_bt_disconnect_time(self):
+        """Action handlers reset lastBtDisconnectTime to 0 on user resume"""
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]play[\'"][\s\S]*?window\.lastBtDisconnectTime\s*=\s*0;'
+        )
+
     def test_next_song_buffering_threshold(self):
         """main.js progress listener checks 85 percent threshold and _streamDone before triggering preloads"""
         self.assertIn("0.85", self.main_content)
