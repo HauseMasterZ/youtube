@@ -302,7 +302,7 @@
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);

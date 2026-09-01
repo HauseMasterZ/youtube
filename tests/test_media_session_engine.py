@@ -48,11 +48,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.stopLiveAudioAnchor = stopLiveAudioAnchor;', self.ms_content)
 
     def test_live_audio_anchor_implementation(self):
-        """Live audio anchor uses native silent WAV data URI with loop=true for pure silence"""
-        self.assertIn('SILENT_AUDIO_URI', self.ms_content)
-        self.assertIn('data:audio/wav;base64', self.ms_content)
+        """Live audio anchor creates AudioContext and destination node with gain.value = 0 for pure silence"""
+        self.assertRegex(self.ms_content, r'(AudioContext|webkitAudioContext)')
+        self.assertIn('createMediaStreamDestination', self.ms_content)
         self.assertIn('live-stream-anchor', self.ms_content)
-        self.assertRegex(self.ms_content, r'anchorEl\.loop\s*=\s*true;')
+        self.assertIn('srcObject', self.ms_content)
+        self.assertRegex(self.ms_content, r'liveAudioGain\.gain\.value\s*=\s*0;')
+        self.assertNotIn('liveAudioGain.gain.value = 0.0001;', self.ms_content)
         # startLiveAudioAnchor checks mode2
         self.assertRegex(self.ms_content, r'window\.playbackMode\s*!==?\s*[\'"]mode2[\'"]')
 
@@ -195,7 +197,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_anchor_debouncing(self):
-        """mediaSession.js pauses audioPlayer, cancels timers, and stops anchor on devicechange"""
+        """mediaSession.js pauses audioPlayer and debounces anchorStartTimer on devicechange"""
         self.assertIn("anchorStartTimer", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertIn("800", self.ms_content)
@@ -205,7 +207,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\)'
+            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\('
         )
 
     def test_next_song_buffering_threshold(self):
@@ -230,15 +232,18 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_stop_live_audio_anchor_teardown(self):
-        """initLiveAudioAnchor sets native silent WAV and stopLiveAudioAnchor cleanly pauses anchorEl"""
-        self.assertIn("SILENT_AUDIO_URI", self.ms_content)
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+initLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.src\s*=\s*SILENT_AUDIO_URI;'
-        )
+        """stopLiveAudioAnchor cleanly pauses anchorEl and teardownLiveAudioAnchor completely cleans up on Mode 1"""
         self.assertRegex(
             self.ms_content,
             r'function\s+stopLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.pause\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
         )
         self.assertIn("teardownLiveAudioAnchor()", self.ms_content)
 
