@@ -463,6 +463,20 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     document.addEventListener("visibilitychange", attemptFocusResume);
 
+    // Phone call overlay: Chrome stays visible but loses focus.
+    // visibilitychange won't fire, so we need window.focus as a fallback.
+    // 1s debounce prevents concurrent playback during brief focus transitions.
+    window.addEventListener("focus", () => {
+        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+            clearTimeout(_focusResumeTimer);
+            _focusResumeTimer = setTimeout(() => {
+                if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                    audioPlayer.play().catch(() => {});
+                }
+            }, 1000);
+        }
+    });
+
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {
             updateTimeUI(Math.floor(audioPlayer.currentTime));
