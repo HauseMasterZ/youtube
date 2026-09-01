@@ -79,9 +79,6 @@
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         initLiveAudioAnchor();
-        if (liveAudioContext && liveAudioContext.state === 'suspended') {
-            liveAudioContext.resume().catch(() => {});
-        }
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
@@ -102,16 +99,9 @@
 
     function stopLiveAudioAnchor() {
         const anchorEl = document.getElementById("live-stream-anchor");
-        if (anchorEl) {
+        if (anchorEl && !anchorEl.paused) {
             try {
                 anchorEl.pause();
-                anchorEl.srcObject = null;
-                anchorEl.removeAttribute('src');
-            } catch (e) {}
-        }
-        if (liveAudioContext && liveAudioContext.state === 'running') {
-            try {
-                liveAudioContext.suspend().catch(() => {});
             } catch (e) {}
         }
     }
@@ -333,26 +323,21 @@
     window.lastBtDisconnectTime = 0;
     let knownOutputCount = 0;
 
-    if (typeof navigator.mediaDevices !== 'undefined') {
-        if (navigator.mediaDevices.enumerateDevices) {
-            navigator.mediaDevices.enumerateDevices().then(devices => {
-                knownOutputCount = devices.filter(d => d.kind === 'audiooutput').length;
-            }).catch(() => {});
-        }
+    if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.enumerateDevices) {
+        navigator.mediaDevices.enumerateDevices().then(d => {
+            knownOutputCount = d.filter(x => x.kind === 'audiooutput').length;
+        }).catch(() => {});
 
         if (navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', () => {
-                if (!navigator.mediaDevices.enumerateDevices) return;
                 navigator.mediaDevices.enumerateDevices().then(devices => {
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
                     if (newCount < knownOutputCount) {
-                        // Output device disconnected
                         window.lastBtDisconnectTime = Date.now();
                         if (anchorStartTimer) {
                             clearTimeout(anchorStartTimer);
                             anchorStartTimer = null;
                         }
-                        // Pause actual audio to prevent speaker bleed
                         window.wasPausedByUser = true;
                         if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                             if (typeof audioPlayer.instantPause === 'function') {
@@ -361,10 +346,9 @@
                                 audioPlayer.pause();
                             }
                         }
-                        if (typeof setPlayUI === 'function') setPlayUI(false);
-
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
+                        if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                             navigator.mediaSession.playbackState = 'paused';
                             if (navigator.mediaSession.metadata) {
@@ -410,6 +394,7 @@
             const isExternalDisconnect = !window.wasPausedByUser;
             if (isExternalDisconnect) {
                 window.lastBtDisconnectTime = Date.now();
+                window.wasPausedByUser = true;
             }
             const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
