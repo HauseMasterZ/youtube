@@ -247,9 +247,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.suspend\(\)'
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?liveAudioContext\.close\(\)'
         )
         self.assertIn("teardownLiveAudioAnchor()", self.ms_content)
+
+    def test_deterministic_mode1_pause_handler(self):
+        """setActionHandler pause handles audioPlayer.paused in Mode 1 to resume playback"""
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*audioPlayer\s*&&\s*audioPlayer\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
+        )
 
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
