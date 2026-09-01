@@ -235,6 +235,13 @@
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
 
+                // In Mode 1 paused state, clear explicit position state override so Android OS
+                // receives native speed 0.0f, completely eliminating the squiggly progress bar animation.
+                if (window.playbackMode === 'mode1' && (navigator.mediaSession.playbackState === 'paused' || isPaused)) {
+                    navigator.mediaSession.setPositionState(null);
+                    return;
+                }
+
                 let rate;
                 if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;

@@ -258,6 +258,14 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*audioPlayer\s*&&\s*audioPlayer\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
         )
 
+    def test_mode1_paused_clears_position_state(self):
+        """updateMediaSessionPosition clears position state with setPositionState(null) when paused in Mode 1"""
+        self.assertIn("setPositionState(null)", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.setPositionState\(\s*null\s*\);'
+        )
+
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
         self.assertRegex(
