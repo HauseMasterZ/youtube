@@ -432,20 +432,17 @@
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
             }
-            if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
-                initLiveAudioAnchor();
-            }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
                 playPromise.catch(e => {
                     console.warn("MediaSession play error:", e);
-                    setTimeout(() => {
+                    Promise.resolve().then(() => {
                         if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                             audioPlayer.play().catch(() => {});
                         }
-                    }, 50);
+                    });
                 });
             }
         });
@@ -467,20 +464,17 @@
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
-                    if (typeof initLiveAudioAnchor === 'function') {
-                        initLiveAudioAnchor();
-                    }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.catch(e => {
                             console.warn("MediaSession play error:", e);
-                            setTimeout(() => {
+                            Promise.resolve().then(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            }, 50);
+                            });
                         });
                     }
                 } else {
@@ -516,11 +510,11 @@
                     }
                     audioPlayer.play().catch(e => {
                         console.warn("MediaSession play error:", e);
-                        setTimeout(() => {
+                        Promise.resolve().then(() => {
                             if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
                                 audioPlayer.play().catch(() => {});
                             }
-                        }, 50);
+                        });
                     });
                 } else {
                     window.wasPausedByUser = true;
@@ -566,20 +560,17 @@
                             updateLyricsUI(0);
                         }
                     }
-                    if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
-                        initLiveAudioAnchor();
-                    }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            setTimeout(() => {
+                            Promise.resolve().then(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            }, 50);
+                            });
                         });
                     }
                 } else {
