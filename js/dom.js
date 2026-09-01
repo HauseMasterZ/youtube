@@ -241,6 +241,12 @@
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
             }
+            if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
+            if (typeof cancelAutoKillWatchdog === 'function') {
+                cancelAutoKillWatchdog();
+            }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';
             }

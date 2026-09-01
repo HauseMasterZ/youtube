@@ -184,11 +184,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*\(\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"]\)\s*:\s*[\'"]playing[\'"];'
         )
 
-    def test_audio_handshake_play_before_stop_anchor(self):
-        """Action handlers invoke audioPlayer.play before stopLiveAudioAnchor in then/finally"""
+    def test_audio_handshake_stop_anchor_before_play(self):
+        """Action handlers and dom.js invoke stopLiveAudioAnchor synchronously before audioPlayer.play"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+playPromise\s*=\s*audioPlayer\.play\(\);[\s\S]*?playPromise\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?stopLiveAudioAnchor\(\);'
+            r'stopLiveAudioAnchor\(\);[\s\S]*?cancelAutoKillWatchdog\(\);[\s\S]*?const\s+playPromise\s*=\s*audioPlayer\.play\(\);'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*typeof\s+stopLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*stopLiveAudioAnchor\(\);[\s\S]*?return\s+this\.active\.play\(\);'
         )
 
     def test_toggle_playback_mode_republishes_metadata(self):
