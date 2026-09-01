@@ -294,16 +294,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*anchorStartTimer\s*\)\s*\{\s*clearTimeout\(\s*anchorStartTimer\s*\);\s*anchorStartTimer\s*=\s*null;\s*\}'
         )
 
-    def test_toggle_playback_mode_detects_anchor_and_enforces_pause(self):
-        """togglePlaybackMode detects isAnchorActive and calls instantPause when switching to Mode 1 while paused"""
+    def test_toggle_playback_mode_preserves_playing_state_on_mode1_switch(self):
+        """togglePlaybackMode defines isPaused strictly by audioPlayer.paused or wasPausedByUser without false positive isAnchorActive"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+isAnchorActive\s*=\s*\(liveAudioContext\s*&&\s*liveAudioContext\.state\s*===\s*[\'"]running[\'"]\)'
+            r'const\s+isPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\);'
         )
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+isPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\s*\|\|\s*isAnchorActive\)\)'
-        )
+        self.assertNotIn("isAnchorActive", self.ms_content)
         self.assertRegex(
             self.ms_content,
             r'function\s+togglePlaybackMode[\s\S]*?audioPlayer\.instantPause\(\)'

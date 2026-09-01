@@ -212,9 +212,7 @@
             btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
         }
 
-        const isAnchorActive = (liveAudioContext && liveAudioContext.state === 'running') || 
-                               (document.getElementById("live-stream-anchor") && !document.getElementById("live-stream-anchor").paused);
-        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser || isAnchorActive));
+        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
 
         if (newMode === 'mode2') {
             if (isPaused) {
