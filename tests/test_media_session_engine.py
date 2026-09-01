@@ -94,11 +94,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast-text', self.ms_content)
 
     def test_micro_rate_scoped_to_mobile(self):
-        """Ensure 0.00001 micro-rate spoof is guarded by isMobileDevice check"""
+        """Ensure 0.00001 micro-rate spoof is guarded by isMobileDevice check and mode2"""
         self.assertIn("isMobileDevice", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'isMobileDevice\s*\)\s*\{[\s\S]*?0\.00001[\s\S]*?\}\s*else\s*\{[\s\S]*?\(isBuffering\s*\|\|\s*isPaused\)\s*\?\s*0\s*:'
+            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\?\s*0\.00001\s*:\s*1\.0'
         )
 
     def test_start_live_anchor_scoped_to_mobile(self):
@@ -224,7 +224,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\?\s*0\.00001\s*:\s*0\s*\)'
+            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\?\s*0\.00001\s*:\s*1\.0\s*\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -240,6 +240,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.srcObject\s*=\s*null;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.removeAttribute\(\s*[\'"]src[\'"]\s*\);'
         )
         self.assertRegex(
             self.ms_content,

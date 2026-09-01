@@ -422,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
             } else {
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0);
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
         }

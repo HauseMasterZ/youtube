@@ -89,6 +89,7 @@
             try {
                 anchorEl.pause();
                 anchorEl.srcObject = null;
+                anchorEl.removeAttribute('src');
             } catch (e) {}
         }
         if (liveAudioContext && liveAudioContext.state === 'running') {
@@ -195,7 +196,7 @@
             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
-                updateMediaSessionPosition(pos, dur, newMode === 'mode2' ? 0.00001 : 0);
+                updateMediaSessionPosition(pos, dur, newMode === 'mode2' ? 0.00001 : 1.0);
             } else {
                 updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
             }
@@ -219,19 +220,17 @@
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
 
                 let rate;
-                if (isForcedRateValid) {
+                if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
-                } else if (navigator.mediaSession.playbackState === 'paused') {
-                    rate = 0;
-                } else if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
-                    rate = (isBuffering || isPaused) ? 0.00001 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
+                    rate = (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) ? 0.00001 : 1.0;
                 } else {
-                    rate = (isBuffering || isPaused) ? 0 : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
-                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate >= 0) ? rate : 1.0;
+                    const validRate = (typeof rate === 'number' && !isNaN(rate) && rate > 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
