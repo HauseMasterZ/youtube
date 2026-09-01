@@ -341,7 +341,18 @@
             margin-bottom: 20px;
             cursor: pointer;
             border-radius: 12px;
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
             transition: background 0.2s, color 0.2s;
+        }
+
+        #lyrics-toggle-hint:focus,
+        #lyrics-toggle-hint:focus-visible,
+        #lyrics-toggle-hint:active {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
         }
 
         @media (hover: hover) {

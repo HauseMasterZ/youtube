@@ -158,12 +158,10 @@
                 const cached = thumbCache.get(thumbUrl);
                 if (cached && cached.status === 'loaded') {
                     thumbDiv.style.backgroundImage = `url("${cached.resolvedUrl}")`;
-                } else if (cached && cached.status === 'failed') {
-                    thumbDiv.style.backgroundImage = 'none';
                 } else {
                     thumbDiv.style.backgroundImage = 'none';
 
-                    if (!cached) {
+                    if (!cached && !isScrollingFast) {
                         thumbCache.set(thumbUrl, { status: 'loading' });
                         
                         const loader = new Image();
@@ -182,7 +180,7 @@
                                     }
                                 })
                                 .catch(() => {
-                                    thumbCache.set(thumbUrl, { status: 'failed' });
+                                    thumbCache.delete(thumbUrl);
                                     if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                         thumbDiv.style.backgroundImage = 'none';
                                     }
@@ -198,7 +196,7 @@
                                 }
                             };
                             loader.onerror = () => {
-                                thumbCache.set(thumbUrl, { status: 'failed' });
+                                thumbCache.delete(thumbUrl);
                                 if (thumbDiv.dataset.targetSrc === thumbUrl) {
                                     thumbDiv.style.backgroundImage = 'none';
                                 }
