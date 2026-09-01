@@ -252,7 +252,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*!preventAutoplay\s*&&\s*!window\.wasPausedByUser\s*&&\s*!this\.active\.paused\s*\)'
+            r'if\s*\(\s*!preventAutoplay\s*&&\s*!window\.wasPausedByUser\s*\)'
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
@@ -263,18 +263,17 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("_focusResumeTimer", self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
-    def test_bt_disconnect_anchor_debouncing(self):
-        """mediaSession.js pauses audioPlayer and debounces anchorStartTimer on devicechange"""
+    def test_bt_disconnect_stops_anchor_and_watchdog(self):
+        """mediaSession.js pauses audioPlayer and stops anchor and watchdog on devicechange"""
         self.assertIn("anchorStartTimer", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
-        self.assertIn("800", self.ms_content)
         self.assertRegex(
             self.ms_content,
             r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?audioPlayer\.(instantPause|pause)\(\)'
         )
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\('
+            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\);'
         )
 
     def test_next_song_buffering_threshold(self):

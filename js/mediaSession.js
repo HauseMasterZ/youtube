@@ -321,6 +321,10 @@
 
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
+            if (anchorStartTimer) {
+                clearTimeout(anchorStartTimer);
+                anchorStartTimer = null;
+            }
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
                 window.wasPausedByUser = true;
                 if (typeof audioPlayer.instantPause === 'function') {
@@ -329,24 +333,8 @@
                     audioPlayer.pause();
                 }
             }
-            if (window.playbackMode === 'mode2') {
-                if (anchorStartTimer) {
-                    clearTimeout(anchorStartTimer);
-                }
-                anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused) {
-                        startLiveAudioAnchor();
-                        armAutoKillWatchdog();
-                    }
-                }, 800);
-            } else {
-                if (anchorStartTimer) {
-                    clearTimeout(anchorStartTimer);
-                    anchorStartTimer = null;
-                }
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
-            }
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
         });
     }
 

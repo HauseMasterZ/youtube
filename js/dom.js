@@ -673,7 +673,7 @@
                                                 const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                                 updateMediaSessionPosition(seekTarget, totalDur, 1.0);
                                             }
-                                            if (!preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
+                                            if (!preventAutoplay && !window.wasPausedByUser) {
                                                 this.active.play().catch(e => console.warn("Catch-up seek play on stream done:", e));
                                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                                     navigator.mediaSession.playbackState = 'playing';
@@ -721,7 +721,7 @@
                                                     const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                                     updateMediaSessionPosition(seekTarget, totalDur, 1.0);
                                                 }
-                                                if (!preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
+                                                if (!preventAutoplay && !window.wasPausedByUser) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
                                                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                                         navigator.mediaSession.playbackState = 'playing';
