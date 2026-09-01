@@ -273,13 +273,17 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*audioPlayer\s*&&\s*audioPlayer\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
         )
 
-    def test_mode1_paused_clears_position_state(self):
-        """updateMediaSessionPosition clears position state with setPositionState(null) when paused in Mode 1"""
-        self.assertIn("setPositionState(null)", self.ms_content)
+    def test_mode1_switch_enforces_paused_pipeline(self):
+        """togglePlaybackMode enforces instantPause, setPlayUI, and playbackState = 'paused' when switching to Mode 1 while paused"""
         self.assertRegex(
             self.ms_content,
-            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.setPositionState\(\s*null\s*\);'
+            r'newMode\s*===\s*[\'"]mode1[\'"]\s*&&\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*typeof\s+setPlayUI\s*===\s*[\'"]function[\'"]\s*\)\s*setPlayUI\(\s*false\s*\);'
+        )
+        self.assertNotIn("setPositionState(null)", self.ms_content)
 
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""

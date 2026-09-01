@@ -202,11 +202,11 @@
                 armAutoKillWatchdog();
             }
         } else {
+            teardownLiveAudioAnchor();
+            cancelAutoKillWatchdog();
             if (isPaused) {
                 window.wasPausedByUser = true;
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
+                if (typeof setPlayUI === 'function') setPlayUI(false);
                 if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                     if (typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
@@ -214,16 +214,20 @@
                         audioPlayer.pause();
                     }
                 }
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
             }
-            teardownLiveAudioAnchor();
-            cancelAutoKillWatchdog();
         }
 
         if (typeof updateMediaSessionPosition === 'function') {
-            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
+            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
                 updateMediaSessionPosition(pos, dur, newMode === 'mode2' ? 0.00001 : 1.0);
+                if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                }
             } else {
                 updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
             }
@@ -245,13 +249,6 @@
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
-
-                // In Mode 1 paused state, clear explicit position state override so Android OS
-                // receives native speed 0.0f, completely eliminating the squiggly progress bar animation.
-                if (window.playbackMode === 'mode1' && (navigator.mediaSession.playbackState === 'paused' || isPaused)) {
-                    navigator.mediaSession.setPositionState(null);
-                    return;
-                }
 
                 let rate;
                 if (isForcedRateValid && forcedRate > 0) {
