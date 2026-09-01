@@ -443,11 +443,11 @@
                     console.warn("MediaSession play error:", e);
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
-                    Promise.resolve().then(() => {
-                        if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                    setTimeout(() => {
+                        if (audioPlayer && audioPlayer.paused) {
                             audioPlayer.play().catch(() => {});
                         }
-                    });
+                    }, 50);
                 });
             } else {
                 stopLiveAudioAnchor();
@@ -481,11 +481,11 @@
                             console.warn("MediaSession play error:", e);
                             stopLiveAudioAnchor();
                             cancelAutoKillWatchdog();
-                            Promise.resolve().then(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                            setTimeout(() => {
+                                if (audioPlayer && audioPlayer.paused) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     } else {
                         stopLiveAudioAnchor();
@@ -583,11 +583,11 @@
                             console.warn("MediaSession playpause error:", e);
                             stopLiveAudioAnchor();
                             cancelAutoKillWatchdog();
-                            Promise.resolve().then(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                            setTimeout(() => {
+                                if (audioPlayer && audioPlayer.paused) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     } else {
                         stopLiveAudioAnchor();
