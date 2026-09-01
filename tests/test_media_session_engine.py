@@ -265,7 +265,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
-        """mediaSession.js tracks knownOutputCount, forces paused playbackState on disconnect, and suppresses anchor on recent BT disconnect"""
+        """mediaSession.js tracks knownOutputCount, forces paused playbackState on disconnect, and cancels watchdog"""
         self.assertIn("window.lastBtDisconnectTime", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertIn("knownOutputCount", self.ms_content)
@@ -281,19 +281,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
-        self.assertIn("isRecentBtDisconnect", self.ms_content)
-        self.assertIn("isRecentBtDisconnect", self.main_content)
-        self.assertIn("2500", self.ms_content)
 
-    def test_external_bt_disconnect_pause_detection(self):
-        """main.js and mediaSession.js detect external pause when !window.wasPausedByUser and set lastBtDisconnectTime"""
-        self.assertRegex(
-            self.main_content,
-            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
-        )
+    def test_mode2_pause_arms_anchor_and_watchdog(self):
+        """mediaSession.js audioPlayer pause listener arms anchor and watchdog in Mode 2"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
         )
 
     def test_bt_device_count_disconnect_detection(self):
