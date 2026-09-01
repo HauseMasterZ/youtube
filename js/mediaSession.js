@@ -59,6 +59,14 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && !anchorEl._hasResumeListener) {
+                anchorEl._hasResumeListener = true;
+                anchorEl.addEventListener('play', () => {
+                    if (!window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                        audioPlayer.play().catch(() => {});
+                    }
+                });
+            }
             if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
                 if (anchorEl.paused) {
@@ -371,6 +379,11 @@
                             if (typeof updateMediaSessionPosition === 'function') {
                                 updateMediaSessionPosition(pos, dur, 1.0);
                             }
+                        }
+                    } else if (newCount >= knownOutputCount && knownOutputCount > 0) {
+                        // Bluetooth device restored after telephony call or reconnect
+                        if (!window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                            audioPlayer.play().catch(() => {});
                         }
                     }
                     knownOutputCount = newCount;
