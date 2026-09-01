@@ -299,6 +299,7 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
         instantPause() {
+            this._pendingSeek = null;
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {

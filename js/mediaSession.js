@@ -35,6 +35,13 @@
             if (anchorEl && liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
+            if (anchorEl && anchorEl.paused) {
+                anchorEl.play().then(() => {
+                    if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                        anchorEl.pause();
+                    }
+                }).catch(() => {});
+            }
             return liveAudioContext;
         }
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -219,6 +226,16 @@
                         audioPlayer.instantPause();
                     } else {
                         audioPlayer.pause();
+                    }
+                    if (audioPlayer.active && audioPlayer.active.paused) {
+                        try {
+                            const p = audioPlayer.active.play();
+                            if (p && p.then) {
+                                p.then(() => {
+                                    audioPlayer.active.pause();
+                                }).catch(() => {});
+                            }
+                        } catch (e) {}
                     }
                 }
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {

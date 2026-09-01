@@ -293,6 +293,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("new MediaMetadata", self.ms_content)
         self.assertNotIn("setPositionState(null)", self.ms_content)
 
+    def test_mode1_switch_audio_session_handshake(self):
+        """togglePlaybackMode performs audioPlayer.active handshake on Mode 1 switch while paused"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*audioPlayer\.active\s*&&\s*audioPlayer\.active\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.active\.play\(\)[\s\S]*?audioPlayer\.active\.pause\(\)'
+        )
+
     def test_mode2_anchor_scheduling_on_pause(self):
         """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
         self.assertRegex(
