@@ -391,9 +391,17 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2') {
+            const isExternalDisconnect = !window.wasPausedByUser;
+            if (isExternalDisconnect) {
+                window.lastBtDisconnectTime = Date.now();
+                window.wasPausedByUser = true;
+            }
+            const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused) {
+                    const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
