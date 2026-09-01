@@ -1090,7 +1090,26 @@ document.addEventListener("DOMContentLoaded", () => {
             ro.observe(albumArt);
         }
     }
-    window.addEventListener('resize', () => requestAnimationFrame(syncArtWidth));
+    if (window.ResizeObserver && playlistContainer) {
+        const playlistRo = new ResizeObserver(() => {
+            lastStartIndex = -1;
+            lastEndIndex = -1;
+            if (typeof renderVirtualTracks === 'function') {
+                renderVirtualTracks();
+            }
+        });
+        playlistRo.observe(playlistContainer);
+    }
+    window.addEventListener('resize', () => {
+        requestAnimationFrame(() => {
+            syncArtWidth();
+            lastStartIndex = -1;
+            lastEndIndex = -1;
+            if (typeof renderVirtualTracks === 'function') {
+                renderVirtualTracks();
+            }
+        });
+    });
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
