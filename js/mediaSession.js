@@ -432,24 +432,18 @@
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
             }
-            stopLiveAudioAnchor();
-            cancelAutoKillWatchdog();
             if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
                 initLiveAudioAnchor();
             }
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
-                playPromise.then(() => {
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                }).catch(e => {
+                playPromise.catch(e => {
                     console.warn("MediaSession play error:", e);
-                    if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
-                        startLiveAudioAnchor();
-                    }
                     setTimeout(() => {
-                        if (audioPlayer && audioPlayer.paused) {
-                            audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
+                        if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                            audioPlayer.play().catch(() => {});
                         }
                     }, 50);
                 });
@@ -473,24 +467,18 @@
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
-                    if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                    if (typeof initLiveAudioAnchor === 'function') {
                         initLiveAudioAnchor();
                     }
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.then(() => {
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
-                        }).catch(e => {
+                        playPromise.catch(e => {
                             console.warn("MediaSession play error:", e);
-                            if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
-                                startLiveAudioAnchor();
-                            }
                             setTimeout(() => {
-                                if (audioPlayer && audioPlayer.paused) {
-                                    audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
+                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                                    audioPlayer.play().catch(() => {});
                                 }
                             }, 50);
                         });
@@ -528,11 +516,11 @@
                     }
                     audioPlayer.play().catch(e => {
                         console.warn("MediaSession play error:", e);
-                        Promise.resolve().then(() => {
+                        setTimeout(() => {
                             if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
                                 audioPlayer.play().catch(() => {});
                             }
-                        });
+                        }, 50);
                     });
                 } else {
                     window.wasPausedByUser = true;
@@ -578,24 +566,18 @@
                             updateLyricsUI(0);
                         }
                     }
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
                     if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
                         initLiveAudioAnchor();
                     }
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.then(() => {
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
-                        }).catch(e => {
+                        playPromise.catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
-                                startLiveAudioAnchor();
-                            }
                             setTimeout(() => {
-                                if (audioPlayer && audioPlayer.paused) {
-                                    audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
+                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                                    audioPlayer.play().catch(() => {});
                                 }
                             }, 50);
                         });
