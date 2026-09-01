@@ -317,10 +317,13 @@
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
     // BT disconnect detection: track device changes to prevent speaker bleed
+    // BT disconnect detection: track device changes to prevent speaker bleed
     let anchorStartTimer = null;
+    window.lastBtDisconnectTime = 0;
 
     if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
         navigator.mediaDevices.addEventListener('devicechange', () => {
+            window.lastBtDisconnectTime = Date.now();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -355,7 +358,8 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            if (window.playbackMode === 'mode2') {
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 1500);
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 anchorStartTimer = setTimeout(() => {
                     if (window.playbackMode === 'mode2' && audioPlayer.paused) {
                         startLiveAudioAnchor();

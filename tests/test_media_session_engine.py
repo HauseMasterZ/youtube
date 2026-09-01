@@ -264,8 +264,8 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
-        """mediaSession.js pauses audioPlayer and stops anchor and watchdog on devicechange"""
-        self.assertIn("anchorStartTimer", self.ms_content)
+        """mediaSession.js tracks lastBtDisconnectTime and suppresses anchor on recent BT disconnect"""
+        self.assertIn("window.lastBtDisconnectTime", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertRegex(
             self.ms_content,
@@ -275,6 +275,8 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\);'
         )
+        self.assertIn("isRecentBtDisconnect", self.ms_content)
+        self.assertIn("isRecentBtDisconnect", self.main_content)
 
     def test_next_song_buffering_threshold(self):
         """main.js progress listener checks 85 percent threshold and _streamDone before triggering preloads"""
