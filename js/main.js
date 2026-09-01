@@ -427,7 +427,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            const isExternalDisconnect = !window.wasPausedByUser;
+            if (isExternalDisconnect) {
+                window.lastBtDisconnectTime = Date.now();
+            }
+            const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
@@ -437,12 +441,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
-            } else if (window.playbackMode === 'mode2') {
-                // Mode 2 BT disconnect: devicechange handler already started anchor, keep 'playing'
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
-                navigator.mediaSession.playbackState = 'playing';
             } else {
-                // Mode 1: standard pause
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
