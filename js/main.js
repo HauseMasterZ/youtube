@@ -427,12 +427,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            const isExternalDisconnect = !window.wasPausedByUser;
-            if (isExternalDisconnect) {
-                window.lastBtDisconnectTime = Date.now();
-                window.wasPausedByUser = true;
-            }
-            const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
@@ -461,7 +456,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     document.addEventListener("visibilitychange", attemptFocusResume);
-    window.addEventListener("focus", attemptFocusResume);
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden && !audioPlayer.paused) {

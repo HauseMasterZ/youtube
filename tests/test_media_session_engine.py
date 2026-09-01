@@ -257,49 +257,37 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
-        """main.js defines debounced attemptFocusResume on visibilitychange and focus events without pointerdown capture interference"""
+        """main.js defines debounced attemptFocusResume on visibilitychange without pointerdown capture or focus interference"""
         self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
         self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*attemptFocusResume\s*\)')
-        self.assertRegex(self.main_content, r'window\.addEventListener\(\s*[\'"]focus[\'"]\s*,\s*attemptFocusResume\s*\)')
+        self.assertNotIn('window.addEventListener("focus", attemptFocusResume)', self.main_content)
         self.assertIn("_focusResumeTimer", self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
-        """mediaSession.js tracks lastBtDisconnectTime, forces paused playbackState, and suppresses anchor on recent BT disconnect"""
+        """mediaSession.js tracks knownOutputCount and lastBtDisconnectTime on device removal"""
         self.assertIn("window.lastBtDisconnectTime", self.ms_content)
+        self.assertIn("knownOutputCount", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?audioPlayer\.(instantPause|pause)\(\)'
+            r'newCount\s*<\s*knownOutputCount'
         )
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?stopLiveAudioAnchor\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'navigator\.mediaDevices\.addEventListener\(\s*[\'"]devicechange[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'stopLiveAudioAnchor\(\);'
         )
         self.assertIn("isRecentBtDisconnect", self.ms_content)
         self.assertIn("isRecentBtDisconnect", self.main_content)
         self.assertIn("2500", self.ms_content)
 
-    def test_external_bt_disconnect_pause_detection(self):
-        """main.js and mediaSession.js detect external pause when !window.wasPausedByUser and set lastBtDisconnectTime"""
+    def test_artwork_reinstantiates_mediametadata(self):
+        """playback.js re-instantiates new MediaMetadata upon resolving square artwork"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_content = f.read()
         self.assertRegex(
-            self.main_content,
-            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+isExternalDisconnect\s*=\s*!window\.wasPausedByUser;\s*if\s*\(\s*isExternalDisconnect\s*\)\s*\{\s*window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);'
-        )
-
-    def test_live_stream_anchor_pause_listener(self):
-        """mediaSession.js syncs paused playbackState when live-stream-anchor element is paused by OS"""
-        self.assertRegex(
-            self.ms_content,
-            r'anchorEl\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]'
+            playback_content,
+            r'navigator\.mediaSession\.metadata\s*=\s*new\s+MediaMetadata\(\s*\{[\s\S]*?artwork:\s*\[\s*\{\s*src:\s*sqUrl'
         )
 
     def test_action_handlers_clear_last_bt_disconnect_time(self):

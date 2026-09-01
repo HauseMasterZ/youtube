@@ -321,60 +321,63 @@
     // BT disconnect detection: track device changes to prevent speaker bleed
     let anchorStartTimer = null;
     window.lastBtDisconnectTime = 0;
+    let knownOutputCount = 0;
 
-    const anchorEl = document.getElementById("live-stream-anchor");
-    if (anchorEl) {
-        anchorEl.addEventListener('pause', () => {
-            if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession.playbackState === 'playing') {
-                    navigator.mediaSession.playbackState = 'paused';
-                    const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    const pos = (audioPlayer && audioPlayer.currentTime) || 0;
-                    if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur, 1.0);
+    if (typeof navigator.mediaDevices !== 'undefined') {
+        if (navigator.mediaDevices.enumerateDevices) {
+            navigator.mediaDevices.enumerateDevices().then(devices => {
+                knownOutputCount = devices.filter(d => d.kind === 'audiooutput').length;
+            }).catch(() => {});
+        }
+
+        if (navigator.mediaDevices.addEventListener) {
+            navigator.mediaDevices.addEventListener('devicechange', () => {
+                if (!navigator.mediaDevices.enumerateDevices) return;
+                navigator.mediaDevices.enumerateDevices().then(devices => {
+                    const newCount = devices.filter(d => d.kind === 'audiooutput').length;
+                    if (newCount < knownOutputCount) {
+                        // Output device disconnected
+                        window.lastBtDisconnectTime = Date.now();
+                        if (anchorStartTimer) {
+                            clearTimeout(anchorStartTimer);
+                            anchorStartTimer = null;
+                        }
+                        if (window.playbackMode === 'mode2') {
+                            window.wasPausedByUser = true;
+                            if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                                if (typeof audioPlayer.instantPause === 'function') {
+                                    audioPlayer.instantPause();
+                                } else {
+                                    audioPlayer.pause();
+                                }
+                            }
+                            stopLiveAudioAnchor();
+                            cancelAutoKillWatchdog();
+                            if (typeof setPlayUI === 'function') setPlayUI(false);
+                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                navigator.mediaSession.playbackState = 'paused';
+                                if (navigator.mediaSession.metadata) {
+                                    try {
+                                        navigator.mediaSession.metadata = new MediaMetadata({
+                                            title: navigator.mediaSession.metadata.title,
+                                            artist: navigator.mediaSession.metadata.artist,
+                                            album: navigator.mediaSession.metadata.album,
+                                            artwork: navigator.mediaSession.metadata.artwork
+                                        });
+                                    } catch (e) {}
+                                }
+                                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                if (typeof updateMediaSessionPosition === 'function') {
+                                    updateMediaSessionPosition(pos, dur, 1.0);
+                                }
+                            }
+                        }
                     }
-                }
-            }
-        });
-    }
-
-    if (typeof navigator.mediaDevices !== 'undefined' && navigator.mediaDevices.addEventListener) {
-        navigator.mediaDevices.addEventListener('devicechange', () => {
-            window.lastBtDisconnectTime = Date.now();
-            if (anchorStartTimer) {
-                clearTimeout(anchorStartTimer);
-                anchorStartTimer = null;
-            }
-            window.wasPausedByUser = true;
-            if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                if (typeof audioPlayer.instantPause === 'function') {
-                    audioPlayer.instantPause();
-                } else {
-                    audioPlayer.pause();
-                }
-            }
-            stopLiveAudioAnchor();
-            cancelAutoKillWatchdog();
-            if (typeof setPlayUI === 'function') setPlayUI(false);
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-                if (navigator.mediaSession.metadata) {
-                    try {
-                        navigator.mediaSession.metadata = new MediaMetadata({
-                            title: navigator.mediaSession.metadata.title,
-                            artist: navigator.mediaSession.metadata.artist,
-                            album: navigator.mediaSession.metadata.album,
-                            artwork: navigator.mediaSession.metadata.artwork
-                        });
-                    } catch (e) {}
-                }
-                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                if (typeof updateMediaSessionPosition === 'function') {
-                    updateMediaSessionPosition(pos, dur, 1.0);
-                }
-            }
-        });
+                    knownOutputCount = newCount;
+                }).catch(() => {});
+            });
+        }
     }
 
     // Connect audioPlayer play/pause events to anchor and watchdog
@@ -394,12 +397,7 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            const isExternalDisconnect = !window.wasPausedByUser;
-            if (isExternalDisconnect) {
-                window.lastBtDisconnectTime = Date.now();
-                window.wasPausedByUser = true;
-            }
-            const isRecentBtDisconnect = isExternalDisconnect || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
