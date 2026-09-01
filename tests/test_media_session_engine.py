@@ -267,10 +267,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("teardownLiveAudioAnchor()", self.ms_content)
 
     def test_deterministic_mode1_pause_handler(self):
-        """setActionHandler pause handles audioPlayer.paused in Mode 1 to resume playback"""
+        """setActionHandler pause handles isActuallyPaused in Mode 1 to resume playback"""
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*audioPlayer\s*&&\s*audioPlayer\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
+            r'const\s+isActuallyPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\);[\s\S]*?if\s*\(\s*isActuallyPaused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
         )
 
     def test_mode1_switch_enforces_paused_pipeline(self):
@@ -283,6 +283,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'if\s*\(\s*typeof\s+setPlayUI\s*===\s*[\'"]function[\'"]\s*\)\s*setPlayUI\(\s*false\s*\);'
         )
+        self.assertIn("new MediaMetadata", self.ms_content)
         self.assertNotIn("setPositionState(null)", self.ms_content)
 
     def test_mode2_anchor_scheduling_on_pause(self):

@@ -227,6 +227,16 @@
                 updateMediaSessionPosition(pos, dur, newMode === 'mode2' ? 0.00001 : 1.0);
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
+                    if (navigator.mediaSession.metadata) {
+                        try {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: navigator.mediaSession.metadata.title,
+                                artist: navigator.mediaSession.metadata.artist,
+                                album: navigator.mediaSession.metadata.album,
+                                artwork: navigator.mediaSession.metadata.artwork
+                            });
+                        } catch (e) {}
+                    }
                 }
             } else {
                 updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
@@ -413,9 +423,11 @@
                     armAutoKillWatchdog();
                 }
             } else {
-                // Mode 1: If audio is paused, play; if playing, pause
-                if (audioPlayer && audioPlayer.paused) {
+                // Mode 1: If audio is paused (or was paused by user), play; if playing, pause
+                const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
+                if (isActuallyPaused) {
                     window.wasPausedByUser = false;
+                    if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -435,6 +447,7 @@
                     });
                 } else {
                     window.wasPausedByUser = true;
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
                     }
@@ -451,10 +464,12 @@
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
-                if (audioPlayer && audioPlayer.paused) {
+                const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
+                if (isActuallyPaused) {
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
+                    if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -485,6 +500,10 @@
                     });
                 } else {
                     window.wasPausedByUser = true;
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                    }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
