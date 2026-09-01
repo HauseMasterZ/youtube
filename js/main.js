@@ -427,14 +427,15 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            const isExternalPause = !window.wasPausedByUser;
+            const isRecentBtDisconnect = isExternalPause || (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
                 setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && window.wasPausedByUser && !isStillBtDisconnect) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
