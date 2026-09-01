@@ -170,6 +170,20 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*\(\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"]\)\s*:\s*[\'"]playing[\'"];'
         )
 
+    def test_audio_handshake_play_before_stop_anchor(self):
+        """Action handlers invoke audioPlayer.play before stopLiveAudioAnchor in then/finally"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+playPromise\s*=\s*audioPlayer\.play\(\);[\s\S]*?playPromise\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?stopLiveAudioAnchor\(\);'
+        )
+
+    def test_toggle_playback_mode_republishes_metadata(self):
+        """togglePlaybackMode re-publishes MediaMetadata when switching modes while paused"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(newMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];[\s\S]*?new\s+MediaMetadata'
+        )
+
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
         """Ensure playback.js uses 1:1 square artwork when !thumbsDisabled and checks offline square cache when thumbsDisabled"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
@@ -309,10 +323,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_mode1_switch_enforces_paused_pipeline(self):
-        """togglePlaybackMode enforces instantPause, setPlayUI, and playbackState = 'paused' when switching to Mode 1 while paused"""
+        """togglePlaybackMode enforces instantPause, setPlayUI, and playbackState when switching while paused"""
         self.assertRegex(
             self.ms_content,
-            r'newMode\s*===\s*[\'"]mode1[\'"]\s*&&\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(newMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.ms_content,

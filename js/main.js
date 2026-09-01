@@ -393,6 +393,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
+        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;
 
@@ -408,6 +410,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
+        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
