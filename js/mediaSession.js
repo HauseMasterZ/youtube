@@ -434,15 +434,24 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
+            }
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
-                playPromise.catch(e => {
+                playPromise.then(() => {
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                }).catch(e => {
                     console.warn("MediaSession play error:", e);
-                    Promise.resolve().then(() => {
-                        if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                            audioPlayer.play().catch(() => {});
+                    if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
+                    setTimeout(() => {
+                        if (audioPlayer && audioPlayer.paused) {
+                            audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
                         }
-                    });
+                    }, 50);
                 });
             }
         });
@@ -466,15 +475,24 @@
                     }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
+                    if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                        initLiveAudioAnchor();
+                    }
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.catch(e => {
+                        playPromise.then(() => {
+                            stopLiveAudioAnchor();
+                            cancelAutoKillWatchdog();
+                        }).catch(e => {
                             console.warn("MediaSession play error:", e);
-                            Promise.resolve().then(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().catch(() => {});
+                            if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
+                                startLiveAudioAnchor();
+                            }
+                            setTimeout(() => {
+                                if (audioPlayer && audioPlayer.paused) {
+                                    audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     }
                 } else {
@@ -562,15 +580,24 @@
                     }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
+                    if (window.playbackMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                        initLiveAudioAnchor();
+                    }
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.catch(e => {
+                        playPromise.then(() => {
+                            stopLiveAudioAnchor();
+                            cancelAutoKillWatchdog();
+                        }).catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            Promise.resolve().then(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().catch(() => {});
+                            if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
+                                startLiveAudioAnchor();
+                            }
+                            setTimeout(() => {
+                                if (audioPlayer && audioPlayer.paused) {
+                                    audioPlayer.play().then(() => stopLiveAudioAnchor()).catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     }
                 } else {
