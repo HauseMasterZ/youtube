@@ -561,10 +561,10 @@
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
-                return;
+            } else {
+                window.lastPlaybackModeTransitions.action = 'prev';
+                window.lastPlaybackModeTransitions.time = now;
             }
-            window.lastPlaybackModeTransitions.action = 'prev';
-            window.lastPlaybackModeTransitions.time = now;
             playPrev();
         });
 
@@ -575,10 +575,10 @@
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
-                return;
+            } else {
+                window.lastPlaybackModeTransitions.action = 'next';
+                window.lastPlaybackModeTransitions.time = now;
             }
-            window.lastPlaybackModeTransitions.action = 'next';
-            window.lastPlaybackModeTransitions.time = now;
             playNext();
         });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
@@ -602,10 +602,10 @@
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
-                return;
+            } else {
+                window.lastPlaybackModeTransitions.action = 'seekback';
+                window.lastPlaybackModeTransitions.time = now;
             }
-            window.lastPlaybackModeTransitions.action = 'seekback';
-            window.lastPlaybackModeTransitions.time = now;
 
             const skipTime = details.seekOffset || 10;
             const newTime = Math.max(0, (audioPlayer.currentTime || 0) - skipTime);
@@ -622,10 +622,10 @@
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;
                 togglePlaybackMode();
-                return;
+            } else {
+                window.lastPlaybackModeTransitions.action = 'seekfwd';
+                window.lastPlaybackModeTransitions.time = now;
             }
-            window.lastPlaybackModeTransitions.action = 'seekfwd';
-            window.lastPlaybackModeTransitions.time = now;
 
             const skipTime = details.seekOffset || 10;
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;

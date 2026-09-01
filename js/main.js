@@ -574,7 +574,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }
             return;
         }
@@ -640,7 +640,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = "paused";
+            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
         }
         
         errorSkipTimer = setTimeout(() => {

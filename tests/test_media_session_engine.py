@@ -153,6 +153,23 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
         self.assertNotIn("this.active.currentTime = ct;", self.dom_content)
 
+    def test_mode2_mode_aware_playback_state_across_files(self):
+        """DualAudioPingPong pause in dom.js, ended/error in main.js, and executePlayback in playback.js use mode-aware playbackState"""
+        self.assertRegex(
+            self.dom_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+        )
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_content = f.read()
+        self.assertRegex(
+            playback_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*\(\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"]\)\s*:\s*[\'"]playing[\'"];'
+        )
+
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
         """Ensure playback.js uses 1:1 square artwork when !thumbsDisabled and checks offline square cache when thumbsDisabled"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
@@ -181,6 +198,17 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'isMobile\s*&&\s*window\.lastPlaybackModeTransitions\.action\s*===\s*[\'"]next[\'"]'
+        )
+
+    def test_hardware_combo_executes_track_navigation(self):
+        """Ensure nexttrack and previoustrack execute playNext and playPrev alongside togglePlaybackMode"""
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]previoustrack[\'"][\s\S]*?togglePlaybackMode\(\);[\s\S]*?playPrev\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]nexttrack[\'"][\s\S]*?togglePlaybackMode\(\);[\s\S]*?playNext\(\);'
         )
 
     def test_buffer_stalled_guard_in_dom_js(self):
