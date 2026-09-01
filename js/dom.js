@@ -221,7 +221,6 @@
             return this.active.duration || this._expectedDuration || 0;
         }
         get paused() {
-            if (this._pendingSeek !== null) return false;
             return this.active.paused;
         }
         get playbackRate() { return this.active.playbackRate; }
@@ -258,7 +257,11 @@
             this.active.muted = false;
 
             if (this._pendingSeek !== null) {
-                return Promise.resolve();
+                const seekTarget = this._pendingSeek;
+                this._pendingSeek = null;
+                try {
+                    this.active.currentTime = seekTarget;
+                } catch (e) {}
             }
             return this.active.play();
         }
