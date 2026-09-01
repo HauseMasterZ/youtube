@@ -328,23 +328,28 @@
             knownOutputCount = d.filter(x => x.kind === 'audiooutput').length;
         }).catch(() => {});
 
-        if (navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 navigator.mediaDevices.enumerateDevices().then(devices => {
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
                     if (newCount < knownOutputCount) {
-                        window.lastBtDisconnectTime = Date.now();
+                        const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
+                        if (!wasAlreadyExternallyPaused) {
+                            window.lastBtDisconnectTime = Date.now();
+                            window.wasPausedByUser = true;
+                        }
                         if (anchorStartTimer) {
                             clearTimeout(anchorStartTimer);
                             anchorStartTimer = null;
                         }
-                        window.wasPausedByUser = true;
                         if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                             if (typeof audioPlayer.instantPause === 'function') {
                                 audioPlayer.instantPause();
                             } else {
                                 audioPlayer.pause();
                             }
+                        }
+                        if (wasAlreadyExternallyPaused) {
+                            window.wasPausedByUser = false;
                         }
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
