@@ -437,7 +437,12 @@ document.addEventListener("DOMContentLoaded", () => {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
+            } else if (window.playbackMode === 'mode2') {
+                // Mode 2 BT disconnect: devicechange handler already started anchor, keep 'playing'
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
+                navigator.mediaSession.playbackState = 'playing';
             } else {
+                // Mode 1: standard pause
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }

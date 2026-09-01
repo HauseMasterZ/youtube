@@ -342,35 +342,36 @@
                             clearTimeout(anchorStartTimer);
                             anchorStartTimer = null;
                         }
-                        if (window.playbackMode === 'mode2') {
-                            window.wasPausedByUser = true;
-                            if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                                if (typeof audioPlayer.instantPause === 'function') {
-                                    audioPlayer.instantPause();
-                                } else {
-                                    audioPlayer.pause();
-                                }
+                        // Pause actual audio to prevent speaker bleed
+                        window.wasPausedByUser = true;
+                        if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                            if (typeof audioPlayer.instantPause === 'function') {
+                                audioPlayer.instantPause();
+                            } else {
+                                audioPlayer.pause();
                             }
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
-                            if (typeof setPlayUI === 'function') setPlayUI(false);
+                        }
+                        if (typeof setPlayUI === 'function') setPlayUI(false);
+
+                        if (window.playbackMode === 'mode2') {
+                            // Mode 2: keep playbackState='playing' to retain notification
+                            // Start anchor to hold the foreground service alive
+                            startLiveAudioAnchor();
+                            armAutoKillWatchdog();
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                                navigator.mediaSession.playbackState = 'paused';
-                                if (navigator.mediaSession.metadata) {
-                                    try {
-                                        navigator.mediaSession.metadata = new MediaMetadata({
-                                            title: navigator.mediaSession.metadata.title,
-                                            artist: navigator.mediaSession.metadata.artist,
-                                            album: navigator.mediaSession.metadata.album,
-                                            artwork: navigator.mediaSession.metadata.artwork
-                                        });
-                                    } catch (e) {}
-                                }
                                 const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                                 const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                                if (typeof updateMediaSessionPosition === 'function') {
-                                    updateMediaSessionPosition(pos, dur, 1.0);
-                                }
+                                updateMediaSessionPosition(pos, dur, 0.00001);
+                            }
+                        } else {
+                            // Mode 1: standard paused state
+                            stopLiveAudioAnchor();
+                            cancelAutoKillWatchdog();
+                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                navigator.mediaSession.playbackState = 'paused';
+                                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                updateMediaSessionPosition(pos, dur, 1.0);
                             }
                         }
                     }
@@ -407,8 +408,7 @@
                     }
                 }, 800);
             } else {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
+                // During BT disconnect, devicechange handler already manages anchor state — do nothing
             }
         });
     }
