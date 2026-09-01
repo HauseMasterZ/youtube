@@ -189,7 +189,10 @@
             btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
         }
 
-        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+        const isAnchorActive = (liveAudioContext && liveAudioContext.state === 'running') || 
+                               (document.getElementById("live-stream-anchor") && !document.getElementById("live-stream-anchor").paused);
+        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser || isAnchorActive));
+
         if (newMode === 'mode2') {
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -200,8 +203,16 @@
             }
         } else {
             if (isPaused) {
+                window.wasPausedByUser = true;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
+                }
+                if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                    if (typeof audioPlayer.instantPause === 'function') {
+                        audioPlayer.instantPause();
+                    } else {
+                        audioPlayer.pause();
+                    }
                 }
             }
             teardownLiveAudioAnchor();
