@@ -115,6 +115,20 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*!isMobileDevice\s*\)\s*return;'
         )
 
+    def test_start_live_anchor_enforces_playing_and_position(self):
+        """startLiveAudioAnchor enforces playbackState = 'playing' and micro-rate position update on play resolution"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+startLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"];[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*0\.00001\s*\);'
+        )
+
+    def test_pause_listener_mode2_delayed_reassertion(self):
+        """audioPlayer pause event listener re-asserts playing state after 100ms in Mode 2"""
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?100\s*\);'
+        )
+
     def test_action_handlers_include_playpause_and_taps(self):
         """Action handlers handle play, pause, playpause, nexttrack, previoustrack, seekto, seekbackward, seekforward"""
         self.assertIn("'play'", self.ms_content)

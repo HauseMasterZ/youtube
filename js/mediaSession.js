@@ -84,7 +84,16 @@
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
-            anchorEl.play().catch(e => console.warn("Live anchor play error:", e));
+            anchorEl.play().then(() => {
+                if (window.playbackMode === 'mode2' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 0.00001);
+                    }
+                }
+            }).catch(e => console.warn("Live anchor play error:", e));
         }
     }
 

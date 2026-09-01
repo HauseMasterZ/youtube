@@ -428,6 +428,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.playbackMode === 'mode2') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
+                setTimeout(() => {
+                    if (window.playbackMode === 'mode2' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
+                }, 100);
             } else {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
