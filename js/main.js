@@ -263,6 +263,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }, {passive: true});
 
     btnPlayPause.addEventListener("click", () => {
+        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+            initLiveAudioAnchor();
+        }
         if (!audioPlayer.src) {
             if (playQueue.length > 0 && queueIndex !== -1) {
                 executePlayback(false);

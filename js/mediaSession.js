@@ -52,8 +52,15 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination.stream) {
+            if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
+                if (anchorEl.paused) {
+                    anchorEl.play().then(() => {
+                        if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                            anchorEl.pause();
+                        }
+                    }).catch(() => {});
+                }
             }
         } catch (e) {
             console.warn("Live audio anchor init error:", e);
@@ -353,22 +360,23 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            window.wasPausedByUser = false;
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof setPlayUI === 'function') setPlayUI(true);
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';
             }
             if (!audioPlayer.src) {
-                if (playQueue.length > 0 && queueIndex !== -1) {
+                if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
                     executePlayback(false);
-                } else if (playQueue.length > 0) {
+                } else if (typeof playQueue !== 'undefined' && playQueue.length > 0) {
                     queueIndex = 0;
                     executePlayback(false);
                 }
                 return;
             }
-            window.wasPausedByUser = false;
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
             if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
                 audioPlayer.currentTime = 0;
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
@@ -377,7 +385,7 @@
             audioPlayer.play().catch(e => {
                 console.warn("MediaSession play error:", e);
                 Promise.resolve().then(() => {
-                    if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                    if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                         audioPlayer.play().catch(() => {});
                     }
                 });
@@ -385,12 +393,14 @@
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
+            const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             if (window.playbackMode === 'mode2') {
-                if (audioPlayer && audioPlayer.paused) {
+                if (isActuallyPaused) {
                     // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
+                    if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
@@ -403,7 +413,7 @@
                     audioPlayer.play().catch(e => {
                         console.warn("MediaSession play error:", e);
                         Promise.resolve().then(() => {
-                            if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                            if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                 audioPlayer.play().catch(() => {});
                             }
                         });
@@ -411,6 +421,7 @@
                 } else {
                     // User intentionally pausing in Mode 2
                     window.wasPausedByUser = true;
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
                     }

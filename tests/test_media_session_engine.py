@@ -58,6 +58,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         # startLiveAudioAnchor checks mode2
         self.assertRegex(self.ms_content, r'window\.playbackMode\s*!==?\s*[\'"]mode2[\'"]')
 
+    def test_anchor_user_gesture_priming(self):
+        """initLiveAudioAnchor primes anchorEl with play/pause on initialization"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?anchorEl\.pause\(\);'
+        )
+
     def test_watchdog_lifecycle_functions_defined(self):
         """armAutoKillWatchdog and cancelAutoKillWatchdog are defined and exposed"""
         self.assertRegex(self.ms_content, r'function\s+armAutoKillWatchdog\s*\(\s*\)')
