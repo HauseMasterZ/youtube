@@ -9,6 +9,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         media_session_path = os.path.join(base_dir, 'js', 'mediaSession.js')
         dom_path = os.path.join(base_dir, 'js', 'dom.js')
         main_path = os.path.join(base_dir, 'js', 'main.js')
+        state_path = os.path.join(base_dir, 'js', 'state.js')
         test_path = os.path.join(base_dir, 'tests', 'test_media_session_engine.py')
 
         with open(media_session_path, 'r', encoding='utf-8') as f:
@@ -17,6 +18,8 @@ class TestMediaSessionEngine(unittest.TestCase):
             cls.dom_content = f.read()
         with open(main_path, 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
+        with open(state_path, 'r', encoding='utf-8') as f:
+            cls.state_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -279,7 +282,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
         )
 
     def test_mode2_pause_arms_anchor_and_watchdog(self):
@@ -388,6 +391,37 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?800\s*\)'
+        )
+
+    def test_phone_call_state_flags_in_state_js(self):
+        """state.js declares wasPlayingBeforeCall, lastCallEndTime, and isCallActive flags"""
+        self.assertIn("window.wasPlayingBeforeCall = false;", self.state_content)
+        self.assertIn("window.lastCallEndTime = 0;", self.state_content)
+        self.assertIn("window.isCallActive = false;", self.state_content)
+
+    def test_phone_call_accepted_mode2_preserves_playing_state(self):
+        """devicechange sets isCallActive and preserves Mode 2 playing playbackState with micro-rate"""
+        self.assertIn("window.isCallActive = true;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\)\s*\?\s*0\.00001\s*:\s*1\.0\s*\)'
+        )
+
+    def test_phone_call_hangup_auto_resume_and_post_call_filter(self):
+        """devicechange resets isCallActive, auto-resumes if wasPlayingBeforeCall, and action handlers filter post-call events"""
+        self.assertIn("window.isCallActive = false;", self.ms_content)
+        self.assertIn("window.lastCallEndTime = Date.now();", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*window\.wasPlayingBeforeCall\s*&&\s*!window\.wasPausedByUser[\s\S]*?audioPlayer\.play\(\)'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isAutoResumeAfterCall\s*=\s*\(typeof\s+window\.lastCallEndTime\s*===\s*[\'"]number[\'"]\s*&&\s*Date\.now\(\)\s*-\s*window\.lastCallEndTime\s*<\s*2500\s*&&\s*window\.wasPlayingBeforeCall\s*===\s*false\);'
         )
 
 if __name__ == '__main__':

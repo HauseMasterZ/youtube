@@ -395,6 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
+        window.wasPlayingBeforeCall = true;
         if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
@@ -448,10 +449,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let _focusResumeTimer = null;
     function attemptFocusResume() {
-        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+        if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {
-                if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
                     audioPlayer.play().catch(() => {});
                 }
             }, 100);
