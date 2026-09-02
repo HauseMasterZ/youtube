@@ -25,7 +25,9 @@
     let liveAudioDestination = null;
     let liveAudioOscillator = null;
     let liveAudioGain = null;
+    let anchorStartTimer = null;
     let _isInternalAnchorStart = false;
+    let _isInternalAnchorStop = false;
 
     function _setupAnchorAutoResume(anchorEl) {
         if (!anchorEl || anchorEl._boundAutoResume) return;
@@ -37,6 +39,21 @@
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
                 audioPlayer.play().catch(e => console.warn("Anchor auto-resume error:", e));
+            }
+        });
+        anchorEl.addEventListener("pause", () => {
+            console.log("[ANCHOR-PAUSE] anchorEl paused! _isInternalAnchorStop:", _isInternalAnchorStop, "mode:", window.playbackMode, "audioPaused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused));
+            if (!_isInternalAnchorStop && window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                if (anchorStartTimer) {
+                    clearTimeout(anchorStartTimer);
+                    anchorStartTimer = null;
+                }
+                anchorStartTimer = setTimeout(() => {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive) {
+                        startLiveAudioAnchor();
+                        armAutoKillWatchdog();
+                    }
+                }, 2000);
             }
         });
     }
@@ -57,7 +74,9 @@
                     anchorEl.play().then(() => {
                         setTimeout(() => { _isInternalAnchorStart = false; }, 200);
                         if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                            _isInternalAnchorStop = true;
                             anchorEl.pause();
+                            _isInternalAnchorStop = false;
                         }
                     }).catch(() => { _isInternalAnchorStart = false; });
                 }
@@ -89,7 +108,9 @@
                     anchorEl.play().then(() => {
                         setTimeout(() => { _isInternalAnchorStart = false; }, 200);
                         if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                            _isInternalAnchorStop = true;
                             anchorEl.pause();
+                            _isInternalAnchorStop = false;
                         }
                     }).catch(() => { _isInternalAnchorStart = false; });
                 }
@@ -133,11 +154,18 @@
     }
 
     function stopLiveAudioAnchor() {
+        if (anchorStartTimer) {
+            clearTimeout(anchorStartTimer);
+            anchorStartTimer = null;
+        }
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl && !anchorEl.paused) {
             try {
+                _isInternalAnchorStop = true;
                 anchorEl.pause();
-            } catch (e) {}
+            } catch (e) {} finally {
+                _isInternalAnchorStop = false;
+            }
         }
     }
 
@@ -145,10 +173,13 @@
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             try {
+                _isInternalAnchorStop = true;
                 anchorEl.pause();
                 anchorEl.srcObject = null;
                 anchorEl.removeAttribute('src');
-            } catch (e) {}
+            } catch (e) {} finally {
+                _isInternalAnchorStop = false;
+            }
         }
         if (liveAudioOscillator) {
             try {
@@ -356,7 +387,6 @@
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
     // BT disconnect detection: track device changes to prevent speaker bleed
-    let anchorStartTimer = null;
     window.lastBtDisconnectTime = 0;
     let knownOutputCount = 0;
 
