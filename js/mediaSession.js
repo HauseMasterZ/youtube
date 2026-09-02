@@ -410,11 +410,11 @@
             }
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
-                // Mode 2 user pause: start anchor to maintain DAC awake
+            if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
+                // Mode 2 pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
