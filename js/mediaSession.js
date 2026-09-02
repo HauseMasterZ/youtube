@@ -76,7 +76,6 @@
     }
 
     function startLiveAudioAnchor() {
-        console.log("[ANCHOR-START] called!");
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
@@ -100,7 +99,6 @@
     }
 
     function stopLiveAudioAnchor() {
-        console.log("[ANCHOR-STOP] called!");
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl && !anchorEl.paused) {
             try {
@@ -528,9 +526,10 @@
                         });
                     }
                 } else {
-                    // User intentionally pausing in Mode 2
-                    window.wasPausedByUser = true;
-                    window.wasPlayingBeforeCall = false;
+                    if (!document.hidden) {
+                        window.wasPausedByUser = true;
+                        window.wasPlayingBeforeCall = false;
+                    }
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';

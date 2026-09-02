@@ -236,7 +236,6 @@
         }
 
         play() {
-            console.log("[DOM-PLAY] called! Stack:\n" + new Error().stack);
             this._initMSE();
             window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;
@@ -271,8 +270,10 @@
 
         pause() {
             this._isBufferStalled = false;
-            window.wasPausedByUser = true;
-            window.wasPlayingBeforeCall = false;
+            if (!document.hidden) {
+                window.wasPausedByUser = true;
+                window.wasPlayingBeforeCall = false;
+            }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }
@@ -310,8 +311,10 @@
         instantPause() {
             this._pendingSeek = null;
             this._isBufferStalled = false;
-            window.wasPausedByUser = true;
-            window.wasPlayingBeforeCall = false;
+            if (!document.hidden) {
+                window.wasPausedByUser = true;
+                window.wasPlayingBeforeCall = false;
+            }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }
