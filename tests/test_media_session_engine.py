@@ -424,6 +424,21 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+isAutoResumeAfterCall\s*=\s*\(typeof\s+window\.lastCallEndTime\s*===\s*[\'"]number[\'"]\s*&&\s*Date\.now\(\)\s*-\s*window\.lastCallEndTime\s*<\s*2500\s*&&\s*window\.wasPlayingBeforeCall\s*===\s*false\);'
         )
 
+    def test_action_handlers_guarded_against_active_call(self):
+        """Action handlers return early when window.isCallActive is true"""
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]play[\'"][\s\S]*?if\s*\(\s*window\.isCallActive\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.isCallActive\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.isCallActive\s*\)\s*return;'
+        )
+
 if __name__ == '__main__':
     unittest.main()
 

@@ -429,6 +429,7 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            if (window.isCallActive) return;
             const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
             if (isAutoResumeAfterCall) {
                 return;
@@ -471,6 +472,7 @@
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
+            if (window.isCallActive) return;
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
@@ -570,6 +572,7 @@
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
+                if (window.isCallActive) return;
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
