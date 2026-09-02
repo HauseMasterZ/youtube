@@ -79,6 +79,7 @@
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
+        if (!window.wasPausedByUser) return;
         initLiveAudioAnchor();
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
@@ -534,10 +535,8 @@
                         });
                     }
                 } else {
-                    if (!document.hidden) {
-                        window.wasPausedByUser = true;
-                        window.wasPlayingBeforeCall = false;
-                    }
+                    window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';

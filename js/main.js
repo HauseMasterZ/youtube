@@ -395,7 +395,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         console.log("[AUDIO-PLAY] event fired! wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
-        if (window.wasPausedByUser && window.wasPlayingBeforeCall === false) {
+        if (window.wasPausedByUser) {
             console.log("[AUDIO-PLAY] Intercepted and blocked unwanted rogue autoplay while wasPausedByUser is true!");
             audioPlayer.instantPause();
             return;
