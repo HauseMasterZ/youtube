@@ -456,7 +456,17 @@ document.addEventListener("DOMContentLoaded", () => {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {
                 if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
-                    audioPlayer.play().catch(() => {});
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                    if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
+                    audioPlayer.play().catch(e => {
+                        console.warn("attemptFocusResume error:", e);
+                        setTimeout(() => {
+                            if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
+                                if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                                audioPlayer.play().catch(() => {});
+                            }
+                        }, 150);
+                    });
                 }
             }, 100);
         }

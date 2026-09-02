@@ -34,6 +34,8 @@
             console.log("[ANCHOR-PLAY] anchor played! _isInternalAnchorStart:", _isInternalAnchorStart, "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
             if (!_isInternalAnchorStart && !window.wasPausedByUser && window.wasPlayingBeforeCall && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
                 console.log("[ANCHOR-PLAY] Native OS focus regain detected after call! Auto-resuming audioPlayer!");
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
                 audioPlayer.play().catch(e => console.warn("Anchor auto-resume error:", e));
             }
         });
