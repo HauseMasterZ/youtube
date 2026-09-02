@@ -1224,6 +1224,13 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    const storedPlaybackMode = (typeof window.getStoredSetting === 'function')
+        ? window.getStoredSetting('yt_playback_mode', 'mode1')
+        : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
+    if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
+        togglePlaybackMode('mode2');
+    }
+
     if (btTimeoutSelect) {
         btTimeoutSelect.addEventListener("change", (e) => {
             if (e.target.value === 'custom') {
