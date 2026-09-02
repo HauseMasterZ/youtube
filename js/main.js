@@ -422,6 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
+        console.log("[AUDIO-PAUSE] wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         setPlayUI(false);
@@ -449,6 +450,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let _focusResumeTimer = null;
     function attemptFocusResume() {
+        console.log("[VISIBILITYCHANGE] hidden:", document.hidden, "paused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
         if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {

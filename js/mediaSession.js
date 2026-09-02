@@ -333,6 +333,7 @@
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 navigator.mediaDevices.enumerateDevices().then(devices => {
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
+                    console.log("[DEVICECHANGE] isCallActive:", window.isCallActive, "newCount:", newCount, "known:", knownOutputCount, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
                     if (window.isCallActive) {
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
