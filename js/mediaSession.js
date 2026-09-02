@@ -448,6 +448,17 @@
                 // Mode 2 pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                    if (!window.wasPausedByUser) {
+                        // External interruption (e.g. phone call or external video): delay anchor start
+                        // to let phone calls finish/deny natively without anchor stealing audio focus
+                        setTimeout(() => {
+                            if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !window.wasPausedByUser) {
+                                startLiveAudioAnchor();
+                                armAutoKillWatchdog();
+                            }
+                        }, 4000);
+                        return;
+                    }
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
