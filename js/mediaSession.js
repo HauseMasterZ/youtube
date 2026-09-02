@@ -337,14 +337,10 @@
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
+                        const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
                             clearTimeout(anchorStartTimer);
                             anchorStartTimer = null;
-                        }
-                        if (!wasAlreadyExternallyPaused) {
-                            window.lastBtDisconnectTime = Date.now();
-                            window.wasPausedByUser = true;
-                            window.wasPlayingBeforeCall = false;
                         }
                         if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                             if (typeof audioPlayer.instantPause === 'function') {
@@ -353,8 +349,13 @@
                                 audioPlayer.pause();
                             }
                         }
-                        if (wasAlreadyExternallyPaused) {
+                        if (wasAlreadyExternallyPaused || wasPlaying) {
                             window.wasPausedByUser = false;
+                            window.wasPlayingBeforeCall = true;
+                        } else {
+                            window.lastBtDisconnectTime = Date.now();
+                            window.wasPausedByUser = true;
+                            window.wasPlayingBeforeCall = false;
                         }
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
