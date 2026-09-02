@@ -279,6 +279,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
+            window.wasPlayingBeforeCall = true;
             if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
@@ -294,6 +295,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
+            window.wasPlayingBeforeCall = false;
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             audioPlayer.instantPause();
@@ -395,6 +397,7 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
+        window.wasPlayingBeforeCall = true;
         if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
@@ -428,22 +431,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                // Mode 2 non-BT pause: keep 'playing' for head unit keepalive
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
+                // Mode 2 user pause: keep 'playing' for head unit keepalive
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
                 setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && window.wasPausedByUser && !isStillBtDisconnect) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
-            } else if (window.playbackMode === 'mode2' && isRecentBtDisconnect) {
-                // Mode 2 BT disconnect: set 'paused' (no anchor on speaker)
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                navigator.mediaSession.playbackState = 'paused';
             } else {
-                // Mode 1: standard pause
+                // External pause (phone call), Mode 1, or BT disconnect: set 'paused' so Android native focus resume works
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
@@ -452,10 +451,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let _focusResumeTimer = null;
     function attemptFocusResume() {
-        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+        if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {
-                if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
                     audioPlayer.play().catch(() => {});
                 }
             }, 100);

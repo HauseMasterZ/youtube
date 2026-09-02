@@ -333,6 +333,8 @@
                 navigator.mediaDevices.enumerateDevices().then(devices => {
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
                     if (newCount < knownOutputCount) {
+                        window.isCallActive = true;
+                        window.lastCallStartTime = Date.now();
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         if (anchorStartTimer) {
                             clearTimeout(anchorStartTimer);
@@ -341,6 +343,7 @@
                         if (!wasAlreadyExternallyPaused) {
                             window.lastBtDisconnectTime = Date.now();
                             window.wasPausedByUser = true;
+                            window.wasPlayingBeforeCall = false;
                         }
                         if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                             if (typeof audioPlayer.instantPause === 'function') {
@@ -356,7 +359,7 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                            navigator.mediaSession.playbackState = 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -373,6 +376,9 @@
                                 updateMediaSessionPosition(pos, dur, 1.0);
                             }
                         }
+                    } else if (newCount > knownOutputCount || window.isCallActive) {
+                        window.isCallActive = false;
+                        window.lastCallEndTime = Date.now();
                     }
                     knownOutputCount = newCount;
                 }).catch(() => {});
@@ -418,7 +424,12 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+            if (isAutoResumeAfterCall) {
+                return;
+            }
             window.wasPausedByUser = false;
+            window.wasPlayingBeforeCall = true;
             window.lastBtDisconnectTime = 0;
             if (typeof setPlayUI === 'function') setPlayUI(true);
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -458,8 +469,13 @@
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
+                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+                    if (isAutoResumeAfterCall) {
+                        return;
+                    }
                     // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
+                    window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -487,6 +503,7 @@
                 } else {
                     // User intentionally pausing in Mode 2
                     window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
@@ -503,7 +520,12 @@
                 // Mode 1: If audio is paused (or was paused by user), play; if playing, pause
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
+                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+                    if (isAutoResumeAfterCall) {
+                        return;
+                    }
                     window.wasPausedByUser = false;
+                    window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -525,6 +547,7 @@
                     });
                 } else {
                     window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
@@ -544,7 +567,12 @@
             navigator.mediaSession.setActionHandler('playpause', () => {
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
+                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+                    if (isAutoResumeAfterCall) {
+                        return;
+                    }
                     window.wasPausedByUser = false;
+                    window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -582,6 +610,7 @@
                     }
                 } else {
                     window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
