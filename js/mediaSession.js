@@ -332,6 +332,7 @@
         if (navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 navigator.mediaDevices.enumerateDevices().then(devices => {
+                    const newCount = devices.filter(d => d.kind === 'audiooutput').length;
                     if (window.isCallActive) {
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
