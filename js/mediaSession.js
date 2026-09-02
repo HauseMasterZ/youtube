@@ -59,14 +59,6 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && !anchorEl._hasResumeListener) {
-                anchorEl._hasResumeListener = true;
-                anchorEl.addEventListener('play', () => {
-                    if (!window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                        audioPlayer.play().catch(() => {});
-                    }
-                });
-            }
             if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
                 if (anchorEl.paused) {
@@ -381,11 +373,6 @@
                                 updateMediaSessionPosition(pos, dur, 1.0);
                             }
                         }
-                    } else if (newCount >= knownOutputCount && knownOutputCount > 0) {
-                        // Bluetooth media output restored after telephony call
-                        if (!window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                            audioPlayer.play().catch(() => {});
-                        }
                     }
                     knownOutputCount = newCount;
                 }).catch(() => {});
@@ -412,17 +399,19 @@
             }
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                // Mode 2 non-BT pause: ALWAYS start anchor (regardless of wasPausedByUser)
+            if (window.playbackMode === 'mode2' && window.wasPausedByUser && !isRecentBtDisconnect) {
+                // Mode 2 user pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && audioPlayer.paused && window.wasPausedByUser && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
                     }
                 }, 800);
+            } else {
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
             }
-            // BT disconnect: devicechange handler already manages state — do nothing here
         });
     }
 

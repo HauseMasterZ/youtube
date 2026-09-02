@@ -283,10 +283,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_mode2_pause_arms_anchor_and_watchdog(self):
-        """mediaSession.js audioPlayer pause listener arms anchor and watchdog in Mode 2 when not BT disconnect"""
+        """mediaSession.js audioPlayer pause listener arms anchor and watchdog in Mode 2 when user paused and not BT disconnect"""
         self.assertRegex(
             self.ms_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*window\.wasPausedByUser\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
         )
 
     def test_bt_device_count_disconnect_detection(self):
