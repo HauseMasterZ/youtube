@@ -457,10 +457,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let _focusResumeTimer = null;
     function attemptFocusResume() {
         console.log("[VISIBILITYCHANGE] hidden:", document.hidden, "paused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
-        if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+        if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {
-                if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
+                if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
                     audioPlayer.play().catch(() => {});
                 }
             }, 100);
