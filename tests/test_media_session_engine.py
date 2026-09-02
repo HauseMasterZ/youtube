@@ -439,6 +439,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'setActionHandler\(\s*[\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.isCallActive\s*\)\s*return;'
         )
 
+    def test_brace_balance_media_session_js(self):
+        """mediaSession.js has perfectly balanced curly braces with no syntax errors"""
+        open_b = self.ms_content.count('{')
+        close_b = self.ms_content.count('}')
+        self.assertEqual(open_b, close_b, f"Mismatched braces in mediaSession.js: {open_b} open vs {close_b} close")
+
 if __name__ == '__main__':
     unittest.main()
 

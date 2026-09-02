@@ -455,6 +455,7 @@
                 audioPlayer.currentTime = 0;
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
+            }
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
             }
