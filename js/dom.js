@@ -238,7 +238,6 @@
         play() {
             this._initMSE();
             window.wasPausedByUser = false;
-            window.wasPlayingBeforeCall = true;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
             }
@@ -271,7 +270,6 @@
         pause() {
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
-            window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }
@@ -310,7 +308,6 @@
             this._pendingSeek = null;
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
-            window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             }

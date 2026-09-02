@@ -279,7 +279,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
-            window.wasPlayingBeforeCall = true;
             if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
@@ -295,7 +294,6 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
-            window.wasPlayingBeforeCall = false;
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
             audioPlayer.instantPause();
@@ -397,7 +395,6 @@ document.addEventListener("DOMContentLoaded", () => {
     
     audioPlayer.addEventListener("play", () => {
         window.wasPausedByUser = false;
-        window.wasPlayingBeforeCall = true;
         if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
@@ -451,10 +448,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let _focusResumeTimer = null;
     function attemptFocusResume() {
-        if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+        if (!document.hidden && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
             clearTimeout(_focusResumeTimer);
             _focusResumeTimer = setTimeout(() => {
-                if (!document.hidden && !window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
+                if (!document.hidden && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
                     audioPlayer.play().catch(() => {});
                 }
             }, 100);

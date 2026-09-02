@@ -45,9 +45,6 @@
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
     window.wasPausedByUser = true;
-    window.wasPlayingBeforeCall = false;
-    window.lastCallEndTime = 0;
-    window.isCallActive = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
     // Virtual Scroller state
