@@ -356,7 +356,7 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
+                            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
