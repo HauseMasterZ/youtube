@@ -429,18 +429,18 @@ document.addEventListener("DOMContentLoaded", () => {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
-            if (window.playbackMode === 'mode2' && (window.wasPausedByUser || window.isCallActive) && !isRecentBtDisconnect) {
-                // Mode 2 user pause or active call: keep 'playing' for head unit keepalive
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
+                // Mode 2 pause: keep 'playing' for head unit keepalive
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
                 setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && (window.wasPausedByUser || window.isCallActive) && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
             } else {
-                // External media focus change (e.g. YouTube video), Mode 1, or BT disconnect: set 'paused' so Android native focus resume works
+                // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }

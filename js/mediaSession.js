@@ -455,6 +455,8 @@
                 audioPlayer.currentTime = 0;
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
+            if (typeof updateMediaSessionPosition === 'function') {
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
@@ -462,11 +464,11 @@
             if (playPromise && playPromise.then) {
                 playPromise.catch(e => {
                     console.warn("MediaSession play error:", e);
-                    Promise.resolve().then(() => {
+                    setTimeout(() => {
                         if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                             audioPlayer.play().catch(() => {});
                         }
-                    });
+                    }, 50);
                 });
             }
         });
@@ -494,17 +496,20 @@
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.catch(e => {
                             console.warn("MediaSession play error:", e);
-                            Promise.resolve().then(() => {
+                            setTimeout(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     }
                 } else {
@@ -603,17 +608,20 @@
                             updateLyricsUI(0);
                         }
                     }
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            Promise.resolve().then(() => {
+                            setTimeout(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
                                     audioPlayer.play().catch(() => {});
                                 }
-                            });
+                            }, 50);
                         });
                     }
                 } else {
