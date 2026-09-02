@@ -438,10 +438,6 @@
         navigator.mediaSession.setActionHandler('play', () => {
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
-            if (document.hidden && window.wasPlayingBeforeCall === false) {
-                console.log("[MS-ACTION] 'play' ignored background action because wasPlayingBeforeCall is false");
-                return;
-            }
             const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
             if (isAutoResumeAfterCall) {
                 return;
@@ -494,10 +490,6 @@
             if (window.isCallActive) return;
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
-                    if (document.hidden && window.wasPlayingBeforeCall === false) {
-                        console.log("[MS-ACTION] 'pause' ignored background action because wasPlayingBeforeCall is false");
-                        return;
-                    }
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
                     if (isAutoResumeAfterCall) {
                         return;
@@ -602,10 +594,6 @@
                 console.log("[MS-ACTION] 'playpause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
                 if (window.isCallActive) return;
                 if (isActuallyPaused) {
-                    if (document.hidden && window.wasPlayingBeforeCall === false) {
-                        console.log("[MS-ACTION] 'playpause' ignored background action because wasPlayingBeforeCall is false");
-                        return;
-                    }
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
                     if (isAutoResumeAfterCall) {
                         return;
