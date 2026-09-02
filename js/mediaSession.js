@@ -69,6 +69,9 @@
 
         try {
             liveAudioContext = new AudioCtx();
+            if (liveAudioContext.state === 'suspended') {
+                liveAudioContext.resume().catch(() => {});
+            }
             liveAudioDestination = liveAudioContext.createMediaStreamDestination();
             liveAudioOscillator = liveAudioContext.createOscillator();
             liveAudioGain = liveAudioContext.createGain();
@@ -102,6 +105,9 @@
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
         initLiveAudioAnchor();
+        if (liveAudioContext && liveAudioContext.state === 'suspended') {
+            liveAudioContext.resume().catch(() => {});
+        }
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             _setupAnchorAutoResume(anchorEl);
@@ -142,7 +148,6 @@
                 anchorEl.pause();
                 anchorEl.srcObject = null;
                 anchorEl.removeAttribute('src');
-                if (typeof anchorEl.load === 'function') anchorEl.load();
             } catch (e) {}
         }
         if (liveAudioOscillator) {
@@ -223,6 +228,9 @@
 
         if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
+            if (liveAudioContext && liveAudioContext.state === 'suspended') {
+                liveAudioContext.resume().catch(() => {});
+            }
         }
 
         if (typeof window.setStoredSetting === 'function') {
@@ -451,12 +459,12 @@
                     if (!window.wasPausedByUser) {
                         // External interruption (e.g. phone call or external video): delay anchor start
                         // to let phone calls finish/deny natively without anchor stealing audio focus
-                        setTimeout(() => {
+                        anchorStartTimer = setTimeout(() => {
                             if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !window.wasPausedByUser) {
                                 startLiveAudioAnchor();
                                 armAutoKillWatchdog();
                             }
-                        }, 4000);
+                        }, 2000);
                         return;
                     }
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
