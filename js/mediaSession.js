@@ -76,6 +76,7 @@
     }
 
     function startLiveAudioAnchor() {
+        console.log("[ANCHOR-START] called!");
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
@@ -99,6 +100,7 @@
     }
 
     function stopLiveAudioAnchor() {
+        console.log("[ANCHOR-STOP] called!");
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl && !anchorEl.paused) {
             try {

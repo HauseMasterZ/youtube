@@ -236,6 +236,7 @@
         }
 
         play() {
+            console.log("[DOM-PLAY] called! Stack:\n" + new Error().stack);
             this._initMSE();
             window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;

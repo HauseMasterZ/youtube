@@ -394,6 +394,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
+        console.log("[AUDIO-PLAY] event fired! wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         window.wasPausedByUser = false;
         window.wasPlayingBeforeCall = true;
         if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
