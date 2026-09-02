@@ -429,6 +429,7 @@
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
         navigator.mediaSession.setActionHandler('play', () => {
+            console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
             if (isAutoResumeAfterCall) {
@@ -463,11 +464,13 @@
             cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
-                playPromise.catch(e => {
+                playPromise.then(() => {
+                    console.log("[MS-ACTION] 'play' playPromise RESOLVED.");
+                }).catch(e => {
                     console.warn("MediaSession play error:", e);
                     setTimeout(() => {
                         if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                            audioPlayer.play().catch(() => {});
+                            audioPlayer.play().then(() => console.log("[MS-ACTION] 'play' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'play' retry REJECTED:", err));
                         }
                     }, 50);
                 });
@@ -475,8 +478,9 @@
         });
 
         navigator.mediaSession.setActionHandler('pause', () => {
-            if (window.isCallActive) return;
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
+            console.log("[MS-ACTION] 'pause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
+            if (window.isCallActive) return;
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
@@ -504,11 +508,13 @@
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.catch(e => {
+                        playPromise.then(() => {
+                            console.log("[MS-ACTION] 'pause' playPromise RESOLVED.");
+                        }).catch(e => {
                             console.warn("MediaSession play error:", e);
                             setTimeout(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().catch(() => {});
+                                    audioPlayer.play().then(() => console.log("[MS-ACTION] 'pause' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'pause' retry REJECTED:", err));
                                 }
                             }, 50);
                         });
@@ -578,8 +584,9 @@
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
-                if (window.isCallActive) return;
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
+                console.log("[MS-ACTION] 'playpause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
+                if (window.isCallActive) return;
                 if (isActuallyPaused) {
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
                     if (isAutoResumeAfterCall) {
@@ -616,11 +623,13 @@
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
-                        playPromise.catch(e => {
+                        playPromise.then(() => {
+                            console.log("[MS-ACTION] 'playpause' playPromise RESOLVED.");
+                        }).catch(e => {
                             console.warn("MediaSession playpause error:", e);
                             setTimeout(() => {
                                 if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().catch(() => {});
+                                    audioPlayer.play().then(() => console.log("[MS-ACTION] 'playpause' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'playpause' retry REJECTED:", err));
                                 }
                             }, 50);
                         });
