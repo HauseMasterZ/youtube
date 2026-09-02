@@ -332,8 +332,18 @@
         if (navigator.mediaDevices.addEventListener) {
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 navigator.mediaDevices.enumerateDevices().then(devices => {
-                    const newCount = devices.filter(d => d.kind === 'audiooutput').length;
-                    if (newCount < knownOutputCount) {
+                    if (window.isCallActive) {
+                        window.isCallActive = false;
+                        window.lastCallEndTime = Date.now();
+                        if (window.wasPlayingBeforeCall && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                            setTimeout(() => {
+                                if (!window.isCallActive && window.wasPlayingBeforeCall && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                                    audioPlayer.play().catch(() => {});
+                                }
+                            }, 150);
+                            audioPlayer.play().catch(() => {});
+                        }
+                    } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
@@ -377,12 +387,6 @@
                             if (typeof updateMediaSessionPosition === 'function') {
                                 updateMediaSessionPosition(pos, dur, (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) ? 0.00001 : 1.0);
                             }
-                        }
-                    } else if (newCount > knownOutputCount || window.isCallActive) {
-                        window.isCallActive = false;
-                        window.lastCallEndTime = Date.now();
-                        if (window.wasPlayingBeforeCall && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                            audioPlayer.play().catch(() => {});
                         }
                     }
                     knownOutputCount = newCount;
