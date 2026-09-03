@@ -22,6 +22,7 @@
 
     // Live Audio Anchor Singleton for Mode 2 (Hands-Free Bluetooth)
     let liveAudioContext = null;
+    const SILENT_WAV_DATA_URI = "data:audio/wav;base64,UklGRkQDAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YSADAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==";
     let liveAudioDestination = null;
     let liveAudioOscillator = null;
     let liveAudioGain = null;
@@ -43,17 +44,19 @@
         });
         anchorEl.addEventListener("pause", () => {
             console.log("[ANCHOR-PAUSE] anchorEl paused! _isInternalAnchorStop:", _isInternalAnchorStop, "mode:", window.playbackMode, "audioPaused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused));
-            if (!_isInternalAnchorStop && window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+            if (!_isInternalAnchorStop && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                 if (anchorStartTimer) {
                     clearTimeout(anchorStartTimer);
                     anchorStartTimer = null;
                 }
-                anchorStartTimer = setTimeout(() => {
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive) {
-                        startLiveAudioAnchor();
-                        armAutoKillWatchdog();
-                    }
-                }, 2000);
+                if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    updateMediaSessionPosition(pos, dur, 1.0);
+                }
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
             }
         });
     }
@@ -66,8 +69,13 @@
             const anchorEl = document.getElementById("live-stream-anchor");
             if (anchorEl) {
                 _setupAnchorAutoResume(anchorEl);
+                anchorEl.loop = true;
+                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                    anchorEl.src = SILENT_WAV_DATA_URI;
+                }
                 if (liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
                     anchorEl.srcObject = liveAudioDestination.stream;
+                    anchorEl.srcObject = null;
                 }
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
@@ -116,7 +124,12 @@
 
             const anchorEl = document.getElementById("live-stream-anchor");
             if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
+                anchorEl.loop = true;
+                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                    anchorEl.src = SILENT_WAV_DATA_URI;
+                }
                 anchorEl.srcObject = liveAudioDestination.stream;
+                anchorEl.srcObject = null;
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
@@ -146,8 +159,13 @@
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             _setupAnchorAutoResume(anchorEl);
+            anchorEl.loop = true;
+            if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                anchorEl.src = SILENT_WAV_DATA_URI;
+            }
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
+                anchorEl.srcObject = null;
             }
             _isInternalAnchorStart = true;
             anchorEl.play().then(() => {
@@ -497,21 +515,21 @@
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
+                if (!window.wasPausedByUser) {
+                    // External interruption (e.g. phone call or external video): proactive pause instead of setTimeout
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
+                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                        updateMediaSessionPosition(pos, dur, 1.0);
+                    }
+                    stopLiveAudioAnchor();
+                    cancelAutoKillWatchdog();
+                    return;
+                }
                 // Mode 2 pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (!window.wasPausedByUser) {
-                        // External interruption (e.g. phone call or external video): drop to 'paused' emulating Mode 1
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
-                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
-                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                            updateMediaSessionPosition(pos, dur, 1.0);
-                        }
-                        stopLiveAudioAnchor();
-                        cancelAutoKillWatchdog();
-                        return;
-                    }
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
