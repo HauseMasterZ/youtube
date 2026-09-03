@@ -26,6 +26,7 @@
     let liveAudioOscillator = null;
     let liveAudioGain = null;
     let anchorStartTimer = null;
+    let anchorHeartbeatTimer = null;
     let _isInternalAnchorStart = false;
     let _isInternalAnchorStop = false;
 
@@ -146,6 +147,7 @@
                         updateMediaSessionPosition(pos, dur, 0.00001);
                     }
                 }
+                startAnchorHeartbeat();
             }).catch(e => {
                 _isInternalAnchorStart = false;
                 console.warn("Live anchor play error:", e);
@@ -153,7 +155,45 @@
         }
     }
 
+    function startAnchorHeartbeat() {
+        stopAnchorHeartbeat();
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2') return;
+        anchorHeartbeatTimer = setInterval(() => {
+            if (window.playbackMode !== 'mode2' || window.isCallActive || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                stopAnchorHeartbeat();
+                return;
+            }
+            if (liveAudioContext && liveAudioContext.state === 'suspended') {
+                liveAudioContext.resume().catch(() => {});
+            }
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && anchorEl.paused) {
+                _isInternalAnchorStart = true;
+                anchorEl.play().then(() => {
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                }).catch(() => { _isInternalAnchorStart = false; });
+            }
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'playing';
+                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(pos, dur, 0.00001);
+                }
+            }
+        }, 2000);
+    }
+
+    function stopAnchorHeartbeat() {
+        if (anchorHeartbeatTimer) {
+            clearInterval(anchorHeartbeatTimer);
+            anchorHeartbeatTimer = null;
+        }
+    }
+
     function stopLiveAudioAnchor() {
+        stopAnchorHeartbeat();
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
             anchorStartTimer = null;
@@ -170,6 +210,7 @@
     }
 
     function teardownLiveAudioAnchor() {
+        stopAnchorHeartbeat();
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             try {
