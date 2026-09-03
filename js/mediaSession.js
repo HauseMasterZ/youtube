@@ -26,7 +26,6 @@
     let liveAudioOscillator = null;
     let liveAudioGain = null;
     let anchorStartTimer = null;
-    let anchorHeartbeatTimer = null;
     let _isInternalAnchorStart = false;
     let _isInternalAnchorStop = false;
 
@@ -92,6 +91,20 @@
             if (liveAudioContext.state === 'suspended') {
                 liveAudioContext.resume().catch(() => {});
             }
+            liveAudioContext.onstatechange = () => {
+                if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                    if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
+                        if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = 'paused';
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            updateMediaSessionPosition(pos, dur, 1.0);
+                            stopLiveAudioAnchor();
+                            cancelAutoKillWatchdog();
+                        }
+                    }
+                }
+            };
             liveAudioDestination = liveAudioContext.createMediaStreamDestination();
             liveAudioOscillator = liveAudioContext.createOscillator();
             liveAudioGain = liveAudioContext.createGain();
@@ -147,7 +160,6 @@
                         updateMediaSessionPosition(pos, dur, 0.00001);
                     }
                 }
-                startAnchorHeartbeat();
             }).catch(e => {
                 _isInternalAnchorStart = false;
                 console.warn("Live anchor play error:", e);
@@ -155,44 +167,7 @@
         }
     }
 
-    function startAnchorHeartbeat() {
-        stopAnchorHeartbeat();
-        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
-        anchorHeartbeatTimer = setInterval(() => {
-            if (window.playbackMode !== 'mode2' || window.isCallActive || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
-                stopAnchorHeartbeat();
-                return;
-            }
-            if (liveAudioContext && liveAudioContext.state === 'suspended') {
-                liveAudioContext.resume().catch(() => {});
-            }
-            const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl) {
-                _isInternalAnchorStart = true;
-                anchorEl.play().catch(() => {});
-                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-            }
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'playing';
-                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                if (typeof updateMediaSessionPosition === 'function') {
-                    updateMediaSessionPosition(pos, dur, 0.00001);
-                }
-            }
-        }, 2000);
-    }
-
-    function stopAnchorHeartbeat() {
-        if (anchorHeartbeatTimer) {
-            clearInterval(anchorHeartbeatTimer);
-            anchorHeartbeatTimer = null;
-        }
-    }
-
     function stopLiveAudioAnchor() {
-        stopAnchorHeartbeat();
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
             anchorStartTimer = null;
@@ -209,7 +184,6 @@
     }
 
     function teardownLiveAudioAnchor() {
-        stopAnchorHeartbeat();
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             try {
@@ -527,14 +501,15 @@
                 anchorStartTimer = setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                     if (!window.wasPausedByUser) {
-                        // External interruption (e.g. phone call or external video): delay anchor start
-                        // to let phone calls finish/deny natively without anchor stealing audio focus
-                        anchorStartTimer = setTimeout(() => {
-                            if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !window.wasPausedByUser) {
-                                startLiveAudioAnchor();
-                                armAutoKillWatchdog();
-                            }
-                        }, 2000);
+                        // External interruption (e.g. phone call or external video): drop to 'paused' emulating Mode 1
+                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = 'paused';
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
+                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            updateMediaSessionPosition(pos, dur, 1.0);
+                        }
+                        stopLiveAudioAnchor();
+                        cancelAutoKillWatchdog();
                         return;
                     }
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {

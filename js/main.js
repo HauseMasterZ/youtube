@@ -440,9 +440,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Mode 2 pause: keep 'playing' for head unit keepalive
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
                 navigator.mediaSession.playbackState = 'playing';
+                if (!window.wasPausedByUser) {
+                    // External interruption: drop to 'paused' emulating Mode 1
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    navigator.mediaSession.playbackState = 'paused';
+                }
                 setTimeout(() => {
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect && window.wasPausedByUser) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);
