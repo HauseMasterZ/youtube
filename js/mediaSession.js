@@ -168,11 +168,10 @@
                 liveAudioContext.resume().catch(() => {});
             }
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && anchorEl.paused) {
+            if (anchorEl) {
                 _isInternalAnchorStart = true;
-                anchorEl.play().then(() => {
-                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                }).catch(() => { _isInternalAnchorStart = false; });
+                anchorEl.play().catch(() => {});
+                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
             }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';

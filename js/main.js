@@ -481,14 +481,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && !audioPlayer.paused) {
-            updateTimeUI(Math.floor(audioPlayer.currentTime));
+        if (!document.hidden) {
+            if (!audioPlayer.paused) {
+                updateTimeUI(Math.floor(audioPlayer.currentTime));
 
-            // Re-sync MediaSession state when PWA is foregrounded
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'playing';
-                const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+                // Re-sync MediaSession state when PWA is foregrounded
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+                }
+            } else if (window.playbackMode === 'mode2' && !window.isCallActive) {
+                if (typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
             }
         }
     });
