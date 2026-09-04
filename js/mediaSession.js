@@ -149,6 +149,7 @@
     }
 
     function startLiveAudioAnchor() {
+        console.log("[TRACE] startLiveAudioAnchor entry. mode:", window.playbackMode, "isCallActive:", window.isCallActive);
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
@@ -177,15 +178,18 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(pos, dur, 0.00001);
                     }
+                    console.log("[TRACE] anchor play RESOLVED. playbackState:", navigator.mediaSession.playbackState, "anchorPaused:", anchorEl.paused);
                 }
             }).catch(e => {
                 _isInternalAnchorStart = false;
+                console.log("[TRACE] anchor play REJECTED:", e && e.name, e && e.message);
                 console.warn("Live anchor play error:", e);
             });
         }
     }
 
     function stopLiveAudioAnchor() {
+        console.log("[TRACE] stopLiveAudioAnchor entry.");
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
             anchorStartTimer = null;
@@ -262,6 +266,7 @@
         if (isNaN(mins) || mins <= 0) return;
 
         const ms = mins * 60 * 1000;
+        console.log("[TRACE] watchdog armed, mins:", mins);
         window.btSleepTimer = setTimeout(() => {
             teardownLiveAudioAnchor();
             stopLiveAudioAnchor();
@@ -321,8 +326,11 @@
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
                 }
-                startLiveAudioAnchor();
-                armAutoKillWatchdog();
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
+                    var _traceAnchorEl = null;
+                    try { _traceAnchorEl = document.getElementById('live-stream-anchor'); } catch (e) {}
+                    console.log("[TRACE] pause-handler exit. playbackState:", navigator.mediaSession.playbackState, "anchorPaused:", _traceAnchorEl ? _traceAnchorEl.paused : 'no-el', "audioPaused:", audioPlayer.paused);
             }
         } else {
             teardownLiveAudioAnchor();
@@ -525,6 +533,7 @@
                     }
                     stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
+                    console.log("[TRACE] ms-pause-listener: external proactive paused.");
                     return;
                 }
                 // Mode 2 pause: start anchor synchronously to maintain DAC awake.
@@ -534,10 +543,12 @@
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     startLiveAudioAnchor();
                     armAutoKillWatchdog();
+                    console.log("[TRACE] ms-pause-listener: user-pause sync start done.");
                 }
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
+                console.log("[TRACE] ms-pause-listener: else stop.");
             }
         });
     }

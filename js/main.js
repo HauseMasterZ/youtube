@@ -456,6 +456,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
+            console.log("[TRACE] main-pause-listener exit. playbackState:", navigator.mediaSession.playbackState);
         }
     });
 
