@@ -65,11 +65,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """initLiveAudioAnchor primes anchorEl with play/pause on initialization"""
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
+            r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?anchorEl\.pause\(\);'
         )
 
     def test_watchdog_lifecycle_functions_defined(self):
@@ -108,13 +104,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast', self.ms_content)
         self.assertIn('mode-toast-text', self.ms_content)
 
-    def test_micro_rate_scoped_to_mobile(self):
-        """Ensure 0.00001 micro-rate spoof is guarded by isMobileDevice check and mode2"""
+    def test_no_micro_rate_spoof(self):
+        """No 0.00001 micro-rate spoof anywhere: paused state is always honest"""
         self.assertIn("isMobileDevice", self.ms_content)
-        self.assertRegex(
-            self.ms_content,
-            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\?\s*0\.00001\s*:\s*1\.0'
-        )
+        self.assertNotIn("0.00001", self.ms_content)
+        self.assertNotIn("0.00001", self.dom_content)
+        self.assertNotIn("0.00001", self.main_content)
+        self.assertNotIn("0.00001", self.state_content)
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_content = f.read()
+        self.assertNotIn("0.00001", playback_content)
 
     def test_start_live_anchor_scoped_to_mobile(self):
         """Ensure startLiveAudioAnchor exits early on desktop"""
@@ -123,22 +122,22 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*!isMobileDevice\s*\)\s*return;'
         )
 
-    def test_start_live_anchor_enforces_playing_and_position(self):
-        """startLiveAudioAnchor enforces playbackState = 'playing' and micro-rate position update on play resolution"""
+    def test_start_live_anchor_leaves_declared_state_alone(self):
+        """startLiveAudioAnchor starts audio without touching declared playback state"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+startLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"];[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*0\.00001\s*\);'
+            r'function\s+startLiveAudioAnchor\s*\(\s*\)[\s\S]*?anchorEl\.play\(\)'
+        )
+        self.assertNotRegex(
+            self.ms_content,
+            r'function\s+startLiveAudioAnchor\s*\(\s*\)\s*\{(?:(?!\n    function )[\s\S])*?playbackState'
         )
 
-    def test_pause_listener_mode2_delayed_reassertion(self):
-        """audioPlayer pause event listener re-asserts playing state after 100ms in Mode 2"""
+    def test_pause_listener_honest_paused(self):
+        """audioPlayer pause event listener in main.js declares honest paused with rate 1.0"""
         self.assertRegex(
             self.main_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?100\s*\);'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?!\s*window\.isCallActive[\s\S]*?100\s*\)'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_action_handlers_include_playpause_and_taps(self):
@@ -179,21 +178,21 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
         self.assertNotIn("this.active.currentTime = ct;", self.dom_content)
 
-    def test_mode2_mode_aware_playback_state_across_files(self):
-        """DualAudioPingPong pause in dom.js, ended/error in main.js, and executePlayback in playback.js use mode-aware playbackState"""
+    def test_honest_paused_playback_state_across_files(self):
+        """pause paths in dom.js, main.js, and playback.js declare honest paused"""
         self.assertRegex(
             self.dom_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.main_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
         self.assertRegex(
             playback_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*\(\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"]\)\s*:\s*[\'"]playing[\'"];'
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"];'
         )
 
     def test_audio_handshake_stop_anchor_before_play(self):
@@ -208,10 +207,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_toggle_playback_mode_republishes_metadata(self):
-        """togglePlaybackMode re-publishes MediaMetadata when switching modes while paused"""
+        """togglePlaybackMode declares honest paused and re-publishes MediaMetadata when switching modes while paused"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(newMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];[\s\S]*?new\s+MediaMetadata'
+            r'if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?new\s+MediaMetadata'
         )
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
@@ -290,7 +289,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
         )
 
     def test_mode2_pause_arms_anchor_and_watchdog(self):
@@ -321,14 +324,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("triggerPreloads()", self.main_content)
 
     def test_toggle_playback_mode_synchronizes_paused_state(self):
-        """togglePlaybackMode synchronizes playbackState and position rate when switched while paused"""
+        """togglePlaybackMode declares honest paused with rate 1.0 when switched while paused"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]'
+            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.ms_content,
-            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\?\s*0\.00001\s*:\s*1\.0\s*\)'
+            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -375,10 +378,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_mode1_switch_enforces_paused_pipeline(self):
-        """togglePlaybackMode enforces instantPause, setPlayUI, and playbackState when switching while paused"""
-        self.assertRegex(
+        """togglePlaybackMode declares honest paused on both mode branches when switching while paused"""
+        self.assertNotRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(newMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+            r'newMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\?\s*[\'"]playing[\'"]'
         )
         self.assertRegex(
             self.ms_content,

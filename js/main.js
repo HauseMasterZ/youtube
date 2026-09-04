@@ -296,7 +296,7 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             window.wasPausedByUser = true;
             setPlayUI(false);
-            if (hasMediaSession) navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
             audioPlayer.instantPause();
         }
     });
@@ -438,21 +438,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                // Mode 2 pause: keep 'playing' for head unit keepalive
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
-                navigator.mediaSession.playbackState = 'playing';
+                // Mode 2 pause: declare honest paused; the running anchor holds keepalive
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                navigator.mediaSession.playbackState = 'paused';
                 if (!window.wasPausedByUser) {
                     // External interruption: drop to 'paused' emulating Mode 1
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     navigator.mediaSession.playbackState = 'paused';
                 }
-                setTimeout(() => {
-                    if (window.isCallActive) return;
-                    const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && !window.isCallActive && !isStillBtDisconnect && window.wasPausedByUser) {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
-                }, 100);
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
@@ -623,7 +616,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
-                navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                navigator.mediaSession.playbackState = 'paused';
             }
             return;
         }
@@ -689,7 +682,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+            navigator.mediaSession.playbackState = 'paused';
         }
         
         errorSkipTimer = setTimeout(() => {

@@ -191,22 +191,20 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_pause_listener_media_session_position(self):
-        """audioPlayer pause event listener calls updateMediaSessionPosition with 0.00001 micro-rate"""
+        """audioPlayer pause event listener calls updateMediaSessionPosition with honest rate 1.0"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertIn('0.00001', pause_block)
-        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*0\.00001\s*\)')
+        self.assertNotIn('0.00001', pause_block)
+        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\)')
 
     def test_pause_listener_mode2_and_mode1_playback_state(self):
-        """audioPlayer pause event listener sets playing for Mode 2 (when not disconnect) and paused for Mode 1"""
+        """audioPlayer pause event listener declares honest paused in both Mode 2 and Mode 1"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertRegex(
-            pause_block,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"]\s*;?[\s\S]*?\}'
-        )
+        self.assertNotIn("'playing'", pause_block)
+        self.assertIn("'paused'", pause_block)
 
     def test_media_session_play_handler_lyrics_reset(self):
         """MediaSession play action handler resets lyrics UI on near-end rewind"""
