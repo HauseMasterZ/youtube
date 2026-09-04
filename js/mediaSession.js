@@ -527,14 +527,14 @@
                     cancelAutoKillWatchdog();
                     return;
                 }
-                // Mode 2 pause: start anchor to maintain DAC awake
-                anchorStartTimer = setTimeout(() => {
-                    const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
-                        startLiveAudioAnchor();
-                        armAutoKillWatchdog();
-                    }
-                }, 800);
+                // Mode 2 pause: start anchor synchronously to maintain DAC awake.
+                // No delayed scheduling: any gap without audio focus lets the
+                // browser reclaim the session and strip the notification.
+                const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
+                    startLiveAudioAnchor();
+                    armAutoKillWatchdog();
+                }
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();

@@ -386,11 +386,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*audioPlayer\.active\s*&&\s*audioPlayer\.active\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.active\.play\(\)[\s\S]*?audioPlayer\.active\.pause\(\)'
         )
 
-    def test_mode2_anchor_scheduling_on_pause(self):
-        """Mode 2 schedules live audio anchor after 800ms on audioPlayer pause"""
+    def test_mode2_anchor_starts_synchronously_on_pause(self):
+        """Mode 2 starts live audio anchor synchronously on audioPlayer pause with no focus gap"""
         self.assertRegex(
             self.ms_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?800\s*\)'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
+        )
+        self.assertNotRegex(
+            self.ms_content,
+            r'anchorStartTimer\s*=\s*setTimeout'
         )
 
     def test_phone_call_state_flags_in_state_js(self):
