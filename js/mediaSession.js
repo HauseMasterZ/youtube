@@ -418,6 +418,26 @@
     }
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
+    // Re-publish the stored song info as a fresh object so the notification
+    // card returns even if the browser dismissed the previous session
+    // (e.g. long call with a frozen page: first code that runs re-announces).
+    function republishMediaMetadata() {
+        if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
+            try {
+                const current = navigator.mediaSession.metadata;
+                if (current) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: current.title,
+                        artist: current.artist,
+                        album: current.album,
+                        artwork: current.artwork
+                    });
+                }
+            } catch (e) {}
+        }
+    }
+    window.republishMediaMetadata = republishMediaMetadata;
+
     // BT disconnect detection: track device changes to prevent speaker bleed
     window.lastBtDisconnectTime = 0;
     let knownOutputCount = 0;
@@ -442,6 +462,7 @@
                                 }
                             }, 150);
                             audioPlayer.play().catch(() => {});
+                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
@@ -505,6 +526,7 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         audioPlayer.addEventListener('pause', () => {
             lastAudioPlayerPauseTime = Date.now();

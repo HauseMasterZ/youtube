@@ -463,6 +463,24 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.mediaSessionDestroyed = true;', self.ms_content)
         self.assertIn('if (window.mediaSessionDestroyed) return;', self.ms_content)
 
+    def test_metadata_republished_on_resume(self):
+        """song info is re-sent fresh on hangup resume, play start, and foregrounding"""
+        self.assertRegex(self.ms_content, r'function\s+republishMediaMetadata\s*\(\s*\)')
+        self.assertIn('window.republishMediaMetadata = republishMediaMetadata;', self.ms_content)
+        self.assertIn('new MediaMetadata({', self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'window\.isCallActive\s*=\s*false;[\s\S]*?audioPlayer\.play\(\)[\s\S]*?republishMediaMetadata\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]play[\'"][\s\S]*?republishMediaMetadata\(\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"][\s\S]*?republishMediaMetadata\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
 

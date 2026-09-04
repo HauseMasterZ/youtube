@@ -497,6 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     navigator.mediaSession.playbackState = 'playing';
                     const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive) {
                 if (typeof startLiveAudioAnchor === 'function') {
