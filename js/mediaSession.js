@@ -242,7 +242,14 @@
 
     let focusProbePrimed = false;
 
+    // TEMP diagnostic 2026-09-04: autostart disabled while investigating the
+    // Mode-2 notification strip. The probe element is the only new runtime
+    // variable in the pause path, so this restores pre-probe runtime exactly.
+    // Re-enable by setting this to true once the root cause is confirmed.
+    const FOCUS_PROBE_AUTOSTART_ENABLED = false;
+
     function primeFocusProbe() {
+        if (!FOCUS_PROBE_AUTOSTART_ENABLED) return;
         const probeEl = document.getElementById("focus-probe");
         if (!probeEl || focusProbePrimed) return;
         if (!probeEl.src) {
@@ -256,6 +263,7 @@
     }
 
     function startFocusProbe() {
+        if (!FOCUS_PROBE_AUTOSTART_ENABLED) return;
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
