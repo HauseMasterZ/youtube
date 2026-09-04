@@ -65,7 +65,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         """initLiveAudioAnchor primes anchorEl with play/pause on initialization"""
         self.assertRegex(
             self.ms_content,
-            r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?anchorEl\.pause\(\);'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
         )
 
     def test_watchdog_lifecycle_functions_defined(self):
@@ -131,6 +135,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.main_content,
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?100\s*\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?!\s*window\.isCallActive[\s\S]*?100\s*\)'
         )
 
     def test_action_handlers_include_playpause_and_taps(self):
@@ -403,16 +411,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window.lastCallEndTime = 0;", self.state_content)
         self.assertIn("window.isCallActive = false;", self.state_content)
 
-    def test_phone_call_accepted_mode2_preserves_playing_state(self):
-        """devicechange sets isCallActive and preserves Mode 2 playing playbackState with micro-rate"""
+    def test_phone_call_accepted_sets_paused_with_rate_1_0(self):
+        """devicechange sets isCallActive and forces paused playbackState with rate 1.0"""
         self.assertIn("window.isCallActive = true;", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.ms_content,
-            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\)\s*\?\s*0\.00001\s*:\s*1\.0\s*\)'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
         )
 
     def test_phone_call_hangup_auto_resume_and_post_call_filter(self):

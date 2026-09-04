@@ -468,7 +468,7 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                            navigator.mediaSession.playbackState = 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -482,7 +482,7 @@
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             if (typeof updateMediaSessionPosition === 'function') {
-                                updateMediaSessionPosition(pos, dur, (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) ? 0.00001 : 1.0);
+                                updateMediaSessionPosition(pos, dur, 1.0);
                             }
                         }
                     }
