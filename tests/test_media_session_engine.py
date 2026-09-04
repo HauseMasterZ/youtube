@@ -479,6 +479,10 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'probeEl\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?stopLiveAudioAnchor\(\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
         )
 
+    def test_focus_probe_plays_at_full_volume(self):
+        """probe must not be muted: volume 0 elements get suspended by the OS, which would strip Mode 2 keepalive"""
+        self.assertNotIn('probeEl.volume = 0', self.ms_content)
+
 if __name__ == '__main__':
     unittest.main()
 

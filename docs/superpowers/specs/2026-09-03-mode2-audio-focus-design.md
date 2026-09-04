@@ -47,7 +47,13 @@ Change (keepalive priority):
 - Add `SILENT_WAV_DATA_URI` const in `js/mediaSession.js`.
 - Prime probe on Mode-2 enter and btnPlayPause gesture via
   `play().then(pause())`, swallow `NotAllowedError`.
-- While Mode-2 paused with anchor running, loop probe at volume 0.
+- While Mode-2 paused with anchor running, loop probe at default volume 1.
+  Silence is in the content (same digitally-silent WAV the anchor plays),
+  never via element mute: a volume 0 element gets suspended by OS power
+  logic when backgrounded, and that suspension fires the probe pause
+  handler below, which tears down the Mode 2 keepalive it was meant to
+  protect (found 2026-09-04 from drawer-pause symptom + anchor
+  play-pause-abort log sequence).
 - On probe native `pause` with Mode-2 + audioPlayer.paused +
   `wasPausedByUser` + `!isCallActive` + `!isRecentBtDisconnect`:
   `stopLiveAudioAnchor`, `cancelAutoKillWatchdog`,

@@ -248,7 +248,6 @@
         if (!probeEl.src) {
             probeEl.src = SILENT_WAV_DATA_URI;
         }
-        probeEl.volume = 0;
         probeEl.loop = true;
         probeEl.play().then(() => {
             probeEl.pause();
@@ -265,7 +264,6 @@
         if (!probeEl.src) {
             probeEl.src = SILENT_WAV_DATA_URI;
         }
-        probeEl.volume = 0;
         probeEl.loop = true;
         probeEl.play().catch(() => {});
     }
