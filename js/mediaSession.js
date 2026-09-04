@@ -150,6 +150,7 @@
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
+        if (window.mediaSessionDestroyed) return;
         initLiveAudioAnchor();
         if (liveAudioContext && liveAudioContext.state === 'suspended') {
             liveAudioContext.resume().catch(() => {});
@@ -260,6 +261,7 @@
 
         const ms = mins * 60 * 1000;
         window.btSleepTimer = setTimeout(() => {
+            window.mediaSessionDestroyed = true;
             teardownLiveAudioAnchor();
             stopLiveAudioAnchor();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
@@ -280,6 +282,7 @@
     function togglePlaybackMode(targetMode = null) {
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
+        window.mediaSessionDestroyed = false;
         lastAudioPlayerPauseTime = Date.now() - 1000;
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -529,6 +532,7 @@
                 // browser reclaim the session and strip the notification.
                 const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
+                    window.mediaSessionDestroyed = false;
                     startLiveAudioAnchor();
                     armAutoKillWatchdog();
                 }
@@ -544,6 +548,7 @@
         navigator.mediaSession.setActionHandler('play', () => {
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
+            window.mediaSessionDestroyed = false;
             const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
             if (isAutoResumeAfterCall) {
                 return;
@@ -594,6 +599,7 @@
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             console.log("[MS-ACTION] 'pause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
             if (window.isCallActive) return;
+            window.mediaSessionDestroyed = false;
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
@@ -699,6 +705,7 @@
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 console.log("[MS-ACTION] 'playpause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
                 if (window.isCallActive) return;
+                window.mediaSessionDestroyed = false;
                 if (isActuallyPaused) {
                     const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
                     if (isAutoResumeAfterCall) {

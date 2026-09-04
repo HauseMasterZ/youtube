@@ -263,6 +263,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, {passive: true});
 
     btnPlayPause.addEventListener("click", () => {
+        window.mediaSessionDestroyed = false;
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }

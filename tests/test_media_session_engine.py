@@ -457,6 +457,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         close_b = self.ms_content.count('}')
         self.assertEqual(open_b, close_b, f"Mismatched braces in mediaSession.js: {open_b} open vs {close_b} close")
 
+    def test_destroyed_marker_lifecycle(self):
+        """watchdog destroy sets marker, anchor start respects it, user intent clears it"""
+        self.assertIn('window.mediaSessionDestroyed = false;', self.state_content)
+        self.assertIn('window.mediaSessionDestroyed = true;', self.ms_content)
+        self.assertIn('if (window.mediaSessionDestroyed) return;', self.ms_content)
+
 if __name__ == '__main__':
     unittest.main()
 
