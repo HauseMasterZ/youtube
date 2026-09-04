@@ -132,10 +132,6 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.main_content,
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?100\s*\);'
         )
-        self.assertRegex(
-            self.main_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?!\s*window\.isCallActive[\s\S]*?100\s*\)'
-        )
 
     def test_action_handlers_include_playpause_and_taps(self):
         """Action handlers handle play, pause, playpause, nexttrack, previoustrack, seekto, seekbackward, seekforward"""
@@ -286,11 +282,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
+            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
         )
 
     def test_mode2_pause_arms_anchor_and_watchdog(self):
@@ -400,10 +392,6 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?anchorStartTimer\s*=\s*setTimeout\(\s*\(\)\s*=>\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?800\s*\)'
         )
-        self.assertRegex(
-            self.ms_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*!isRecentBtDisconnect'
-        )
 
     def test_phone_call_state_flags_in_state_js(self):
         """state.js declares wasPlayingBeforeCall, lastCallEndTime, and isCallActive flags"""
@@ -411,16 +399,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window.lastCallEndTime = 0;", self.state_content)
         self.assertIn("window.isCallActive = false;", self.state_content)
 
-    def test_phone_call_accepted_sets_paused_with_rate_1_0(self):
-        """devicechange sets isCallActive and forces paused playbackState with rate 1.0"""
+    def test_phone_call_accepted_mode2_preserves_playing_state(self):
+        """devicechange sets isCallActive and preserves Mode 2 playing playbackState with micro-rate"""
         self.assertIn("window.isCallActive = true;", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
+            r'updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*\(window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\)\s*\?\s*0\.00001\s*:\s*1\.0\s*\)'
         )
 
     def test_phone_call_hangup_auto_resume_and_post_call_filter(self):
@@ -456,32 +444,6 @@ class TestMediaSessionEngine(unittest.TestCase):
         open_b = self.ms_content.count('{')
         close_b = self.ms_content.count('}')
         self.assertEqual(open_b, close_b, f"Mismatched braces in mediaSession.js: {open_b} open vs {close_b} close")
-
-    def test_focus_probe_lifecycle_defined(self):
-        """focus probe prime/start/stop helpers are defined and exposed"""
-        self.assertRegex(self.ms_content, r'function\s+primeFocusProbe\s*\(\s*\)')
-        self.assertRegex(self.ms_content, r'function\s+startFocusProbe\s*\(\s*\)')
-        self.assertRegex(self.ms_content, r'function\s+stopFocusProbe\s*\(\s*\)')
-        self.assertIn('window.primeFocusProbe = primeFocusProbe;', self.ms_content)
-        self.assertIn('window.startFocusProbe = startFocusProbe;', self.ms_content)
-        self.assertIn('window.stopFocusProbe = stopFocusProbe;', self.ms_content)
-
-    def test_focus_probe_uses_silent_wav_and_hidden_element(self):
-        """focus probe reuses silent WAV URI and binds native pause"""
-        self.assertIn('getElementById("focus-probe")', self.ms_content)
-        self.assertIn('SILENT_WAV_DATA_URI', self.ms_content)
-        self.assertRegex(self.ms_content, r'probeEl\.addEventListener\(\s*[\'"]pause[\'"]')
-
-    def test_focus_probe_pause_transitions_to_paused(self):
-        """probe pause while Mode-2 paused stops anchor and sets paused plus 1.0"""
-        self.assertRegex(
-            self.ms_content,
-            r'probeEl\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?stopLiveAudioAnchor\(\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\)'
-        )
-
-    def test_focus_probe_plays_at_full_volume(self):
-        """probe must not be muted: volume 0 elements get suspended by the OS, which would strip Mode 2 keepalive"""
-        self.assertNotIn('probeEl.volume = 0', self.ms_content)
 
 if __name__ == '__main__':
     unittest.main()

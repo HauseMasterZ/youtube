@@ -265,7 +265,6 @@ document.addEventListener("DOMContentLoaded", () => {
     btnPlayPause.addEventListener("click", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
-            if (typeof primeFocusProbe === 'function') primeFocusProbe();
         }
         if (!audioPlayer.src) {
             if (playQueue.length > 0 && queueIndex !== -1) {
@@ -447,9 +446,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     navigator.mediaSession.playbackState = 'paused';
                 }
                 setTimeout(() => {
-                    if (window.isCallActive) return;
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                    if (window.playbackMode === 'mode2' && hasMediaSession && !window.isCallActive && !isStillBtDisconnect && window.wasPausedByUser) {
+                    if (window.playbackMode === 'mode2' && hasMediaSession && !isStillBtDisconnect && window.wasPausedByUser) {
                         navigator.mediaSession.playbackState = 'playing';
                     }
                 }, 100);

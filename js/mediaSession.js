@@ -240,55 +240,6 @@
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
     window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
 
-    let focusProbePrimed = false;
-
-    // TEMP diagnostic 2026-09-04: autostart disabled while investigating the
-    // Mode-2 notification strip. The probe element is the only new runtime
-    // variable in the pause path, so this restores pre-probe runtime exactly.
-    // Re-enable by setting this to true once the root cause is confirmed.
-    const FOCUS_PROBE_AUTOSTART_ENABLED = false;
-
-    function primeFocusProbe() {
-        if (!FOCUS_PROBE_AUTOSTART_ENABLED) return;
-        const probeEl = document.getElementById("focus-probe");
-        if (!probeEl || focusProbePrimed) return;
-        if (!probeEl.src) {
-            probeEl.src = SILENT_WAV_DATA_URI;
-        }
-        probeEl.loop = true;
-        probeEl.play().then(() => {
-            probeEl.pause();
-            focusProbePrimed = true;
-        }).catch(() => {});
-    }
-
-    function startFocusProbe() {
-        if (!FOCUS_PROBE_AUTOSTART_ENABLED) return;
-        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
-        if (window.isCallActive) return;
-        const probeEl = document.getElementById("focus-probe");
-        if (!probeEl) return;
-        if (!probeEl.src) {
-            probeEl.src = SILENT_WAV_DATA_URI;
-        }
-        probeEl.loop = true;
-        probeEl.play().catch(() => {});
-    }
-
-    function stopFocusProbe() {
-        const probeEl = document.getElementById("focus-probe");
-        if (probeEl && !probeEl.paused) {
-            try {
-                probeEl.pause();
-            } catch (e) {}
-        }
-    }
-
-    window.primeFocusProbe = primeFocusProbe;
-    window.startFocusProbe = startFocusProbe;
-    window.stopFocusProbe = stopFocusProbe;
-
     // Auto-Kill Watchdog Lifecycle
     function cancelAutoKillWatchdog() {
         if (window.btSleepTimer !== null) {
@@ -371,14 +322,11 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
                 startLiveAudioAnchor();
-                if (typeof primeFocusProbe === 'function') primeFocusProbe();
-                if (typeof startFocusProbe === 'function') startFocusProbe();
                 armAutoKillWatchdog();
             }
         } else {
             teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
-            if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (isPaused) {
                 window.wasPausedByUser = true;
                 if (typeof setPlayUI === 'function') setPlayUI(false);
@@ -523,7 +471,7 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
+                            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -537,7 +485,7 @@
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             if (typeof updateMediaSessionPosition === 'function') {
-                                updateMediaSessionPosition(pos, dur, 1.0);
+                                updateMediaSessionPosition(pos, dur, (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) ? 0.00001 : 1.0);
                             }
                         }
                     }
@@ -557,7 +505,6 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
-            if (typeof stopFocusProbe === 'function') stopFocusProbe();
         });
         audioPlayer.addEventListener('pause', () => {
             lastAudioPlayerPauseTime = Date.now();
@@ -582,43 +529,18 @@
                 }
                 // Mode 2 pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
-                    if (window.isCallActive) return;
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
-                        if (typeof startFocusProbe === 'function') startFocusProbe();
                     }
                 }, 800);
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
-                if (typeof stopFocusProbe === 'function') stopFocusProbe();
             }
         });
     }
-
-(function bindFocusProbeHandler() {
-    const probeEl = document.getElementById("focus-probe");
-    if (!probeEl || probeEl._boundFocusProbe) return;
-    probeEl._boundFocusProbe = true;
-    probeEl.addEventListener("pause", () => {
-        const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-        if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && window.wasPausedByUser && !window.isCallActive && !isRecentBtDisconnect) {
-            stopLiveAudioAnchor();
-            cancelAutoKillWatchdog();
-            if (typeof setPlayUI === 'function') setPlayUI(false);
-            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                updateMediaSessionPosition(pos, dur, 1.0);
-            }
-        }
-    });
-    probeEl.addEventListener("mute", () => {});
-    probeEl.addEventListener("unmute", () => {});
-})();
 
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
