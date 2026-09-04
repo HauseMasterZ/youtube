@@ -240,6 +240,49 @@
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
     window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
 
+    let focusProbePrimed = false;
+
+    function primeFocusProbe() {
+        const probeEl = document.getElementById("focus-probe");
+        if (!probeEl || focusProbePrimed) return;
+        if (!probeEl.src) {
+            probeEl.src = SILENT_WAV_DATA_URI;
+        }
+        probeEl.volume = 0;
+        probeEl.loop = true;
+        probeEl.play().then(() => {
+            probeEl.pause();
+            focusProbePrimed = true;
+        }).catch(() => {});
+    }
+
+    function startFocusProbe() {
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2') return;
+        if (window.isCallActive) return;
+        const probeEl = document.getElementById("focus-probe");
+        if (!probeEl) return;
+        if (!probeEl.src) {
+            probeEl.src = SILENT_WAV_DATA_URI;
+        }
+        probeEl.volume = 0;
+        probeEl.loop = true;
+        probeEl.play().catch(() => {});
+    }
+
+    function stopFocusProbe() {
+        const probeEl = document.getElementById("focus-probe");
+        if (probeEl && !probeEl.paused) {
+            try {
+                probeEl.pause();
+            } catch (e) {}
+        }
+    }
+
+    window.primeFocusProbe = primeFocusProbe;
+    window.startFocusProbe = startFocusProbe;
+    window.stopFocusProbe = stopFocusProbe;
+
     // Auto-Kill Watchdog Lifecycle
     function cancelAutoKillWatchdog() {
         if (window.btSleepTimer !== null) {
@@ -322,11 +365,14 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
                 startLiveAudioAnchor();
+                if (typeof primeFocusProbe === 'function') primeFocusProbe();
+                if (typeof startFocusProbe === 'function') startFocusProbe();
                 armAutoKillWatchdog();
             }
         } else {
             teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (isPaused) {
                 window.wasPausedByUser = true;
                 if (typeof setPlayUI === 'function') setPlayUI(false);
@@ -471,7 +517,7 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+                            navigator.mediaSession.playbackState = 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -485,7 +531,7 @@
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             if (typeof updateMediaSessionPosition === 'function') {
-                                updateMediaSessionPosition(pos, dur, (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) ? 0.00001 : 1.0);
+                                updateMediaSessionPosition(pos, dur, 1.0);
                             }
                         }
                     }
@@ -505,6 +551,7 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof stopFocusProbe === 'function') stopFocusProbe();
         });
         audioPlayer.addEventListener('pause', () => {
             lastAudioPlayerPauseTime = Date.now();
@@ -529,18 +576,43 @@
                 }
                 // Mode 2 pause: start anchor to maintain DAC awake
                 anchorStartTimer = setTimeout(() => {
+                    if (window.isCallActive) return;
                     const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                     if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
+                        if (typeof startFocusProbe === 'function') startFocusProbe();
                     }
                 }, 800);
             } else {
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
+                if (typeof stopFocusProbe === 'function') stopFocusProbe();
             }
         });
     }
+
+(function bindFocusProbeHandler() {
+    const probeEl = document.getElementById("focus-probe");
+    if (!probeEl || probeEl._boundFocusProbe) return;
+    probeEl._boundFocusProbe = true;
+    probeEl.addEventListener("pause", () => {
+        const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+        if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && window.wasPausedByUser && !window.isCallActive && !isRecentBtDisconnect) {
+            stopLiveAudioAnchor();
+            cancelAutoKillWatchdog();
+            if (typeof setPlayUI === 'function') setPlayUI(false);
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                updateMediaSessionPosition(pos, dur, 1.0);
+            }
+        }
+    });
+    probeEl.addEventListener("mute", () => {});
+    probeEl.addEventListener("unmute", () => {});
+})();
 
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {

@@ -183,5 +183,13 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIn('preload="none"', anchor_tag)
         self.assertIn('display:none', anchor_tag.replace(' ', ''))
 
+    def test_focus_probe_element(self):
+        """Hidden focus probe audio element for external-steal detection"""
+        probe_match = re.search(r'<audio[^>]*id=["\']focus-probe["\'][^>]*>', self.html_content)
+        self.assertIsNotNone(probe_match, "Could not find #focus-probe")
+        probe_tag = probe_match.group(0)
+        self.assertIn('loop', probe_tag)
+        self.assertIn('display:none', probe_tag.replace(' ', ''))
+
 if __name__ == '__main__':
     unittest.main()
