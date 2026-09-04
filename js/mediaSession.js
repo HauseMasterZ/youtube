@@ -75,7 +75,6 @@
                 }
                 if (liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
                     anchorEl.srcObject = liveAudioDestination.stream;
-                    anchorEl.srcObject = null;
                 }
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
@@ -129,7 +128,6 @@
                     anchorEl.src = SILENT_WAV_DATA_URI;
                 }
                 anchorEl.srcObject = liveAudioDestination.stream;
-                anchorEl.srcObject = null;
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
@@ -166,7 +164,6 @@
             }
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
-                anchorEl.srcObject = null;
             }
             _isInternalAnchorStart = true;
             anchorEl.play().then(() => {
