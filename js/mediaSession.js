@@ -236,10 +236,10 @@
     // audio-focus steals (YouTube) AND on idle battery-saving. A suspend
     // while music-paused in Mode 2 is our only steal signal for the
     // already-paused case (occasion 4), which fires zero other events.
-    // PASSIVE detector only: the handler below must never stop the anchor,
-    // cancel the watchdog, or touch play UI (that teardown is what caused
-    // the historical strip regression). It only drops declared state to
-    // honest 'paused' so the drawer triangle delivers.
+    // PIN ABSOLUTISM: this handler must NEVER write playbackState. Any
+    // honest drop strips the card on this device, no exceptions. It only
+    // logs (field diagnostics) and arms the watchdog if idle, so an
+    // abandoned session still auto-cleans.
     let focusProbePrimed = false;
     let _isProbeInternal = false;
 
@@ -299,18 +299,10 @@
         probeEl.addEventListener("pause", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
-                // Passive steal signal (genuine steal OR idle suspend): drop
-                // to honest 'paused' so the drawer triangle delivers. Anchor,
-                // watchdog, and UI untouched: a false positive costs nothing
-                // (anchor still pins; foreground return re-spoofs below).
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
-                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                    if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur, 1.0);
-                    }
-                }
+                // Steal-or-idle suspend observed. Deliberately NO state write:
+                // Mode 2 declares 'playing' unconditionally (pin absolutism).
+                // Log only, so field diagnostics can see steal moments.
+                console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }

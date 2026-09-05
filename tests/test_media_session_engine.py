@@ -518,19 +518,20 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('getElementById("focus-probe")', self.ms_content)
 
     def test_focus_probe_pause_is_passive(self):
-        """probe pause drops state honest WITHOUT tearing down anchor, watchdog, or UI"""
+        """probe pause never writes playbackState (pin absolutism) nor tears down anchor, watchdog, or UI"""
         probe_match = re.search(
             r'bindFocusProbeHandler[\s\S]*?probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
             self.ms_content
         )
         self.assertIsNotNone(probe_match, "Could not find probe pause handler")
         code = probe_match.group(1)
-        self.assertIn("navigator.mediaSession.playbackState = 'paused';", code)
+        self.assertNotIn("playbackState", code)
         self.assertNotIn("stopLiveAudioAnchor()", code)
         self.assertNotIn("cancelAutoKillWatchdog()", code)
         self.assertNotIn("setPlayUI(", code)
         self.assertIn("armAutoKillWatchdog()", code)
         self.assertIn("!_isProbeInternal", code)
+        self.assertIn("[PROBE-SUSPEND]", code)
 
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""
