@@ -113,10 +113,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
         self.assertNotIn("0.00001", playback_content)
-        self.assertEqual(self.ms_content.count("0.00001"), 1)
+        self.assertEqual(self.ms_content.count("0.00001"), 2)
         self.assertRegex(
             self.ms_content,
             r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*d\s*,\s*0\.00001\s*\);'
         )
 
     def test_start_live_anchor_scoped_to_mobile(self):
@@ -575,6 +579,26 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", code)
         self.assertIn("!_isProbeInternal", code)
         self.assertIn("[PROBE-SUSPEND]", code)
+
+    def test_spoof_reassert_burst(self):
+        """reassertSpoofBurst re-declares playing with frozen rate, self-terminates, and runs on steal paths"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"];'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*d\s*,\s*0\.00001\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?if\s*\(\s*\+\+n\s*<\s*5\s*\)\s*setTimeout\(\s*tick\s*,\s*1000\s*\);'
+        )
+        self.assertIn("window.reassertSpoofBurst = reassertSpoofBurst;", self.ms_content)
 
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""
