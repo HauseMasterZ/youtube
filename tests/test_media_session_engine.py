@@ -134,10 +134,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_pause_listener_honest_paused(self):
-        """audioPlayer pause event listener in main.js declares honest paused with rate 1.0"""
+        """audioPlayer pause event listener in main.js declares mode-aware paused state with rate 1.0"""
         self.assertRegex(
             self.main_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\);[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\);[\s\S]*?declaredPausedState\(\)'
         )
 
     def test_action_handlers_include_playpause_and_taps(self):
@@ -190,21 +190,25 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertNotIn("this.active.volume = 0;", self.dom_content)
 
+    def test_declared_paused_state_mapping(self):
+        """state.js declares mode-aware paused state: mode2 spoofs playing (pin), mode1 honest paused"""
+        self.assertIn("window.declaredPausedState = function()", self.state_content)
+        self.assertRegex(
+            self.state_content,
+            r'window\.declaredPausedState\s*=\s*function\s*\(\s*\)\s*\{\s*return\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\?\s*[\'"]playing[\'"]\s*:\s*[\'"]paused[\'"];'
+        )
+
     def test_honest_paused_playback_state_across_files(self):
-        """pause paths in dom.js, main.js, and playback.js declare honest paused"""
-        self.assertRegex(
-            self.dom_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
-        )
+        """pause paths in dom.js, main.js, and playback.js declare state via declaredPausedState helper"""
+        for content in (self.dom_content, self.main_content):
+            self.assertIn("declaredPausedState()", content)
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
+        self.assertIn("declaredPausedState()", playback_content)
+        # Mode 1 branch stays literally honest
         self.assertRegex(
-            playback_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(preventAutoplay\s*\|\|\s*uiOnly\)\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"];'
+            self.main_content,
+            r'// Mode 1 or BT disconnect[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_audio_handshake_stop_anchor_before_play(self):
@@ -219,10 +223,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_toggle_playback_mode_republishes_metadata(self):
-        """togglePlaybackMode declares honest paused and re-publishes MediaMetadata when switching modes while paused"""
+        """togglePlaybackMode declares mode-aware paused state and re-publishes MediaMetadata when switching modes while paused"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?new\s+MediaMetadata'
+            r'if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?new\s+MediaMetadata'
         )
 
     def test_thumbnail_fetch_guarded_by_thumbs_disabled(self):
@@ -287,7 +291,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
-        """mediaSession.js tracks knownOutputCount, forces paused playbackState on disconnect, and cancels watchdog"""
+        """mediaSession.js tracks knownOutputCount, forces mode-aware playbackState on disconnect, and cancels watchdog"""
         self.assertIn("window.lastBtDisconnectTime", self.ms_content)
         self.assertIn("devicechange", self.ms_content)
         self.assertIn("knownOutputCount", self.ms_content)
@@ -301,7 +305,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?declaredPausedState\(\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -336,10 +340,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("triggerPreloads()", self.main_content)
 
     def test_toggle_playback_mode_synchronizes_paused_state(self):
-        """togglePlaybackMode declares honest paused with rate 1.0 when switched while paused"""
+        """togglePlaybackMode declares mode-aware paused state with rate 1.0 when switched while paused"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"];'
+            r'function\s+togglePlaybackMode[\s\S]*?if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?declaredPausedState\(\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -427,11 +431,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window.isCallActive = false;", self.state_content)
 
     def test_phone_call_accepted_sets_paused_with_rate_1_0(self):
-        """devicechange sets isCallActive and forces paused playbackState with rate 1.0"""
+        """devicechange sets isCallActive and forces mode-aware playbackState with rate 1.0"""
         self.assertIn("window.isCallActive = true;", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?declaredPausedState\(\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -467,6 +471,36 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'setActionHandler\(\s*[\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.isCallActive\s*\)\s*return;'
         )
+
+    def test_hangup_rearms_anchor_when_staying_paused(self):
+        """devicechange hangup while staying paused re-arms anchor and watchdog (occasion 2 keepalive)"""
+        self.assertRegex(
+            self.ms_content,
+            r'window\.isCallActive\s*=\s*false;[\s\S]*?else\s+if\s*\(\s*typeof\s+audioPlayer[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
+        )
+
+    def test_seek_buttons_resume_in_mode2(self):
+        """seekbackward/seekforward resume paused Mode 2 playback (post-steal guarantee)"""
+        for action in ('seekbackward', 'seekforward'):
+            handler_match = re.search(
+                r"setActionHandler\(\s*['\"]" + action + r"['\"]\s*,\s*\(details\)\s*=>\s*\{([\s\S]*?)\n        \}\);",
+                self.ms_content
+            )
+            self.assertIsNotNone(handler_match, f"Could not find {action} action handler")
+            code = handler_match.group(1)
+            self.assertIn("window.playbackMode === 'mode2'", code)
+            self.assertIn("audioPlayer.play()", code)
+            self.assertIn("stopLiveAudioAnchor()", code)
+            self.assertIn("cancelAutoKillWatchdog()", code)
+
+    def test_seekto_stays_positioning_only(self):
+        """seekto (seekbar scrub) never auto-plays"""
+        seekto_match = re.search(
+            r"setActionHandler\(\s*['\"]seekto['\"]\s*,\s*\(details\)\s*=>\s*\{([\s\S]*?)\n        \}\);",
+            self.ms_content
+        )
+        self.assertIsNotNone(seekto_match, "Could not find seekto action handler")
+        self.assertNotIn("audioPlayer.play()", seekto_match.group(1))
 
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""

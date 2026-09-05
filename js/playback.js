@@ -581,8 +581,11 @@
                 });
             }
 
-            // HONEST STATE: paused playback declares paused so drawer controls stay truthful
-            navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
+            // Mode 2 doctrine: paused declaration spoofs 'playing' (pin);
+            // Mode 1 declares honestly.
+            navigator.mediaSession.playbackState = (preventAutoplay || uiOnly)
+                ? ((typeof window.declaredPausedState === 'function') ? window.declaredPausedState() : 'paused')
+                : "playing";
 
             // Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
             if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {

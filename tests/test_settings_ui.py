@@ -199,11 +199,11 @@ class TestSettingsUI(unittest.TestCase):
         self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\)')
 
     def test_pause_listener_mode2_and_mode1_playback_state(self):
-        """audioPlayer pause event listener declares honest paused in both Mode 2 and Mode 1"""
+        """audioPlayer pause event listener declares mode-aware state (helper) with honest Mode 1 fallback"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertNotIn("'playing'", pause_block)
+        self.assertIn("declaredPausedState()", pause_block)
         self.assertIn("'paused'", pause_block)
 
     def test_media_session_play_handler_lyrics_reset(self):

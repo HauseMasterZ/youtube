@@ -92,6 +92,13 @@
         return (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
     };
 
+    // Mode 2 doctrine: playbackState is ALWAYS 'playing' while paused so the
+    // OS never strips the card (pin comes from declared state + live anchor).
+    // Mode 1 declares honestly. Single choke-point for all pause paths.
+    window.declaredPausedState = function() {
+        return (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+    };
+
     window.playbackMode = 'mode1';
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '5');
     window.btSleepTimer = null;

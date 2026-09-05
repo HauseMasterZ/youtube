@@ -280,7 +280,8 @@
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
@@ -322,7 +323,8 @@
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);

@@ -296,7 +296,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             window.wasPausedByUser = true;
             setPlayUI(false);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+            if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
             audioPlayer.instantPause();
         }
     });
@@ -438,13 +439,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                // Mode 2 pause: declare honest paused; the running anchor holds keepalive
+                // Mode 2 doctrine: ALWAYS 'playing' (spoof pins the card; the
+                // live anchor + honest element state carry the truth)
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'playing';
                 if (!window.wasPausedByUser) {
-                    // External interruption: drop to 'paused' emulating Mode 1
+                    // External interruption: state stays spoofed; anchor path
+                    // in mediaSession.js owns the keepalive decision
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                    navigator.mediaSession.playbackState = 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                 }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
@@ -590,7 +595,8 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             return;
         }
@@ -656,7 +662,8 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = 'paused';
+            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
         }
         
         errorSkipTimer = setTimeout(() => {

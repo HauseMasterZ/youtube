@@ -50,7 +50,8 @@
                     anchorStartTimer = null;
                 }
                 if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     updateMediaSessionPosition(pos, dur, 1.0);
@@ -102,7 +103,8 @@
                 if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                     if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
                         if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'playing';
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
@@ -311,7 +313,9 @@
         if (newMode === 'mode2') {
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+                    // Doctrine: spoof on entry (helper reads the just-set mode)
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                 }
                     startLiveAudioAnchor();
                     armAutoKillWatchdog();
@@ -351,7 +355,8 @@
             if (isPaused) {
                 updateMediaSessionPosition(pos, dur, 1.0);
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
                     if (navigator.mediaSession.metadata) {
                         try {
                             navigator.mediaSession.metadata = new MediaMetadata({
@@ -455,6 +460,14 @@
                                 }
                             }, 150);
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                        } else if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                            // Staying paused after hangup (occasion 2): the call-start
+                            // path stopped the anchor, so re-arm keepalive here or
+                            // Mode 2 silently loses its pin. Zero leak risk: the
+                            // anchor is mathematical silence (gain 0).
+                            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                            if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
@@ -484,7 +497,10 @@
                         cancelAutoKillWatchdog();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
+                            // Mode 2 doctrine: ALWAYS 'playing' (helper); the spoof
+                            // is what pins the card through the call.
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'paused';
                             if (navigator.mediaSession.metadata) {
                                 try {
                                     navigator.mediaSession.metadata = new MediaMetadata({
@@ -530,15 +546,19 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    // External interruption (e.g. phone call or external video): proactive pause instead of setTimeout
+                    // External interruption (video steal while playing): state
+                    // STAYS spoofed per doctrine (the pin must survive the
+                    // steal); anchor stops (stealer holds focus/DAC), watchdog
+                    // arms so an abandoned session still auto-cleans.
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
                         const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                         updateMediaSessionPosition(pos, dur, 1.0);
                     }
                     stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
+                    armAutoKillWatchdog();
                     return;
                 }
                 // Mode 2 pause: start anchor synchronously to maintain DAC awake.
@@ -645,7 +665,8 @@
                     window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
@@ -753,7 +774,8 @@
                     window.wasPlayingBeforeCall = false;
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'paused';
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
@@ -837,6 +859,27 @@
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             updateMediaSessionPosition(newTime, dur);
+            // Mode 2 seek-resume: center Play is swallowed by C++ under spoof,
+            // so discrete seek buttons double as the guaranteed resume gesture
+            // after video steals (both paused/playing occasions). Seekbar
+            // scrub (seekto) stays positioning-only by design. No quarantine
+            // gate: head-unit blasts emit play/pause keys, never seek keys.
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                window.mediaSessionDestroyed = false;
+                window.wasPausedByUser = false;
+                window.wasPlayingBeforeCall = true;
+                window.lastBtDisconnectTime = 0;
+                if (typeof setPlayUI === 'function') setPlayUI(true);
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(newTime, dur, 1.0);
+                }
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+                audioPlayer.play().catch(e => console.warn("MediaSession seekbackward resume error:", e));
+            }
         });
         navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const now = Date.now();
@@ -857,5 +900,23 @@
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
             updateMediaSessionPosition(newTime, dur);
+            // Mode 2 seek-resume (mirror of seekbackward): guaranteed resume
+            // gesture after video steals; seekto stays positioning-only.
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                window.mediaSessionDestroyed = false;
+                window.wasPausedByUser = false;
+                window.wasPlayingBeforeCall = true;
+                window.lastBtDisconnectTime = 0;
+                if (typeof setPlayUI === 'function') setPlayUI(true);
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(newTime, dur, 1.0);
+                }
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
+                audioPlayer.play().catch(e => console.warn("MediaSession seekforward resume error:", e));
+            }
         });
     }
