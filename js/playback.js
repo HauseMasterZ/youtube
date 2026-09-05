@@ -543,20 +543,26 @@
             preloadedFetches.delete(cacheKey);
         }
         
-        if (hasMediaSession) {
-            const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
-                ? getPurpleNoteArtwork() 
+        // Single source of truth for (re)publishing track metadata: fresh card
+        // announcements (e.g. foreground resurrection after a steal evicted
+        // the native session) must not drift from first-publish artwork logic.
+        window.publishTrackMetadata = function(track, thumbUrl, originalIndex) {
+            if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !track) return;
+            const fallbackIcon = typeof getPurpleNoteArtwork === 'function'
+                ? getPurpleNoteArtwork()
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
-            const currentSq = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) 
-                ? artworkSquareCache.get(track.id) 
+            const currentSq = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id))
+                ? artworkSquareCache.get(track.id)
                 : fallbackIcon;
 
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: track.title,
-                artist: track.channel,
-                artwork: [{ src: currentSq, sizes: '512x512', type: 'image/jpeg' }]
-            });
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [{ src: currentSq, sizes: '512x512', type: 'image/jpeg' }]
+                });
+            } catch (e) { return; }
 
             if (!thumbsDisabled && thumbUrl) {
                 if (!artworkSquareCache.has(track.id)) {
@@ -585,6 +591,10 @@
                     }
                 });
             }
+        };
+
+        if (hasMediaSession) {
+            window.publishTrackMetadata(track, thumbUrl, originalIndex);
 
             // Mode 2 doctrine: paused declaration spoofs 'playing' (pin);
             // Mode 1 declares honestly.

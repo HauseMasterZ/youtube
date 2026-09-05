@@ -341,6 +341,24 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn('window.addEventListener("focus"', self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
+    def test_foreground_resurrects_interrupted_session_honest(self):
+        """visible foreground with interrupted (non-user) pause rebuilds metadata honest-paused for triangle delivery"""
+        self.assertRegex(
+            self.main_content,
+            r'!\s*window\.wasPausedByUser\s*&&\s*window\.wasPlayingBeforeCall\s*!==\s*false[\s\S]*?window\.publishTrackMetadata\(track'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'!\s*window\.wasPausedByUser\s*&&\s*window\.wasPlayingBeforeCall\s*!==\s*false[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_hidden_bookend_respoofs_unattended(self):
+        """hidden transition while paused in Mode 2 re-spoofs via helper (unattended pin)"""
+        self.assertRegex(
+            self.main_content,
+            r'\}\s*else\s*\{\s*// Going hidden while paused in Mode 2[\s\S]*?declaredPausedState\(\)'
+        )
+
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
         """mediaSession.js tracks knownOutputCount, forces mode-aware playbackState on disconnect, and cancels watchdog"""
         self.assertIn("window.lastBtDisconnectTime", self.ms_content)
@@ -552,6 +570,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertIsNotNone(seekto_match, "Could not find seekto action handler")
         self.assertNotIn("audioPlayer.play()", seekto_match.group(1))
+
+    def test_publish_track_metadata_helper(self):
+        """playback.js exposes publishTrackMetadata used by resurrection"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_content = f.read()
+        self.assertIn("window.publishTrackMetadata = function(track, thumbUrl, originalIndex)", playback_content)
+        self.assertIn("window.publishTrackMetadata(track, thumbUrl, originalIndex);", playback_content)
 
     def test_focus_probe_lifecycle_functions(self):
         """prime/start/stopFocusProbe defined, exposed, and internally flagged"""

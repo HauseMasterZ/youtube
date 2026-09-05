@@ -492,16 +492,56 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
-            } else if (window.playbackMode === 'mode2' && !window.isCallActive) {
-                // Foreground return while paused: re-arm keepalive + probe and
-                // re-spoof (a probe suspend or call may have honestly dropped
-                // the state while hidden). No autoplay here: pure re-arm.
-                if (typeof startLiveAudioAnchor === 'function') {
-                    startLiveAudioAnchor();
+            } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
+                const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                if (!window.wasPausedByUser && window.wasPlayingBeforeCall !== false && !isRecentBtDisconnect) {
+                    // INTERRUPTED (steal killed our native session while music
+                    // played): resurrect HONEST so the triangle delivers. This
+                    // is the attended moment, so honesty is safe; the next
+                    // user-pause re-spoofs via helper. Rebuild metadata fresh
+                    // (old binding may be gone), freeze position, re-arm audio.
+                    try {
+                        const db = (typeof allDatabases !== 'undefined' && globalActivePlaylist) ? allDatabases[globalActivePlaylist] : null;
+                        const track = (db && globalActiveOriginalIndex >= 0) ? db[globalActiveOriginalIndex] : null;
+                        if (track && typeof window.publishTrackMetadata === 'function' && typeof getAudioUrl === 'function') {
+                            window.publishTrackMetadata(track, getThumbUrl(track), globalActiveOriginalIndex);
+                        } else if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    } catch (e) {}
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                        }
+                    }
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    if (typeof startFocusProbe === 'function') startFocusProbe();
+                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
+                } else {
+                    // User-paused: re-arm keepalive + probe and re-spoof (a
+                    // probe suspend or call may have honestly dropped the
+                    // state while hidden). No autoplay here: pure re-arm.
+                    if (typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
+                    if (typeof startFocusProbe === 'function') {
+                        startFocusProbe();
+                    }
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                    }
                 }
-                if (typeof startFocusProbe === 'function') {
-                    startFocusProbe();
-                }
+            }
+        } else {
+            // Going hidden while paused in Mode 2: re-spoof (unattended pin).
+            // Steals happening while already hidden fire no event, so this
+            // changes nothing mid-steal; it only protects attended-honest
+            // cards being abandoned (resurrected above) from idle eviction.
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
