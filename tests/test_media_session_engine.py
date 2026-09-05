@@ -506,6 +506,32 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIsNotNone(seekto_match, "Could not find seekto action handler")
         self.assertNotIn("audioPlayer.play()", seekto_match.group(1))
 
+    def test_focus_probe_lifecycle_functions(self):
+        """prime/start/stopFocusProbe defined, exposed, and internally flagged"""
+        self.assertRegex(self.ms_content, r'function\s+primeFocusProbe\s*\(\s*\)')
+        self.assertRegex(self.ms_content, r'function\s+startFocusProbe\s*\(\s*\)')
+        self.assertRegex(self.ms_content, r'function\s+stopFocusProbe\s*\(\s*\)')
+        self.assertIn('window.primeFocusProbe = primeFocusProbe;', self.ms_content)
+        self.assertIn('window.startFocusProbe = startFocusProbe;', self.ms_content)
+        self.assertIn('window.stopFocusProbe = stopFocusProbe;', self.ms_content)
+        self.assertIn('_isProbeInternal', self.ms_content)
+        self.assertIn('getElementById("focus-probe")', self.ms_content)
+
+    def test_focus_probe_pause_is_passive(self):
+        """probe pause drops state honest WITHOUT tearing down anchor, watchdog, or UI"""
+        probe_match = re.search(
+            r'bindFocusProbeHandler[\s\S]*?probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(probe_match, "Could not find probe pause handler")
+        code = probe_match.group(1)
+        self.assertIn("navigator.mediaSession.playbackState = 'paused';", code)
+        self.assertNotIn("stopLiveAudioAnchor()", code)
+        self.assertNotIn("cancelAutoKillWatchdog()", code)
+        self.assertNotIn("setPlayUI(", code)
+        self.assertIn("armAutoKillWatchdog()", code)
+        self.assertIn("!_isProbeInternal", code)
+
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""
         open_b = self.ms_content.count('{')

@@ -267,6 +267,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
+        if (typeof primeFocusProbe === 'function') {
+            primeFocusProbe();
+        }
         if (!audioPlayer.src) {
             if (playQueue.length > 0 && queueIndex !== -1) {
                 executePlayback(false);
@@ -472,8 +475,18 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive) {
+                // Foreground return while paused: re-arm keepalive + probe and
+                // re-spoof (a probe suspend or call may have honestly dropped
+                // the state while hidden). No autoplay here: pure re-arm.
                 if (typeof startLiveAudioAnchor === 'function') {
                     startLiveAudioAnchor();
+                }
+                if (typeof startFocusProbe === 'function') {
+                    startFocusProbe();
+                }
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                 }
             }
         }

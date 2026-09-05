@@ -232,6 +232,92 @@
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
     window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
 
+    // Focus Probe: silent WAV loop that the OS power manager suspends on
+    // audio-focus steals (YouTube) AND on idle battery-saving. A suspend
+    // while music-paused in Mode 2 is our only steal signal for the
+    // already-paused case (occasion 4), which fires zero other events.
+    // PASSIVE detector only: the handler below must never stop the anchor,
+    // cancel the watchdog, or touch play UI (that teardown is what caused
+    // the historical strip regression). It only drops declared state to
+    // honest 'paused' so the drawer triangle delivers.
+    let focusProbePrimed = false;
+    let _isProbeInternal = false;
+
+    function primeFocusProbe() {
+        const probeEl = document.getElementById("focus-probe");
+        if (!probeEl || focusProbePrimed) return;
+        if (!probeEl.src) {
+            probeEl.src = SILENT_WAV_DATA_URI;
+        }
+        probeEl.loop = true;
+        _isProbeInternal = true;
+        probeEl.play().then(() => {
+            try { probeEl.pause(); } catch (e) {}
+            focusProbePrimed = true;
+            setTimeout(() => { _isProbeInternal = false; }, 200);
+        }).catch(() => { _isProbeInternal = false; });
+    }
+
+    function startFocusProbe() {
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2') return;
+        if (window.isCallActive) return;
+        const probeEl = document.getElementById("focus-probe");
+        if (!probeEl) return;
+        if (!probeEl.src) {
+            probeEl.src = SILENT_WAV_DATA_URI;
+        }
+        probeEl.loop = true;
+        if (probeEl.paused) {
+            _isProbeInternal = true;
+            probeEl.play().then(() => {
+                setTimeout(() => { _isProbeInternal = false; }, 200);
+            }).catch(() => { _isProbeInternal = false; });
+        }
+    }
+
+    function stopFocusProbe() {
+        const probeEl = document.getElementById("focus-probe");
+        if (probeEl && !probeEl.paused) {
+            try {
+                _isProbeInternal = true;
+                probeEl.pause();
+            } catch (e) {} finally {
+                setTimeout(() => { _isProbeInternal = false; }, 200);
+            }
+        }
+    }
+
+    window.primeFocusProbe = primeFocusProbe;
+    window.startFocusProbe = startFocusProbe;
+    window.stopFocusProbe = stopFocusProbe;
+
+    (function bindFocusProbeHandler() {
+        const probeEl = document.getElementById("focus-probe");
+        if (!probeEl || probeEl._boundFocusProbe) return;
+        probeEl._boundFocusProbe = true;
+        probeEl.addEventListener("pause", () => {
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
+                // Passive steal signal (genuine steal OR idle suspend): drop
+                // to honest 'paused' so the drawer triangle delivers. Anchor,
+                // watchdog, and UI untouched: a false positive costs nothing
+                // (anchor still pins; foreground return re-spoofs below).
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 1.0);
+                    }
+                }
+                if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
+                    armAutoKillWatchdog();
+                }
+            }
+        });
+    })();
+
     // Auto-Kill Watchdog Lifecycle
     function cancelAutoKillWatchdog() {
         if (window.btSleepTimer !== null) {
@@ -318,11 +404,14 @@
                         ? window.declaredPausedState() : 'playing';
                 }
                     startLiveAudioAnchor();
+                    if (typeof primeFocusProbe === 'function') primeFocusProbe();
+                    if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
             }
         } else {
             teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (isPaused) {
                 window.wasPausedByUser = true;
                 if (typeof setPlayUI === 'function') setPlayUI(false);
@@ -470,9 +559,16 @@
                             // Staying paused after hangup (occasion 2): the call-start
                             // path stopped the anchor, so re-arm keepalive here or
                             // Mode 2 silently loses its pin. Zero leak risk: the
-                            // anchor is mathematical silence (gain 0).
+                            // anchor is mathematical silence (gain 0). Re-spoof too:
+                            // a probe suspend during the call may have honestly
+                            // dropped the state mid-call.
                             if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                            if (typeof startFocusProbe === 'function') startFocusProbe();
                             if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                    ? window.declaredPausedState() : 'playing';
+                            }
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
@@ -501,6 +597,7 @@
                         }
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
+                        if (typeof stopFocusProbe === 'function') stopFocusProbe();
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                             // Mode 2 doctrine: ALWAYS 'playing' (helper); the spoof
@@ -540,6 +637,7 @@
             }
             stopLiveAudioAnchor();
             cancelAutoKillWatchdog();
+            if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         audioPlayer.addEventListener('pause', () => {
@@ -565,6 +663,7 @@
                     }
                     stopLiveAudioAnchor();
                     armAutoKillWatchdog();
+                    if (typeof startFocusProbe === 'function') startFocusProbe();
                     return;
                 }
                 // Mode 2 pause: start anchor synchronously to maintain DAC awake.
@@ -574,6 +673,7 @@
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     window.mediaSessionDestroyed = false;
                     startLiveAudioAnchor();
+                    if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
                 }
             } else {
