@@ -209,7 +209,7 @@ class TestSettingsUI(unittest.TestCase):
     def test_media_session_play_handler_lyrics_reset(self):
         """MediaSession play action handler resets lyrics UI on near-end rewind"""
         play_handler_match = re.search(
-            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+            r"function\s+handlePlayAction\s*\(\s*\)\s*\{([\s\S]*?)\n    \}\n    window\.handlePlayAction",
             self.ms_content
         )
         self.assertIsNotNone(play_handler_match, "Could not find play action handler in mediaSession.js")

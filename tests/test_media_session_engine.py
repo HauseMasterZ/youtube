@@ -93,7 +93,7 @@ class TestMediaSessionEngine(unittest.TestCase):
 
     def test_no_detect_shortcut_in_play_pause_handlers(self):
         """Ensure detectPlaybackModeShortcut is not called on routine play/pause actions"""
-        play_match = re.search(r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);", self.ms_content)
+        play_match = re.search(r"function\s+handlePlayAction\s*\(\s*\)\s*\{([\s\S]*?)\n    \}\n    window\.handlePlayAction", self.ms_content)
         self.assertIsNotNone(play_match)
         self.assertNotIn("detectPlaybackModeShortcut()", play_match.group(1))
 
@@ -242,13 +242,25 @@ class TestMediaSessionEngine(unittest.TestCase):
     def test_play_action_stops_live_anchor_before_play(self):
         """Verify play handler stops anchor and sets playbackState to playing"""
         play_handler_match = re.search(
-            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]play['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+            r"function\s+handlePlayAction\s*\(\s*\)\s*\{([\s\S]*?)\n    \}\n    window\.handlePlayAction",
             self.ms_content
         )
-        self.assertIsNotNone(play_handler_match, "Could not find play action handler in mediaSession.js")
+        self.assertIsNotNone(play_handler_match, "Could not find handlePlayAction in mediaSession.js")
         play_code = play_handler_match.group(1)
         self.assertIn("stopLiveAudioAnchor()", play_code)
         self.assertIn("navigator.mediaSession.playbackState = 'playing'", play_code)
+
+    def test_play_handler_nulled_in_mode2(self):
+        """Mode 2 withdraws the play action (pause-glyph routing) and toggle re-applies per mode"""
+        self.assertRegex(
+            self.ms_content,
+            r"setActionHandler\(\s*['\"]play['\"]\s*,\s*\(window\.playbackMode\s*===\s*['\"]mode2['\"]\s*\)\s*\?\s*null\s*:\s*handlePlayAction\s*\)"
+        )
+        self.assertIn("window.applyPlayHandlerForMode = applyPlayHandlerForMode;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r"function\s+togglePlaybackMode[\s\S]*?applyPlayHandlerForMode\(\);"
+        )
 
     def test_hardware_combo_shortcut(self):
         """Ensure nexttrack, previoustrack, seekforward, and seekbackward handlers detect combo and call togglePlaybackMode"""

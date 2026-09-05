@@ -373,6 +373,10 @@
         } else if (typeof setStoredSetting === 'function') {
             setStoredSetting('yt_playback_mode', newMode);
         }
+        // Re-advertise (or withdraw in Mode 2) the Play action for the new mode
+        if (typeof applyPlayHandlerForMode === 'function') {
+            applyPlayHandlerForMode();
+        }
 
         const mode1Radio = document.getElementById("mode-1-radio");
         const mode2Radio = document.getElementById("mode-2-radio");
@@ -676,8 +680,11 @@
     }
 
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
-    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-        navigator.mediaSession.setActionHandler('play', () => {
+    // Mode 2 experiment (pin + triangle): the 'play' action is registered ONLY
+    // in Mode 1. With no Play action advertised, SystemUI can only offer the
+    // pause glyph, whose taps dispatch ACTION_PAUSE (never dropped under
+    // kPlaying) straight into our pause-toggle resume below. Doctrine untouched.
+    function handlePlayAction() {
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
@@ -719,7 +726,21 @@
                     console.warn("MediaSession play error:", e);
                 });
             }
-        });
+    }
+    window.handlePlayAction = handlePlayAction;
+
+    function applyPlayHandlerForMode() {
+        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+            try {
+                navigator.mediaSession.setActionHandler('play',
+                    (window.playbackMode === 'mode2') ? null : handlePlayAction);
+            } catch (e) {}
+        }
+    }
+    window.applyPlayHandlerForMode = applyPlayHandlerForMode;
+
+    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+        applyPlayHandlerForMode();
 
         navigator.mediaSession.setActionHandler('pause', () => {
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
