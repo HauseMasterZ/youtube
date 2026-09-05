@@ -170,17 +170,17 @@
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
-            // Idempotent: never re-enter play() on a running anchor (resets the
-            // detector guard window and risks focus churn).
-            if (anchorEl.paused) {
-                _isInternalAnchorStart = true;
-                anchorEl.play().then(() => {
-                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                }).catch(e => {
-                    _isInternalAnchorStart = false;
-                    console.warn("Live anchor play error:", e);
-                });
-            }
+            // No paused-guard here by design (m2 68 lesson): a fresh play()
+            // call at the pause boundary re-asserts audio focus to the anchor,
+            // which is what pins the card. Skipping it when the element merely
+            // reports playing (suspended silent graph included) loses the pin.
+            _isInternalAnchorStart = true;
+            anchorEl.play().then(() => {
+                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+            }).catch(e => {
+                _isInternalAnchorStart = false;
+                console.warn("Live anchor play error:", e);
+            });
         }
     }
 
@@ -679,13 +679,24 @@
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     return;
                 }
-                // Mode 2 pause: start anchor synchronously to maintain DAC awake.
-                // No delayed scheduling: any gap without audio focus lets the
-                // browser reclaim the session and strip the notification.
+                // Mode 2 pause: recycle the anchor synchronously (stop + start) so
+                // the pause boundary carries a genuine fresh focus request and
+                // a rendering graph, whether the anchor was running or not.
+                // A mere no-op when already running loses the pin (m2 68).
+                // Flag-guarded: the trailing pause event must not trip the
+                // anchor auto-handlers (esp. watchdog cancel).
                 const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     window.mediaSessionDestroyed = false;
+                    try {
+                        const anchorEl = document.getElementById("live-stream-anchor");
+                        if (anchorEl && !anchorEl.paused) {
+                            _isInternalAnchorStop = true;
+                            try { anchorEl.pause(); } catch (e) {}
+                        }
+                    } catch (e) {}
                     startLiveAudioAnchor();
+                    setTimeout(() => { _isInternalAnchorStop = false; }, 200);
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
                 }

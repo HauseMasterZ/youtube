@@ -196,6 +196,8 @@ class TestMediaSessionEngine(unittest.TestCase):
 
     def test_declared_paused_state_mapping(self):
         """state.js declares mode-aware paused state: mode2 spoofs playing (pin), mode1 honest paused"""
+        self.assertIn("window.APP_BUILD", self.state_content)
+        self.assertIn("window.APP_BUILD", self.main_content)
         self.assertIn("window.declaredPausedState = function()", self.state_content)
         self.assertRegex(
             self.state_content,
@@ -282,6 +284,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertEqual(
             len(re.findall(r"if\s*\(\s*window\.playbackMode\s*!==\s*['\"]mode2['\"]\s*\)\s*\{\s*_isInternalAnchorStop", self.ms_content)),
             2
+        )
+
+    def test_pause_boundary_recycles_anchor(self):
+        """mode2 user-pause performs flagged stop+start recycle (genuine focus request)"""
+        self.assertRegex(
+            self.ms_content,
+            r'_isInternalAnchorStop\s*=\s*true;[\s\S]*?anchorEl\.pause\(\);[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?setTimeout\(\s*\(\s*\)\s*=>\s*\{\s*_isInternalAnchorStop\s*=\s*false;\s*\},\s*200\s*\);'
         )
 
     def test_hardware_combo_shortcut(self):

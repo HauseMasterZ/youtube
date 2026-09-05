@@ -1,4 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
+    try {
+        console.log("[BUILD]", (typeof window.APP_BUILD !== 'undefined' && window.APP_BUILD) ? window.APP_BUILD : 'unknown');
+    } catch (e) {}
     searchInput.addEventListener("input", (e) => {
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {

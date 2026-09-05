@@ -84,6 +84,10 @@
     window.getStoredSetting = getStoredSetting;
     window.setStoredSetting = setStoredSetting;
 
+    // Build self-identification: bump every commit, logged once at startup so
+    // field tests can prove which build is under test from the console.
+    window.APP_BUILD = 'm2-69';
+
     // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
     // ~2.5s of hangup even if paused before the call. Single helper so the
     // window lives in one place (rogue-vs-drawer-tap are identical bare
