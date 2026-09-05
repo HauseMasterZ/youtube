@@ -179,7 +179,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("this.active.currentTime = ct;", self.dom_content)
 
     def test_play_authorization_choke_point_in_dom_js(self):
-        """DualAudioPingPong play() gates on wasPausedByUser with no self-authorization; pauses leave volume at 0"""
+        """DualAudioPingPong play() gates on wasPausedByUser with no self-authorization; pauses keep volume at 1.0 so the OS keeps the card"""
         self.assertRegex(
             self.dom_content,
             r'play\(\)\s*\{[\s\S]*?if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{\s*return\s+Promise\.resolve\(\);\s*\}'
@@ -188,7 +188,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.dom_content,
             r'play\(\)\s*\{(?:(?!\n        (pause|instantPause|recoverTrack|switchTrack)\().)*?window\.wasPausedByUser\s*=\s*false;'
         )
-        self.assertIn("this.active.volume = 0;", self.dom_content)
+        self.assertNotIn("this.active.volume = 0;", self.dom_content)
 
     def test_honest_paused_playback_state_across_files(self):
         """pause paths in dom.js, main.js, and playback.js declare honest paused"""

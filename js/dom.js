@@ -285,8 +285,10 @@
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
                 this.active.pause();
-                // Leave volume at 0 while paused: any rogue play starts silent
-                this.active.volume = 0;
+                // Keep volume at 1.0 while paused: volume 0 marks the player
+                // muted to the OS and gets the card evicted (m2 60 regression).
+                // Rogue plays die at the play() gate above, so this is safe.
+                this.active.volume = 1.0;
                 return Promise.resolve();
             }
             return new Promise(resolve => {
@@ -300,7 +302,7 @@
                         clearInterval(this.fadeInterval);
                         this.fadeInterval = null;
                         this.active.pause();
-                        this.active.volume = 0;
+                        this.active.volume = 1.0;
                         resolve();
                     }
                 }, 5);
@@ -327,8 +329,9 @@
                 this.fadeInterval = null;
             }
             this.active.pause();
-            // Leave volume at 0 while paused: any rogue play starts silent
-            this.active.volume = 0;
+            // Keep volume at 1.0 while paused (see above): the play() gate
+            // blocks rogues before the element is touched.
+            this.active.volume = 1.0;
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
