@@ -407,7 +407,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         window.wasPausedByUser = false;
         window.wasPlayingBeforeCall = true;
-        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+        // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+        if (window.playbackMode === 'mode2') {
+            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+        } else if (typeof stopLiveAudioAnchor === 'function') {
+            stopLiveAudioAnchor();
+        }
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;

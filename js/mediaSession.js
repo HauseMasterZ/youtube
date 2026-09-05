@@ -167,13 +167,17 @@
             if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.srcObject = liveAudioDestination.stream;
             }
-            _isInternalAnchorStart = true;
-            anchorEl.play().then(() => {
-                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-            }).catch(e => {
-                _isInternalAnchorStart = false;
-                console.warn("Live anchor play error:", e);
-            });
+            // Idempotent: never re-enter play() on a running anchor (resets the
+            // detector guard window and risks focus churn).
+            if (anchorEl.paused) {
+                _isInternalAnchorStart = true;
+                anchorEl.play().then(() => {
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                }).catch(e => {
+                    _isInternalAnchorStart = false;
+                    console.warn("Live anchor play error:", e);
+                });
+            }
         }
     }
 
@@ -373,10 +377,6 @@
         } else if (typeof setStoredSetting === 'function') {
             setStoredSetting('yt_playback_mode', newMode);
         }
-        // Re-advertise (or withdraw in Mode 2) the Play action for the new mode
-        if (typeof applyPlayHandlerForMode === 'function') {
-            applyPlayHandlerForMode();
-        }
 
         const mode1Radio = document.getElementById("mode-1-radio");
         const mode2Radio = document.getElementById("mode-2-radio");
@@ -393,6 +393,10 @@
         const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
 
         if (newMode === 'mode2') {
+            // Always-on anchor: start whether playing or paused (we hold focus
+            // either way, so no yank possible); paused additionally primes the
+            // probe, spoofs state, and arms the watchdog.
+            startLiveAudioAnchor();
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Doctrine: spoof on entry (helper reads the just-set mode)
@@ -631,7 +635,12 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            stopLiveAudioAnchor();
+            // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
             cancelAutoKillWatchdog();
             if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
@@ -648,8 +657,10 @@
                 if (!window.wasPausedByUser) {
                     // External interruption (video steal while playing): state
                     // STAYS spoofed per doctrine (the pin must survive the
-                    // steal); anchor stops (stealer holds focus/DAC), watchdog
-                    // arms so an abandoned session still auto-cleans.
+                    // steal). Anchor KEEPS RUNNING ducked (never request focus
+                    // mid-steal; starting audio now would yank their video) so
+                    // the session retains a live track like the paused case.
+                    // Watchdog arms so an abandoned session still auto-cleans.
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
@@ -657,7 +668,10 @@
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                         updateMediaSessionPosition(pos, dur, 1.0);
                     }
-                    stopLiveAudioAnchor();
+                    // NOTE: anchor intentionally NOT stopped here. It keeps running
+                    // ducked (proven harmless to the stealer in the paused
+                    // case); killing it at this exact moment is what evicted
+                    // playing-steal cards. Never *start* audio here either.
                     armAutoKillWatchdog();
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     return;
@@ -680,10 +694,8 @@
     }
 
     // Media Session Global Action Handlers (Bound exactly once to prevent CPU overhead on track change)
-    // Mode 2 experiment (pin + triangle): the 'play' action is registered ONLY
-    // in Mode 1. With no Play action advertised, SystemUI can only offer the
-    // pause glyph, whose taps dispatch ACTION_PAUSE (never dropped under
-    // kPlaying) straight into our pause-toggle resume below. Doctrine untouched.
+    // handlePlayAction extracted for testability; registered unconditionally
+    // (withdrawing it did not change the post-steal glyph, so it stays).
     function handlePlayAction() {
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
@@ -729,18 +741,13 @@
     }
     window.handlePlayAction = handlePlayAction;
 
-    function applyPlayHandlerForMode() {
-        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-            try {
-                navigator.mediaSession.setActionHandler('play',
-                    (window.playbackMode === 'mode2') ? null : handlePlayAction);
-            } catch (e) {}
-        }
-    }
-    window.applyPlayHandlerForMode = applyPlayHandlerForMode;
-
     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-        applyPlayHandlerForMode();
+        // m2 66 experiment reverted: withdrawing 'play' did not change the
+        // post-steal glyph (SystemUI renders the triangle from session
+        // inactivity, not handler presence), and an unhandled triangle risks
+        // breaking discrete BT PLAY keys. Triangle taps under spoof stay
+        // dropped by Chromium; documented limitation.
+        navigator.mediaSession.setActionHandler('play', handlePlayAction);
 
         navigator.mediaSession.setActionHandler('pause', () => {
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));

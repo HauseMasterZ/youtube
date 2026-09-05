@@ -250,16 +250,27 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("stopLiveAudioAnchor()", play_code)
         self.assertIn("navigator.mediaSession.playbackState = 'playing'", play_code)
 
-    def test_play_handler_nulled_in_mode2(self):
-        """Mode 2 withdraws the play action (pause-glyph routing) and toggle re-applies per mode"""
+    def test_play_handler_registered_unconditionally(self):
+        """play action always registered (null-withdrawal reverted: glyph follows session activity, BT PLAY must keep its target)"""
         self.assertRegex(
             self.ms_content,
-            r"setActionHandler\(\s*['\"]play['\"]\s*,\s*\(window\.playbackMode\s*===\s*['\"]mode2['\"]\s*\)\s*\?\s*null\s*:\s*handlePlayAction\s*\)"
+            r"setActionHandler\(\s*['\"]play['\"]\s*,\s*handlePlayAction\s*\)"
         )
-        self.assertIn("window.applyPlayHandlerForMode = applyPlayHandlerForMode;", self.ms_content)
+        self.assertNotIn("applyPlayHandlerForMode", self.ms_content)
+
+    def test_anchor_always_on_in_mode2(self):
+        """Mode 2 keeps the anchor across playback and steals: starts on play/dom-play/toggle, never stopped on external pause"""
         self.assertRegex(
             self.ms_content,
-            r"function\s+togglePlaybackMode[\s\S]*?applyPlayHandlerForMode\(\);"
+            r'audioPlayer\.addEventListener\(\s*[\'"]play[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{\s*if\s*\(\s*typeof\s+startLiveAudioAnchor'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{\s*if\s*\(\s*typeof\s+startLiveAudioAnchor'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'window\.wasPausedByUser\s*=\s*false;[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{\s*if\s*\(\s*typeof\s+startLiveAudioAnchor'
         )
 
     def test_hardware_combo_shortcut(self):

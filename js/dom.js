@@ -248,7 +248,15 @@
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
             }
-            if (typeof stopLiveAudioAnchor === 'function') {
+            // Always-on anchor in Mode 2: keep a live (duckable) track across
+            // steals so the card survives playing-case interruptions. Starts
+            // here only ever happen while WE hold focus (our own playback), so
+            // no focus yank is possible. Mode 1 stops it as before.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
+            } else if (typeof stopLiveAudioAnchor === 'function') {
                 stopLiveAudioAnchor();
             }
             if (typeof cancelAutoKillWatchdog === 'function') {
@@ -261,7 +269,7 @@
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
-            // Past the gate: legitimate start, restore full volume (pause leaves it at 0)
+            // Past the gate: legitimate start, ensure full volume
             this.active.volume = 1.0;
             this.active.muted = false;
 
