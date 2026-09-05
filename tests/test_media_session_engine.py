@@ -178,6 +178,18 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("this.active.currentTime = this.active.currentTime;", self.dom_content)
         self.assertNotIn("this.active.currentTime = ct;", self.dom_content)
 
+    def test_play_authorization_choke_point_in_dom_js(self):
+        """DualAudioPingPong play() gates on wasPausedByUser with no self-authorization; pauses leave volume at 0"""
+        self.assertRegex(
+            self.dom_content,
+            r'play\(\)\s*\{[\s\S]*?if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{\s*return\s+Promise\.resolve\(\);\s*\}'
+        )
+        self.assertNotRegex(
+            self.dom_content,
+            r'play\(\)\s*\{(?:(?!\n        (pause|instantPause|recoverTrack|switchTrack)\().)*?window\.wasPausedByUser\s*=\s*false;'
+        )
+        self.assertIn("this.active.volume = 0;", self.dom_content)
+
     def test_honest_paused_playback_state_across_files(self):
         """pause paths in dom.js, main.js, and playback.js declare honest paused"""
         self.assertRegex(
@@ -267,11 +279,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_focus_and_visibility_resume_in_main_js(self):
-        """main.js defines debounced attemptFocusResume on visibilitychange without focus listener or pointerdown capture interference"""
-        self.assertRegex(self.main_content, r'function\s+attemptFocusResume\s*\(\s*\)')
-        self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*attemptFocusResume\s*\)')
+        """main.js has no background autoplay on visibilitychange: only foreground anchor re-arm, no focus listener"""
+        self.assertNotIn("attemptFocusResume", self.main_content)
+        self.assertNotIn("_focusResumeTimer", self.main_content)
+        self.assertRegex(self.main_content, r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]')
         self.assertNotIn('window.addEventListener("focus"', self.main_content)
-        self.assertIn("_focusResumeTimer", self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
     def test_bt_disconnect_stops_anchor_and_watchdog(self):
@@ -427,16 +439,18 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_phone_call_hangup_auto_resume_and_post_call_filter(self):
-        """devicechange resets isCallActive, auto-resumes if wasPlayingBeforeCall, and action handlers filter post-call events"""
+        """devicechange resets isCallActive, auto-resumes if wasPlayingBeforeCall, and action handlers filter post-call events via centralized helper"""
         self.assertIn("window.isCallActive = false;", self.ms_content)
         self.assertIn("window.lastCallEndTime = Date.now();", self.ms_content)
         self.assertRegex(
             self.ms_content,
             r'if\s*\(\s*window\.wasPlayingBeforeCall\s*&&\s*!window\.wasPausedByUser[\s\S]*?audioPlayer\.play\(\)'
         )
+        self.assertIn("window.isPostCallQuarantine = function()", self.state_content)
+        self.assertNotIn("isAutoResumeAfterCall", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'const\s+isAutoResumeAfterCall\s*=\s*\(typeof\s+window\.lastCallEndTime\s*===\s*[\'"]number[\'"]\s*&&\s*Date\.now\(\)\s*-\s*window\.lastCallEndTime\s*<\s*2500\s*&&\s*window\.wasPlayingBeforeCall\s*===\s*false\);'
+            r'window\.isPostCallQuarantine\(\)'
         )
 
     def test_action_handlers_guarded_against_active_call(self):

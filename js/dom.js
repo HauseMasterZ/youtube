@@ -236,8 +236,14 @@
         }
 
         play() {
+            // Authorization choke-point: rogues (AVRCP blast, stray autoplay)
+            // die here synchronously before touching the element. Legitimate
+            // callers flip wasPausedByUser=false first (handlers, btnPlayPause,
+            // executePlayback, devicechange resume, anchor auto-resume).
+            if (window.wasPausedByUser) {
+                return Promise.resolve();
+            }
             this._initMSE();
-            window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
@@ -254,8 +260,9 @@
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
-                this.active.volume = 1.0;
             }
+            // Past the gate: legitimate start, restore full volume (pause leaves it at 0)
+            this.active.volume = 1.0;
             this.active.muted = false;
 
             if (this._pendingSeek !== null) {
@@ -278,7 +285,8 @@
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
                 this.active.pause();
-                this.active.volume = 1.0;
+                // Leave volume at 0 while paused: any rogue play starts silent
+                this.active.volume = 0;
                 return Promise.resolve();
             }
             return new Promise(resolve => {
@@ -292,7 +300,7 @@
                         clearInterval(this.fadeInterval);
                         this.fadeInterval = null;
                         this.active.pause();
-                        this.active.volume = 1.0;
+                        this.active.volume = 0;
                         resolve();
                     }
                 }, 5);
@@ -319,7 +327,8 @@
                 this.fadeInterval = null;
             }
             this.active.pause();
-            this.active.volume = 1.0;
+            // Leave volume at 0 while paused: any rogue play starts silent
+            this.active.volume = 0;
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {

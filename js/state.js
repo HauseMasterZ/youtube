@@ -84,6 +84,14 @@
     window.getStoredSetting = getStoredSetting;
     window.setStoredSetting = setStoredSetting;
 
+    // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
+    // ~2.5s of hangup even if paused before the call. Single helper so the
+    // window lives in one place (rogue-vs-drawer-tap are identical bare
+    // ACTION_PLAY, so wall-clock gating is unavoidable).
+    window.isPostCallQuarantine = function() {
+        return (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+    };
+
     window.playbackMode = 'mode1';
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '5');
     window.btSleepTimer = null;

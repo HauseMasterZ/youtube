@@ -311,7 +311,7 @@
         if (newMode === 'mode2') {
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
+                    navigator.mediaSession.playbackState = 'paused';
                 }
                     startLiveAudioAnchor();
                     armAutoKillWatchdog();
@@ -448,12 +448,12 @@
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
                         if (window.wasPlayingBeforeCall && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                            // Single deferred resume: let telecom -> media routing settle before opening the stream (no dual-fire pop)
                             setTimeout(() => {
                                 if (!window.isCallActive && window.wasPlayingBeforeCall && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
                                     audioPlayer.play().catch(() => {});
                                 }
                             }, 150);
-                            audioPlayer.play().catch(() => {});
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
@@ -563,8 +563,7 @@
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
-            const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
-            if (isAutoResumeAfterCall) {
+            if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                 return;
             }
             window.wasPausedByUser = false;
@@ -600,11 +599,6 @@
                     console.log("[MS-ACTION] 'play' playPromise RESOLVED.");
                 }).catch(e => {
                     console.warn("MediaSession play error:", e);
-                    setTimeout(() => {
-                        if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                            audioPlayer.play().then(() => console.log("[MS-ACTION] 'play' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'play' retry REJECTED:", err));
-                        }
-                    }, 50);
                 });
             }
         });
@@ -616,8 +610,7 @@
             window.mediaSessionDestroyed = false;
             if (window.playbackMode === 'mode2') {
                 if (isActuallyPaused) {
-                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
-                    if (isAutoResumeAfterCall) {
+                    if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
                     // User intentionally resuming from paused state in Mode 2
@@ -645,11 +638,6 @@
                             console.log("[MS-ACTION] 'pause' playPromise RESOLVED.");
                         }).catch(e => {
                             console.warn("MediaSession play error:", e);
-                            setTimeout(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().then(() => console.log("[MS-ACTION] 'pause' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'pause' retry REJECTED:", err));
-                                }
-                            }, 50);
                         });
                     }
                 } else {
@@ -671,8 +659,7 @@
                 // Mode 1: If audio is paused (or was paused by user), play; if playing, pause
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (isActuallyPaused) {
-                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
-                    if (isAutoResumeAfterCall) {
+                    if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
                     window.wasPausedByUser = false;
@@ -721,8 +708,7 @@
                 if (window.isCallActive) return;
                 window.mediaSessionDestroyed = false;
                 if (isActuallyPaused) {
-                    const isAutoResumeAfterCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
-                    if (isAutoResumeAfterCall) {
+                    if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
                     window.wasPausedByUser = false;
@@ -760,11 +746,6 @@
                             console.log("[MS-ACTION] 'playpause' playPromise RESOLVED.");
                         }).catch(e => {
                             console.warn("MediaSession playpause error:", e);
-                            setTimeout(() => {
-                                if (audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                    audioPlayer.play().then(() => console.log("[MS-ACTION] 'playpause' retry RESOLVED")).catch(err => console.warn("[MS-ACTION] 'playpause' retry REJECTED:", err));
-                                }
-                            }, 50);
                         });
                     }
                 } else {

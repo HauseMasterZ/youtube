@@ -454,32 +454,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    let _focusResumeTimer = null;
-    function attemptFocusResume() {
-        console.log("[VISIBILITYCHANGE] hidden:", document.hidden, "paused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
-        if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-            clearTimeout(_focusResumeTimer);
-            _focusResumeTimer = setTimeout(() => {
-                if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
-                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                    if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
-                    audioPlayer.play().catch(e => {
-                        console.warn("attemptFocusResume error:", e);
-                        setTimeout(() => {
-                            if (!window.wasPausedByUser && (window.wasPlayingBeforeCall !== false) && audioPlayer && audioPlayer.paused) {
-                                if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                                audioPlayer.play().catch(() => {});
-                            }
-                        }, 150);
-                    });
-                }
-            }, 100);
-        }
-    }
-    document.addEventListener("visibilitychange", attemptFocusResume);
-
-
-
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
