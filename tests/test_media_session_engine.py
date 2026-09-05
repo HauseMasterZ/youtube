@@ -105,15 +105,19 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast-text', self.ms_content)
 
     def test_no_micro_rate_spoof(self):
-        """No 0.00001 micro-rate spoof anywhere: paused state is always honest"""
+        """0.00001 micro-rate exists ONLY to freeze the card seekbar under spoofed mode2 pause; nowhere else"""
         self.assertIn("isMobileDevice", self.ms_content)
-        self.assertNotIn("0.00001", self.ms_content)
         self.assertNotIn("0.00001", self.dom_content)
         self.assertNotIn("0.00001", self.main_content)
         self.assertNotIn("0.00001", self.state_content)
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
         self.assertNotIn("0.00001", playback_content)
+        self.assertEqual(self.ms_content.count("0.00001"), 1)
+        self.assertRegex(
+            self.ms_content,
+            r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
+        )
 
     def test_start_live_anchor_scoped_to_mobile(self):
         """Ensure startLiveAudioAnchor exits early on desktop"""

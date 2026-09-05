@@ -391,7 +391,13 @@
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
 
                 let rate;
-                if (isForcedRateValid && forcedRate > 0) {
+                if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
+                    // Spoofed pause: OS advances the card seekbar by rate while
+                    // state reads 'playing', so freeze it with a near-zero rate
+                    // (0 is rejected by setPositionState; hence the micro-rate).
+                    // Scoped strictly to mode2-paused; all other paths below.
+                    rate = 0.00001;
+                } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
                 } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
                     rate = 1.0;
