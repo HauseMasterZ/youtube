@@ -113,15 +113,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
         self.assertNotIn("0.00001", playback_content)
-        self.assertEqual(self.ms_content.count("0.00001"), 2)
+        self.assertEqual(self.ms_content.count("0.00001"), 1)
         self.assertRegex(
             self.ms_content,
             r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
         )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+reassertSpoofBurst[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*d\s*,\s*0\.00001\s*\);'
-        )
+        self.assertNotIn("reassertSpoofBurst", self.ms_content)
 
     def test_start_live_anchor_scoped_to_mobile(self):
         """Ensure startLiveAudioAnchor exits early on desktop"""
@@ -590,40 +587,36 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('getElementById("focus-probe")', self.ms_content)
 
     def test_focus_probe_pause_is_passive(self):
-        """probe pause never writes playbackState (pin absolutism) nor tears down anchor, watchdog, or UI"""
+        """probe pause drops honest (triangle delivery) + sets steal flag, WITHOUT tearing down anchor, watchdog, or UI"""
         probe_match = re.search(
             r'bindFocusProbeHandler[\s\S]*?probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
             self.ms_content
         )
         self.assertIsNotNone(probe_match, "Could not find probe pause handler")
         code = probe_match.group(1)
-        self.assertNotIn("playbackState", code)
+        self.assertIn("navigator.mediaSession.playbackState = 'paused';", code)
+        self.assertIn("window._probeTrippedSteal = Date.now();", code)
         self.assertNotIn("stopLiveAudioAnchor()", code)
         self.assertNotIn("cancelAutoKillWatchdog()", code)
         self.assertNotIn("setPlayUI(", code)
         self.assertIn("armAutoKillWatchdog()", code)
         self.assertIn("!_isProbeInternal", code)
         self.assertIn("[PROBE-SUSPEND]", code)
+        self.assertNotIn("reassertSpoofBurst", self.ms_content)
 
-    def test_spoof_reassert_burst(self):
-        """reassertSpoofBurst re-declares playing with frozen rate, self-terminates, and runs on steal paths"""
+    def test_steal_flag_guards_respoof_paths(self):
+        """standing steal flag suppresses re-spoof; cleared on resume, call entry, and toggle"""
+        self.assertIn("window._probeTrippedSteal = 0;", self.state_content)
         self.assertRegex(
-            self.ms_content,
-            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+            self.main_content,
+            r'!\s*window\._probeTrippedSteal\s*&&\s*hasMediaSession[\s\S]*?declaredPausedState\(\)'
         )
         self.assertRegex(
-            self.ms_content,
-            r'function\s+reassertSpoofBurst[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"];'
+            self.main_content,
+            r'!\s*window\._probeTrippedSteal\s*\)\s*\{\s*if\s*\(\s*hasMediaSession\s*\)'
         )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+reassertSpoofBurst[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*d\s*,\s*0\.00001\s*\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+reassertSpoofBurst[\s\S]*?if\s*\(\s*\+\+n\s*<\s*5\s*\)\s*setTimeout\(\s*tick\s*,\s*1000\s*\);'
-        )
-        self.assertIn("window.reassertSpoofBurst = reassertSpoofBurst;", self.ms_content)
+        self.assertIn("window._probeTrippedSteal = 0;", self.ms_content)
+        self.assertGreater(self.ms_content.count("window._probeTrippedSteal = 0;"), 2)
 
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""

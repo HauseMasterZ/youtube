@@ -306,11 +306,22 @@
         probeEl.addEventListener("pause", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
-                // Steal-or-idle suspend observed. Deliberately NO direct state
-                // write here (pin absolutism) — but DO re-assert the spoof in
-                // case the browser natively flipped it on focus loss.
+                // Confirmed steal-or-idle suspend while paused: drop to honest
+                // 'paused' so the drawer triangle DELIVERS (this is the only
+                // path that ever made post-steal triangle work). No teardown:
+                // anchor/watchdog/UI untouched (m2 64 kept, m2 65 wrongly cut).
+                // pin risk accepted here by explicit human order; re-spoof
+                // triggers below stay suppressed while this flag stands.
                 console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
-                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                window._probeTrippedSteal = Date.now();
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 1.0);
+                    }
+                }
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -363,6 +374,8 @@
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
+        // Mode switch resets the world: revoke any standing steal flag.
+        window._probeTrippedSteal = 0;
         lastAudioPlayerPauseTime = Date.now() - 1000;
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -514,33 +527,6 @@
     }
     window.updateMediaSessionPosition = updateMediaSessionPosition;
 
-    // Spoof re-assert burst: the browser/OS may rewrite declared state to
-    // 'paused' asynchronously on audio-focus loss AFTER our handler runs
-    // (native override race). Re-assert 'playing' a few times over ~5s so the
-    // last write wins. Self-terminating; guarded on mode + still-paused;
-    // pure state writes (zero audio/focus interaction, zero yank risk).
-    // No-op when already spoofed.
-    function reassertSpoofBurst() {
-        if (window.playbackMode !== 'mode2') return;
-        let n = 0;
-        const tick = () => {
-            try {
-                if (window.playbackMode !== 'mode2') return;
-                if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
-                    if (typeof updateMediaSessionPosition === 'function' && typeof audioPlayer !== 'undefined' && audioPlayer) {
-                        const d = audioPlayer.duration || 0;
-                        updateMediaSessionPosition(audioPlayer.currentTime, d, 0.00001);
-                    }
-                }
-            } catch (e) {}
-            if (++n < 5) setTimeout(tick, 1000);
-        };
-        setTimeout(tick, 500);
-    }
-    window.reassertSpoofBurst = reassertSpoofBurst;
-
     // Re-publish the stored song info as a fresh object so the notification
     // card returns even if the browser dismissed the previous session
     // (e.g. long call with a frozen page: first code that runs re-announces).
@@ -605,6 +591,8 @@
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
+                        // Fresh pin state for the call: revoke any standing steal flag.
+                        window._probeTrippedSteal = 0;
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
@@ -666,6 +654,8 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
+            // Any real resume revokes a standing steal flag (fresh pin state).
+            window._probeTrippedSteal = 0;
             // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
@@ -703,9 +693,10 @@
                     // ducked (proven harmless to the stealer in the paused
                     // case); killing it at this exact moment is what evicted
                     // playing-steal cards. Never *start* audio here either.
+                    // Probe (started below) confirms the steal and drops state
+                    // honest for triangle delivery; anchor keeps the pin.
                     armAutoKillWatchdog();
                     if (typeof startFocusProbe === 'function') startFocusProbe();
-                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                     return;
                 }
                 // Mode 2 pause: recycle the anchor synchronously (stop + start) so

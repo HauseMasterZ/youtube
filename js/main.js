@@ -521,27 +521,27 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                 } else {
-                    // User-paused: re-arm keepalive + probe and re-spoof (a
-                    // probe suspend or call may have honestly dropped the
-                    // state while hidden). No autoplay here: pure re-arm.
+                    // User-paused: re-arm keepalive + probe. Re-spoof EXCEPT
+                    // while a probe-confirmed steal stands un-revoked (flag):
+                    // overwriting probe-honest would re-kill the triangle.
                     if (typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();
                     }
                     if (typeof startFocusProbe === 'function') {
                         startFocusProbe();
                     }
-                    if (hasMediaSession) {
+                    if (!window._probeTrippedSteal && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
                     }
                 }
             }
         } else {
-            // Going hidden while paused in Mode 2: re-spoof (unattended pin).
-            // Steals happening while already hidden fire no event, so this
-            // changes nothing mid-steal; it only protects attended-honest
-            // cards being abandoned (resurrected above) from idle eviction.
-            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+            // Going hidden while paused in Mode 2: re-spoof (unattended pin),
+            // SKIPPED while a probe-confirmed steal stands (would re-kill the
+            // triangle the honest drop enables). Steals happening while already
+            // hidden fire no event, so this changes nothing mid-steal.
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching && !window._probeTrippedSteal) {
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
