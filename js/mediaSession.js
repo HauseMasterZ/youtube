@@ -81,7 +81,9 @@
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
                         setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                        if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                        // Always-on anchor in Mode 2: never pause it here, even
+                        // while music plays (the ducked track is the pin).
+                        if (window.playbackMode !== 'mode2') {
                             _isInternalAnchorStop = true;
                             anchorEl.pause();
                             _isInternalAnchorStop = false;
@@ -134,7 +136,8 @@
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
                         setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                        if (window.playbackMode !== 'mode2' || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                        // Always-on anchor in Mode 2 (see above).
+                        if (window.playbackMode !== 'mode2') {
                             _isInternalAnchorStop = true;
                             anchorEl.pause();
                             _isInternalAnchorStop = false;
@@ -728,7 +731,12 @@
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
             }
-            stopLiveAudioAnchor();
+            // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
             cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
@@ -776,7 +784,8 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
-                    stopLiveAudioAnchor();
+                    // Already inside mode2 branch: keep anchor (idempotent).
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
@@ -885,7 +894,12 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
-                    stopLiveAudioAnchor();
+                    // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+                    if (window.playbackMode === 'mode2') {
+                        if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    } else if (typeof stopLiveAudioAnchor === 'function') {
+                        stopLiveAudioAnchor();
+                    }
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
@@ -1002,7 +1016,8 @@
                 if (typeof updateMediaSessionPosition === 'function') {
                     updateMediaSessionPosition(newTime, dur, 1.0);
                 }
-                stopLiveAudioAnchor();
+                // Already inside mode2-only block: keep anchor (idempotent).
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                 cancelAutoKillWatchdog();
                 audioPlayer.play().catch(e => console.warn("MediaSession seekbackward resume error:", e));
             }
@@ -1040,7 +1055,8 @@
                 if (typeof updateMediaSessionPosition === 'function') {
                     updateMediaSessionPosition(newTime, dur, 1.0);
                 }
-                stopLiveAudioAnchor();
+                // Already inside mode2-only block: keep anchor (idempotent).
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                 cancelAutoKillWatchdog();
                 audioPlayer.play().catch(e => console.warn("MediaSession seekforward resume error:", e));
             }

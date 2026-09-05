@@ -283,7 +283,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
-            if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+            // Always-on anchor in Mode 2; stop only in Mode 1.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
@@ -429,7 +434,12 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
-        if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+        // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+        if (window.playbackMode === 'mode2') {
+            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+        } else if (typeof stopLiveAudioAnchor === 'function') {
+            stopLiveAudioAnchor();
+        }
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         if (hasMediaSession) {

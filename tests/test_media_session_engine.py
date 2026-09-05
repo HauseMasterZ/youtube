@@ -273,6 +273,17 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.wasPausedByUser\s*=\s*false;[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{\s*if\s*\(\s*typeof\s+startLiveAudioAnchor'
         )
 
+    def test_anchor_survives_external_steal(self):
+        """external-steal branch never stops the anchor; init only pauses it outside Mode 2"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{(?:(?!stopLiveAudioAnchor)[\s\S])*?return;'
+        )
+        self.assertEqual(
+            len(re.findall(r"if\s*\(\s*window\.playbackMode\s*!==\s*['\"]mode2['\"]\s*\)\s*\{\s*_isInternalAnchorStop", self.ms_content)),
+            2
+        )
+
     def test_hardware_combo_shortcut(self):
         """Ensure nexttrack, previoustrack, seekforward, and seekbackward handlers detect combo and call togglePlaybackMode"""
         self.assertIn("lastPlaybackModeTransitions", self.ms_content)
@@ -517,7 +528,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             code = handler_match.group(1)
             self.assertIn("window.playbackMode === 'mode2'", code)
             self.assertIn("audioPlayer.play()", code)
-            self.assertIn("stopLiveAudioAnchor()", code)
+            self.assertIn("startLiveAudioAnchor()", code)
             self.assertIn("cancelAutoKillWatchdog()", code)
 
     def test_seekto_stays_positioning_only(self):
