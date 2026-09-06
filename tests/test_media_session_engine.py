@@ -118,7 +118,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.ms_content,
             r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
         )
-        self.assertNotIn("reassertSpoofBurst", self.ms_content)
+        self.assertIn("reassertSpoofBurst", self.ms_content)
 
     def test_start_live_anchor_scoped_to_mobile(self):
         """Ensure startLiveAudioAnchor exits early on desktop"""
@@ -374,15 +374,15 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn('window.addEventListener("focus"', self.main_content)
         self.assertNotIn("capture: true", self.main_content)
 
-    def test_foreground_resurrects_interrupted_session_honest(self):
-        """visible foreground with interrupted (non-user) pause rebuilds metadata honest-paused for triangle delivery"""
+    def test_foreground_resurrects_interrupted_session_declared_state(self):
+        """visible foreground with interrupted (non-user) pause rebuilds metadata and sets mode-declared state"""
         self.assertRegex(
             self.main_content,
             r'!\s*window\.wasPausedByUser\s*&&\s*window\.wasPlayingBeforeCall\s*!==\s*false[\s\S]*?window\.publishTrackMetadata\(track'
         )
         self.assertRegex(
             self.main_content,
-            r'!\s*window\.wasPausedByUser\s*&&\s*window\.wasPlayingBeforeCall\s*!==\s*false[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'!\s*window\.wasPausedByUser\s*&&\s*window\.wasPlayingBeforeCall\s*!==\s*false[\s\S]*?declaredPausedState\(\)'
         )
 
     def test_hidden_bookend_respoofs_unattended(self):
@@ -637,7 +637,27 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", code)
         self.assertIn("!_isProbeInternal", code)
         self.assertIn("[PROBE-SUSPEND]", code)
-        self.assertNotIn("reassertSpoofBurst", self.ms_content)
+        self.assertIn("reassertSpoofBurst()", code)
+
+    def test_spoof_reassert_burst(self):
+        """reassertSpoofBurst re-declares playing with frozen rate, self-terminates, and runs on steal paths"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?declaredPausedState\(\)'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst[\s\S]*?republishMediaMetadata\(\);'
+        )
+        self.assertIn("window.reassertSpoofBurst = reassertSpoofBurst;", self.ms_content)
 
     def test_declared_paused_state_on_respoof_paths(self):
         """declaredPausedState is respected on all respoof paths in main.js and mediaSession.js"""

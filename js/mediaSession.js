@@ -57,6 +57,7 @@
                     updateMediaSessionPosition(pos, dur, 1.0);
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
+                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -114,6 +115,7 @@
                             updateMediaSessionPosition(pos, dur, 1.0);
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
+                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                         if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                             armAutoKillWatchdog();
                         }
@@ -314,6 +316,7 @@
                 // Mode 2 declares 'playing' unconditionally (pin absolutism).
                 // Log only, so field diagnostics can see steal moments.
                 console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
+                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -522,22 +525,81 @@
     // Re-publish the stored song info as a fresh object so the notification
     // card returns even if the browser dismissed the previous session
     // (e.g. long call with a frozen page: first code that runs re-announces).
+    let lastValidMetadata = null;
     function republishMediaMetadata() {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
             try {
                 const current = navigator.mediaSession.metadata;
-                if (current) {
+                if (current && current.title) {
+                    lastValidMetadata = {
+                        title: current.title,
+                        artist: current.artist,
+                        album: current.album,
+                        artwork: current.artwork
+                    };
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: current.title,
                         artist: current.artist,
                         album: current.album,
                         artwork: current.artwork
                     });
+                } else if (lastValidMetadata) {
+                    navigator.mediaSession.metadata = new MediaMetadata({
+                        title: lastValidMetadata.title,
+                        artist: lastValidMetadata.artist,
+                        album: lastValidMetadata.album,
+                        artwork: lastValidMetadata.artwork
+                    });
+                } else if (typeof allDatabases !== 'undefined' && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && allDatabases[globalActivePlaylist][globalActiveOriginalIndex] && typeof window.publishTrackMetadata === 'function') {
+                    const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                    const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
+                    window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
                 }
             } catch (e) {}
         }
     }
     window.republishMediaMetadata = republishMediaMetadata;
+
+    // Spoof re-assert burst: when an external app takes audio focus (calls or video),
+    // Chromium's native Android C++ engine asynchronously rewrites the declared state
+    // to 'paused' or hides the notification card on AUDIOFOCUS_LOSS (native override race).
+    // Re-asserting 'playing' and re-publishing metadata over a progressive burst (~3s)
+    // guarantees that the web app wins the race against the native thread, resurrecting
+    // the card if evicted (Occasion 3) and preserving playbackState = 'playing' (Occasion 4).
+    let _spoofBurstTimer = null;
+    function reassertSpoofBurst() {
+        if (window.playbackMode !== 'mode2') return;
+        if (_spoofBurstTimer) {
+            clearTimeout(_spoofBurstTimer);
+            _spoofBurstTimer = null;
+        }
+        let n = 0;
+        const delays = [150, 400, 800, 1500, 2500];
+        const tick = () => {
+            try {
+                if (window.playbackMode !== 'mode2') return;
+                if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                    if (typeof updateMediaSessionPosition === 'function' && typeof audioPlayer !== 'undefined' && audioPlayer) {
+                        const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur);
+                    }
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
+                }
+            } catch (e) {}
+            if (++n < delays.length) {
+                _spoofBurstTimer = setTimeout(tick, delays[n] - delays[n - 1]);
+            } else {
+                _spoofBurstTimer = null;
+            }
+        };
+        _spoofBurstTimer = setTimeout(tick, delays[0]);
+    }
+    window.reassertSpoofBurst = reassertSpoofBurst;
 
     // BT disconnect detection: track device changes to prevent speaker bleed
     window.lastBtDisconnectTime = 0;
@@ -678,6 +740,7 @@
                         updateMediaSessionPosition(pos, dur, 1.0);
                         if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                     armAutoKillWatchdog();
                     return;
                 }

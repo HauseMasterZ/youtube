@@ -510,7 +510,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                     } catch (e) {}
                     if (hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
                         const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
                         if (typeof updateMediaSessionPosition === 'function') {
                             updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
