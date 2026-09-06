@@ -128,6 +128,17 @@
             }
         }
 
+        _resetMSE() {
+            this._mseInitialized = false;
+            this._mseEnabled = false;
+            if (this._sourceBuffer) {
+                try { this._mediaSource.removeSourceBuffer(this._sourceBuffer); } catch (e) {}
+                this._sourceBuffer = null;
+            }
+            this._mediaSource = null;
+            this._initMSE();
+        }
+
         _waitForUpdate() {
             if (!this._sourceBuffer || !this._sourceBuffer.updating) return Promise.resolve();
             return new Promise(resolve => {
@@ -429,7 +440,16 @@
                                     this._sourceBuffer.timestampOffset = 0;
                                 } catch (e) {}
 
-                                await this._appendToSourceBuffer(cachedArrayBuffer);
+                                try {
+                                    await this._appendToSourceBuffer(cachedArrayBuffer);
+                                } catch (appendErr) {
+                                    console.warn("Cached audio buffer invalid/corrupted, purging from cache:", appendErr);
+                                    try { await mediaCache.delete(url); } catch (e) {}
+                                    this._resetMSE();
+                                    cachedPartialBytes = 0;
+                                    cachedArrayBuffer = null;
+                                    throw appendErr;
+                                }
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
                                 // Unlock switching flag immediately so the buffer bar can render the cached portion in 0ms
