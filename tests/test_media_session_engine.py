@@ -287,6 +287,42 @@ class TestMediaSessionEngine(unittest.TestCase):
             2
         )
 
+    def test_anchor_and_context_listeners_never_kill_anchor_in_mode2(self):
+        """anchorEl pause and audioContext statechange never call stopLiveAudioAnchor or cancelAutoKillWatchdog"""
+        anchor_pause_match = re.search(
+            r'anchorEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(anchor_pause_match, "Could not find anchorEl pause listener")
+        anchor_pause_code = anchor_pause_match.group(1)
+        self.assertNotIn("stopLiveAudioAnchor()", anchor_pause_code)
+        self.assertNotIn("cancelAutoKillWatchdog()", anchor_pause_code)
+        self.assertIn("armAutoKillWatchdog()", anchor_pause_code)
+        self.assertIn("republishMediaMetadata()", anchor_pause_code)
+
+        ctx_change_match = re.search(
+            r'liveAudioContext\.onstatechange\s*=\s*\(\)\s*=>\s*\{([\s\S]*?)\n            \};',
+            self.ms_content
+        )
+        self.assertIsNotNone(ctx_change_match, "Could not find liveAudioContext onstatechange listener")
+        ctx_code = ctx_change_match.group(1)
+        self.assertNotIn("stopLiveAudioAnchor()", ctx_code)
+        self.assertNotIn("cancelAutoKillWatchdog()", ctx_code)
+        self.assertIn("armAutoKillWatchdog()", ctx_code)
+        self.assertIn("republishMediaMetadata()", ctx_code)
+
+    def test_external_steal_republishes_metadata_without_probe_collision(self):
+        """external steal branch re-publishes metadata and avoids background startFocusProbe collision"""
+        steal_match = re.search(
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
+            self.ms_content
+        )
+        self.assertIsNotNone(steal_match, "Could not find external steal branch")
+        steal_code = steal_match.group(1)
+        self.assertIn("republishMediaMetadata()", steal_code)
+        self.assertNotIn("startFocusProbe()", steal_code)
+        self.assertIn("armAutoKillWatchdog()", steal_code)
+
     def test_pause_boundary_recycles_anchor(self):
         """mode2 user-pause performs flagged stop+start recycle (genuine focus request)"""
         self.assertRegex(

@@ -55,9 +55,11 @@
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     updateMediaSessionPosition(pos, dur, 1.0);
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
+                if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
+                    armAutoKillWatchdog();
+                }
             }
         });
     }
@@ -110,8 +112,10 @@
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
-                            stopLiveAudioAnchor();
-                            cancelAutoKillWatchdog();
+                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                        }
+                        if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
+                            armAutoKillWatchdog();
                         }
                     }
                 }
@@ -672,15 +676,9 @@
                         const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                         updateMediaSessionPosition(pos, dur, 1.0);
+                        if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
-                    // NOTE: anchor intentionally NOT stopped here. It keeps running
-                    // ducked (proven harmless to the stealer in the paused
-                    // case); killing it at this exact moment is what evicted
-                    // playing-steal cards. Never *start* audio here either.
-                    // Probe (started below) confirms the steal and drops state
-                    // honest for triangle delivery; anchor keeps the pin.
                     armAutoKillWatchdog();
-                    if (typeof startFocusProbe === 'function') startFocusProbe();
                     return;
                 }
                 // Mode 2 pause: recycle the anchor synchronously (stop + start) so
