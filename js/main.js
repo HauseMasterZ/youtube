@@ -306,6 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
             window.wasPausedByUser = true;
+            window._isExternalInterrupted = false;
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                 ? window.declaredPausedState() : 'paused';
@@ -466,11 +467,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'playing';
                 if (!window.wasPausedByUser) {
-                    // External interruption: state stays spoofed; anchor path
-                    // in mediaSession.js owns the keepalive decision
+                    // External interruption: drop state to 'paused' so Android
+                    // renders Play triangle and Chromium routes ACTION_PLAY
+                    window._isExternalInterrupted = true;
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
+                    navigator.mediaSession.playbackState = 'paused';
                 }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works

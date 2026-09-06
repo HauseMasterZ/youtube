@@ -698,6 +698,21 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
 
+    def test_external_interruption_delivers_play_action(self):
+        """External focus loss transitions playbackState to paused so Android sends ACTION_PLAY to un-suspend"""
+        self.assertIn("window._isExternalInterrupted = false;", self.state_content)
+        self.assertIn("window._isExternalInterrupted = true;", self.ms_content)
+        self.assertIn("window._isExternalInterrupted = true;", self.main_content)
+        self.assertIn("window._isExternalInterrupted = false;", self.ms_content)
+        self.assertIn("window._isExternalInterrupted = false;", self.main_content)
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\._isExternalInterrupted\)\s*\?\s*[\'"]paused[\'"]'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'handlePlayAction[\s\S]*?window\._isExternalInterrupted\s*=\s*false;'
+        )
+
 if __name__ == '__main__':
     unittest.main()
-
