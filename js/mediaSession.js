@@ -306,22 +306,10 @@
         probeEl.addEventListener("pause", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
-                // Confirmed steal-or-idle suspend while paused: drop to honest
-                // 'paused' so the drawer triangle DELIVERS (this is the only
-                // path that ever made post-steal triangle work). No teardown:
-                // anchor/watchdog/UI untouched (m2 64 kept, m2 65 wrongly cut).
-                // pin risk accepted here by explicit human order; re-spoof
-                // triggers below stay suppressed while this flag stands.
+                // Steal-or-idle suspend observed. Deliberately NO state write:
+                // Mode 2 declares 'playing' unconditionally (pin absolutism).
+                // Log only, so field diagnostics can see steal moments.
                 console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
-                window._probeTrippedSteal = Date.now();
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
-                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                    if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur, 1.0);
-                    }
-                }
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -591,8 +579,6 @@
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
-                        // Fresh pin state for the call: revoke any standing steal flag.
-                        window._probeTrippedSteal = 0;
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
@@ -654,8 +640,6 @@
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
             }
-            // Any real resume revokes a standing steal flag (fresh pin state).
-            window._probeTrippedSteal = 0;
             // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();

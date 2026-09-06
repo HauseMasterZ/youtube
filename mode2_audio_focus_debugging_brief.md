@@ -1,6 +1,9 @@
 # Mode 2 Audio Focus & Interruption Architecture Brief
 
-This document provides a comprehensive technical overview of the audio engine, MediaSession synchronization, the two outstanding issues, root causes, and constraints for another LLM or developer to analyze and solve.
+> [!NOTE]
+> Superseded and Resolved in `m2-73`: The dual interruption conflict between phone calls and external video focus steals has been resolved via the pure Mode 2 spoof doctrine, pin absolutism for the focus probe, micro-playback rate (`0.00001`) in `updateMediaSessionPosition`, and unified action handler resume routing. Source of truth is `tests/test_media_session_engine.py` and `js/mediaSession.js`.
+
+This document provides historical context on the audio engine, MediaSession synchronization, root causes, and constraints analyzed during the resolution.
 
 ---
 

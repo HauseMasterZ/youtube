@@ -24,16 +24,16 @@ The player supports two switchable audio engine modes persisted in `localStorage
    - When paused, `navigator.mediaSession.playbackState` is set to `'paused'` (if paused by user) and seekbar rate stays `1.0`.
    - Minimal battery consumption; zero background oscillator loops.
 2. **Mode 2 (Car & Bluetooth Mode)**:
-   - When paused, `navigator.mediaSession.playbackState` is set to `'paused'` (honest state; the running anchor below holds keepalive, which also keeps drawer Play working first tap).
+   - When paused, `navigator.mediaSession.playbackState` declares `'playing'` via `window.declaredPausedState()` with micro-playback rate `0.00001` in `updateMediaSessionPosition` to freeze the notification seekbar while pinning the card on aggressive Android OEMs. Mode 1 declares honest `'paused'` (rate `1.0`).
    - On mobile, `startLiveAudioAnchor()` runs a silent 0-gain `AudioContext` oscillator connected to `<audio id="live-stream-anchor">` to prevent vehicle infotainment systems and Bluetooth earbuds from entering standby or disconnecting.
-   - **Inactivity Auto-Kill Watchdog**: When paused in Mode 2, `armAutoKillWatchdog()` starts a timer (default 30m, configurable to 15m, 30m, 1h, 2h, custom 1-1440m, or never) that automatically disarms and pauses all playback after sustained inactivity.
-   - **Hardware Button Combo**: Rapid double-tap of Next ↔ Prev within 1200ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2 (`togglePlaybackMode()`).
+   - **Inactivity Auto-Kill Watchdog**: When paused in Mode 2, `armAutoKillWatchdog()` starts a timer (default 5m, configurable in Settings) that automatically destroys the session and tears down the anchor after sustained inactivity.
+   - **Hardware Button Combo**: Rapid tap of Next then Prev within 2500ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2 (`togglePlaybackMode()`).
 
 ### Audio Focus & Phone Call Management (Mode 2)
 - **Call Interruption & Silence**: When an incoming call arrives or is accepted, `window.isCallActive = true`, `<audio>` pauses, and `stopLiveAudioAnchor()` halts the silent oscillator immediately. No music or anchor audio leaks into the call. Action handlers (`play`, `pause`, `playpause`) return early while `window.isCallActive` is true.
-- **Mode 2 State Preservation**: In Mode 2 non-call pauses (user pause and media focus transfers), keepalive declares honest `playbackState = 'paused'` (rate `1.0`) and runs the silent audio anchor (`!window.isCallActive && !isRecentBtDisconnect`) to keep DACs awake.
-- **Media Controls Notification Resume**: When resuming playback via media controls (`play`, `pause`, `playpause`), handlers immediately re-assert 1.0x playback rate via `updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0)` and retry playback after 50ms if initial acquisition is transiently deferred by OS audio routing handoff.
-- **Call Hangup Auto-Resume**: On call termination (`devicechange` / `visibilitychange`), playback automatically resumes if audio was actively playing before the call (`window.wasPlayingBeforeCall && !window.wasPausedByUser`). If playback was paused by the user prior to the call, it remains paused and ignores post-call automated AVRCP Bluetooth play events within 2500ms (`isAutoResumeAfterCall`).
+- **Mode 2 State Preservation**: In Mode 2 non-call pauses (user pause and media focus transfers), keepalive declares `declaredPausedState()` (`'playing'`) with micro-rate `0.00001` to freeze the seekbar, and runs the silent audio anchor (`!window.isCallActive && !isRecentBtDisconnect`) to keep DACs awake.
+- **Media Controls Notification Resume**: When resuming playback via media controls (`play`, `pause`, `playpause`), handlers immediately re-assert 1.0x playback rate via `updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0)`.
+- **Call Hangup Auto-Resume**: On call termination (`devicechange`), playback automatically resumes if audio was actively playing before the call (`window.wasPlayingBeforeCall && !window.wasPausedByUser`). If playback was paused by the user prior to the call, it remains paused and ignores post-call automated AVRCP Bluetooth play events within 2500ms (`window.isPostCallQuarantine()`).
 
 ---
 

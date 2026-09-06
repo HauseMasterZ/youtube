@@ -86,7 +86,7 @@
 
     // Build self-identification: bump every commit, logged once at startup so
     // field tests can prove which build is under test from the console.
-    window.APP_BUILD = 'm2-72';
+    window.APP_BUILD = 'm2-73';
 
     // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
     // ~2.5s of hangup even if paused before the call. Single helper so the
@@ -102,11 +102,6 @@
     window.declaredPausedState = function() {
         return (window.playbackMode === 'mode2') ? 'playing' : 'paused';
     };
-
-    // Probe-confirmed steal stands un-revoked (timestamp): suppresses
-    // re-spoof paths so the honest drop that enables triangle delivery
-    // survives. Cleared on any music resume, mode switch, or call entry.
-    window._probeTrippedSteal = 0;
 
     window.playbackMode = 'mode1';
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '5');

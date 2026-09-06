@@ -587,15 +587,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('getElementById("focus-probe")', self.ms_content)
 
     def test_focus_probe_pause_is_passive(self):
-        """probe pause drops honest (triangle delivery) + sets steal flag, WITHOUT tearing down anchor, watchdog, or UI"""
+        """probe pause never writes playbackState (pin absolutism) nor tears down anchor, watchdog, or UI"""
         probe_match = re.search(
             r'bindFocusProbeHandler[\s\S]*?probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
             self.ms_content
         )
         self.assertIsNotNone(probe_match, "Could not find probe pause handler")
         code = probe_match.group(1)
-        self.assertIn("navigator.mediaSession.playbackState = 'paused';", code)
-        self.assertIn("window._probeTrippedSteal = Date.now();", code)
+        self.assertNotIn("playbackState", code)
         self.assertNotIn("stopLiveAudioAnchor()", code)
         self.assertNotIn("cancelAutoKillWatchdog()", code)
         self.assertNotIn("setPlayUI(", code)
@@ -604,19 +603,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("[PROBE-SUSPEND]", code)
         self.assertNotIn("reassertSpoofBurst", self.ms_content)
 
-    def test_steal_flag_guards_respoof_paths(self):
-        """standing steal flag suppresses re-spoof; cleared on resume, call entry, and toggle"""
-        self.assertIn("window._probeTrippedSteal = 0;", self.state_content)
+    def test_declared_paused_state_on_respoof_paths(self):
+        """declaredPausedState is respected on all respoof paths in main.js and mediaSession.js"""
         self.assertRegex(
             self.main_content,
-            r'!\s*window\._probeTrippedSteal\s*&&\s*hasMediaSession[\s\S]*?declaredPausedState\(\)'
+            r'hasMediaSession[\s\S]*?declaredPausedState\(\)'
         )
-        self.assertRegex(
-            self.main_content,
-            r'!\s*window\._probeTrippedSteal\s*\)\s*\{\s*if\s*\(\s*hasMediaSession\s*\)'
-        )
-        self.assertIn("window._probeTrippedSteal = 0;", self.ms_content)
-        self.assertGreater(self.ms_content.count("window._probeTrippedSteal = 0;"), 2)
+        self.assertNotIn("_probeTrippedSteal", self.state_content)
+        self.assertNotIn("_probeTrippedSteal", self.main_content)
 
     def test_brace_balance_media_session_js(self):
         """mediaSession.js has perfectly balanced curly braces with no syntax errors"""
