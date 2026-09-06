@@ -49,9 +49,9 @@
                     clearTimeout(anchorStartTimer);
                     anchorStartTimer = null;
                 }
-                window._isExternalInterrupted = true;
                 if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     updateMediaSessionPosition(pos, dur, 1.0);
@@ -107,9 +107,9 @@
             liveAudioContext.onstatechange = () => {
                 if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                     if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
-                        window._isExternalInterrupted = true;
                         if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'paused';
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'playing';
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
@@ -313,10 +313,9 @@
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
                 // Steal-or-idle suspend observed. Deliberately NO state write:
-                // Mode 2 re-assert burst reads _isExternalInterrupted.
+                // Mode 2 declares 'playing' unconditionally (pin absolutism).
                 // Log only, so field diagnostics can see steal moments.
                 console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
-                window._isExternalInterrupted = true;
                 if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
@@ -372,7 +371,6 @@
         window.mediaSessionDestroyed = false;
         // Mode switch resets the world: revoke any standing steal flag.
         window._probeTrippedSteal = 0;
-        window._isExternalInterrupted = false;
         lastAudioPlayerPauseTime = Date.now() - 1000;
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -582,10 +580,8 @@
                 if (window.playbackMode !== 'mode2') return;
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (window._isExternalInterrupted)
-                        ? 'paused'
-                        : ((typeof window.declaredPausedState === 'function')
-                            ? window.declaredPausedState() : 'playing');
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     if (typeof updateMediaSessionPosition === 'function' && typeof audioPlayer !== 'undefined' && audioPlayer) {
                         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                         updateMediaSessionPosition(audioPlayer.currentTime, dur);
@@ -622,7 +618,6 @@
                     if (window.isCallActive) {
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
-                        window._isExternalInterrupted = false;
                         if (window.wasPlayingBeforeCall && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
                             // Single deferred resume: let telecom -> media routing settle before opening the stream (no dual-fire pop)
                             setTimeout(() => {
@@ -650,7 +645,6 @@
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
-                        window._isExternalInterrupted = false;
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
@@ -708,7 +702,6 @@
     let lastAudioPlayerPauseTime = 0;
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
-            window._isExternalInterrupted = false;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -733,19 +726,21 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    // External interruption (video steal while playing): set
-                    // _isExternalInterrupted and drop state to 'paused' so
-                    // Android renders Play triangle and Chromium routes ACTION_PLAY.
-                    // Card is pinned across the steal via reassertSpoofBurst.
-                    window._isExternalInterrupted = true;
+                    // External interruption (video steal while playing): state
+                    // STAYS spoofed per doctrine (the pin and sound wave animation
+                    // must survive the steal). Anchor is recycled and kept running
+                    // ducked so Chromium's IsActive() remains true, enabling
+                    // ACTION_PAUSE routing to resume playback on external video end.
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
                         const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                         updateMediaSessionPosition(pos, dur, 1.0);
                         if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
                     if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                     armAutoKillWatchdog();
                     return;
                 }
@@ -784,7 +779,6 @@
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
-            window._isExternalInterrupted = false;
             if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                 return;
             }
@@ -855,7 +849,6 @@
                         return;
                     }
                     // User intentionally resuming from paused state in Mode 2
-                    window._isExternalInterrupted = false;
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
@@ -872,8 +865,7 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
-                    // Already inside mode2 branch: keep anchor (idempotent).
-                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    stopLiveAudioAnchor();
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
@@ -881,6 +873,11 @@
                             console.log("[MS-ACTION] 'pause' playPromise RESOLVED.");
                         }).catch(e => {
                             console.warn("MediaSession play error:", e);
+                            Promise.resolve().then(() => {
+                                if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                                    audioPlayer.play().catch(() => {});
+                                }
+                            });
                         });
                     }
                 } else {
@@ -955,7 +952,6 @@
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
-                    window._isExternalInterrupted = false;
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
@@ -996,6 +992,11 @@
                             console.log("[MS-ACTION] 'playpause' playPromise RESOLVED.");
                         }).catch(e => {
                             console.warn("MediaSession playpause error:", e);
+                            Promise.resolve().then(() => {
+                                if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
+                                    audioPlayer.play().catch(() => {});
+                                }
+                            });
                         });
                     }
                 } else {

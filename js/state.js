@@ -86,7 +86,7 @@
 
     // Build self-identification: bump every commit, logged once at startup so
     // field tests can prove which build is under test from the console.
-    window.APP_BUILD = 'm2-76';
+    window.APP_BUILD = 'm2-77';
 
     // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
     // ~2.5s of hangup even if paused before the call. Single helper so the
@@ -102,12 +102,6 @@
     window.declaredPausedState = function() {
         return (window.playbackMode === 'mode2') ? 'playing' : 'paused';
     };
-
-    // External interruption flag: set when an external app steals audio focus
-    // while playing (Occasion 3) or paused (Occasion 4). Dropping playbackState
-    // to 'paused' during steal allows Android to render the Play triangle and
-    // Chromium to route ACTION_PLAY to un-suspend and resume playback.
-    window._isExternalInterrupted = false;
 
     window.playbackMode = 'mode1';
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '5');

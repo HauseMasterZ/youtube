@@ -698,20 +698,18 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_external_interruption_delivers_play_action(self):
-        """External focus loss transitions playbackState to paused so Android sends ACTION_PLAY to un-suspend"""
-        self.assertIn("window._isExternalInterrupted = false;", self.state_content)
-        self.assertIn("window._isExternalInterrupted = true;", self.ms_content)
-        self.assertIn("window._isExternalInterrupted = true;", self.main_content)
-        self.assertIn("window._isExternalInterrupted = false;", self.ms_content)
-        self.assertIn("window._isExternalInterrupted = false;", self.main_content)
+    def test_external_interruption_preserves_playing_state_and_recycles_anchor(self):
+        """External focus loss in Mode 2 maintains declared playing state and starts anchor so IsActive remains true"""
+        self.assertNotIn("_isExternalInterrupted", self.state_content)
+        self.assertNotIn("_isExternalInterrupted", self.ms_content)
+        self.assertNotIn("_isExternalInterrupted", self.main_content)
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*\(window\._isExternalInterrupted\)\s*\?\s*[\'"]paused[\'"]'
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?return;'
         )
         self.assertRegex(
             self.ms_content,
-            r'handlePlayAction[\s\S]*?window\._isExternalInterrupted\s*=\s*false;'
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?return;'
         )
 
 if __name__ == '__main__':
