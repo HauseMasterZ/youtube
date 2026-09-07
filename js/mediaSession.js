@@ -102,34 +102,23 @@
             if (liveAudioContext.state === 'suspended') {
                 liveAudioContext.resume().catch(() => {});
             }
-            let lastCtxState = 'uninitialized';
             liveAudioContext.onstatechange = () => {
-                const curState = liveAudioContext ? liveAudioContext.state : 'null';
-                console.log("[CTX-STATE] state:", curState, "prev:", lastCtxState, "audioPaused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive, "callSession:", window._callSessionActive);
-
-                const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-
-                // EDGE 1: Running -> Interrupted or Suspended (Call Arrival without devicechange)
-                if (curState === 'interrupted' || curState === 'suspended') {
-                    if (window.playbackMode === 'mode2' && !window.wasPausedByUser && window.wasPlayingBeforeCall && !isRecentBt && !window.mediaSessionDestroyed) {
-                        if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-                            if (!window._callSessionActive) {
-                                console.log("[CALL-PROMOTION] Graph entered", curState, "- confirming voice call session");
-                                executeCallTeardown('onstatechange_interrupted');
-                            }
+                if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+                    if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
+                        if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'playing';
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            updateMediaSessionPosition(pos, dur, 1.0);
+                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                        }
+                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                        if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
+                            armAutoKillWatchdog();
                         }
                     }
                 }
-                // EDGE 2: Interrupted or Suspended -> Running (Call Hangup without devicechange)
-                else if (curState === 'running') {
-                    if (window._callSessionActive && window.isCallActive && window.wasPlayingBeforeCall && !window.wasPausedByUser && !isRecentBt && !window.mediaSessionDestroyed) {
-                        console.log("[CALL-HANGUP] Graph restored to running while callActive - triggering call-end resume");
-                        window.isCallActive = false;
-                        window.lastCallEndTime = Date.now();
-                        tryCallEndResume('context_running_hangup');
-                    }
-                }
-                lastCtxState = curState;
             };
             liveAudioDestination = liveAudioContext.createMediaStreamDestination();
             liveAudioOscillator = liveAudioContext.createOscillator();
@@ -412,19 +401,12 @@
         if (!probeEl || probeEl._boundFocusProbe) return;
         probeEl._boundFocusProbe = true;
         probeEl.addEventListener("pause", () => {
-            if (_provisionalPauseTimer !== null) {
-                console.log("[PROBE-SUSPEND] Ignored during provisional pause classifier window");
-                return;
-            }
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
                 // Steal-or-idle suspend observed. Deliberately NO state write:
                 // Mode 2 declares 'playing' unconditionally (pin absolutism).
                 // Log only, so field diagnostics can see steal moments.
                 console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
-                window._callSessionActive = false;
-                window.lastVideoStealTime = Date.now();
-                cancelPendingCallEndResume();
                 if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
@@ -459,10 +441,7 @@
 
         const ms = mins * 60 * 1000;
         window.btSleepTimer = setTimeout(() => {
-            cancelProvisionalPause();
             window.mediaSessionDestroyed = true;
-            window._callSessionActive = false;
-            cancelPendingCallEndResume();
             teardownLiveAudioAnchor();
             stopLiveAudioAnchor();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
@@ -481,12 +460,9 @@
 
     // Unified Playback Mode Toggle Engine
     function togglePlaybackMode(targetMode = null) {
-        cancelProvisionalPause();
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
-        window._callSessionActive = false;
-        cancelPendingCallEndResume();
         // Mode switch resets the world: revoke any standing steal flag.
         window._probeTrippedSteal = 0;
         lastAudioPlayerPauseTime = Date.now() - 1000;
@@ -720,200 +696,6 @@
         _spoofBurstTimer = setTimeout(tick, delays[0]);
     }
     window.reassertSpoofBurst = reassertSpoofBurst;
-    let _provisionalPauseTimer = null;
-
-    function cancelProvisionalPause() {
-        if (_provisionalPauseTimer !== null) {
-            clearTimeout(_provisionalPauseTimer);
-            _provisionalPauseTimer = null;
-        }
-    }
-    window.cancelProvisionalPause = cancelProvisionalPause;
-
-    // Unified Full Voice Call Teardown Helper
-    function executeCallTeardown(source = 'unknown') {
-        if (window._callSessionActive && window.isCallActive) {
-            return; // Idempotent: already torn down for this call episode
-        }
-        console.log("[CALL-TEARDOWN] Executing voice teardown from:", source);
-        cancelProvisionalPause();
-        window.isCallActive = true;
-        window._callSessionActive = true;
-        window.lastCallStartTime = Date.now();
-        window.lastVideoStealTime = 0;
-        cancelPendingCallEndResume();
-
-        if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
-            try {
-                if (typeof audioPlayer.instantPause === 'function') {
-                    audioPlayer.instantPause();
-                } else {
-                    audioPlayer.pause();
-                }
-            } catch (e) {}
-        }
-
-        if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-        if (typeof stopFocusProbe === 'function') stopFocusProbe();
-        cancelAutoKillWatchdog();
-
-        // Detach live audio anchor element
-        stopLiveAudioAnchor();
-        try {
-            const _callAnchorEl = document.getElementById("live-stream-anchor");
-            if (_callAnchorEl) {
-                _isInternalAnchorStop = true;
-                try { _callAnchorEl.pause(); } catch (e) {}
-                try { _callAnchorEl.srcObject = null; } catch (e) {}
-                try { _callAnchorEl.removeAttribute('src'); } catch (e) {}
-                try { if (typeof _callAnchorEl.load === 'function') _callAnchorEl.load(); } catch (e) {}
-                setTimeout(() => { _isInternalAnchorStop = false; }, 200);
-            }
-        } catch (e) {}
-
-        // Suspend AudioContext to release audio routing
-        if (liveAudioContext && (liveAudioContext.state === 'running' || liveAudioContext.state === 'interrupted')) {
-            try { liveAudioContext.suspend().catch(() => {}); } catch (e) {}
-        }
-
-        if (typeof setPlayUI === 'function') setPlayUI(false);
-        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                ? window.declaredPausedState() : 'playing';
-            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
-        }
-    }
-    window.executeCallTeardown = executeCallTeardown;
-
-    // Staged Call-End Autoplay Executor (Occasion 1)
-    let _callEndResumeTimers = [];
-
-    function cancelPendingCallEndResume() {
-        if (_callEndResumeTimers && _callEndResumeTimers.length > 0) {
-            for (const t of _callEndResumeTimers) {
-                clearTimeout(t);
-            }
-            _callEndResumeTimers = [];
-        }
-    }
-
-    function tryCallEndResume(triggerSource = 'unknown') {
-        if (window.playbackMode !== 'mode2') return;
-        if (window.isCallActive) return;
-        if (!window.wasPlayingBeforeCall || window.wasPausedByUser) return;
-
-        const now = Date.now();
-        const isRecentCallEnd = (typeof window.lastCallEndTime === 'number' && (now - window.lastCallEndTime) <= 5000);
-        const hasCallToken = Boolean(window._callSessionActive);
-        if (!hasCallToken && !isRecentCallEnd) return;
-
-        if (typeof window.lastVideoStealTime === 'number' && typeof window.lastCallStartTime === 'number') {
-            if (window.lastVideoStealTime > 0 && window.lastCallStartTime <= window.lastVideoStealTime) return;
-        }
-
-        if (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.paused || audioPlayer.switching) return;
-        if (window.mediaSessionDestroyed) return;
-
-        console.log("[CALL-RESUME] Initiating staged auto-resume from:", triggerSource);
-        cancelPendingCallEndResume();
-
-        const delays = [200, 500, 1000, 1800];
-
-        delays.forEach((delay, idx) => {
-            const isLastAttempt = (idx === delays.length - 1);
-            const tid = setTimeout(() => {
-                // Re-validate flags and call status
-                if (window.isCallActive || !window.wasPlayingBeforeCall || window.wasPausedByUser) {
-                    cancelPendingCallEndResume();
-                    window._callSessionActive = false;
-                    return;
-                }
-
-                // Tick-level recency revalidation (prevents frozen-tab bunch firing after doze/throttle)
-                const nowTick = Date.now();
-                const isRecentTick = (typeof window.lastCallEndTime === 'number' && (nowTick - window.lastCallEndTime) <= 5000);
-                if (!window._callSessionActive && !isRecentTick) {
-                    cancelPendingCallEndResume();
-                    window._callSessionActive = false;
-                    return;
-                }
-
-                // Steal episode order revalidation
-                if (typeof window.lastVideoStealTime === 'number' && typeof window.lastCallStartTime === 'number') {
-                    if (window.lastVideoStealTime > 0 && window.lastCallStartTime <= window.lastVideoStealTime) {
-                        cancelPendingCallEndResume();
-                        window._callSessionActive = false;
-                        return;
-                    }
-                }
-
-                if (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.paused || audioPlayer.switching || window.mediaSessionDestroyed) {
-                    cancelPendingCallEndResume();
-                    window._callSessionActive = false;
-                    return;
-                }
-
-                // Option Alpha Warming: resume AudioContext
-                if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
-                    try { liveAudioContext.resume().catch(() => {}); } catch (e) {}
-                }
-
-                console.log("[CALL-RESUME] Attempting audioPlayer.play() at", delay, "ms");
-                const playPromise = audioPlayer.play();
-                if (playPromise && playPromise.then) {
-                    playPromise.then(() => {
-                        // Check if user paused or call arrived while play() was in-flight
-                        if (window.wasPausedByUser || window.isCallActive || (audioPlayer && audioPlayer.switching) || window.mediaSessionDestroyed) {
-                            cancelPendingCallEndResume();
-                            window._callSessionActive = false;
-                            return;
-                        }
-
-                        console.log("[CALL-RESUME] audioPlayer.play() RESOLVED at", delay, "ms");
-                        cancelPendingCallEndResume();
-                        window._callSessionActive = false;
-                        window.wasPausedByUser = false;
-                        window.wasPlayingBeforeCall = true;
-                        if (typeof setPlayUI === 'function') setPlayUI(true);
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = 'playing';
-                        }
-                        if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
-                            const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                            updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                        }
-                        if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
-
-                        // Centralized anchor keepalive restore (post-resolve)
-                        if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
-                            try { startLiveAudioAnchor(); } catch (e) {}
-                        }
-                    }).catch(err => {
-                        console.warn("[CALL-RESUME] Play attempt at", delay, "ms rejected:", err);
-                        if (isLastAttempt) {
-                            // Exhaustion Fallback: all 4 attempts failed. Re-arm parked keepalive
-                            console.warn("[CALL-RESUME] All staged attempts exhausted, re-arming parked keepalive");
-                            cancelPendingCallEndResume();
-                            window._callSessionActive = false;
-                            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
-                            if (typeof startFocusProbe === 'function') startFocusProbe();
-                            if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
-                            if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
-                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                                    ? window.declaredPausedState() : 'playing';
-                            }
-                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
-                        }
-                    });
-                }
-            }, delay);
-            _callEndResumeTimers.push(tid);
-        });
-    }
-
-    window.tryCallEndResume = tryCallEndResume;
-    window.cancelPendingCallEndResume = cancelPendingCallEndResume;
 
     // BT disconnect detection: track device changes to prevent speaker bleed
     window.lastBtDisconnectTime = 0;
@@ -930,11 +712,15 @@
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
                     console.log("[DEVICECHANGE] isCallActive:", window.isCallActive, "newCount:", newCount, "known:", knownOutputCount, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
                     if (window.isCallActive) {
-                        cancelProvisionalPause();
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
                         if (window.wasPlayingBeforeCall && !window.wasPausedByUser && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                            tryCallEndResume('devicechange_hangup');
+                            // Single deferred resume: let telecom -> media routing settle before opening the stream (no dual-fire pop)
+                            setTimeout(() => {
+                                if (!window.isCallActive && window.wasPlayingBeforeCall && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                                    audioPlayer.play().catch(() => {});
+                                }
+                            }, 150);
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         } else if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
                             // Staying paused after hangup (occasion 2): the call-start
@@ -943,8 +729,6 @@
                             // anchor is mathematical silence (gain 0). Re-spoof too:
                             // a probe suspend during the call may have honestly
                             // dropped the state mid-call.
-                            cancelPendingCallEndResume();
-                            window._callSessionActive = false;
                             if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                             if (typeof startFocusProbe === 'function') startFocusProbe();
                             if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
@@ -956,7 +740,9 @@
                             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
-                        cancelProvisionalPause();
+                        window.isCallActive = true;
+                        window.lastCallStartTime = Date.now();
+                        if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
@@ -978,11 +764,39 @@
                             window.wasPausedByUser = true;
                             window.wasPlayingBeforeCall = false;
                         }
-                        executeCallTeardown('devicechange_call_arrival');
                         stopLiveAudioAnchor();
+                        try {
+                            const _callAnchorEl = document.getElementById("live-stream-anchor");
+                            if (_callAnchorEl) {
+                                _isInternalAnchorStop = true;
+                                try { _callAnchorEl.pause(); } catch (e) {}
+                                try { _callAnchorEl.srcObject = null; } catch (e) {}
+                                try { _callAnchorEl.removeAttribute('src'); } catch (e) {}
+                                try { if (typeof _callAnchorEl.load === 'function') _callAnchorEl.load(); } catch (e) {}
+                                setTimeout(() => { _isInternalAnchorStop = false; }, 200);
+                            }
+                        } catch (e) {}
+                        cancelAutoKillWatchdog();
+                        if (typeof stopFocusProbe === 'function') stopFocusProbe();
+                        if (liveAudioContext && (liveAudioContext.state === 'running' || liveAudioContext.state === 'interrupted')) {
+                            try { liveAudioContext.suspend().catch(() => {}); } catch (e) {}
+                        }
+                        if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            // Mode 2 doctrine: ALWAYS 'playing' (helper); the spoof
+                            // is what pins the card through the call.
                             navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                                 ? window.declaredPausedState() : 'paused';
+                            if (navigator.mediaSession.metadata) {
+                                try {
+                                    navigator.mediaSession.metadata = new MediaMetadata({
+                                        title: navigator.mediaSession.metadata.title,
+                                        artist: navigator.mediaSession.metadata.artist,
+                                        album: navigator.mediaSession.metadata.album,
+                                        artwork: navigator.mediaSession.metadata.artwork
+                                    });
+                                } catch (e) {}
+                            }
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             if (typeof updateMediaSessionPosition === 'function') {
@@ -1000,7 +814,6 @@
     let lastAudioPlayerPauseTime = 0;
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
-            cancelProvisionalPause();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
@@ -1026,8 +839,12 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    cancelProvisionalPause();
-                    // Maintain notification pin with frozen seekbar position
+                    // External interruption (video steal while playing): state
+                    // STAYS spoofed per doctrine (the pin and sound wave animation
+                    // must survive the steal). Anchor is recycled and kept running
+                    // ducked so Chromium's IsActive() remains true, enabling
+                    // ACTION_PAUSE routing to resume playback on external video end.
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
@@ -1036,45 +853,12 @@
                         updateMediaSessionPosition(pos, dur);
                         if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
-
-                    // Fast-path: WebAudio graph already suspended or interrupted
-                    if (liveAudioContext && (liveAudioContext.state === 'interrupted' || liveAudioContext.state === 'suspended')) {
-                        console.log("[PAUSE-FAST-PATH] AudioContext already", liveAudioContext.state, "- promoting voice call session");
-                        executeCallTeardown('audio_pause_already_interrupted');
-                        return;
-                    }
-
-                    // Deferred provisional classifier (1000ms window)
-                    console.log("[PAUSE-PROVISIONAL] Starting 1000ms hold to differentiate voice call from video steal");
-                    _provisionalPauseTimer = setTimeout(() => {
-                        _provisionalPauseTimer = null;
-                        const lateRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                        if (window.playbackMode !== 'mode2' || window.wasPausedByUser || window.isCallActive || lateRecentBt) {
-                            console.log("[PAUSE-PROVISIONAL] Expired but conditions changed: playbackMode:", window.playbackMode, "userPaused:", window.wasPausedByUser, "callActive:", window.isCallActive);
-                            return;
-                        }
-
-                        // Late-interruption check
-                        if (liveAudioContext && (liveAudioContext.state === 'interrupted' || liveAudioContext.state === 'suspended')) {
-                            console.log("[PAUSE-PROVISIONAL] Late graph preemption detected - promoting voice call session");
-                            executeCallTeardown('deferred_interrupted');
-                            return;
-                        }
-
-                        // Confirmed Occasion 3 external video steal (duckable focus loss)
-                        console.log("[PAUSE-CONFIRMED-STEAL] WebAudio intact in running state - committing to video keepalive");
-                        window._callSessionActive = false;
-                        window.lastVideoStealTime = Date.now();
-                        cancelPendingCallEndResume();
-
-                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
-                        if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
-                        if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
-                        armAutoKillWatchdog();
-                    }, 1000);
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+                    armAutoKillWatchdog();
                     return;
                 }
-                cancelProvisionalPause();
                 // Mode 2 pause: recycle the anchor synchronously (stop + start) so
                 // the pause boundary carries a genuine fresh focus request and
                 // a rendering graph, whether the anchor was running or not.
@@ -1098,7 +882,6 @@
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                 }
             } else {
-                cancelProvisionalPause();
                 if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
@@ -1110,15 +893,12 @@
     // handlePlayAction extracted for testability; registered unconditionally
     // (withdrawing it did not change the post-steal glyph, so it stays).
     function handlePlayAction() {
-            cancelProvisionalPause();
             console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
             if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                 return;
             }
-            cancelPendingCallEndResume();
-            window._callSessionActive = false;
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;
@@ -1188,7 +968,6 @@
         navigator.mediaSession.setActionHandler('play', handlePlayAction);
 
         navigator.mediaSession.setActionHandler('pause', () => {
-            cancelProvisionalPause();
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             console.log("[MS-ACTION] 'pause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
             if (window.isCallActive) return;
@@ -1245,8 +1024,6 @@
                 } else {
                     window.wasPausedByUser = true;
                     window.wasPlayingBeforeCall = false;
-                    window._callSessionActive = false;
-                    cancelPendingCallEndResume();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -1292,8 +1069,6 @@
                 } else {
                     window.wasPausedByUser = true;
                     window.wasPlayingBeforeCall = false;
-                    window._callSessionActive = false;
-                    cancelPendingCallEndResume();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
@@ -1311,7 +1086,6 @@
 
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
-                cancelProvisionalPause();
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 console.log("[MS-ACTION] 'playpause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
                 if (window.isCallActive) return;
@@ -1320,8 +1094,6 @@
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
-                    cancelPendingCallEndResume();
-                    window._callSessionActive = false;
                     if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;
@@ -1384,8 +1156,6 @@
                 } else {
                     window.wasPausedByUser = true;
                     window.wasPlayingBeforeCall = false;
-                    window._callSessionActive = false;
-                    cancelPendingCallEndResume();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')

@@ -46,10 +46,7 @@
     let currentPlaybackSequence = 0;
     window.wasPausedByUser = true;
     window.wasPlayingBeforeCall = false;
-    window.lastCallStartTime = 0;
     window.lastCallEndTime = 0;
-    window.lastVideoStealTime = 0;
-    window._callSessionActive = false;
     window.isCallActive = false;
     window.mediaSessionDestroyed = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
@@ -89,7 +86,7 @@
 
     // Build self-identification: bump every commit, logged once at startup so
     // field tests can prove which build is under test from the console.
-    window.APP_BUILD = 'm2-85';
+    window.APP_BUILD = 'm2-86';
 
     // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
     // ~2.5s of hangup even if paused before the call. Single helper so the
