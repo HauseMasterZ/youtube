@@ -243,56 +243,85 @@
         liveAudioDestination = null;
     }
 
+    let anchorHeartbeatTimeout = null;
     let anchorHeartbeatTimer = null;
     let _isAnchorPlayPending = false;
 
     function startAnchorHeartbeat() {
+        const initialDelay = (arguments.length > 0 && typeof arguments[0] === 'number') ? arguments[0] : 1000;
         stopAnchorHeartbeat();
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
         if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
-        anchorHeartbeatTimer = setInterval(() => {
-            if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+
+        function runTick() {
+            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            if (window.playbackMode !== 'mode2' || window.isCallActive || isRecentBt || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
                 stopAnchorHeartbeat();
                 return;
             }
             if (_isAnchorPlayPending) return;
+
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (!anchorEl) return;
+
+            if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
+                anchorEl.removeAttribute('src');
+                anchorEl.srcObject = liveAudioDestination.stream;
+            }
+
+            const tracks = anchorEl.srcObject ? anchorEl.srcObject.getAudioTracks() : [];
+            if (tracks.length === 0 || tracks[0].readyState === 'ended') {
+                initLiveAudioAnchor();
+                return;
+            }
+
             if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
                 liveAudioContext.resume().catch(() => {});
             }
-            const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl) {
-                if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
-                    anchorEl.removeAttribute('src');
-                    anchorEl.srcObject = liveAudioDestination.stream;
+
+            _isAnchorPlayPending = true;
+            _isInternalAnchorStop = true;
+            try { anchorEl.pause(); } catch (e) {}
+            setTimeout(() => { _isInternalAnchorStop = false; }, 200);
+
+            _isInternalAnchorStart = true;
+            anchorEl.play().then(() => {
+                _isAnchorPlayPending = false;
+                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur);
+                    }
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
                 }
-                if (anchorEl.paused) {
-                    _isAnchorPlayPending = true;
-                    _isInternalAnchorStart = true;
-                    anchorEl.play().then(() => {
-                        _isAnchorPlayPending = false;
-                        setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                                ? window.declaredPausedState() : 'playing';
-                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                            if (typeof updateMediaSessionPosition === 'function') {
-                                updateMediaSessionPosition(pos, dur);
-                            }
-                            if (typeof republishMediaMetadata === 'function') {
-                                republishMediaMetadata();
-                            }
-                        }
-                    }).catch(() => {
-                        _isAnchorPlayPending = false;
-                        _isInternalAnchorStart = false;
-                    });
-                }
+                stopAnchorHeartbeat();
+            }).catch(() => {
+                _isAnchorPlayPending = false;
+                _isInternalAnchorStart = false;
+            });
+        }
+
+        anchorHeartbeatTimeout = setTimeout(() => {
+            anchorHeartbeatTimeout = null;
+            runTick();
+            if (anchorHeartbeatTimer === null && window.playbackMode === 'mode2' && !window.isCallActive && !window.mediaSessionDestroyed && (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused)) {
+                anchorHeartbeatTimer = setInterval(runTick, 1200);
             }
-        }, 1000);
+        }, initialDelay);
     }
 
     function stopAnchorHeartbeat() {
+        if (anchorHeartbeatTimeout) {
+            clearTimeout(anchorHeartbeatTimeout);
+            anchorHeartbeatTimeout = null;
+        }
         if (anchorHeartbeatTimer) {
             clearInterval(anchorHeartbeatTimer);
             anchorHeartbeatTimer = null;

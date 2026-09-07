@@ -736,5 +736,33 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.isCallActive\s*=\s*true;[\s\S]*?stopAnchorHeartbeat\(\);'
         )
 
+    def test_heartbeat_forced_pause_then_play_recycle(self):
+        """Heartbeat uses forced pause-then-play recycle with 200ms stop window to force genuine WebMediaPlayer focus request"""
+        self.assertRegex(
+            self.ms_content,
+            r'_isInternalAnchorStop\s*=\s*true;\s*try\s*\{\s*anchorEl\.pause\(\);\s*\}\s*catch\s*\(e\)\s*\{\}\s*setTimeout\(\s*\(\)\s*=>\s*\{\s*_isInternalAnchorStop\s*=\s*false;\s*\},\s*200\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'_isInternalAnchorStart\s*=\s*true;\s*anchorEl\.play\(\)\.then'
+        )
+
+    def test_heartbeat_split_timer_handles_and_liveness_check(self):
+        """Heartbeat uses split anchorHeartbeatTimeout and anchorHeartbeatTimer handles, and checks track liveness"""
+        self.assertIn('let anchorHeartbeatTimeout = null;', self.ms_content)
+        self.assertIn('let anchorHeartbeatTimer = null;', self.ms_content)
+        self.assertIn('initLiveAudioAnchor();', self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'tracks\.length\s*===\s*0\s*\|\|\s*tracks\[0\]\.readyState\s*===\s*[\'"]ended[\'"]'
+        )
+
+    def test_heartbeat_stops_on_resolution(self):
+        """Heartbeat self-terminates upon anchorEl.play resolution to conserve battery and hold IsActive"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?stopAnchorHeartbeat\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
