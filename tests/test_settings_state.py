@@ -42,13 +42,13 @@ class TestSettingsState(unittest.TestCase):
         )
 
     def test_bt_timeout_mins_initialization(self):
-        """window.btTimeoutMins is initialized from localStorage key 'yt_bt_timeout_mins' with default '5'"""
+        """window.btTimeoutMins is initialized from localStorage key 'yt_bt_timeout_mins' with default '3'"""
         self.assertIn('window.btTimeoutMins', self.state_content)
         self.assertIn('yt_bt_timeout_mins', self.state_content)
-        self.assertIn('5', self.state_content)
+        self.assertIn('3', self.state_content)
         self.assertRegex(
             self.state_content,
-            r'window\.btTimeoutMins\s*=\s*(getStoredSetting\(\s*[\'"]yt_bt_timeout_mins[\'"],\s*[\'"]5[\'"]\s*\)|\(typeof localStorage[^\n]+\|\|\s*[\'"]5[\'"]\));'
+            r'window\.btTimeoutMins\s*=\s*(getStoredSetting\(\s*[\'"]yt_bt_timeout_mins[\'"],\s*[\'"]3[\'"]\s*\)|\(typeof localStorage[^\n]+\|\|\s*[\'"]3[\'"]\));'
         )
 
     def test_bt_sleep_timer_initialization(self):

@@ -1240,10 +1240,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'none';
         }
 
-        const standardTimeouts = ['5', '15', '30', '60', '120', 'never'];
+        const standardTimeouts = ['3'];
         const currentTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
             ? String(window.btTimeoutMins).trim()
-            : '5';
+            : '3';
 
         if (standardTimeouts.includes(currentTimeout)) {
             if (btTimeoutSelect) btTimeoutSelect.value = currentTimeout;

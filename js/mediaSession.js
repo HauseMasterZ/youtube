@@ -432,8 +432,9 @@
 
         const rawTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
             ? String(window.btTimeoutMins).trim()
-            : '5';
+            : '3';
 
+        // Legacy compat: pre-m2-87 users may have 'never' persisted in localStorage
         if (rawTimeout === 'never') return;
 
         const mins = parseFloat(rawTimeout);
@@ -442,12 +443,52 @@
         const ms = mins * 60 * 1000;
         window.btSleepTimer = setTimeout(() => {
             window.mediaSessionDestroyed = true;
+            if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                try {
+                    audioPlayer.instantPause();
+                    if (typeof audioPlayer._resetMSE === 'function') {
+                        audioPlayer._resetMSE();
+                    }
+                    if (audioPlayer.audio1) {
+                        audioPlayer.audio1.pause();
+                        audioPlayer.audio1.removeAttribute('src');
+                        audioPlayer.audio1.srcObject = null;
+                        audioPlayer.audio1.load();
+                    }
+                    if (audioPlayer.audio2) {
+                        audioPlayer.audio2.pause();
+                        audioPlayer.audio2.removeAttribute('src');
+                        audioPlayer.audio2.srcObject = null;
+                        audioPlayer.audio2.load();
+                    }
+                } catch (e) {}
+            }
+            if (typeof stopFocusProbe === 'function') {
+                stopFocusProbe();
+            }
+            const probeEl = document.getElementById("focus-probe");
+            if (probeEl) {
+                try {
+                    probeEl.pause();
+                    probeEl.removeAttribute('src');
+                    probeEl.load();
+                } catch (e) {}
+            }
+            if (typeof focusProbePrimed !== 'undefined') {
+                focusProbePrimed = false;
+            }
+            if (typeof stopAnchorHeartbeat === 'function') {
+                stopAnchorHeartbeat();
+            }
             teardownLiveAudioAnchor();
             stopLiveAudioAnchor();
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                 try {
                     navigator.mediaSession.playbackState = 'none';
                     navigator.mediaSession.metadata = null;
+                    if ('setPositionState' in navigator.mediaSession) {
+                        navigator.mediaSession.setPositionState();
+                    }
                 } catch (e) {}
             }
             showModeToast("Auto-kill: Inactivity timeout reached");

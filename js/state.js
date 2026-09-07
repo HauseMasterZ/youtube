@@ -86,7 +86,7 @@
 
     // Build self-identification: bump every commit, logged once at startup so
     // field tests can prove which build is under test from the console.
-    window.APP_BUILD = 'm2-86';
+    window.APP_BUILD = 'm2-87';
 
     // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
     // ~2.5s of hangup even if paused before the call. Single helper so the
@@ -104,7 +104,7 @@
     };
 
     window.playbackMode = 'mode1';
-    window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '5');
+    window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '3');
     window.btSleepTimer = null;
     window.lastPlaybackModeTransitions = [];
 

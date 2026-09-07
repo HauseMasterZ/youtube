@@ -117,27 +117,20 @@ class TestSettingsMarkup(unittest.TestCase):
         options = re.findall(r'<option[^>]*value=["\']([^"\']*)["\']([^>]*)>(.*?)</option>', select_body, re.DOTALL)
         options_dict = {val: (attrs, text.strip()) for val, attrs, text in options}
         
-        self.assertIn("5", options_dict)
-        self.assertEqual(options_dict["5"][1], "5 Minutes")
-        self.assertIn("selected", options_dict["5"][0])
-        
-        self.assertIn("15", options_dict)
-        self.assertEqual(options_dict["15"][1], "15 Minutes")
-        
-        self.assertIn("30", options_dict)
-        self.assertEqual(options_dict["30"][1], "30 Minutes")
-        
-        self.assertIn("60", options_dict)
-        self.assertEqual(options_dict["60"][1], "1 Hour")
-        
-        self.assertIn("120", options_dict)
-        self.assertEqual(options_dict["120"][1], "2 Hours")
-        
-        self.assertIn("never", options_dict)
-        self.assertEqual(options_dict["never"][1], "Never (Stay Alive)")
+        self.assertIn("3", options_dict)
+        self.assertEqual(options_dict["3"][1], "3 Minutes")
+        self.assertIn("selected", options_dict["3"][0])
         
         self.assertIn("custom", options_dict)
         self.assertEqual(options_dict["custom"][1], "Custom...")
+
+        # Removed options must no longer exist
+        self.assertNotIn("5", options_dict)
+        self.assertNotIn("15", options_dict)
+        self.assertNotIn("30", options_dict)
+        self.assertNotIn("60", options_dict)
+        self.assertNotIn("120", options_dict)
+        self.assertNotIn("never", options_dict)
 
         # Custom timeout input
         custom_input_match = re.search(r'<input[^>]*id=["\']bt-timeout-custom["\'][^>]*>', self.html_content)

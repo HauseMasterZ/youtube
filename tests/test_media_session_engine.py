@@ -198,7 +198,7 @@ class TestMediaSessionEngine(unittest.TestCase):
     def test_declared_paused_state_mapping(self):
         """state.js declares mode-aware paused state: mode2 spoofs playing (pin), mode1 honest paused"""
         self.assertIn("window.APP_BUILD", self.state_content)
-        self.assertIn("window.APP_BUILD = 'm2-86';", self.state_content)
+        self.assertIn("window.APP_BUILD = 'm2-87';", self.state_content)
         self.assertIn("window.APP_BUILD", self.main_content)
         self.assertIn("window.declaredPausedState = function()", self.state_content)
         self.assertRegex(
@@ -507,7 +507,25 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*typeof\s+setPlayUI\s*===\s*[\'"]function[\'"]\s*\)\s*setPlayUI\(\s*false\s*\);'
         )
         self.assertIn("new MediaMetadata", self.ms_content)
-        self.assertNotIn("setPositionState(null)", self.ms_content)
+        self.assertIn("setPositionState()", self.ms_content)
+
+    def test_watchdog_teardown_clears_position_state(self):
+        """Auto-kill watchdog calls setPositionState() guarded by feature check inside media session teardown block"""
+        self.assertRegex(
+            self.ms_content,
+            r"navigator\.mediaSession\.metadata\s*=\s*null;[\s\S]*?setPositionState\s*\(\s*\)"
+        )
+        self.assertRegex(
+            self.ms_content,
+            r"if\s*\(\s*'setPositionState'\s+in\s+navigator\.mediaSession\s*\)\s*\{\s*navigator\.mediaSession\.setPositionState\(\s*\);\s*\}"
+        )
+
+    def test_watchdog_teardown_stops_heartbeat_before_anchor_teardown(self):
+        """Auto-kill watchdog stops anchor heartbeat before tearing down the live audio anchor"""
+        self.assertRegex(
+            self.ms_content,
+            r"stopAnchorHeartbeat\(\);[\s\S]*?teardownLiveAudioAnchor\(\);"
+        )
 
     def test_mode1_switch_audio_session_handshake(self):
         """togglePlaybackMode performs audioPlayer.active handshake on Mode 1 switch while paused"""
