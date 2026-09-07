@@ -772,12 +772,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.cancelPendingCallEndResume = cancelPendingCallEndResume;', self.ms_content)
 
     def test_call_session_token_state_initialization_and_build(self):
-        """Call token and steal timestamp variables initialized in state.js with build m2-84"""
+        """Call token and steal timestamp variables initialized in state.js with build m2-85"""
         self.assertIn('window.lastCallStartTime = 0;', self.state_content)
         self.assertIn('window.lastCallEndTime = 0;', self.state_content)
         self.assertIn('window.lastVideoStealTime = 0;', self.state_content)
         self.assertIn('window._callSessionActive = false;', self.state_content)
-        self.assertIn("window.APP_BUILD = 'm2-84';", self.state_content)
+        self.assertIn("window.APP_BUILD = 'm2-85';", self.state_content)
 
     def test_call_end_resume_entry_guards(self):
         """tryCallEndResume checks mode2, isCallActive, playback flags, 5000ms recency, and episode order"""
