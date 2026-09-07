@@ -661,10 +661,21 @@
                             window.wasPlayingBeforeCall = false;
                         }
                         stopLiveAudioAnchor();
+                        try {
+                            const _callAnchorEl = document.getElementById("live-stream-anchor");
+                            if (_callAnchorEl) {
+                                _isInternalAnchorStop = true;
+                                try { _callAnchorEl.pause(); } catch (e) {}
+                                try { _callAnchorEl.srcObject = null; } catch (e) {}
+                                try { _callAnchorEl.removeAttribute('src'); } catch (e) {}
+                                try { if (typeof _callAnchorEl.load === 'function') _callAnchorEl.load(); } catch (e) {}
+                                setTimeout(() => { _isInternalAnchorStop = false; }, 200);
+                            }
+                        } catch (e) {}
                         cancelAutoKillWatchdog();
                         if (typeof stopFocusProbe === 'function') stopFocusProbe();
-                        if (liveAudioContext && liveAudioContext.state === 'running') {
-                            liveAudioContext.suspend().catch(() => {});
+                        if (liveAudioContext && (liveAudioContext.state === 'running' || liveAudioContext.state === 'interrupted')) {
+                            try { liveAudioContext.suspend().catch(() => {}); } catch (e) {}
                         }
                         if (typeof setPlayUI === 'function') setPlayUI(false);
                         if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -804,9 +815,13 @@
             if (typeof updateMediaSessionPosition === 'function') {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
             }
-            // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+            // Conditional anchor (m2-79): skip redundant play when already holding focus (Occasion 4 hot path).
             if (window.playbackMode === 'mode2') {
-                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                try {
+                    const _resumeAnchorEl = document.getElementById("live-stream-anchor");
+                    if (_resumeAnchorEl && _resumeAnchorEl.paused && typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                } catch (e) {}
             } else if (typeof stopLiveAudioAnchor === 'function') {
                 stopLiveAudioAnchor();
             }
@@ -815,6 +830,13 @@
             if (playPromise && playPromise.then) {
                 playPromise.then(() => {
                     console.log("[MS-ACTION] 'play' playPromise RESOLVED.");
+                    try {
+                        if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
+                            const _rd = audioPlayer.duration || dur || 0;
+                            updateMediaSessionPosition(audioPlayer.currentTime, _rd, 1.0);
+                        }
+                        if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    } catch (e) {}
                 }).catch(e => {
                     console.warn("MediaSession play error:", e);
                     Promise.resolve().then(() => {
@@ -862,11 +884,23 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    try {
+                        const _pauseResumeAnchorEl = document.getElementById("live-stream-anchor");
+                        if (window.playbackMode === 'mode2' && _pauseResumeAnchorEl && _pauseResumeAnchorEl.paused && typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    } catch (e) {}
                     cancelAutoKillWatchdog();
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.then(() => {
                             console.log("[MS-ACTION] 'pause' playPromise RESOLVED.");
+                            try {
+                                if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
+                                    const _pd = audioPlayer.duration || dur || 0;
+                                    updateMediaSessionPosition(audioPlayer.currentTime, _pd, 1.0);
+                                }
+                                if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                            } catch (e) {}
                         }).catch(e => {
                             console.warn("MediaSession play error:", e);
                             Promise.resolve().then(() => {
@@ -975,9 +1009,13 @@
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
-                    // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    // Conditional anchor (m2-79): same hot-path rule as play and pause handlers.
                     if (window.playbackMode === 'mode2') {
-                        if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                        try {
+                            const _toggleAnchorEl = document.getElementById("live-stream-anchor");
+                            if (_toggleAnchorEl && _toggleAnchorEl.paused && typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                        } catch (e) {}
                     } else if (typeof stopLiveAudioAnchor === 'function') {
                         stopLiveAudioAnchor();
                     }
@@ -986,6 +1024,13 @@
                     if (playPromise && playPromise.then) {
                         playPromise.then(() => {
                             console.log("[MS-ACTION] 'playpause' playPromise RESOLVED.");
+                            try {
+                                if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
+                                    const _td = audioPlayer.duration || dur || 0;
+                                    updateMediaSessionPosition(audioPlayer.currentTime, _td, 1.0);
+                                }
+                                if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                            } catch (e) {}
                         }).catch(e => {
                             console.warn("MediaSession playpause error:", e);
                             Promise.resolve().then(() => {
