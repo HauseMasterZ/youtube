@@ -228,25 +228,52 @@
         const s = parseInt(match[3] || 0, 10);
         return h * 3600 + m * 60 + s;
     }
+    function getVibrantFallbackColor(key) {
+        if (!key) return '#8c73ff';
+        let hash = 0;
+        const str = String(key);
+        for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+        }
+        const vibrantPalette = [
+            '#ff5376', '#ff6b4a', '#ff9f1c', '#ffb703',
+            '#06d6a0', '#2ec4b6', '#00b4d8', '#3a86ff',
+            '#7209b7', '#9d4edd', '#b5179e', '#f72585',
+            '#4cc9f0', '#48cae4', '#52b788', '#f48c06'
+        ];
+        const index = Math.abs(hash) % vibrantPalette.length;
+        return vibrantPalette[index];
+    }
+    window.getVibrantFallbackColor = getVibrantFallbackColor;
+
     function normalizeTrackItem(item, folderName) {
         if (!item) return null;
         let normalized;
         if (Array.isArray(item)) {
+            const trackId = item[0];
+            const rawColor = item[5];
+            const fallbackColor = getVibrantFallbackColor(trackId || item[1]);
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
             normalized = {
-                id: item[0],
+                id: trackId,
                 title: item[1],
                 channel: item[2],
                 duration: item[3],
-                file_path: `${folderName}/${item[0]}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`,
-                color: (item[5] && item[5] !== '#000000') ? item[5] : '#8c73ff'
+                file_path: `${folderName}/${trackId}.webm`,
+                thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
+                color: validColor
             };
         } else {
+            const trackId = item.id;
+            const rawColor = item.color;
+            const fallbackColor = getVibrantFallbackColor(trackId || item.title);
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
             normalized = {
                 ...item,
-                file_path: `${folderName}/${item.id}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`,
-                color: (item.color && item.color !== '#000000') ? item.color : '#8c73ff'
+                file_path: `${folderName}/${trackId}.webm`,
+                thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
+                color: validColor
             };
         }
         if (normalized.id && normalized.color) {

@@ -10,6 +10,7 @@ class TestSettingsUI(unittest.TestCase):
         ms_path = os.path.join(base_dir, 'js', 'mediaSession.js')
         playback_path = os.path.join(base_dir, 'js', 'playback.js')
         ui_path = os.path.join(base_dir, 'js', 'ui.js')
+        utils_path = os.path.join(base_dir, 'js', 'utils.js')
         test_path = os.path.join(base_dir, 'tests', 'test_settings_ui.py')
 
         with open(main_path, 'r', encoding='utf-8') as f:
@@ -20,8 +21,19 @@ class TestSettingsUI(unittest.TestCase):
             cls.playback_content = f.read()
         with open(ui_path, 'r', encoding='utf-8') as f:
             cls.ui_content = f.read()
+        with open(utils_path, 'r', encoding='utf-8') as f:
+            cls.utils_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
+
+    def test_no_emojis_in_utils_js(self):
+        """Strictly zero emojis anywhere in js/utils.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.utils_content)
+        self.assertEqual(matches, [], f"Found emojis in utils.js: {matches}")
 
     def test_no_emojis_in_main_js(self):
         """Strictly zero emojis anywhere in js/main.js"""
@@ -249,11 +261,40 @@ class TestSettingsUI(unittest.TestCase):
             r'function loadPlaylist\s*\([\s\S]*?selectedSearchIndex\s*=\s*-1;'
         )
 
-    def test_search_escape_key_clears_search_and_resets_selection(self):
-        """searchInput keydown handles Escape to clear search and reset selection"""
+    def test_mobile_swipe_gesture_works_with_keyboard_open(self):
+        """playlistPanel touchend allows swipe even when searchInput is focused, clearing/blurring search on switch"""
+        self.assertNotIn("if (document.activeElement === searchInput) return;", self.main_content)
         self.assertRegex(
             self.main_content,
-            r'e\.key\s*===\s*[\'"]Escape[\'"][\s\S]*?selectedSearchIndex\s*=\s*-1;'
+            r'playlistPanel\.addEventListener\(\s*[\'"]touchend[\'"][\s\S]*?searchInput\.blur\(\)[\s\S]*?playlistSelect\.dispatchEvent'
+        )
+
+    def test_playlist_switch_clears_and_unfocuses_search(self):
+        """loadPlaylist, playFromPlaylist, and playlistSelect change listener clear and blur search"""
+        self.assertRegex(
+            self.playback_content,
+            r'function loadPlaylist\s*\([\s\S]*?sInput\.value\s*=\s*[\'"][\'"];[\s\S]*?sInput\.blur\(\);'
+        )
+        self.assertRegex(
+            self.playback_content,
+            r'function playFromPlaylist\s*\([\s\S]*?sInput\.value\s*=\s*[\'"][\'"];[\s\S]*?sInput\.blur\(\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'playlistSelect\.addEventListener\(\s*[\'"]change[\'"][\s\S]*?searchInput\.value\s*=\s*[\'"][\'"];[\s\S]*?searchInput\.blur\(\);'
+        )
+
+    def test_vibrant_fallback_color_and_normalization(self):
+        """utils.js defines getVibrantFallbackColor with rich palette and uses it in normalizeTrackItem"""
+        self.assertRegex(
+            self.utils_content,
+            r'function\s+getVibrantFallbackColor\s*\('
+        )
+        self.assertIn('window.getVibrantFallbackColor = getVibrantFallbackColor;', self.utils_content)
+        self.assertIn('vibrantPalette = [', self.utils_content)
+        self.assertRegex(
+            self.utils_content,
+            r'const\s+fallbackColor\s*=\s*getVibrantFallbackColor'
         )
 
 if __name__ == '__main__':

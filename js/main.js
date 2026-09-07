@@ -969,6 +969,10 @@ document.addEventListener("DOMContentLoaded", () => {
             crossShuffleHistory = [];
             crossShufflePos = -1;
         }
+        if (typeof searchInput !== 'undefined' && searchInput) {
+            searchInput.value = '';
+            if (typeof searchInput.blur === 'function') searchInput.blur();
+        }
         loadPlaylist(e.target.value);
     });
 
@@ -988,7 +992,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         playlistPanel.addEventListener("touchend", (e) => {
             if (window.innerWidth > 800) return;
-            if (document.activeElement === searchInput) return;
             if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
 
             const deltaX = e.changedTouches[0].clientX - plTouchStartX;
@@ -1005,6 +1008,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const nextPl = ALL_PLAYLISTS[targetIndex];
                 if (nextPl && nextPl !== playlistSelect.value) {
+                    if (typeof searchInput !== 'undefined' && searchInput) {
+                        searchInput.value = '';
+                        if (typeof searchInput.blur === 'function') searchInput.blur();
+                    }
                     playlistSelect.value = nextPl;
                     playlistSelect.dispatchEvent(new Event('change'));
                 }

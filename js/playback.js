@@ -73,6 +73,11 @@
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
         }
+        const sInput = (typeof searchInput !== 'undefined' && searchInput) ? searchInput : document.getElementById('search-input');
+        if (sInput) {
+            sInput.value = '';
+            if (typeof sInput.blur === 'function') sInput.blur();
+        }
 
         let hasRendered = false;
 
@@ -191,7 +196,11 @@
             playlistSelect.value = playlist;
             if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = playlist;
             currentPlaylistData = allDatabases[playlist];
-            searchInput.value = '';
+            const sInput = (typeof searchInput !== 'undefined' && searchInput) ? searchInput : document.getElementById('search-input');
+            if (sInput) {
+                sInput.value = '';
+                if (typeof sInput.blur === 'function') sInput.blur();
+            }
             filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: playlist, index: i })) : [];
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
