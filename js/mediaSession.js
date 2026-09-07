@@ -74,10 +74,9 @@
             if (anchorEl) {
                 _setupAnchorAutoResume(anchorEl);
                 anchorEl.loop = true;
-                anchorEl.volume = 1.0;
-                anchorEl.srcObject = null;
-                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
-                    anchorEl.src = SILENT_WAV_DATA_URI;
+                anchorEl.removeAttribute('src');
+                if (liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
+                    anchorEl.srcObject = liveAudioDestination.stream;
                 }
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
@@ -131,13 +130,10 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl) {
+            if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
                 anchorEl.loop = true;
-                anchorEl.volume = 1.0;
-                anchorEl.srcObject = null;
-                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
-                    anchorEl.src = SILENT_WAV_DATA_URI;
-                }
+                anchorEl.removeAttribute('src');
+                anchorEl.srcObject = liveAudioDestination.stream;
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
@@ -170,10 +166,9 @@
         if (anchorEl) {
             _setupAnchorAutoResume(anchorEl);
             anchorEl.loop = true;
-            anchorEl.volume = 1.0;
-            anchorEl.srcObject = null;
-            if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
-                anchorEl.src = SILENT_WAV_DATA_URI;
+            anchorEl.removeAttribute('src');
+            if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
+                anchorEl.srcObject = liveAudioDestination.stream;
             }
             // No paused-guard here by design (m2 68 lesson): a fresh play()
             // call at the pause boundary re-asserts audio focus to the anchor,
@@ -261,35 +256,38 @@
                 return;
             }
             if (_isAnchorPlayPending) return;
+            if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
+                liveAudioContext.resume().catch(() => {});
+            }
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && anchorEl.paused) {
-                _isAnchorPlayPending = true;
-                _isInternalAnchorStart = true;
-                anchorEl.loop = true;
-                anchorEl.volume = 1.0;
-                anchorEl.srcObject = null;
-                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
-                    anchorEl.src = SILENT_WAV_DATA_URI;
+            if (anchorEl) {
+                if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
+                    anchorEl.removeAttribute('src');
+                    anchorEl.srcObject = liveAudioDestination.stream;
                 }
-                anchorEl.play().then(() => {
-                    _isAnchorPlayPending = false;
-                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                            ? window.declaredPausedState() : 'playing';
-                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                        if (typeof updateMediaSessionPosition === 'function') {
-                            updateMediaSessionPosition(pos, dur);
+                if (anchorEl.paused) {
+                    _isAnchorPlayPending = true;
+                    _isInternalAnchorStart = true;
+                    anchorEl.play().then(() => {
+                        _isAnchorPlayPending = false;
+                        setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'playing';
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            if (typeof updateMediaSessionPosition === 'function') {
+                                updateMediaSessionPosition(pos, dur);
+                            }
+                            if (typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
+                            }
                         }
-                        if (typeof republishMediaMetadata === 'function') {
-                            republishMediaMetadata();
-                        }
-                    }
-                }).catch(() => {
-                    _isAnchorPlayPending = false;
-                    _isInternalAnchorStart = false;
-                });
+                    }).catch(() => {
+                        _isAnchorPlayPending = false;
+                        _isInternalAnchorStart = false;
+                    });
+                }
             }
         }, 1000);
     }
