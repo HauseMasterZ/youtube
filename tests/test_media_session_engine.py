@@ -198,7 +198,7 @@ class TestMediaSessionEngine(unittest.TestCase):
     def test_declared_paused_state_mapping(self):
         """state.js declares mode-aware paused state: mode2 spoofs playing (pin), mode1 honest paused"""
         self.assertIn("window.APP_BUILD", self.state_content)
-        self.assertIn("window.APP_BUILD = 'm2-87';", self.state_content)
+        self.assertIn("window.APP_BUILD = 'm2-88';", self.state_content)
         self.assertIn("window.APP_BUILD", self.main_content)
         self.assertIn("window.declaredPausedState = function()", self.state_content)
         self.assertRegex(
@@ -528,10 +528,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_mode1_switch_audio_session_handshake(self):
-        """togglePlaybackMode performs audioPlayer.active handshake on Mode 1 switch while paused"""
+        """togglePlaybackMode sets honest paused synchronously without clobbering async play-pause handshake"""
+        self.assertNotIn("audioPlayer.active.play()", self.ms_content)
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*audioPlayer\.active\s*&&\s*audioPlayer\.active\.paused\s*\)\s*\{[\s\S]*?audioPlayer\.active\.play\(\)[\s\S]*?audioPlayer\.active\.pause\(\)'
+            r'window\.wasPausedByUser\s*=\s*true;[\s\S]*?audioPlayer\.instantPause\(\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_mode2_anchor_starts_synchronously_on_pause(self):
@@ -781,6 +782,39 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?stopAnchorHeartbeat\(\);'
+        )
+
+    def test_pruned_dead_variables_absent(self):
+        """Verify pruned dead variables are completely absent from mediaSession.js"""
+        self.assertNotIn("_probeTrippedSteal", self.ms_content)
+        self.assertNotIn("lastCallStartTime", self.ms_content)
+        self.assertNotIn("lastAudioPlayerPauseTime", self.ms_content)
+        self.assertNotIn("audioPlayer.audio1", self.ms_content)
+        self.assertNotIn("audioPlayer.audio2", self.ms_content)
+
+    def test_toggle_playback_mode_playing_switch(self):
+        """togglePlaybackMode while playing sets playbackState to playing and republishes metadata"""
+        self.assertRegex(
+            self.ms_content,
+            r'window\.wasPausedByUser\s*=\s*false;\s*if\s*\(\s*typeof\s+setPlayUI\s*===\s*[\'"]function[\'"]\s*\)\s*setPlayUI\(\s*true\s*\);\s*if\s*\(\s*typeof\s+hasMediaSession\s*!==\s*[\'"]undefined[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"];'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"];\s*if\s*\(\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*republishMediaMetadata\(\);'
+        )
+
+    def test_auto_kill_watchdog_operates_on_active_player(self):
+        """armAutoKillWatchdog tears down audioPlayer.active directly"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*audioPlayer\.active\s*\)\s*\{[\s\S]*?audioPlayer\.active\.pause\(\);[\s\S]*?audioPlayer\.active\.removeAttribute\(\s*[\'"]src[\'"]\s*\);'
+        )
+
+    def test_bt_disconnect_locks_was_paused_by_user(self):
+        """Route loss in devicechange marks lastBtDisconnectTime, sets wasPausedByUser true, and clears isCallActive"""
+        self.assertRegex(
+            self.ms_content,
+            r'newCount\s*<\s*knownOutputCount[\s\S]*?window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);[\s\S]*?window\.isCallActive\s*=\s*false;[\s\S]*?window\.wasPausedByUser\s*=\s*true;[\s\S]*?window\.wasPlayingBeforeCall\s*=\s*false;'
         )
 
 if __name__ == '__main__':

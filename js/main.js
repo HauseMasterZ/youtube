@@ -467,6 +467,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     ? window.declaredPausedState() : 'playing';
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
+                window.wasPausedByUser = true;
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
@@ -790,8 +791,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         
-        // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
+        function toggleThumbnailsAndRefresh() {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
@@ -822,6 +822,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             lastStartIndex = -1;
             renderVirtualTracks();
+        }
+
+        // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
+            toggleThumbnailsAndRefresh();
             return;
         }
 
@@ -847,36 +852,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isLeft) performSeekDelta(-5);
             else if (isRight) performSeekDelta(5);
         } else if (isMiddle || e.target.closest('#thumb-toggle-hint')) {
-            thumbsDisabled = !thumbsDisabled;
-            updateThumbToggleUI();
-            if (!thumbsDisabled && isPlaying) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                    if (hasMediaSession && navigator.mediaSession.metadata) {
-                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        if (sqCached) {
-                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
-                        } else {
-                            getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
-                                if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: track.title,
-                                        artist: track.channel,
-                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-            }
-            lastStartIndex = -1;
-            renderVirtualTracks();
+            toggleThumbnailsAndRefresh();
         }
     });
 
