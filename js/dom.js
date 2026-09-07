@@ -341,6 +341,10 @@
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
+            window._callSessionActive = false;
+            if (typeof window.cancelPendingCallEndResume === 'function') {
+                window.cancelPendingCallEndResume();
+            }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'paused';
@@ -358,6 +362,10 @@
         async switchTrack(url, preventAutoplay, expectedDuration = 0) {
             this._initMSE();
             this.switching = true;
+            window._callSessionActive = false;
+            if (typeof window.cancelPendingCallEndResume === 'function') {
+                window.cancelPendingCallEndResume();
+            }
             this._endedFired = false;
             this._streamDone = false;
             this._isBufferStalled = false;

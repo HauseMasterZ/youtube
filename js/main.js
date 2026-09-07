@@ -454,6 +454,22 @@ document.addEventListener("DOMContentLoaded", () => {
         console.log("[AUDIO-PAUSE] wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
+        if (!window.wasPausedByUser && !window.isCallActive) {
+            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+            if (!isRecentBt) {
+                window._callSessionActive = false;
+                window.lastVideoStealTime = Date.now();
+                if (typeof window.cancelPendingCallEndResume === 'function') {
+                    window.cancelPendingCallEndResume();
+                }
+            }
+        } else if (window.wasPausedByUser) {
+            window._callSessionActive = false;
+            if (typeof window.cancelPendingCallEndResume === 'function') {
+                window.cancelPendingCallEndResume();
+            }
+        }
+
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
