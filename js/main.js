@@ -407,6 +407,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
+        if (typeof window.cancelProvisionalPause === 'function') {
+            window.cancelProvisionalPause();
+        }
         console.log("[AUDIO-PLAY] event fired! wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         if (window.wasPausedByUser) {
             console.log("[AUDIO-PLAY] Blocked unwanted rogue autoplay while wasPausedByUser is true!");
@@ -464,6 +467,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
         } else if (window.wasPausedByUser) {
+            if (typeof window.cancelProvisionalPause === 'function') {
+                window.cancelProvisionalPause();
+            }
             window._callSessionActive = false;
             if (typeof window.cancelPendingCallEndResume === 'function') {
                 window.cancelPendingCallEndResume();

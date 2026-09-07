@@ -342,6 +342,9 @@
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
             window._callSessionActive = false;
+            if (typeof window.cancelProvisionalPause === 'function') {
+                window.cancelProvisionalPause();
+            }
             if (typeof window.cancelPendingCallEndResume === 'function') {
                 window.cancelPendingCallEndResume();
             }
@@ -363,6 +366,9 @@
             this._initMSE();
             this.switching = true;
             window._callSessionActive = false;
+            if (typeof window.cancelProvisionalPause === 'function') {
+                window.cancelProvisionalPause();
+            }
             if (typeof window.cancelPendingCallEndResume === 'function') {
                 window.cancelPendingCallEndResume();
             }

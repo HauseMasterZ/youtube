@@ -288,7 +288,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_anchor_and_context_listeners_never_kill_anchor_in_mode2(self):
-        """anchorEl pause and audioContext statechange never call stopLiveAudioAnchor or cancelAutoKillWatchdog"""
+        """anchorEl pause arms watchdog and republishes, and audioContext onstatechange hooks call promotion and hangup"""
         anchor_pause_match = re.search(
             r'anchorEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);',
             self.ms_content
@@ -306,15 +306,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertIsNotNone(ctx_change_match, "Could not find liveAudioContext onstatechange listener")
         ctx_code = ctx_change_match.group(1)
-        self.assertNotIn("stopLiveAudioAnchor()", ctx_code)
-        self.assertNotIn("cancelAutoKillWatchdog()", ctx_code)
-        self.assertIn("armAutoKillWatchdog()", ctx_code)
-        self.assertIn("republishMediaMetadata()", ctx_code)
+        self.assertIn("executeCallTeardown", ctx_code)
+        self.assertIn("tryCallEndResume", ctx_code)
 
     def test_external_steal_republishes_metadata_without_probe_collision(self):
-        """external steal branch re-publishes metadata and avoids background startFocusProbe collision"""
+        """external steal branch preserves metadata and arms watchdog on confirmed steal without probe collision"""
         steal_match = re.search(
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)cancelProvisionalPause\(\);\s*// Mode 2 pause',
             self.ms_content
         )
         self.assertIsNotNone(steal_match, "Could not find external steal branch")
@@ -322,6 +320,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("republishMediaMetadata()", steal_code)
         self.assertNotIn("startFocusProbe()", steal_code)
         self.assertIn("armAutoKillWatchdog()", steal_code)
+        self.assertIn("_provisionalPauseTimer", steal_code)
 
     def test_pause_boundary_recycles_anchor(self):
         """mode2 user-pause performs flagged stop+start recycle (genuine focus request)"""
@@ -773,12 +772,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.cancelPendingCallEndResume = cancelPendingCallEndResume;', self.ms_content)
 
     def test_call_session_token_state_initialization_and_build(self):
-        """Call token and steal timestamp variables initialized in state.js with build m2-83"""
+        """Call token and steal timestamp variables initialized in state.js with build m2-84"""
         self.assertIn('window.lastCallStartTime = 0;', self.state_content)
         self.assertIn('window.lastCallEndTime = 0;', self.state_content)
         self.assertIn('window.lastVideoStealTime = 0;', self.state_content)
         self.assertIn('window._callSessionActive = false;', self.state_content)
-        self.assertIn("window.APP_BUILD = 'm2-83';", self.state_content)
+        self.assertIn("window.APP_BUILD = 'm2-84';", self.state_content)
 
     def test_call_end_resume_entry_guards(self):
         """tryCallEndResume checks mode2, isCallActive, playback flags, 5000ms recency, and episode order"""
@@ -854,6 +853,45 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'handlePlayAction\(\)[\s\S]*?cancelPendingCallEndResume\(\);[\s\S]*?window\._callSessionActive\s*=\s*false;'
+        )
+
+    def test_execute_call_teardown_and_cancel_provisional_pause_defined(self):
+        """executeCallTeardown and cancelProvisionalPause are defined and exposed on window"""
+        self.assertIn('function cancelProvisionalPause()', self.ms_content)
+        self.assertIn("function executeCallTeardown(source = 'unknown')", self.ms_content)
+        self.assertIn('window.cancelProvisionalPause = cancelProvisionalPause;', self.ms_content)
+        self.assertIn('window.executeCallTeardown = executeCallTeardown;', self.ms_content)
+        self.assertIn('window.cancelProvisionalPause()', self.dom_content)
+        self.assertIn('window.cancelProvisionalPause()', self.main_content)
+
+    def test_probe_pause_suppressed_during_provisional_window(self):
+        """probe pause listener returns early when provisional pause timer is active"""
+        self.assertRegex(
+            self.ms_content,
+            r'probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*_provisionalPauseTimer\s*!==\s*null\s*\)\s*\{[\s\S]*?return;'
+        )
+
+    def test_bidirectional_webaudio_onstatechange(self):
+        """liveAudioContext onstatechange promotes on interrupted/suspended and resumes on running"""
+        self.assertRegex(
+            self.ms_content,
+            r'curState\s*===\s*[\'"]interrupted[\'"]\s*\|\|\s*curState\s*===\s*[\'"]suspended[\'"][\s\S]*?executeCallTeardown\(\s*[\'"]onstatechange_interrupted[\'"]\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'curState\s*===\s*[\'"]running[\'"][\s\S]*?tryCallEndResume\(\s*[\'"]context_running_hangup[\'"]\s*\);'
+        )
+
+    def test_deferred_provisional_classifier_implementation(self):
+        """audioPlayer pause implements 1000ms deferred provisional classifier with fast-path and late check"""
+        self.assertRegex(
+            self.ms_content,
+            r'liveAudioContext\s*&&\s*\(\s*liveAudioContext\.state\s*===\s*[\'"]interrupted[\'"]\s*\|\|\s*liveAudioContext\.state\s*===\s*[\'"]suspended[\'"]\s*\)[\s\S]*?executeCallTeardown\(\s*[\'"]audio_pause_already_interrupted[\'"]\s*\);'
+        )
+        self.assertIn('_provisionalPauseTimer = setTimeout(', self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'executeCallTeardown\(\s*[\'"]deferred_interrupted[\'"]\s*\);'
         )
 
 if __name__ == '__main__':
