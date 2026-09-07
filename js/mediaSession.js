@@ -74,9 +74,10 @@
             if (anchorEl) {
                 _setupAnchorAutoResume(anchorEl);
                 anchorEl.loop = true;
-                anchorEl.removeAttribute('src');
-                if (liveAudioDestination && liveAudioDestination.stream && !anchorEl.srcObject) {
-                    anchorEl.srcObject = liveAudioDestination.stream;
+                anchorEl.volume = 1.0;
+                anchorEl.srcObject = null;
+                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                    anchorEl.src = SILENT_WAV_DATA_URI;
                 }
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
@@ -130,10 +131,13 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
+            if (anchorEl) {
                 anchorEl.loop = true;
-                anchorEl.removeAttribute('src');
-                anchorEl.srcObject = liveAudioDestination.stream;
+                anchorEl.volume = 1.0;
+                anchorEl.srcObject = null;
+                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                    anchorEl.src = SILENT_WAV_DATA_URI;
+                }
                 if (anchorEl.paused) {
                     _isInternalAnchorStart = true;
                     anchorEl.play().then(() => {
@@ -166,9 +170,10 @@
         if (anchorEl) {
             _setupAnchorAutoResume(anchorEl);
             anchorEl.loop = true;
-            anchorEl.removeAttribute('src');
-            if (!anchorEl.srcObject && liveAudioDestination && liveAudioDestination.stream) {
-                anchorEl.srcObject = liveAudioDestination.stream;
+            anchorEl.volume = 1.0;
+            anchorEl.srcObject = null;
+            if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                anchorEl.src = SILENT_WAV_DATA_URI;
             }
             // No paused-guard here by design (m2 68 lesson): a fresh play()
             // call at the pause boundary re-asserts audio focus to the anchor,
@@ -182,9 +187,15 @@
                 console.warn("Live anchor play error:", e);
             });
         }
+        if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
+            startAnchorHeartbeat();
+        }
     }
 
     function stopLiveAudioAnchor() {
+        if (typeof stopAnchorHeartbeat === 'function') {
+            stopAnchorHeartbeat();
+        }
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
             anchorStartTimer = null;
@@ -201,6 +212,9 @@
     }
 
     function teardownLiveAudioAnchor() {
+        if (typeof stopAnchorHeartbeat === 'function') {
+            stopAnchorHeartbeat();
+        }
         const anchorEl = document.getElementById("live-stream-anchor");
         if (anchorEl) {
             try {
@@ -234,10 +248,66 @@
         liveAudioDestination = null;
     }
 
+    let anchorHeartbeatTimer = null;
+    let _isAnchorPlayPending = false;
+
+    function startAnchorHeartbeat() {
+        stopAnchorHeartbeat();
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
+        anchorHeartbeatTimer = setInterval(() => {
+            if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+                stopAnchorHeartbeat();
+                return;
+            }
+            if (_isAnchorPlayPending) return;
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && anchorEl.paused) {
+                _isAnchorPlayPending = true;
+                _isInternalAnchorStart = true;
+                anchorEl.loop = true;
+                anchorEl.volume = 1.0;
+                anchorEl.srcObject = null;
+                if (!anchorEl.src || !anchorEl.src.startsWith("data:")) {
+                    anchorEl.src = SILENT_WAV_DATA_URI;
+                }
+                anchorEl.play().then(() => {
+                    _isAnchorPlayPending = false;
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(pos, dur);
+                        }
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    }
+                }).catch(() => {
+                    _isAnchorPlayPending = false;
+                    _isInternalAnchorStart = false;
+                });
+            }
+        }, 1000);
+    }
+
+    function stopAnchorHeartbeat() {
+        if (anchorHeartbeatTimer) {
+            clearInterval(anchorHeartbeatTimer);
+            anchorHeartbeatTimer = null;
+        }
+        _isAnchorPlayPending = false;
+    }
+
     window.initLiveAudioAnchor = initLiveAudioAnchor;
     window.startLiveAudioAnchor = startLiveAudioAnchor;
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
     window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
+    window.startAnchorHeartbeat = startAnchorHeartbeat;
+    window.stopAnchorHeartbeat = stopAnchorHeartbeat;
 
     // Focus Probe: silent WAV loop that the OS power manager suspends on
     // audio-focus steals (YouTube) AND on idle battery-saving. A suspend
@@ -313,6 +383,9 @@
                 if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
+                }
+                if (typeof startAnchorHeartbeat === 'function') {
+                    startAnchorHeartbeat();
                 }
             }
         });
@@ -413,8 +486,10 @@
                     if (typeof primeFocusProbe === 'function') primeFocusProbe();
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
             }
         } else {
+            if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
             if (typeof stopFocusProbe === 'function') stopFocusProbe();
@@ -630,6 +705,7 @@
                             if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                             if (typeof startFocusProbe === 'function') startFocusProbe();
                             if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                            if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                                     ? window.declaredPausedState() : 'playing';
@@ -639,6 +715,7 @@
                     } else if (newCount < knownOutputCount || newCount > knownOutputCount) {
                         window.isCallActive = true;
                         window.lastCallStartTime = Date.now();
+                        if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                         const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
                         const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
                         if (anchorStartTimer) {
@@ -710,6 +787,7 @@
     let lastAudioPlayerPauseTime = 0;
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
+            if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -749,6 +827,7 @@
                     }
                     if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                     if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                     armAutoKillWatchdog();
                     return;
                 }
@@ -772,8 +851,10 @@
                     setTimeout(() => { _isInternalAnchorStop = false; }, 200);
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                 }
             } else {
+                if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
             }
@@ -790,6 +871,7 @@
             if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                 return;
             }
+            if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;
             window.lastBtDisconnectTime = 0;
@@ -867,6 +949,7 @@
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                     // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;
@@ -924,6 +1007,7 @@
                         audioPlayer.pause();
                     }
                     startLiveAudioAnchor();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                     armAutoKillWatchdog();
                 }
             } else {
@@ -982,6 +1066,7 @@
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;
                     window.lastBtDisconnectTime = 0;
@@ -1056,6 +1141,7 @@
                     if (window.playbackMode === 'mode2') {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
+                        if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                     } else {
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();
@@ -1150,6 +1236,7 @@
                 // Already inside mode2-only block: keep anchor (idempotent).
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                 cancelAutoKillWatchdog();
+                if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                 audioPlayer.play().catch(e => console.warn("MediaSession seekbackward resume error:", e));
             }
         });
@@ -1189,6 +1276,7 @@
                 // Already inside mode2-only block: keep anchor (idempotent).
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                 cancelAutoKillWatchdog();
+                if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                 audioPlayer.play().catch(e => console.warn("MediaSession seekforward resume error:", e));
             }
         });

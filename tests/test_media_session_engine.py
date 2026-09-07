@@ -712,5 +712,29 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?return;'
         )
 
+    def test_anchor_heartbeat_lifecycle_functions_defined(self):
+        """startAnchorHeartbeat and stopAnchorHeartbeat are defined and exposed globally"""
+        self.assertRegex(self.ms_content, r'function\s+startAnchorHeartbeat\s*\(\s*\)')
+        self.assertRegex(self.ms_content, r'function\s+stopAnchorHeartbeat\s*\(\s*\)')
+        self.assertIn('window.startAnchorHeartbeat = startAnchorHeartbeat;', self.ms_content)
+        self.assertIn('window.stopAnchorHeartbeat = stopAnchorHeartbeat;', self.ms_content)
+
+    def test_anchor_heartbeat_implementation(self):
+        """Heartbeat checks mode2, call status, player pause, uses pending guard, and re-asserts state"""
+        self.assertIn('anchorHeartbeatTimer = setInterval', self.ms_content)
+        self.assertIn('1000', self.ms_content)
+        self.assertIn('_isAnchorPlayPending', self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?declaredPausedState\(\)'
+        )
+
+    def test_telecom_isolation_stops_heartbeat_synchronously(self):
+        """Call start immediately stops heartbeat and halts anchor to protect Bluetooth SCO"""
+        self.assertRegex(
+            self.ms_content,
+            r'window\.isCallActive\s*=\s*true;[\s\S]*?stopAnchorHeartbeat\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
