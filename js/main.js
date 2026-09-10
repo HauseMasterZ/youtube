@@ -1,7 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    try {
-        console.log("[BUILD]", (typeof window.APP_BUILD !== 'undefined' && window.APP_BUILD) ? window.APP_BUILD : 'unknown');
-    } catch (e) {}
+    // Build version: window.APP_BUILD
     searchInput.addEventListener("input", (e) => {
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
@@ -407,9 +405,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
-        console.log("[AUDIO-PLAY] event fired! wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         if (window.wasPausedByUser) {
-            console.log("[AUDIO-PLAY] Blocked unwanted rogue autoplay while wasPausedByUser is true!");
             audioPlayer.instantPause();
             return;
         }
@@ -451,7 +447,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        console.log("[AUDIO-PAUSE] wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall, "isCallActive:", window.isCallActive);
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         setPlayUI(false);

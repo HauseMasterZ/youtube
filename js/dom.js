@@ -865,10 +865,27 @@
                     })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                        console.warn("MSE switchTrack error:", e);
                         this._clearSourceBuffer().catch(() => {});
-                        this.switching = false;
-                        this.dispatchEvent(new Event('error'));
+                        try {
+                            if (!preventAutoplay) {
+                                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                    navigator.mediaSession.playbackState = "playing";
+                                }
+                                this.active.src = url;
+                                this.active.play().catch(() => {
+                                    this.switching = false;
+                                    this.dispatchEvent(new Event('error'));
+                                });
+                            } else {
+                                this.active.src = url;
+                                this.active.load();
+                            }
+                            this.switching = false;
+                            return Promise.resolve();
+                        } catch (nativeErr) {
+                            this.switching = false;
+                            this.dispatchEvent(new Event('error'));
+                        }
                     }
                 }
             } else {

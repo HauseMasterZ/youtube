@@ -34,16 +34,13 @@
         if (!anchorEl || anchorEl._boundAutoResume) return;
         anchorEl._boundAutoResume = true;
         anchorEl.addEventListener("play", () => {
-            console.log("[ANCHOR-PLAY] anchor played! _isInternalAnchorStart:", _isInternalAnchorStart, "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
             if (!_isInternalAnchorStart && !window.wasPausedByUser && window.wasPlayingBeforeCall && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                console.log("[ANCHOR-PLAY] Native OS focus regain detected after call! Auto-resuming audioPlayer!");
                 stopLiveAudioAnchor();
                 cancelAutoKillWatchdog();
                 audioPlayer.play().catch(e => console.warn("Anchor auto-resume error:", e));
             }
         });
         anchorEl.addEventListener("pause", () => {
-            console.log("[ANCHOR-PAUSE] anchorEl paused! _isInternalAnchorStop:", _isInternalAnchorStop, "mode:", window.playbackMode, "audioPaused:", (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused));
             if (!_isInternalAnchorStop && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                 if (anchorStartTimer) {
                     clearTimeout(anchorStartTimer);
@@ -405,8 +402,7 @@
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
                 // Steal-or-idle suspend observed. Deliberately NO state write:
                 // Mode 2 declares 'playing' unconditionally (pin absolutism).
-                // Log only, so field diagnostics can see steal moments.
-                console.log("[PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)");
+                // [PROBE-SUSPEND] focus probe suspended while paused in Mode 2 (steal or idle)
                 if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
@@ -750,7 +746,6 @@
             navigator.mediaDevices.addEventListener('devicechange', () => {
                 navigator.mediaDevices.enumerateDevices().then(devices => {
                     const newCount = devices.filter(d => d.kind === 'audiooutput').length;
-                    console.log("[DEVICECHANGE] isCallActive:", window.isCallActive, "newCount:", newCount, "known:", knownOutputCount, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "wasPlayingBeforeCall:", window.wasPlayingBeforeCall);
                     if (window.isCallActive) {
                         window.isCallActive = false;
                         window.lastCallEndTime = Date.now();
@@ -975,7 +970,6 @@
     // handlePlayAction extracted for testability; registered unconditionally
     // (withdrawing it did not change the post-steal glyph, so it stays).
     function handlePlayAction() {
-            console.log("[MS-ACTION] 'play' triggered. isCallActive:", window.isCallActive, "paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
             if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
@@ -1021,7 +1015,6 @@
             const playPromise = audioPlayer.play();
             if (playPromise && playPromise.then) {
                 playPromise.then(() => {
-                    console.log("[MS-ACTION] 'play' playPromise RESOLVED.");
                     try {
                         if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                             const _rd = audioPlayer.duration || dur || 0;
@@ -1051,7 +1044,6 @@
 
         navigator.mediaSession.setActionHandler('pause', () => {
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
-            console.log("[MS-ACTION] 'pause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
             if (window.playbackMode === 'mode2') {
@@ -1086,7 +1078,6 @@
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.then(() => {
-                            console.log("[MS-ACTION] 'pause' playPromise RESOLVED.");
                             try {
                                 if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                                     const _pd = audioPlayer.duration || dur || 0;
@@ -1169,7 +1160,6 @@
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
-                console.log("[MS-ACTION] 'playpause' triggered. isCallActive:", window.isCallActive, "isActuallyPaused:", isActuallyPaused, "audioPlayer.paused:", (audioPlayer && audioPlayer.paused), "wasPausedByUser:", window.wasPausedByUser, "mode:", window.playbackMode);
                 if (window.isCallActive) return;
                 window.mediaSessionDestroyed = false;
                 if (isActuallyPaused) {
@@ -1218,7 +1208,6 @@
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.then(() => {
-                            console.log("[MS-ACTION] 'playpause' playPromise RESOLVED.");
                             try {
                                 if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                                     const _td = audioPlayer.duration || dur || 0;
