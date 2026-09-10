@@ -866,26 +866,8 @@
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
                         this._clearSourceBuffer().catch(() => {});
-                        try {
-                            if (!preventAutoplay) {
-                                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                                    navigator.mediaSession.playbackState = "playing";
-                                }
-                                this.active.src = url;
-                                this.active.play().catch(() => {
-                                    this.switching = false;
-                                    this.dispatchEvent(new Event('error'));
-                                });
-                            } else {
-                                this.active.src = url;
-                                this.active.load();
-                            }
-                            this.switching = false;
-                            return Promise.resolve();
-                        } catch (nativeErr) {
-                            this.switching = false;
-                            this.dispatchEvent(new Event('error'));
-                        }
+                        this.switching = false;
+                        this.dispatchEvent(new Event('error'));
                     }
                 }
             } else {
