@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build & Minify Distributions
+    name: Build, Bundle & Minify Distributions
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main (Root Site)
@@ -74,9 +74,10 @@ jobs:
           fi
           echo "All source scripts passed syntax verification."
 
-      - name: Inject API Gateway URL
+      - name: Inject API Gateway and Origin URLs
         env:
-          GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL }}
+          GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL || secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
+          UPSTREAM_ORIGIN_URL: ${{ secrets.UPSTREAM_ORIGIN_URL || vars.UPSTREAM_ORIGIN_URL }}
         run: |
           TARGET_FILES="site-root/index.html site-root/js/utils.js"
           if [ -d "site-root/dev" ]; then
@@ -89,15 +90,26 @@ jobs:
           GATEWAY_URL="${GATEWAY_URL%/}"
 
           if [ -n "$GATEWAY_URL" ]; then
+            echo "Injecting configured API Gateway URL into distribution..."
             for f in $TARGET_FILES; do
               if [ -f "$f" ]; then
                 sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" "$f"
               fi
             done
           else
+            echo "No custom Gateway URL provided; stripping placeholders."
             for f in site-root/index.html site-root/dev/index.html cf-root/index.html; do
               if [ -f "$f" ]; then
                 sed -i '/__API_GATEWAY_URL__/d' "$f"
+              fi
+            done
+          fi
+
+          if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
+            echo "Injecting configured Upstream Origin URL..."
+            for f in site-root/index.html site-root/dev/index.html cf-root/index.html; do
+              if [ -f "$f" ]; then
+                sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" "$f"
               fi
             done
           fi
@@ -285,6 +297,93 @@ jobs:
           temporaryPublicStorage: true
         continue-on-error: true
 
+      - name: Pin Lighthouse Report to GitHub Summary
+        if: always()
+        env:
+          LH_LINKS: ${{ steps.lighthouse.outputs.links }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          REPORT_URL=""
+          if [ -n "$LH_LINKS" ]; then
+            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' | head -n 1)
+          fi
+          if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
+            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
+          fi
+          export REPORT_URL
+
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+
+          try {
+            const lhciDir = ".lighthouseci";
+            const manifestPath = path.join(lhciDir, "manifest.json");
+            const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+            const branch = process.env.BRANCH_NAME || "branch";
+            const reportUrl = process.env.REPORT_URL || "";
+
+            if (!fs.existsSync(manifestPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (GitHub Pages - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
+            if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (GitHub Pages - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const lhr = JSON.parse(fs.readFileSync(repRun.jsonPath, "utf8"));
+            const scoreBadge = (val) => {
+              const s = Math.round((val || 0) * 100);
+              const badge = s >= 90 ? "[PASS]" : s >= 50 ? "[WARN]" : "[FAIL]";
+              return `${badge} **${s}**`;
+            };
+
+            const perf = scoreBadge(lhr.categories?.performance?.score);
+            const a11y = scoreBadge(lhr.categories?.accessibility?.score);
+            const bp = scoreBadge(lhr.categories?.["best-practices"]?.score);
+            const seo = scoreBadge(lhr.categories?.seo?.score);
+
+            const fcp = lhr.audits?.["first-contentful-paint"]?.displayValue || "N/A";
+            const lcp = lhr.audits?.["largest-contentful-paint"]?.displayValue || "N/A";
+            const tbt = lhr.audits?.["total-blocking-time"]?.displayValue || "N/A";
+            const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
+            const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
+
+            let md = `## Lighthouse CI Audit Report (GitHub Pages - \`${branch}\`)\n\n`;
+            md += `### Category Scores\n`;
+            md += `| Performance | Accessibility | Best Practices | SEO |\n`;
+            md += `| :---: | :---: | :---: | :---: |\n`;
+            md += `| ${perf} | ${a11y} | ${bp} | ${seo} |\n\n`;
+            md += `### Core Web Vitals & Key Metrics\n`;
+            md += `| Metric | Measurement |\n`;
+            md += `|---|---|\n`;
+            md += `| **First Contentful Paint (FCP)** | \`${fcp}\` |\n`;
+            md += `| **Largest Contentful Paint (LCP)** | \`${lcp}\` |\n`;
+            md += `| **Total Blocking Time (TBT)** | \`${tbt}\` |\n`;
+            md += `| **Speed Index (SI)** | \`${si}\` |\n`;
+            md += `| **Cumulative Layout Shift (CLS)** | \`${cls}\` |\n\n`;
+
+            if (reportUrl) {
+              md += `**[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
+              md += `**Direct URL:** ${reportUrl}\n`;
+            }
+
+            if (summaryFile) {
+              fs.appendFileSync(summaryFile, md, "utf8");
+            }
+          } catch (err) {
+            console.error("Summary builder notice:", err);
+          }
+          '
+
   deploy-cloudflare:
     name: Deploy to Cloudflare Pages (Production Custom Domain)
     if: github.ref == 'refs/heads/main'
@@ -368,3 +467,108 @@ jobs:
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
+
+      - name: Pin Lighthouse Report to GitHub Summary
+        if: always()
+        env:
+          LH_LINKS: ${{ steps.lighthouse.outputs.links }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          REPORT_URL=""
+          if [ -n "$LH_LINKS" ]; then
+            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' | head -n 1)
+          fi
+          if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
+            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
+          fi
+          export REPORT_URL
+
+          node -e '
+          const fs = require("fs");
+          const path = require("path");
+
+          try {
+            const lhciDir = ".lighthouseci";
+            const manifestPath = path.join(lhciDir, "manifest.json");
+            const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+            const branch = process.env.BRANCH_NAME || "branch";
+            const reportUrl = process.env.REPORT_URL || "";
+
+            if (!fs.existsSync(manifestPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+            const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
+            if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
+              if (summaryFile && reportUrl) {
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+              }
+              process.exit(0);
+            }
+
+            const lhr = JSON.parse(fs.readFileSync(repRun.jsonPath, "utf8"));
+            const scoreBadge = (val) => {
+              const s = Math.round((val || 0) * 100);
+              const badge = s >= 90 ? "[PASS]" : s >= 50 ? "[WARN]" : "[FAIL]";
+              return `${badge} **${s}**`;
+            };
+
+            const perf = scoreBadge(lhr.categories?.performance?.score);
+            const a11y = scoreBadge(lhr.categories?.accessibility?.score);
+            const bp = scoreBadge(lhr.categories?.["best-practices"]?.score);
+            const seo = scoreBadge(lhr.categories?.seo?.score);
+
+            const fcp = lhr.audits?.["first-contentful-paint"]?.displayValue || "N/A";
+            const lcp = lhr.audits?.["largest-contentful-paint"]?.displayValue || "N/A";
+            const tbt = lhr.audits?.["total-blocking-time"]?.displayValue || "N/A";
+            const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
+            const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
+
+            let md = `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n`;
+            md += `### Category Scores\n`;
+            md += `| Performance | Accessibility | Best Practices | SEO |\n`;
+            md += `| :---: | :---: | :---: | :---: |\n`;
+            md += `| ${perf} | ${a11y} | ${bp} | ${seo} |\n\n`;
+            md += `### Core Web Vitals & Key Metrics\n`;
+            md += `| Metric | Measurement |\n`;
+            md += `|---|---|\n`;
+            md += `| **First Contentful Paint (FCP)** | \`${fcp}\` |\n`;
+            md += `| **Largest Contentful Paint (LCP)** | \`${lcp}\` |\n`;
+            md += `| **Total Blocking Time (TBT)** | \`${tbt}\` |\n`;
+            md += `| **Speed Index (SI)** | \`${si}\` |\n`;
+            md += `| **Cumulative Layout Shift (CLS)** | \`${cls}\` |\n\n`;
+
+            if (reportUrl) {
+              md += `**[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
+              md += `**Direct URL:** ${reportUrl}\n`;
+            }
+
+            if (summaryFile) {
+              fs.appendFileSync(summaryFile, md, "utf8");
+            }
+          } catch (err) {
+            console.error("Summary builder notice:", err);
+          }
+          '
+
+      - name: Purge Edge Distribution Cache
+        if: always() && steps.edge_distribution.outputs.deployment-url != '' && env.EDGE_ROUTE_TAG != '' && env.EDGE_SVC_KEY != ''
+        env:
+          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG || secrets.CLOUDFLARE_ZONE_ID }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY || secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          echo "Purging edge cache for route ${EDGE_ROUTE_TAG}..."
+          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
+            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          
+          if echo "$RESPONSE" | grep -q '"success":true'; then
+            echo "Edge cache successfully purged."
+          else
+            echo "Edge cache purge notice: ${RESPONSE}"
+          fi
