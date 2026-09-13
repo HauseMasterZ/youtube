@@ -14,18 +14,41 @@ permissions:
   deployments: write
 
 concurrency:
-  group: "production-deployments-${{ github.ref_name }}"
+  group: "deployments-${{ github.ref_name }}"
   cancel-in-progress: true
 
 jobs:
   build:
-    name: Build & Minify Distribution
+    name: Build & Minify Distributions
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repository
+      - name: Checkout main (Root Site)
         uses: actions/checkout@v4
         with:
+          ref: main
           path: site-root
+
+      - name: Copy Clean Root for Cloudflare
+        if: github.ref == 'refs/heads/main'
+        run: |
+          cp -rf site-root cf-root
+          rm -rf cf-root/.git cf-root/.github
+
+      - name: Checkout dev (Dev Staging)
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          path: dev-src
+        continue-on-error: true
+
+      - name: Merge Dev Subdirectory into GitHub Pages Root
+        run: |
+          if [ -d "dev-src" ]; then
+            mkdir -p site-root/dev
+            cp -rf dev-src/* site-root/dev/
+            rm -rf site-root/dev/.git site-root/dev/.github
+          fi
+          rm -rf site-root/.git site-root/.github
 
       - name: Pre-Deployment Syntax & Integrity Guard
         run: |
@@ -35,23 +58,46 @@ jobs:
               node --check "$f"
             fi
           done
+          if [ -d "site-root/dev" ]; then
+            for f in site-root/dev/js/*.js site-root/dev/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
+          fi
+          if [ -d "cf-root" ]; then
+            for f in cf-root/js/*.js cf-root/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
+          fi
           echo "All source scripts passed syntax verification."
 
       - name: Inject API Gateway URL
         env:
           GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL }}
         run: |
+          TARGET_FILES="site-root/index.html site-root/js/utils.js"
+          if [ -d "site-root/dev" ]; then
+            TARGET_FILES="$TARGET_FILES site-root/dev/index.html site-root/dev/js/utils.js"
+          fi
+          if [ -d "cf-root" ]; then
+            TARGET_FILES="$TARGET_FILES cf-root/index.html cf-root/js/utils.js"
+          fi
+
           if [ -n "$GATEWAY_URL" ]; then
-            if [ -f site-root/index.html ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/index.html
-            fi
-            if [ -f site-root/js/utils.js ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/js/utils.js
-            fi
+            for f in $TARGET_FILES; do
+              if [ -f "$f" ]; then
+                sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" "$f"
+              fi
+            done
           else
-            if [ -f site-root/index.html ]; then
-              sed -i '/__API_GATEWAY_URL__/d' site-root/index.html
-            fi
+            for f in site-root/index.html site-root/dev/index.html cf-root/index.html; do
+              if [ -f "$f" ]; then
+                sed -i '/__API_GATEWAY_URL__/d' "$f"
+              fi
+            done
           fi
 
       - name: Setup Node LTS
@@ -72,10 +118,9 @@ jobs:
       - name: Install Build Tools
         run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli
 
-      - name: Build, Bundle, and Minify Source Files
+      - name: Build, Bundle, and Minify Distributions
         env:
           BUILD_VER: ${{ github.sha }}
-          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           node << 'EOF'
           const fs = require('fs');
@@ -83,11 +128,10 @@ jobs:
           const { execSync } = require('child_process');
 
           const buildVer = (process.env.BUILD_VER || Date.now().toString()).substring(0, 10);
-          const branch = process.env.BRANCH_NAME || 'dev';
 
-          function buildDirectory(dir) {
+          function buildDirectory(dir, branchPrefix) {
             if (!fs.existsSync(dir)) return;
-            console.log(`==> Building, bundling, and minifying ${dir} (Build: ${buildVer})...`);
+            console.log(`==> Building, bundling, and minifying ${dir} (Build: ${buildVer}, Scope: ${branchPrefix})...`);
 
             // 1. Bundle 8 JS modules into single bundle.min.js
             const jsOrder = ['state.js', 'dom.js', 'utils.js', 'ui.js', 'mediaSession.js', 'lyrics.js', 'playback.js', 'main.js'];
@@ -128,11 +172,11 @@ jobs:
               execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
             }
 
-            // 4. Update and minify sw.js
+            // 4. Update and minify sw.js with isolated cache name
             const swPath = path.join(dir, 'sw.js');
             if (fs.existsSync(swPath)) {
               let sw = fs.readFileSync(swPath, 'utf8');
-              sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'yt-player-cache-${buildVer}';`);
+              sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'yt-player-cache-${branchPrefix}-${buildVer}';`);
               sw = sw.replace(/'\.\/js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js',?\s*/g, '');
               sw = sw.replace(/const CORE_ASSETS = \[\s*/, `const CORE_ASSETS = [\n    './js/bundle.min.js',\n`);
               fs.writeFileSync(swPath, sw, 'utf8');
@@ -140,25 +184,55 @@ jobs:
             }
           }
 
-          buildDirectory('site-root');
+          // Build GitHub Pages root (main) and dev staging (dev)
+          buildDirectory('site-root', 'main');
+          if (fs.existsSync('site-root/dev')) {
+            buildDirectory('site-root/dev', 'dev');
+          }
+
+          // Build Cloudflare Pages clean root (main)
+          if (fs.existsSync('cf-root')) {
+            buildDirectory('cf-root', 'main');
+          }
           EOF
 
       - name: Post-Build Integrity Verification
         run: |
           echo "==> Verifying production bundle and Service Worker syntax..."
-          if [ -f "site-root/js/bundle.min.js" ]; then
-            node --check site-root/js/bundle.min.js
+          for f in site-root/js/bundle.min.js site-root/sw.js; do
+            if [ -f "$f" ]; then
+              node --check "$f"
+            fi
+          done
+          if [ -d "site-root/dev" ]; then
+            for f in site-root/dev/js/bundle.min.js site-root/dev/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
           fi
-          if [ -f "site-root/sw.js" ]; then
-            node --check site-root/sw.js
+          if [ -d "cf-root" ]; then
+            for f in cf-root/js/bundle.min.js cf-root/sw.js; do
+              if [ -f "$f" ]; then
+                node --check "$f"
+              fi
+            done
           fi
-          echo "Production bundles verified successfully."
+          echo "Distributions verified successfully."
 
-      - name: Upload Built Distribution Artifact
+      - name: Upload GitHub Pages Distribution Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: built-distribution
+          name: github-pages-distribution
           path: site-root
+          retention-days: 1
+
+      - name: Upload Cloudflare Distribution Artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-distribution
+          path: cf-root
           retention-days: 1
 
   deploy-github-pages:
@@ -173,10 +247,10 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download Built Distribution
+      - name: Download GitHub Pages Distribution
         uses: actions/download-artifact@v4
         with:
-          name: built-distribution
+          name: github-pages-distribution
           path: site-root
 
       - name: Setup Pages
@@ -191,8 +265,27 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
+      - name: Wait 15s for GitHub Pages CDN Propagation
+        if: steps.deployment.outputs.page_url != ''
+        run: sleep 15
+
+      - name: Audit Deployed Site with Lighthouse CI
+        id: lighthouse
+        if: steps.deployment.outputs.page_url != ''
+        uses: treosh/lighthouse-ci-action@v12
+        env:
+          LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
+        with:
+          urls: |
+            ${{ steps.deployment.outputs.page_url }}
+            ${{ format('{0}dev/', steps.deployment.outputs.page_url) }}
+          uploadArtifacts: true
+          temporaryPublicStorage: true
+        continue-on-error: true
+
   deploy-cloudflare:
-    name: Deploy to Cloudflare Pages
+    name: Deploy to Cloudflare Pages (Production Custom Domain)
+    if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -202,11 +295,11 @@ jobs:
       name: production-edge
       url: ${{ steps.edge_distribution.outputs.deployment-url }}
     steps:
-      - name: Download Built Distribution
+      - name: Download Cloudflare Distribution
         uses: actions/download-artifact@v4
         with:
-          name: built-distribution
-          path: site-root
+          name: cloudflare-distribution
+          path: cf-root
 
       - name: Setup Node LTS
         uses: actions/setup-node@v4
@@ -227,8 +320,7 @@ jobs:
           NODE_NO_WARNINGS: "1"
         run: |
           PROJECT="${{ secrets.APP_TARGET_SLUG || secrets.CLOUDFLARE_PAGES_PROJECT || secrets.CF_PAGES_PROJECT || secrets.PAGES_PROJECT || secrets.PROJECT_NAME || 'music-player-web' }}"
-          BRANCH="${{ github.ref_name }}"
-          echo "Target project: ${PROJECT} (branch: ${BRANCH})"
+          echo "Target project: ${PROJECT} (branch: main)"
           wrangler --version
 
           echo "--- Auth verification ---"
@@ -242,7 +334,7 @@ jobs:
 
           echo "--- Executing Pages deployment ---"
           set +e
-          wrangler pages deploy site-root --project-name="${PROJECT}" --branch="${BRANCH}" --commit-dirty=true 2>&1 | tee deploy.log
+          wrangler pages deploy cf-root --project-name="${PROJECT}" --branch="main" --commit-dirty=true 2>&1 | tee deploy.log
           EXIT_CODE=${PIPESTATUS[0]}
           set -e
 
@@ -253,11 +345,7 @@ jobs:
 
           DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' deploy.log | head -n 1)
           if [ -z "$DEPLOY_URL" ]; then
-            if [ "$BRANCH" = "main" ]; then
-              DEPLOY_URL="https://${PROJECT}.pages.dev"
-            else
-              DEPLOY_URL="https://${BRANCH}.${PROJECT}.pages.dev"
-            fi
+            DEPLOY_URL="https://${PROJECT}.pages.dev"
           fi
           echo "Deployment target URL: ${DEPLOY_URL}"
           echo "deployment-url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
@@ -278,108 +366,3 @@ jobs:
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
-
-      - name: Pin Lighthouse Report to GitHub Summary
-        if: always()
-        env:
-          LH_LINKS: ${{ steps.lighthouse.outputs.links }}
-          BRANCH_NAME: ${{ github.ref_name }}
-        run: |
-          REPORT_URL=""
-          if [ -n "$LH_LINKS" ]; then
-            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' | head -n 1)
-          fi
-          if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
-            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
-          fi
-          export REPORT_URL
-
-          node -e '
-          const fs = require("fs");
-          const path = require("path");
-
-          try {
-            const lhciDir = ".lighthouseci";
-            const manifestPath = path.join(lhciDir, "manifest.json");
-            const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-            const branch = process.env.BRANCH_NAME || "branch";
-            const reportUrl = process.env.REPORT_URL || "";
-
-            if (!fs.existsSync(manifestPath)) {
-              if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (\`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
-              }
-              process.exit(0);
-            }
-
-            const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-            const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
-            if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
-              if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (\`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
-              }
-              process.exit(0);
-            }
-
-            const lhr = JSON.parse(fs.readFileSync(repRun.jsonPath, "utf8"));
-            const scoreBadge = (val) => {
-              const s = Math.round((val || 0) * 100);
-              const badge = s >= 90 ? "[PASS]" : s >= 50 ? "[WARN]" : "[FAIL]";
-              return `${badge} **${s}**`;
-            };
-
-            const perf = scoreBadge(lhr.categories?.performance?.score);
-            const a11y = scoreBadge(lhr.categories?.accessibility?.score);
-            const bp = scoreBadge(lhr.categories?.["best-practices"]?.score);
-            const seo = scoreBadge(lhr.categories?.seo?.score);
-
-            const fcp = lhr.audits?.["first-contentful-paint"]?.displayValue || "N/A";
-            const lcp = lhr.audits?.["largest-contentful-paint"]?.displayValue || "N/A";
-            const tbt = lhr.audits?.["total-blocking-time"]?.displayValue || "N/A";
-            const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
-            const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
-
-            let md = `## Lighthouse CI Audit Report (\`${branch}\`)\n\n`;
-            md += `### Category Scores\n`;
-            md += `| Performance | Accessibility | Best Practices | SEO |\n`;
-            md += `| :---: | :---: | :---: | :---: |\n`;
-            md += `| ${perf} | ${a11y} | ${bp} | ${seo} |\n\n`;
-            md += `### Core Web Vitals & Key Metrics\n`;
-            md += `| Metric | Measurement |\n`;
-            md += `|---|---|\n`;
-            md += `| **First Contentful Paint (FCP)** | \`${fcp}\` |\n`;
-            md += `| **Largest Contentful Paint (LCP)** | \`${lcp}\` |\n`;
-            md += `| **Total Blocking Time (TBT)** | \`${tbt}\` |\n`;
-            md += `| **Speed Index (SI)** | \`${si}\` |\n`;
-            md += `| **Cumulative Layout Shift (CLS)** | \`${cls}\` |\n\n`;
-
-            if (reportUrl) {
-              md += `**[Click here to view the Full Interactive Lighthouse Report](${reportUrl})**\n\n`;
-              md += `**Direct URL:** ${reportUrl}\n`;
-            }
-
-            if (summaryFile) {
-              fs.appendFileSync(summaryFile, md, "utf8");
-            }
-          } catch (err) {
-            console.error("Summary builder notice:", err);
-          }
-          '
-
-      - name: Purge Edge Distribution Cache
-        if: env.EDGE_ROUTE_TAG != '' && env.EDGE_SVC_KEY != ''
-        env:
-          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG }}
-          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY }}
-        run: |
-          echo "Purging edge cache for route ${EDGE_ROUTE_TAG}..."
-          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
-            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
-            -H "Content-Type: application/json" \
-            --data '{"purge_everything":true}')
-          
-          if echo "$RESPONSE" | grep -q '"success":true'; then
-            echo "Edge cache successfully purged."
-          else
-            echo "Edge cache purge notice: ${RESPONSE}"
-          fi
