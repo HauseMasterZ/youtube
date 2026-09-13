@@ -255,12 +255,19 @@
             const rawColor = item[5];
             const fallbackColor = getVibrantFallbackColor(trackId || item[1]);
             const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            const fileItem = item[4];
+            let filePath;
+            if (fileItem && (fileItem.endsWith('.opus') || fileItem.endsWith('.webm') || fileItem.endsWith('.m4a'))) {
+                filePath = fileItem.includes('/') ? fileItem : `${folderName}/${fileItem}`;
+            } else {
+                filePath = `${folderName}/${trackId}.webm`;
+            }
             normalized = {
                 id: trackId,
                 title: item[1],
                 channel: item[2],
                 duration: item[3],
-                file_path: `${folderName}/${trackId}.webm`,
+                file_path: filePath,
                 thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
                 color: validColor
             };
@@ -269,9 +276,15 @@
             const rawColor = item.color;
             const fallbackColor = getVibrantFallbackColor(trackId || item.title);
             const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            let filePath = item.file_path || item.audio_path;
+            if (!filePath) {
+                filePath = `${folderName}/${trackId}.webm`;
+            } else if (!filePath.includes('/')) {
+                filePath = `${folderName}/${filePath}`;
+            }
             normalized = {
                 ...item,
-                file_path: `${folderName}/${trackId}.webm`,
+                file_path: filePath,
                 thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
                 color: validColor
             };

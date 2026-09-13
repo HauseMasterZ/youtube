@@ -1038,35 +1038,93 @@ document.addEventListener("DOMContentLoaded", () => {
             btnSync.classList.add("spinning");
             isSyncPolling = true;
 
-            try {
-                await fetch(syncEndpoint, { method: "POST" });
-            } catch (err) {
-                console.warn("Sync trigger:", err);
+            let pollInterval = null;
+            const stopPollingAndRefresh = async () => {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+                isSyncPolling = false;
+                btnSync.classList.remove("spinning");
+                await refreshUpdatedPlaylists();
+            };
+
+            // If offline, stop immediately after tactile acknowledgment
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                setTimeout(async () => {
+                    await stopPollingAndRefresh();
+                }, 300);
+                return;
             }
 
-            // Poll /status every 10 seconds until idle
+            try {
+                const syncRes = await fetch(syncEndpoint, { method: "POST" });
+                if (!syncRes.ok) {
+                    setTimeout(async () => {
+                        await stopPollingAndRefresh();
+                    }, 300);
+                    return;
+                }
+
+                const syncData = await syncRes.json().catch(() => ({}));
+                if (syncData.status === "autonomous") {
+                    // Autonomous node mode: check current live status
+                    try {
+                        const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json().catch(() => ({}));
+                            if (statusData.status !== "syncing") {
+                                // Node is not currently syncing, finish after brief tactile spin
+                                setTimeout(async () => {
+                                    await stopPollingAndRefresh();
+                                }, 600);
+                                return;
+                            }
+                        } else {
+                            setTimeout(async () => {
+                                await stopPollingAndRefresh();
+                            }, 600);
+                            return;
+                        }
+                    } catch (_) {
+                        setTimeout(async () => {
+                            await stopPollingAndRefresh();
+                        }, 600);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn("Sync trigger:", err);
+                setTimeout(async () => {
+                    await stopPollingAndRefresh();
+                }, 300);
+                return;
+            }
+
+            // Poll /status every 10 seconds until not syncing or max attempts
             let pollAttempts = 0;
-            const maxAttempts = 30; // 5 minutes max
-            
-            const pollInterval = setInterval(async () => {
+            const maxAttempts = 12; // 2 minutes max
+            let errorCount = 0;
+
+            pollInterval = setInterval(async () => {
                 pollAttempts++;
                 try {
                     const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
                     if (statusRes.ok) {
-                        const data = await statusRes.json();
-                        if (data.status === "idle" || pollAttempts >= maxAttempts) {
-                            clearInterval(pollInterval);
-                            isSyncPolling = false;
-                            btnSync.classList.remove("spinning");
-                            await refreshUpdatedPlaylists();
+                        const data = await statusRes.json().catch(() => ({}));
+                        if (data.status === "idle" || data.status === "autonomous" || data.status !== "syncing" || pollAttempts >= maxAttempts) {
+                            await stopPollingAndRefresh();
+                        }
+                    } else {
+                        errorCount++;
+                        if (errorCount >= 3 || pollAttempts >= maxAttempts) {
+                            await stopPollingAndRefresh();
                         }
                     }
                 } catch (e) {
-                    if (pollAttempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        isSyncPolling = false;
-                        btnSync.classList.remove("spinning");
-                        await refreshUpdatedPlaylists();
+                    errorCount++;
+                    if (errorCount >= 3 || pollAttempts >= maxAttempts) {
+                        await stopPollingAndRefresh();
                     }
                 }
             }, 10000);

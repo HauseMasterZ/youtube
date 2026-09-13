@@ -827,10 +827,11 @@
                             const res = await fetchWithRetry(fetchUrl, { signal }, 3);
                             if (res && res.ok) {
                                 const buf = await res.arrayBuffer();
+                                const contentType = res.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                                 const fullRes = new Response(buf, {
                                     status: 200,
                                     headers: {
-                                        'Content-Type': 'audio/webm',
+                                        'Content-Type': contentType,
                                         'Content-Length': buf.byteLength.toString(),
                                         'X-Partial-Cached': 'false'
                                     }
@@ -903,10 +904,11 @@
                         const res = await fetchWithRetry(fetchUrl, { signal }, 2).catch(() => {});
                         if (res && res.ok) {
                             const buf = await res.arrayBuffer();
+                            const contentType = res.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                             const fullRes = new Response(buf, {
                                 status: 200,
                                 headers: {
-                                    'Content-Type': 'audio/webm',
+                                    'Content-Type': contentType,
                                     'Content-Length': buf.byteLength.toString(),
                                     'X-Partial-Cached': 'false'
                                 }

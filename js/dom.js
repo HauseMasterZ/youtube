@@ -13,6 +13,8 @@
             this.lastKnownTime = 0;
             this._currentUrl = '';
             this._mseEnabled = false;
+            this._isDirectAudio = false;
+            this._mediaSourceUrl = null;
             this._pendingSeek = null;
             this._seekingTo = null;
             this._expectedDuration = 0;
@@ -46,7 +48,7 @@
 
                         // ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
                         let effectiveEnd = dur;
-                        if (this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                        if (!this._isDirectAudio && this._mseEnabled && this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                             if (buffEnd > 0) {
                                 effectiveEnd = Math.min(dur, buffEnd);
@@ -120,7 +122,8 @@
                             }
                         }, { once: true });
                     });
-                    this.active.src = URL.createObjectURL(this._mediaSource);
+                    this._mediaSourceUrl = URL.createObjectURL(this._mediaSource);
+                    this.active.src = this._mediaSourceUrl;
                 } catch (e) {
                     console.warn("MSE init failed:", e);
                     this._mseEnabled = false;
@@ -134,6 +137,10 @@
             if (this._sourceBuffer) {
                 try { this._mediaSource.removeSourceBuffer(this._sourceBuffer); } catch (e) {}
                 this._sourceBuffer = null;
+            }
+            if (this._mediaSourceUrl) {
+                try { URL.revokeObjectURL(this._mediaSourceUrl); } catch (e) {}
+                this._mediaSourceUrl = null;
             }
             this._mediaSource = null;
             this._initMSE();
@@ -200,7 +207,7 @@
                     this._endedFired = false;
                 }
 
-                if (this._mseEnabled) {
+                if (!this._isDirectAudio && this._mseEnabled) {
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
@@ -242,7 +249,7 @@
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
         get buffered() {
-            if (this._mseEnabled && this._sourceBuffer) return this._sourceBuffer.buffered;
+            if (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) return this._sourceBuffer.buffered;
             return this.active.buffered;
         }
 
@@ -385,11 +392,19 @@
                 return Promise.resolve();
             }
 
-            if (this._mseReady) {
-                await this._mseReady;
+            const isOpusDirect = url && url.includes('.opus') && !('MediaSource' in window && MediaSource.isTypeSupported('audio/ogg; codecs="opus"'));
+
+            if (!isOpusDirect) {
+                if (!this._mseInitialized || !this._mediaSource || this._mediaSource.readyState === 'closed' || this.active.src !== this._mediaSourceUrl) {
+                    this._resetMSE();
+                }
+                if (this._mseReady) {
+                    await this._mseReady;
+                }
             }
 
-            if (this._mseEnabled && this._sourceBuffer) {
+            if (this._mseEnabled && this._sourceBuffer && !isOpusDirect) {
+                this._isDirectAudio = false;
                 if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
                     try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
                 }
@@ -443,12 +458,15 @@
                                 try {
                                     await this._appendToSourceBuffer(cachedArrayBuffer);
                                 } catch (appendErr) {
-                                    console.warn("Cached audio buffer invalid/corrupted, purging from cache:", appendErr);
-                                    try { await mediaCache.delete(url); } catch (e) {}
-                                    this._resetMSE();
-                                    cachedPartialBytes = 0;
-                                    cachedArrayBuffer = null;
-                                    throw appendErr;
+                                    console.warn("Cached audio buffer MSE append error, falling back to HTML5 Audio:", appendErr);
+                                    this._isDirectAudio = true;
+                                    this._streamDone = true;
+                                    this.switching = false;
+                                    this.active.src = url;
+                                    if (!preventAutoplay && !window.wasPausedByUser) {
+                                        this.active.play().catch(e => console.warn("Fallback HTML5 play error:", e));
+                                    }
+                                    return Promise.resolve();
                                 }
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
@@ -509,10 +527,11 @@
                                     combined.set(c, off);
                                     off += c.length;
                                 }
+                                const contentType = (response && response.headers && response.headers.get('Content-Type')) || (url.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                                 const responseToCache = new Response(combined.buffer, {
                                     status: 200,
                                     headers: {
-                                        'Content-Type': 'audio/webm',
+                                        'Content-Type': contentType,
                                         'Content-Length': totalBytesAppended.toString(),
                                         'X-Partial-Cached': isComplete ? 'false' : 'true'
                                     }
@@ -865,13 +884,28 @@
                     })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
+                        console.warn("MSE streaming error, falling back to standard HTML5 Audio:", e);
+                        this._isDirectAudio = true;
                         this._clearSourceBuffer().catch(() => {});
+                        this._streamDone = true;
                         this.switching = false;
-                        this.dispatchEvent(new Event('error'));
+                        this.active.src = url;
+                        if (!preventAutoplay && !window.wasPausedByUser) {
+                            this.active.play().catch(err => console.warn("Standard audio fallback play error:", err));
+                        }
                     }
                 }
             } else {
-                if (!preventAutoplay) {
+                this._isDirectAudio = true;
+                if (this._sourceBuffer) {
+                    try { this._clearSourceBuffer(); } catch (e) {}
+                }
+                if (this._streamAbortController) {
+                    try { this._streamAbortController.abort(); } catch (e) {}
+                    this._streamAbortController = null;
+                }
+                this._streamDone = true;
+                if (!preventAutoplay && !window.wasPausedByUser) {
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = "playing";
                     }

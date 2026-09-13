@@ -1,4 +1,4 @@
-name: Deploy GitHub Pages
+name: Deploy Cloudflare Pages
 
 on:
   push:
@@ -8,18 +8,17 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
+  deployments: write
 
 concurrency:
-  group: "pages"
+  group: "cloudflare-pages"
   cancel-in-progress: true
 
 jobs:
   deploy:
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: cloudflare-pages
+      url: ${{ steps.cloudflare_pages.outputs.deployment-url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main (Root Site)
@@ -59,9 +58,6 @@ jobs:
             done
           fi
           echo "All source scripts passed syntax verification."
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
 
       - name: Inject API Gateway and Origin URLs
         env:
@@ -206,28 +202,27 @@ jobs:
           fi
           echo "Production bundles verified successfully."
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to Cloudflare Pages
+        id: cloudflare_pages
+        uses: cloudflare/wrangler-action@v3
         with:
-          path: site-root
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy site-root --project-name=${{ secrets.CLOUDFLARE_PAGES_PROJECT || 'youtube-player' }} --branch=${{ github.ref_name }}
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-      - name: Wait 15s for GitHub Pages CDN Propagation
-        if: steps.deployment.outputs.page_url != ''
-        run: sleep 15
+      - name: Wait 5s for Cloudflare Edge Propagation
+        if: steps.cloudflare_pages.outputs.deployment-url != ''
+        run: sleep 5
 
       - name: Audit Deployed Site with Lighthouse CI
         id: lighthouse
-        if: steps.deployment.outputs.page_url != ''
+        if: steps.cloudflare_pages.outputs.deployment-url != ''
         uses: treosh/lighthouse-ci-action@v12
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ github.ref_name == 'dev' && format('{0}dev/', steps.deployment.outputs.page_url) || steps.deployment.outputs.page_url }}
+            ${{ github.ref_name == 'dev' && format('{0}/dev/', steps.cloudflare_pages.outputs.deployment-url) || steps.cloudflare_pages.outputs.deployment-url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true

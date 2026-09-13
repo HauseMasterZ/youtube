@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v132';
+const CACHE_NAME = 'yt-player-cache-v133';
 
 const CORE_ASSETS = [
     './index.html',
@@ -62,7 +62,7 @@ self.addEventListener('fetch', (event) => {
     if (event.request.method !== 'GET') return;
     
     // 1. Audio Media Caching
-    if (event.request.url.includes('.webm') || event.request.url.includes('.mp4')) {
+    if (event.request.url.includes('.webm') || event.request.url.includes('.opus') || event.request.url.includes('.mp4') || event.request.url.includes('.m4a')) {
         if (event.request.url.includes('bypass=true')) return;
 
         event.respondWith(
@@ -82,6 +82,9 @@ self.addEventListener('fetch', (event) => {
                             const start = parseInt(parts[0], 10);
                             const end = parts[1] ? parseInt(parts[1], 10) : total - 1;
                             const sliced = buffer.slice(start, end + 1);
+                            const defaultMime = event.request.url.includes('.opus')
+                                ? 'audio/ogg; codecs=opus'
+                                : (event.request.url.includes('.m4a') ? 'audio/mp4' : 'audio/webm');
                             return new Response(sliced, {
                                 status: 206,
                                 statusText: 'Partial Content',
@@ -89,7 +92,7 @@ self.addEventListener('fetch', (event) => {
                                     'Content-Range': `bytes ${start}-${end}/${total}`,
                                     'Accept-Ranges': 'bytes',
                                     'Content-Length': sliced.byteLength,
-                                    'Content-Type': cachedResponse.headers.get('Content-Type') || 'audio/webm'
+                                    'Content-Type': cachedResponse.headers.get('Content-Type') || defaultMime
                                 }
                             });
                         });
