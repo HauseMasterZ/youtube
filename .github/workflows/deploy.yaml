@@ -221,7 +221,7 @@ jobs:
           wrangler --version
 
           echo "--- Auth verification ---"
-          wrangler whoami 2>&1 || true
+          wrangler whoami > /dev/null 2>&1 || true
 
           echo "--- Project validation & auto-creation ---"
           if ! wrangler pages project list 2>&1 | grep -q "${PROJECT}"; then
