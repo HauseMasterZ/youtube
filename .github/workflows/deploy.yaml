@@ -1,4 +1,4 @@
-name: Production Edge Deployment
+name: Production Edge & GitHub Pages Deployment
 
 on:
   push:
@@ -9,17 +9,17 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
   deployments: write
 
 concurrency:
-  group: "production-edge"
+  group: "production-deployments-${{ github.ref_name }}"
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: production-edge
-      url: ${{ steps.edge_distribution.outputs.deployment-url }}
+  build:
+    name: Build & Minify Distribution
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -70,7 +70,7 @@ jobs:
             ${{ runner.os }}-npm-tools-
 
       - name: Install Build Tools
-        run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli wrangler@latest
+        run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli
 
       - name: Build, Bundle, and Minify Source Files
         env:
@@ -134,7 +134,7 @@ jobs:
               let sw = fs.readFileSync(swPath, 'utf8');
               sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'yt-player-cache-${buildVer}';`);
               sw = sw.replace(/'\.\/js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js',?\s*/g, '');
-              sw = sw.replace(/const CORE_ASSETS = \[/, `const CORE_ASSETS = [\n    './js/bundle.min.js',`);
+              sw = sw.replace(/const CORE_ASSETS = \[\s*/, `const CORE_ASSETS = [\n    './js/bundle.min.js',\n`);
               fs.writeFileSync(swPath, sw, 'utf8');
               execSync(`terser --compress passes=3,pure_getters=true,unsafe=true --mangle --comments false -o "${swPath}" "${swPath}"`);
             }
@@ -154,7 +154,70 @@ jobs:
           fi
           echo "Production bundles verified successfully."
 
-      - name: Deploy Production Distribution
+      - name: Upload Built Distribution Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+          retention-days: 1
+
+  deploy-github-pages:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      deployments: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Built Distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact for GitHub Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site-root
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production-edge
+      url: ${{ steps.edge_distribution.outputs.deployment-url }}
+    steps:
+      - name: Download Built Distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+
+      - name: Setup Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
+
+      - name: Install Wrangler CLI
+        run: npm install -g --prefer-offline wrangler@latest
+
+      - name: Deploy Distribution to Cloudflare Pages
         id: edge_distribution
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.EDGE_SVC_KEY }}
@@ -224,10 +287,10 @@ jobs:
         run: |
           REPORT_URL=""
           if [ -n "$LH_LINKS" ]; then
-            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' | head -n 1)
+            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' | head -n 1)
           fi
           if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
-            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
+            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
           fi
           export REPORT_URL
 
