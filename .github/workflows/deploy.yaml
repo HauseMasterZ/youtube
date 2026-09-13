@@ -1,4 +1,4 @@
-name: Deploy Cloudflare Pages
+name: Production Edge Deployment
 
 on:
   push:
@@ -11,14 +11,14 @@ permissions:
   deployments: write
 
 concurrency:
-  group: "cloudflare-pages"
+  group: "production-edge"
   cancel-in-progress: true
 
 jobs:
   deploy:
     environment:
-      name: cloudflare-pages
-      url: ${{ steps.cloudflare_pages.outputs.deployment-url }}
+      name: production-edge
+      url: ${{ steps.edge_distribution.outputs.deployment-url }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout main (Root Site)
@@ -61,8 +61,8 @@ jobs:
 
       - name: Inject API Gateway and Origin URLs
         env:
-          GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
-          UPSTREAM_ORIGIN_URL: ${{ secrets.UPSTREAM_ORIGIN_URL || vars.UPSTREAM_ORIGIN_URL }}
+          GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL }}
+          UPSTREAM_ORIGIN_URL: ${{ secrets.MEDIA_ORIGIN_URL || vars.MEDIA_ORIGIN_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -77,6 +77,13 @@ jobs:
             if [ -f site-root/dev/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
             fi
+          else
+            if [ -f site-root/index.html ]; then
+              sed -i '/__API_GATEWAY_URL__/d' site-root/index.html
+            fi
+            if [ -f site-root/dev/index.html ]; then
+              sed -i '/__API_GATEWAY_URL__/d' site-root/dev/index.html
+            fi
           fi
           if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -84,6 +91,13 @@ jobs:
             fi
             if [ -f site-root/dev/index.html ]; then
               sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/dev/index.html
+            fi
+          else
+            if [ -f site-root/index.html ]; then
+              sed -i '/__UPSTREAM_ORIGIN_URL__/d' site-root/index.html
+            fi
+            if [ -f site-root/dev/index.html ]; then
+              sed -i '/__UPSTREAM_ORIGIN_URL__/d' site-root/dev/index.html
             fi
           fi
 
@@ -202,27 +216,27 @@ jobs:
           fi
           echo "Production bundles verified successfully."
 
-      - name: Deploy to Cloudflare Pages
-        id: cloudflare_pages
+      - name: Deploy Production Distribution
+        id: edge_distribution
         uses: cloudflare/wrangler-action@v3
         with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy site-root --project-name=${{ secrets.CLOUDFLARE_PAGES_PROJECT || 'youtube-player' }} --branch=${{ github.ref_name }}
+          apiToken: ${{ secrets.EDGE_SVC_KEY }}
+          accountId: ${{ secrets.EDGE_ORG_ID }}
+          command: pages deploy site-root --project-name=${{ secrets.APP_TARGET_SLUG || 'music-player-web' }} --branch=${{ github.ref_name }}
 
-      - name: Wait 5s for Cloudflare Edge Propagation
-        if: steps.cloudflare_pages.outputs.deployment-url != ''
+      - name: Wait 5s for Edge Network Propagation
+        if: steps.edge_distribution.outputs.deployment-url != ''
         run: sleep 5
 
       - name: Audit Deployed Site with Lighthouse CI
         id: lighthouse
-        if: steps.cloudflare_pages.outputs.deployment-url != ''
+        if: steps.edge_distribution.outputs.deployment-url != ''
         uses: treosh/lighthouse-ci-action@v12
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ github.ref_name == 'dev' && format('{0}/dev/', steps.cloudflare_pages.outputs.deployment-url) || steps.cloudflare_pages.outputs.deployment-url }}
+            ${{ github.ref_name == 'dev' && format('{0}/dev/', steps.edge_distribution.outputs.deployment-url) || steps.edge_distribution.outputs.deployment-url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
@@ -314,20 +328,20 @@ jobs:
           }
           '
 
-      - name: Purge Cloudflare CDN Cache
-        if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+      - name: Purge Edge Distribution Cache
+        if: env.EDGE_ROUTE_TAG != '' && env.EDGE_SVC_KEY != ''
         env:
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY }}
         run: |
-          echo "Purging Cloudflare edge cache for zone $CLOUDFLARE_ZONE_ID..."
-          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+          echo "Purging edge cache for route ${EDGE_ROUTE_TAG}..."
+          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
+            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}')
           
           if echo "$RESPONSE" | grep -q '"success":true'; then
-            echo "Cloudflare edge cache successfully purged!"
+            echo "Edge cache successfully purged."
           else
-            echo "Cloudflare purge notice: $RESPONSE"
+            echo "Edge cache purge notice: ${RESPONSE}"
           fi
