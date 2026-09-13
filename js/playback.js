@@ -73,6 +73,11 @@
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
         }
+        const sInput = (typeof searchInput !== 'undefined' && searchInput) ? searchInput : document.getElementById('search-input');
+        if (sInput) {
+            sInput.value = '';
+            if (typeof sInput.blur === 'function') sInput.blur();
+        }
 
         let hasRendered = false;
 
@@ -107,7 +112,7 @@
             }).catch(() => {});
         }
 
-        // 4. Direct Unblocked Network Fetch to Cloudflare Worker Proxy
+        // 4. Direct Network Fetch
         if (navigator.onLine !== false) {
             const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
             fetch(dbUrl)
@@ -122,13 +127,6 @@
 
                     if (!globalActivePlaylist || queueIndex === -1) {
                         generateQueue(true, folderName);
-                    }
-
-                    // Background cache update for offline PWA capability
-                    if ('caches' in window) {
-                        caches.open(CACHE_NAME).then(cache => {
-                            cache.put(dbUrl, new Response(JSON.stringify(rawData)));
-                        }).catch(() => {});
                     }
                 })
                 .catch(err => {
@@ -198,7 +196,11 @@
             playlistSelect.value = playlist;
             if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = playlist;
             currentPlaylistData = allDatabases[playlist];
-            searchInput.value = '';
+            const sInput = (typeof searchInput !== 'undefined' && searchInput) ? searchInput : document.getElementById('search-input');
+            if (sInput) {
+                sInput.value = '';
+                if (typeof sInput.blur === 'function') sInput.blur();
+            }
             filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: playlist, index: i })) : [];
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
@@ -232,6 +234,9 @@
     };
 
     async function playTrackSelection(targetPlaylist, targetOriginalIndex) {
+        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+            initLiveAudioAnchor();
+        }
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
             searchDebounceTimer = null;
@@ -389,7 +394,17 @@
         // Set active playing intent on fresh track launch (fixes first-ever song load bug)
         if (!uiOnly) {
             window.wasPausedByUser = false;
+            // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
+            if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
+            if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
+            }
         }
         
         // Cancel any pending error auto-skip when user manually selects a track
@@ -537,43 +552,71 @@
             preloadedFetches.delete(cacheKey);
         }
         
-        if (hasMediaSession) {
-            const fallbackIcon = typeof getPurpleNoteArtwork === 'function' 
-                ? getPurpleNoteArtwork() 
+        // Single source of truth for (re)publishing track metadata: fresh card
+        // announcements (e.g. foreground resurrection after a steal evicted
+        // the native session) must not drift from first-publish artwork logic.
+        window.publishTrackMetadata = function(track, thumbUrl, originalIndex) {
+            if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !track) return;
+            const fallbackIcon = typeof getPurpleNoteArtwork === 'function'
+                ? getPurpleNoteArtwork()
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
 
-            // 1. Strict 1:1 Square Cache Check (0ms)
-            const squareCached = (thumbUrl && typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id)) ? artworkSquareCache.get(track.id) : null;
+            const currentSq = (typeof artworkSquareCache !== 'undefined' && artworkSquareCache.has(track.id))
+                ? artworkSquareCache.get(track.id)
+                : fallbackIcon;
 
-            // 2. Select initial artwork (STRICTLY 1:1 square crop or fallback icon - NEVER raw 16:9 thumbUrl)
-            const initialArtwork = squareCached || fallbackIcon;
+            try {
+                navigator.mediaSession.metadata = new MediaMetadata({
+                    title: track.title,
+                    artist: track.channel,
+                    artwork: [{ src: currentSq, sizes: '512x512', type: 'image/jpeg' }]
+                });
+            } catch (e) { return; }
 
-            navigator.mediaSession.metadata = new MediaMetadata({
-                title: track.title,
-                artist: track.channel,
-                artwork: [{ src: initialArtwork, sizes: '512x512', type: 'image/jpeg' }]
-            });
-
-            // PINS NOTIFICATION: Signals the OS that audio is actively starting so the widget is NEVER torn down during buffering
-            navigator.mediaSession.playbackState = (preventAutoplay || uiOnly) ? "paused" : "playing";
-
-            // 3. If square artwork is not yet cached and thumbnails are enabled, generate 1:1 center-crop
-            if (!thumbsDisabled && !squareCached && thumbUrl && typeof getSquareArtwork === 'function') {
-                getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
-                    if (hasMediaSession && globalActiveOriginalIndex === originalIndex && sqUrl) {
-                        if (navigator.mediaSession.metadata) {
-                            navigator.mediaSession.metadata.artwork = [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }];
+            if (!thumbsDisabled && thumbUrl) {
+                if (!artworkSquareCache.has(track.id)) {
+                    getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
+                        if (sqUrl && hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                            try {
+                                navigator.mediaSession.metadata = new MediaMetadata({
+                                    title: track.title,
+                                    artist: track.channel,
+                                    artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
+                                });
+                            } catch (e) {}
                         }
+                    });
+                }
+            } else if (thumbsDisabled && thumbUrl) {
+                getCachedSquareArtwork(track.id, thumbUrl, (sqUrl) => {
+                    if (sqUrl && hasMediaSession && globalActiveOriginalIndex === originalIndex) {
+                        try {
+                            navigator.mediaSession.metadata = new MediaMetadata({
+                                title: track.title,
+                                artist: track.channel,
+                                artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
+                            });
+                        } catch (e) {}
                     }
                 });
             }
+        };
+
+        if (hasMediaSession) {
+            window.publishTrackMetadata(track, thumbUrl, originalIndex);
+
+            // Mode 2 doctrine: paused declaration spoofs 'playing' (pin);
+            // Mode 1 declares honestly.
+            navigator.mediaSession.playbackState = (preventAutoplay || uiOnly)
+                ? ((typeof window.declaredPausedState === 'function') ? window.declaredPausedState() : 'paused')
+                : "playing";
 
             // Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
             if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: parsedDuration,
-                        playbackRate: 0.00001,
+                        playbackRate: 1.0,
                         position: 0
                     });
                 } catch(e) {}
@@ -784,10 +827,11 @@
                             const res = await fetchWithRetry(fetchUrl, { signal }, 3);
                             if (res && res.ok) {
                                 const buf = await res.arrayBuffer();
+                                const contentType = res.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                                 const fullRes = new Response(buf, {
                                     status: 200,
                                     headers: {
-                                        'Content-Type': 'audio/webm',
+                                        'Content-Type': contentType,
                                         'Content-Length': buf.byteLength.toString(),
                                         'X-Partial-Cached': 'false'
                                     }
@@ -860,10 +904,11 @@
                         const res = await fetchWithRetry(fetchUrl, { signal }, 2).catch(() => {});
                         if (res && res.ok) {
                             const buf = await res.arrayBuffer();
+                            const contentType = res.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                             const fullRes = new Response(buf, {
                                 status: 200,
                                 headers: {
-                                    'Content-Type': 'audio/webm',
+                                    'Content-Type': contentType,
                                     'Content-Length': buf.byteLength.toString(),
                                     'X-Partial-Cached': 'false'
                                 }

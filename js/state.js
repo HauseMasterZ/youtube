@@ -45,6 +45,10 @@
     let thumbsDisabled = isMobileDevice;
     let currentPlaybackSequence = 0;
     window.wasPausedByUser = true;
+    window.wasPlayingBeforeCall = false;
+    window.lastCallEndTime = 0;
+    window.isCallActive = false;
+    window.mediaSessionDestroyed = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
     // Virtual Scroller state
@@ -80,8 +84,27 @@
     window.getStoredSetting = getStoredSetting;
     window.setStoredSetting = setStoredSetting;
 
-    window.playbackMode = getStoredSetting('yt_playback_mode', 'mode1');
-    window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '30');
+    // Build self-identification: bump every commit, logged once at startup so
+    // field tests can prove which build is under test from the console.
+    window.APP_BUILD = 'm2-88';
+
+    // Post-call quarantine: car BT head units blast rogue AVRCP PLAY within
+    // ~2.5s of hangup even if paused before the call. Single helper so the
+    // window lives in one place (rogue-vs-drawer-tap are identical bare
+    // ACTION_PLAY, so wall-clock gating is unavoidable).
+    window.isPostCallQuarantine = function() {
+        return (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500 && window.wasPlayingBeforeCall === false);
+    };
+
+    // Mode 2 doctrine: playbackState is ALWAYS 'playing' while paused so the
+    // OS never strips the card (pin comes from declared state + live anchor).
+    // Mode 1 declares honestly. Single choke-point for all pause paths.
+    window.declaredPausedState = function() {
+        return (window.playbackMode === 'mode2') ? 'playing' : 'paused';
+    };
+
+    window.playbackMode = 'mode1';
+    window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '3');
     window.btSleepTimer = null;
     window.lastPlaybackModeTransitions = [];
 

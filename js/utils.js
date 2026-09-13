@@ -14,8 +14,6 @@
         artworkSquareCache.set(trackId, url);
     }
 
-    function getSearchString(track) { return (track.title + " " + track.channel).toLowerCase(); }
-
     function damerauLevenshtein(s1, s2) {
         const m = s1.length, n = s2.length;
         if (Math.abs(m - n) > 2) return 99;
@@ -138,14 +136,14 @@
             const blob = await resp.blob();
             const bitmap = await createImageBitmap(blob);
             const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 512;
+            canvas.width = 256;
+            canvas.height = 256;
             const ctx = canvas.getContext('2d');
             const size = Math.min(bitmap.width, bitmap.height);
             const sx = (bitmap.width - size) / 2;
             const sy = (bitmap.height - size) / 2;
-            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 512, 512);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 256, 256);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
             setCachedSquareArtwork(trackId, dataUrl);
             if (typeof callback === 'function') callback(dataUrl);
         } catch (err) {
@@ -154,14 +152,14 @@
             img.onload = function() {
                 try {
                     const canvas = document.createElement('canvas');
-                    canvas.width = 512;
-                    canvas.height = 512;
+                    canvas.width = 256;
+                    canvas.height = 256;
                     const ctx = canvas.getContext('2d');
                     const size = Math.min(img.naturalWidth, img.naturalHeight);
                     const sx = (img.naturalWidth - size) / 2;
                     const sy = (img.naturalHeight - size) / 2;
-                    ctx.drawImage(img, sx, sy, size, size, 0, 0, 512, 512);
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                    ctx.drawImage(img, sx, sy, size, size, 0, 0, 256, 256);
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
                     setCachedSquareArtwork(trackId, dataUrl);
                     if (typeof callback === 'function') callback(dataUrl);
                 } catch(e) {
@@ -172,6 +170,43 @@
                 if (typeof callback === 'function') callback(null);
             };
             img.src = url;
+        }
+    }
+    async function getCachedSquareArtwork(trackId, thumbUrl, callback) {
+        if (!trackId) {
+            if (typeof callback === 'function') callback(null);
+            return;
+        }
+        if (artworkSquareCache.has(trackId)) {
+            if (typeof callback === 'function') callback(artworkSquareCache.get(trackId));
+            return;
+        }
+        if (!thumbUrl || !('caches' in window)) {
+            if (typeof callback === 'function') callback(null);
+            return;
+        }
+        try {
+            const cache = await caches.open('yt-player-thumbs');
+            const cachedResp = await cache.match(thumbUrl);
+            if (!cachedResp) {
+                if (typeof callback === 'function') callback(null);
+                return;
+            }
+            const blob = await cachedResp.blob();
+            const bitmap = await createImageBitmap(blob);
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            const size = Math.min(bitmap.width, bitmap.height);
+            const sx = (bitmap.width - size) / 2;
+            const sy = (bitmap.height - size) / 2;
+            ctx.drawImage(bitmap, sx, sy, size, size, 0, 0, 256, 256);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.70);
+            setCachedSquareArtwork(trackId, dataUrl);
+            if (typeof callback === 'function') callback(dataUrl);
+        } catch (e) {
+            if (typeof callback === 'function') callback(null);
         }
     }
     function getAudioUrl(track) { return `${baseUrl}/${track.file_path.split('/').map(encodeURIComponent).join('/')}`; }
@@ -193,25 +228,65 @@
         const s = parseInt(match[3] || 0, 10);
         return h * 3600 + m * 60 + s;
     }
+    function getVibrantFallbackColor(key) {
+        if (!key) return '#8c73ff';
+        let hash = 0;
+        const str = String(key);
+        for (let i = 0; i < str.length; i++) {
+            hash = (hash << 5) - hash + str.charCodeAt(i);
+            hash |= 0;
+        }
+        const vibrantPalette = [
+            '#ff5376', '#ff6b4a', '#ff9f1c', '#ffb703',
+            '#06d6a0', '#2ec4b6', '#00b4d8', '#3a86ff',
+            '#7209b7', '#9d4edd', '#b5179e', '#f72585',
+            '#4cc9f0', '#48cae4', '#52b788', '#f48c06'
+        ];
+        const index = Math.abs(hash) % vibrantPalette.length;
+        return vibrantPalette[index];
+    }
+    window.getVibrantFallbackColor = getVibrantFallbackColor;
+
     function normalizeTrackItem(item, folderName) {
         if (!item) return null;
         let normalized;
         if (Array.isArray(item)) {
+            const trackId = item[0];
+            const rawColor = item[5];
+            const fallbackColor = getVibrantFallbackColor(trackId || item[1]);
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            const fileItem = item[4];
+            let filePath;
+            if (fileItem && (fileItem.endsWith('.opus') || fileItem.endsWith('.webm') || fileItem.endsWith('.m4a'))) {
+                filePath = fileItem.includes('/') ? fileItem : `${folderName}/${fileItem}`;
+            } else {
+                filePath = `${folderName}/${trackId}.webm`;
+            }
             normalized = {
-                id: item[0],
+                id: trackId,
                 title: item[1],
                 channel: item[2],
                 duration: item[3],
-                file_path: `${folderName}/${item[0]}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item[0]}.webp`,
-                color: (item[5] && item[5] !== '#000000') ? item[5] : '#8c73ff'
+                file_path: filePath,
+                thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
+                color: validColor
             };
         } else {
+            const trackId = item.id;
+            const rawColor = item.color;
+            const fallbackColor = getVibrantFallbackColor(trackId || item.title);
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            let filePath = item.file_path || item.audio_path;
+            if (!filePath) {
+                filePath = `${folderName}/${trackId}.webm`;
+            } else if (!filePath.includes('/')) {
+                filePath = `${folderName}/${filePath}`;
+            }
             normalized = {
                 ...item,
-                file_path: `${folderName}/${item.id}.webm`,
-                thumbnail_path: `${folderName}/thumbnails/${item.id}.webp`,
-                color: (item.color && item.color !== '#000000') ? item.color : '#8c73ff'
+                file_path: filePath,
+                thumbnail_path: `${folderName}/thumbnails/${trackId}.webp`,
+                color: validColor
             };
         }
         if (normalized.id && normalized.color) {

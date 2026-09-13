@@ -1,47 +1,31 @@
-name: Deploy GitHub Pages
+name: Production Edge & GitHub Pages Deployment
 
 on:
   push:
     branches:
       - main
       - dev
+  workflow_dispatch:
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  deployments: write
 
 concurrency:
-  group: "pages"
+  group: "production-deployments-${{ github.ref_name }}"
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
+    name: Build & Minify Distribution
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main (Root Site)
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: main
           path: site-root
-
-      - name: Checkout dev (Dev Staging)
-        uses: actions/checkout@v4
-        with:
-          ref: dev
-          path: dev-src
-        continue-on-error: true
-
-      - name: Merge Dev Subdirectory
-        run: |
-          if [ -d "dev-src" ]; then
-            mkdir -p site-root/dev
-            cp -rf dev-src/* site-root/dev/
-            rm -rf site-root/dev/.git site-root/dev/.github
-          fi
 
       - name: Pre-Deployment Syntax & Integrity Guard
         run: |
@@ -51,22 +35,11 @@ jobs:
               node --check "$f"
             fi
           done
-          if [ -d "site-root/dev" ]; then
-            for f in site-root/dev/js/*.js site-root/dev/sw.js; do
-              if [ -f "$f" ]; then
-                node --check "$f"
-              fi
-            done
-          fi
           echo "All source scripts passed syntax verification."
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Inject API Gateway and Origin URLs
+      - name: Inject API Gateway URL
         env:
-          GATEWAY_URL: ${{ secrets.API_GATEWAY_URL || vars.API_GATEWAY_URL }}
-          UPSTREAM_ORIGIN_URL: ${{ secrets.UPSTREAM_ORIGIN_URL || vars.UPSTREAM_ORIGIN_URL }}
+          GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -75,28 +48,24 @@ jobs:
             if [ -f site-root/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/js/utils.js
             fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/index.html
-            fi
-            if [ -f site-root/dev/js/utils.js ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
-            fi
-          fi
-          if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
+          else
             if [ -f site-root/index.html ]; then
-              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/index.html
-            fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/dev/index.html
+              sed -i '/__API_GATEWAY_URL__/d' site-root/index.html
             fi
           fi
+
+      - name: Setup Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
 
       - name: Cache npm global tools
         uses: actions/cache@v4
         id: npm-cache
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-tools-v1
+          key: ${{ runner.os }}-npm-tools-v2
           restore-keys: |
             ${{ runner.os }}-npm-tools-
 
@@ -165,48 +134,55 @@ jobs:
               let sw = fs.readFileSync(swPath, 'utf8');
               sw = sw.replace(/const CACHE_NAME = '[^']*';/, `const CACHE_NAME = 'yt-player-cache-${buildVer}';`);
               sw = sw.replace(/'\.\/js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js',?\s*/g, '');
-              sw = sw.replace(/const CORE_ASSETS = \[/, `const CORE_ASSETS = [\n    './js/bundle.min.js',`);
+              sw = sw.replace(/const CORE_ASSETS = \[\s*/, `const CORE_ASSETS = [\n    './js/bundle.min.js',\n`);
               fs.writeFileSync(swPath, sw, 'utf8');
               execSync(`terser --compress passes=3,pure_getters=true,unsafe=true --mangle --comments false -o "${swPath}" "${swPath}"`);
             }
           }
 
-          if (branch === 'main') {
-            buildDirectory('site-root');
-            if (fs.existsSync('site-root/dev')) {
-              buildDirectory('site-root/dev');
-            }
-          } else {
-            if (fs.existsSync('site-root/dev')) {
-              buildDirectory('site-root/dev');
-            }
-          }
+          buildDirectory('site-root');
           EOF
 
       - name: Post-Build Integrity Verification
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           echo "==> Verifying production bundle and Service Worker syntax..."
-          if [ "$BRANCH_NAME" = "main" ]; then
-            if [ -f "site-root/js/bundle.min.js" ]; then
-              node --check site-root/js/bundle.min.js
-            fi
-            if [ -f "site-root/sw.js" ]; then
-              node --check site-root/sw.js
-            fi
+          if [ -f "site-root/js/bundle.min.js" ]; then
+            node --check site-root/js/bundle.min.js
           fi
-          if [ -d "site-root/dev" ]; then
-            if [ -f "site-root/dev/js/bundle.min.js" ]; then
-              node --check site-root/dev/js/bundle.min.js
-            fi
-            if [ -f "site-root/dev/sw.js" ]; then
-              node --check site-root/dev/sw.js
-            fi
+          if [ -f "site-root/sw.js" ]; then
+            node --check site-root/sw.js
           fi
           echo "Production bundles verified successfully."
 
-      - name: Upload artifact
+      - name: Upload Built Distribution Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+          retention-days: 1
+
+  deploy-github-pages:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      deployments: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Download Built Distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact for GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: site-root
@@ -215,19 +191,90 @@ jobs:
         id: deployment
         uses: actions/deploy-pages@v4
 
-      - name: Wait 15s for GitHub Pages CDN Propagation
-        if: steps.deployment.outputs.page_url != ''
-        run: sleep 15
+  deploy-cloudflare:
+    name: Deploy to Cloudflare Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    environment:
+      name: production-edge
+      url: ${{ steps.edge_distribution.outputs.deployment-url }}
+    steps:
+      - name: Download Built Distribution
+        uses: actions/download-artifact@v4
+        with:
+          name: built-distribution
+          path: site-root
+
+      - name: Setup Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
+
+      - name: Install Wrangler CLI
+        run: npm install -g --prefer-offline wrangler@latest
+
+      - name: Deploy Distribution to Cloudflare Pages
+        id: edge_distribution
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EDGE_SVC_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.EDGE_ORG_ID }}
+          CI: "true"
+          NO_COLOR: "1"
+          NODE_NO_WARNINGS: "1"
+        run: |
+          PROJECT="${{ secrets.APP_TARGET_SLUG || secrets.CLOUDFLARE_PAGES_PROJECT || secrets.CF_PAGES_PROJECT || secrets.PAGES_PROJECT || secrets.PROJECT_NAME || 'music-player-web' }}"
+          BRANCH="${{ github.ref_name }}"
+          echo "Target project: ${PROJECT} (branch: ${BRANCH})"
+          wrangler --version
+
+          echo "--- Auth verification ---"
+          wrangler whoami > /dev/null 2>&1 || true
+
+          echo "--- Project validation & auto-creation ---"
+          if ! wrangler pages project list 2>&1 | grep -q "${PROJECT}"; then
+            echo "Project ${PROJECT} not found on account, creating with production-branch=main..."
+            wrangler pages project create "${PROJECT}" --production-branch=main 2>&1 || true
+          fi
+
+          echo "--- Executing Pages deployment ---"
+          set +e
+          wrangler pages deploy site-root --project-name="${PROJECT}" --branch="${BRANCH}" --commit-dirty=true 2>&1 | tee deploy.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Wrangler deploy failed with exit code ${EXIT_CODE}"
+            exit $EXIT_CODE
+          fi
+
+          DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' deploy.log | head -n 1)
+          if [ -z "$DEPLOY_URL" ]; then
+            if [ "$BRANCH" = "main" ]; then
+              DEPLOY_URL="https://${PROJECT}.pages.dev"
+            else
+              DEPLOY_URL="https://${BRANCH}.${PROJECT}.pages.dev"
+            fi
+          fi
+          echo "Deployment target URL: ${DEPLOY_URL}"
+          echo "deployment-url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait 5s for Edge Network Propagation
+        if: steps.edge_distribution.outputs.deployment-url != ''
+        run: sleep 5
 
       - name: Audit Deployed Site with Lighthouse CI
         id: lighthouse
-        if: steps.deployment.outputs.page_url != ''
+        if: steps.edge_distribution.outputs.deployment-url != ''
         uses: treosh/lighthouse-ci-action@v12
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ github.ref_name == 'dev' && format('{0}dev/', steps.deployment.outputs.page_url) || steps.deployment.outputs.page_url }}
+            ${{ steps.edge_distribution.outputs.deployment-url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
@@ -240,10 +287,10 @@ jobs:
         run: |
           REPORT_URL=""
           if [ -n "$LH_LINKS" ]; then
-            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' | head -n 1)
+            REPORT_URL=$(echo "$LH_LINKS" | grep -o 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' | head -n 1)
           fi
           if [ -z "$REPORT_URL" ] && [ -d ".lighthouseci" ]; then
-            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
+            REPORT_URL=$(grep -roh 'https://storage.googleapis.com/lighthouse-infrastructure.appspot.com/reports/[^"\'\'' ]*' .lighthouseci/ 2>/dev/null | head -n 1)
           fi
           export REPORT_URL
 
@@ -319,20 +366,20 @@ jobs:
           }
           '
 
-      - name: Purge Cloudflare CDN Cache
-        if: env.CLOUDFLARE_ZONE_ID != '' && env.CLOUDFLARE_API_TOKEN != ''
+      - name: Purge Edge Distribution Cache
+        if: env.EDGE_ROUTE_TAG != '' && env.EDGE_SVC_KEY != ''
         env:
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY }}
         run: |
-          echo "Purging Cloudflare edge cache for zone $CLOUDFLARE_ZONE_ID..."
-          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/purge_cache" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+          echo "Purging edge cache for route ${EDGE_ROUTE_TAG}..."
+          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
+            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}')
           
           if echo "$RESPONSE" | grep -q '"success":true'; then
-            echo "Cloudflare edge cache successfully purged!"
+            echo "Edge cache successfully purged."
           else
-            echo "Cloudflare purge notice: $RESPONSE"
+            echo "Edge cache purge notice: ${RESPONSE}"
           fi

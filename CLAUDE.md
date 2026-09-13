@@ -21,13 +21,19 @@ This document contains frontend-only coding guidelines for the Web Music Player 
 ### Playback Engines: Mode 1 vs. Mode 2
 The player supports two switchable audio engine modes persisted in `localStorage` (`yt_playback_mode`):
 1. **Mode 1 (Standard / Battery Saver)**:
-   - When paused, `navigator.mediaSession.playbackState` is set to `'paused'` (if paused by user) and seekbar rate is spoofed to `0.00001` on mobile to prevent Android lock-screen controls from unmounting.
+   - When paused, `navigator.mediaSession.playbackState` is set to `'paused'` (if paused by user) and seekbar rate stays `1.0`.
    - Minimal battery consumption; zero background oscillator loops.
 2. **Mode 2 (Car & Bluetooth Mode)**:
-   - When paused, `navigator.mediaSession.playbackState` remains set to `'playing'`.
+   - When paused, `navigator.mediaSession.playbackState` declares `'playing'` via `window.declaredPausedState()` with micro-playback rate `0.00001` in `updateMediaSessionPosition` to freeze the notification seekbar while pinning the card on aggressive Android OEMs. Mode 1 declares honest `'paused'` (rate `1.0`).
    - On mobile, `startLiveAudioAnchor()` runs a silent 0-gain `AudioContext` oscillator connected to `<audio id="live-stream-anchor">` to prevent vehicle infotainment systems and Bluetooth earbuds from entering standby or disconnecting.
-   - **Inactivity Auto-Kill Watchdog**: When paused in Mode 2, `armAutoKillWatchdog()` starts a timer (default 30m, configurable to 15m, 30m, 1h, 2h, custom 1-1440m, or never) that automatically disarms and pauses all playback after sustained inactivity.
-   - **Hardware Button Combo**: Rapid double-tap of Next ↔ Prev within 1200ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2 (`togglePlaybackMode()`).
+   - **Inactivity Auto-Kill Watchdog**: When paused in Mode 2, `armAutoKillWatchdog()` starts a timer (default 5m, configurable in Settings) that automatically destroys the session and tears down the anchor after sustained inactivity.
+   - **Hardware Button Combo**: Rapid tap of Next then Prev within 2500ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2 (`togglePlaybackMode()`).
+
+### Audio Focus & Phone Call Management (Mode 2)
+- **Call Interruption & Silence**: When an incoming call arrives or is accepted, `window.isCallActive = true`, `<audio>` pauses, and `stopLiveAudioAnchor()` halts the silent oscillator immediately. No music or anchor audio leaks into the call. Action handlers (`play`, `pause`, `playpause`) return early while `window.isCallActive` is true.
+- **Mode 2 State Preservation**: In Mode 2 non-call pauses (user pause and media focus transfers), keepalive declares `declaredPausedState()` (`'playing'`) with micro-rate `0.00001` to freeze the seekbar, and runs the silent audio anchor (`!window.isCallActive && !isRecentBtDisconnect`) to keep DACs awake.
+- **Media Controls Notification Resume**: When resuming playback via media controls (`play`, `pause`, `playpause`), handlers immediately re-assert 1.0x playback rate via `updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0)`.
+- **Call Hangup Auto-Resume**: On call termination (`devicechange`), playback automatically resumes if audio was actively playing before the call (`window.wasPlayingBeforeCall && !window.wasPausedByUser`). If playback was paused by the user prior to the call, it remains paused and ignores post-call automated AVRCP Bluetooth play events within 2500ms (`window.isPostCallQuarantine()`).
 
 ---
 
@@ -116,12 +122,12 @@ All tests run natively with `unittest`:
 python -m unittest discover -s tests -p "test_*.py"
 ```
 
-1. [`test_download_engine.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_download_engine.py): Verifies `bypass=true` query usage, cache name normalization (`yt-player-thumbs`), unconditional thumb/lyrics downloads, and zero `backdrop-filter`.
-2. [`test_media_session_engine.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_media_session_engine.py): Verifies micro-rate spoofing (`0.00001`), live audio anchor checks, and auto-kill watchdog mechanics.
-3. [`test_settings_state.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_settings_state.py): Tests mode persistence, custom timeout bounds (1–1440m), and storage defaults.
-4. [`test_settings_ui.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_settings_ui.py): Tests dropdown settings interception, modal wiring, and shortcut bounds.
-5. [`test_settings_markup.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_settings_markup.py): Tests HTML tag balance, accessibility attributes, and element markup.
-6. [`test_settings_css.py`](file:///c:/Users/Hause/Documents/Code/youtube_frontend/tests/test_settings_css.py): Tests modal styling, zero-blur overlays, and $\ge 44\text{px}$ touch targets.
+1. `tests/test_download_engine.py`: Verifies `bypass=true` query usage, cache name normalization (`yt-player-thumbs`), unconditional thumb/lyrics downloads, and zero `backdrop-filter`.
+2. `tests/test_media_session_engine.py`: Verifies honest paused state (no micro-rate spoof), live audio anchor checks, and auto-kill watchdog mechanics.
+3. `tests/test_settings_state.py`: Tests mode persistence, custom timeout bounds (1–1440m), and storage defaults.
+4. `tests/test_settings_ui.py`: Tests dropdown settings interception, modal wiring, and shortcut bounds.
+5. `tests/test_settings_markup.py`: Tests HTML tag balance, accessibility attributes, and element markup.
+6. `tests/test_settings_css.py`: Tests modal styling, zero-blur overlays, and $\ge 44\text{px}$ touch targets.
 
 > **STRICT INVARIANT**:
 > Strictly **zero emojis** are permitted anywhere in JavaScript, CSS, HTML, or Python test files.

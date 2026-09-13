@@ -13,12 +13,15 @@
             this.lastKnownTime = 0;
             this._currentUrl = '';
             this._mseEnabled = false;
+            this._isDirectAudio = false;
+            this._mediaSourceUrl = null;
             this._pendingSeek = null;
             this._seekingTo = null;
             this._expectedDuration = 0;
             this._streamAbortController = null;
             this._streamId = 0;
             this._streamDone = false;
+            this._isBufferStalled = false;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -26,6 +29,15 @@
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
+                    if (e.type === 'waiting') {
+                        if (!this.active.paused) {
+                            this._isBufferStalled = true;
+                        }
+                    }
+
+                    if (e.type === 'playing' || e.type === 'play' || e.type === 'pause') {
+                        this._isBufferStalled = false;
+                    }
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
                         const ct = this.active.currentTime;
@@ -36,7 +48,7 @@
 
                         // ONLY use demuxed buffer end once the ENTIRE audio stream has finished downloading
                         let effectiveEnd = dur;
-                        if (this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                        if (!this._isDirectAudio && this._mseEnabled && this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
                             if (buffEnd > 0) {
                                 effectiveEnd = Math.min(dur, buffEnd);
@@ -110,12 +122,28 @@
                             }
                         }, { once: true });
                     });
-                    this.active.src = URL.createObjectURL(this._mediaSource);
+                    this._mediaSourceUrl = URL.createObjectURL(this._mediaSource);
+                    this.active.src = this._mediaSourceUrl;
                 } catch (e) {
                     console.warn("MSE init failed:", e);
                     this._mseEnabled = false;
                 }
             }
+        }
+
+        _resetMSE() {
+            this._mseInitialized = false;
+            this._mseEnabled = false;
+            if (this._sourceBuffer) {
+                try { this._mediaSource.removeSourceBuffer(this._sourceBuffer); } catch (e) {}
+                this._sourceBuffer = null;
+            }
+            if (this._mediaSourceUrl) {
+                try { URL.revokeObjectURL(this._mediaSourceUrl); } catch (e) {}
+                this._mediaSourceUrl = null;
+            }
+            this._mediaSource = null;
+            this._initMSE();
         }
 
         _waitForUpdate() {
@@ -179,7 +207,7 @@
                     this._endedFired = false;
                 }
 
-                if (this._mseEnabled) {
+                if (!this._isDirectAudio && this._mseEnabled) {
                     if (this.switching || !this._sourceBuffer || this._sourceBuffer.buffered.length === 0) {
                         this._pendingSeek = v;
                         this.active.pause();
@@ -221,15 +249,36 @@
         get muted() { return this.active.muted; }
         set muted(v) { this.active.muted = v; }
         get buffered() {
-            if (this._mseEnabled && this._sourceBuffer) return this._sourceBuffer.buffered;
+            if (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) return this._sourceBuffer.buffered;
             return this.active.buffered;
         }
 
         play() {
+            // Authorization choke-point: rogues (AVRCP blast, stray autoplay)
+            // die here synchronously before touching the element. Legitimate
+            // callers flip wasPausedByUser=false first (handlers, btnPlayPause,
+            // executePlayback, devicechange resume, anchor auto-resume).
+            if (window.wasPausedByUser) {
+                return Promise.resolve();
+            }
             this._initMSE();
-            window.wasPausedByUser = false;
+            window.wasPlayingBeforeCall = true;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
                 this._endedFired = false;
+            }
+            // Always-on anchor in Mode 2: keep a live (duckable) track across
+            // steals so the card survives playing-case interruptions. Starts
+            // here only ever happen while WE hold focus (our own playback), so
+            // no focus yank is possible. Mode 1 stops it as before.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
+            if (typeof cancelAutoKillWatchdog === 'function') {
+                cancelAutoKillWatchdog();
             }
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = 'playing';
@@ -237,9 +286,11 @@
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
-                this.active.volume = 1.0;
             }
+            // Past the gate: legitimate start, ensure full volume
+            this.active.volume = 1.0;
             this.active.muted = false;
+
             if (this._pendingSeek !== null) {
                 return Promise.resolve();
             }
@@ -251,13 +302,19 @@
         }
 
         pause() {
+            this._isBufferStalled = false;
             window.wasPausedByUser = true;
+            window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
                 this.active.pause();
+                // Keep volume at 1.0 while paused: volume 0 marks the player
+                // muted to the OS and gets the card evicted (m2 60 regression).
+                // Rogue plays die at the play() gate above, so this is safe.
                 this.active.volume = 1.0;
                 return Promise.resolve();
             }
@@ -287,15 +344,21 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
         instantPause() {
+            this._pendingSeek = null;
+            this._isBufferStalled = false;
             window.wasPausedByUser = true;
+            window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
                 this.fadeInterval = null;
             }
             this.active.pause();
+            // Keep volume at 1.0 while paused (see above): the play() gate
+            // blocks rogues before the element is touched.
             this.active.volume = 1.0;
         }
 
@@ -304,6 +367,7 @@
             this.switching = true;
             this._endedFired = false;
             this._streamDone = false;
+            this._isBufferStalled = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
@@ -328,11 +392,19 @@
                 return Promise.resolve();
             }
 
-            if (this._mseReady) {
-                await this._mseReady;
+            const isOpusDirect = url && url.includes('.opus') && !('MediaSource' in window && MediaSource.isTypeSupported('audio/ogg; codecs="opus"'));
+
+            if (!isOpusDirect) {
+                if (!this._mseInitialized || !this._mediaSource || this._mediaSource.readyState === 'closed' || this.active.src !== this._mediaSourceUrl) {
+                    this._resetMSE();
+                }
+                if (this._mseReady) {
+                    await this._mseReady;
+                }
             }
 
-            if (this._mseEnabled && this._sourceBuffer) {
+            if (this._mseEnabled && this._sourceBuffer && !isOpusDirect) {
+                this._isDirectAudio = false;
                 if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
                     try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
                 }
@@ -383,7 +455,19 @@
                                     this._sourceBuffer.timestampOffset = 0;
                                 } catch (e) {}
 
-                                await this._appendToSourceBuffer(cachedArrayBuffer);
+                                try {
+                                    await this._appendToSourceBuffer(cachedArrayBuffer);
+                                } catch (appendErr) {
+                                    console.warn("Cached audio buffer MSE append error, falling back to HTML5 Audio:", appendErr);
+                                    this._isDirectAudio = true;
+                                    this._streamDone = true;
+                                    this.switching = false;
+                                    this.active.src = url;
+                                    if (!preventAutoplay && !window.wasPausedByUser) {
+                                        this.active.play().catch(e => console.warn("Fallback HTML5 play error:", e));
+                                    }
+                                    return Promise.resolve();
+                                }
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
                                 // Unlock switching flag immediately so the buffer bar can render the cached portion in 0ms
@@ -443,10 +527,11 @@
                                     combined.set(c, off);
                                     off += c.length;
                                 }
+                                const contentType = (response && response.headers && response.headers.get('Content-Type')) || (url.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
                                 const responseToCache = new Response(combined.buffer, {
                                     status: 200,
                                     headers: {
-                                        'Content-Type': 'audio/webm',
+                                        'Content-Type': contentType,
                                         'Content-Length': totalBytesAppended.toString(),
                                         'X-Partial-Cached': isComplete ? 'false' : 'true'
                                     }
@@ -460,9 +545,6 @@
                     let response = null;
 
                     if (cachedPartialBytes > 0) {
-                        if (this._gainNode) {
-                            this._gainNode.gain.value = 1.0;
-                        }
                         if (this._pendingSeek !== null) {
                             const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
                                 ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
@@ -583,10 +665,6 @@
                             return Promise.resolve();
                         }
 
-                        if (this._gainNode) {
-                            this._gainNode.gain.value = 1.0;
-                        }
-
                         if (this._pendingSeek !== null) {
                             const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
                                 ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
@@ -645,6 +723,7 @@
                                             try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
                                         await saveProgress(true);
+                                        this.dispatchEvent(new Event('progress'));
 
                                         // Fulfill any pending seek targeting the end of the song
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
@@ -688,9 +767,9 @@
                                             }
                                         }
 
-                                        // Auto-resume playback if paused/stalled due to buffer exhaustion
-                                        if (!window.wasPausedByUser && this.active.paused && this._pendingSeek === null) {
-                                            this.active.play().catch(() => {});
+                                        // Auto-resume playback ONLY if playback stalled due to buffer underrun and player is not paused
+                                        if (this._isBufferStalled && !window.wasPausedByUser && !this.active.paused && this._pendingSeek === null && this.active.readyState >= 3) {
+                                            this._isBufferStalled = false;
                                         }
 
                                         // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
@@ -805,14 +884,28 @@
                     })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                        console.warn("MSE switchTrack error:", e);
+                        console.warn("MSE streaming error, falling back to standard HTML5 Audio:", e);
+                        this._isDirectAudio = true;
                         this._clearSourceBuffer().catch(() => {});
+                        this._streamDone = true;
                         this.switching = false;
-                        this.dispatchEvent(new Event('error'));
+                        this.active.src = url;
+                        if (!preventAutoplay && !window.wasPausedByUser) {
+                            this.active.play().catch(err => console.warn("Standard audio fallback play error:", err));
+                        }
                     }
                 }
             } else {
-                if (!preventAutoplay) {
+                this._isDirectAudio = true;
+                if (this._sourceBuffer) {
+                    try { this._clearSourceBuffer(); } catch (e) {}
+                }
+                if (this._streamAbortController) {
+                    try { this._streamAbortController.abort(); } catch (e) {}
+                    this._streamAbortController = null;
+                }
+                this._streamDone = true;
+                if (!preventAutoplay && !window.wasPausedByUser) {
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = "playing";
                     }

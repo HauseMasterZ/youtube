@@ -47,7 +47,7 @@
 ## Playback Modes & Audio Engines
 
 ### Playback Engines (Settings)
-- **Standard (Battery Saver / Mode 1)**: Minimal battery consumption. When paused, media session is marked paused and lock screen controls are preserved using mobile micro-rate spoofing (`0.00001`).
+- **Standard (Battery Saver / Mode 1)**: Minimal battery consumption. When paused, media session is marked paused with rate `1.0`.
 - **Car & Bluetooth Mode (Mode 2)**: Prevents vehicle infotainment and Bluetooth headphone disconnects when paused by maintaining an active media session state and running a silent audio anchor loop on mobile.
 - **Inactivity Auto-Kill Watchdog**: Configurable sleep timer (15m, 30m, 1h, 2h, custom 1-1440m, or never) that automatically disarms Mode 2 and pauses all playback after sustained pause inactivity.
 - **Hardware Button Combo**: Rapid double-tap of Next ↔ Prev within 1200ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2.
@@ -122,7 +122,7 @@ Every release is audited against simulated mobile slow 4G (1.6 Mbps / 150ms RTT)
 │   └── utils.js                # Fuzzy search, duration parser, URL generators
 └── tests/
     ├── test_download_engine.py      # Offline download & zero-GPU overlay tests
-    ├── test_media_session_engine.py # Audio engine, rate spoofing, and watchdog tests
+    ├── test_media_session_engine.py # Audio engine, honest-state, and watchdog tests
     ├── test_settings_state.py       # State and persistence tests
     ├── test_settings_ui.py          # UI wiring and shortcut tests
     ├── test_settings_markup.py      # HTML validation and accessibility tests

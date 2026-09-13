@@ -10,6 +10,7 @@ class TestSettingsUI(unittest.TestCase):
         ms_path = os.path.join(base_dir, 'js', 'mediaSession.js')
         playback_path = os.path.join(base_dir, 'js', 'playback.js')
         ui_path = os.path.join(base_dir, 'js', 'ui.js')
+        utils_path = os.path.join(base_dir, 'js', 'utils.js')
         test_path = os.path.join(base_dir, 'tests', 'test_settings_ui.py')
 
         with open(main_path, 'r', encoding='utf-8') as f:
@@ -20,8 +21,19 @@ class TestSettingsUI(unittest.TestCase):
             cls.playback_content = f.read()
         with open(ui_path, 'r', encoding='utf-8') as f:
             cls.ui_content = f.read()
+        with open(utils_path, 'r', encoding='utf-8') as f:
+            cls.utils_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
+
+    def test_no_emojis_in_utils_js(self):
+        """Strictly zero emojis anywhere in js/utils.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.utils_content)
+        self.assertEqual(matches, [], f"Found emojis in utils.js: {matches}")
 
     def test_no_emojis_in_main_js(self):
         """Strictly zero emojis anywhere in js/main.js"""
@@ -133,17 +145,19 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_mode_radio_change_listener(self):
-        """Radio inputs change listener updates mode, storage, display, anchor/watchdog on pause, and media session"""
+        """Radio inputs change listener delegates to togglePlaybackMode and eagerly initializes anchor for Mode 2"""
         self.assertIn('name="playback-mode"', self.main_content)
-        self.assertIn('yt_playback_mode', self.main_content)
-        self.assertIn('startLiveAudioAnchor', self.main_content)
-        self.assertIn('stopLiveAudioAnchor', self.main_content)
-        self.assertIn('armAutoKillWatchdog', self.main_content)
-        self.assertIn('cancelAutoKillWatchdog', self.main_content)
         self.assertRegex(
             self.main_content,
-            r'input\[name=["\']playback-mode["\']\][\s\S]*?addEventListener\(\s*[\'"]change[\'"]'
+            r'input\[name=["\']playback-mode["\']\][\s\S]*?addEventListener\(\s*[\'"]change[\'"][\s\S]*?togglePlaybackMode\s*\('
         )
+        self.assertIn('initLiveAudioAnchor', self.main_content)
+        self.assertIn('initLiveAudioAnchor', self.ms_content)
+        self.assertIn('startLiveAudioAnchor', self.ms_content)
+        self.assertIn('stopLiveAudioAnchor', self.ms_content)
+        self.assertIn('armAutoKillWatchdog', self.ms_content)
+        self.assertIn('cancelAutoKillWatchdog', self.ms_content)
+        self.assertIn('yt_playback_mode', self.ms_content)
 
     def test_timeout_select_change_listener(self):
         """bt-timeout-select change listener toggles custom input and updates window.btTimeoutMins and storage"""
@@ -189,34 +203,32 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_pause_listener_media_session_position(self):
-        """audioPlayer pause event listener calls updateMediaSessionPosition with 0.00001 micro-rate"""
+        """audioPlayer pause event listener calls updateMediaSessionPosition with honest rate 1.0"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertIn('0.00001', pause_block)
-        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*0\.00001\s*\)')
+        self.assertNotIn('0.00001', pause_block)
+        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\)')
 
     def test_pause_listener_mode2_and_mode1_playback_state(self):
-        """audioPlayer pause event listener sets playing for Mode 2 and checks wasPausedByUser for Mode 1"""
+        """audioPlayer pause event listener declares mode-aware state (helper) with honest Mode 1 fallback"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertRegex(
-            pause_block,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}\s*else\s*\{[\s\S]*?playbackState\s*=\s*window\.wasPausedByUser\s*\?\s*[\'"]paused[\'"]\s*:\s*[\'"]playing[\'"]\s*;?[\s\S]*?\}'
-        )
+        self.assertIn("declaredPausedState()", pause_block)
+        self.assertIn("'paused'", pause_block)
 
-    def test_media_session_pause_handler_lyrics_reset(self):
-        """MediaSession pause action handler resets lyrics UI on near-end rewind"""
-        pause_handler_match = re.search(
-            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);",
+    def test_media_session_play_handler_lyrics_reset(self):
+        """MediaSession play action handler resets lyrics UI on near-end rewind"""
+        play_handler_match = re.search(
+            r"function\s+handlePlayAction\s*\(\s*\)\s*\{([\s\S]*?)\n    \}\n    window\.handlePlayAction",
             self.ms_content
         )
-        self.assertIsNotNone(pause_handler_match, "Could not find pause action handler in mediaSession.js")
-        pause_code = pause_handler_match.group(1)
+        self.assertIsNotNone(play_handler_match, "Could not find play action handler in mediaSession.js")
+        play_code = play_handler_match.group(1)
         self.assertRegex(
-            pause_code,
-            r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*updateLyricsUI\(0\);'
+            play_code,
+            r'if\s*\(\s*typeof\s+lyricsActive\s*!==\s*[\'"]undefined[\'"]\s*&&\s*lyricsActive\s*&&\s*typeof\s+updateLyricsUI\s*===\s*[\'"]function[\'"]\s*\)\s*\{?\s*updateLyricsUI\(0\)'
         )
 
     def test_no_desktop_m_key_shortcut(self):
@@ -249,11 +261,40 @@ class TestSettingsUI(unittest.TestCase):
             r'function loadPlaylist\s*\([\s\S]*?selectedSearchIndex\s*=\s*-1;'
         )
 
-    def test_search_escape_key_clears_search_and_resets_selection(self):
-        """searchInput keydown handles Escape to clear search and reset selection"""
+    def test_mobile_swipe_gesture_works_with_keyboard_open(self):
+        """playlistPanel touchend allows swipe even when searchInput is focused, clearing/blurring search on switch"""
+        self.assertNotIn("if (document.activeElement === searchInput) return;", self.main_content)
         self.assertRegex(
             self.main_content,
-            r'e\.key\s*===\s*[\'"]Escape[\'"][\s\S]*?selectedSearchIndex\s*=\s*-1;'
+            r'playlistPanel\.addEventListener\(\s*[\'"]touchend[\'"][\s\S]*?searchInput\.blur\(\)[\s\S]*?playlistSelect\.dispatchEvent'
+        )
+
+    def test_playlist_switch_clears_and_unfocuses_search(self):
+        """loadPlaylist, playFromPlaylist, and playlistSelect change listener clear and blur search"""
+        self.assertRegex(
+            self.playback_content,
+            r'function loadPlaylist\s*\([\s\S]*?sInput\.value\s*=\s*[\'"][\'"];[\s\S]*?sInput\.blur\(\);'
+        )
+        self.assertRegex(
+            self.playback_content,
+            r'function playFromPlaylist\s*\([\s\S]*?sInput\.value\s*=\s*[\'"][\'"];[\s\S]*?sInput\.blur\(\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'playlistSelect\.addEventListener\(\s*[\'"]change[\'"][\s\S]*?searchInput\.value\s*=\s*[\'"][\'"];[\s\S]*?searchInput\.blur\(\);'
+        )
+
+    def test_vibrant_fallback_color_and_normalization(self):
+        """utils.js defines getVibrantFallbackColor with rich palette and uses it in normalizeTrackItem"""
+        self.assertRegex(
+            self.utils_content,
+            r'function\s+getVibrantFallbackColor\s*\('
+        )
+        self.assertIn('window.getVibrantFallbackColor = getVibrantFallbackColor;', self.utils_content)
+        self.assertIn('vibrantPalette = [', self.utils_content)
+        self.assertRegex(
+            self.utils_content,
+            r'const\s+fallbackColor\s*=\s*getVibrantFallbackColor'
         )
 
 if __name__ == '__main__':

@@ -1,4 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Build version: window.APP_BUILD
     searchInput.addEventListener("input", (e) => {
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
@@ -263,6 +264,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }, {passive: true});
 
     btnPlayPause.addEventListener("click", () => {
+        window.mediaSessionDestroyed = false;
+        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+            initLiveAudioAnchor();
+        }
+        if (typeof primeFocusProbe === 'function') {
+            primeFocusProbe();
+        }
         if (!audioPlayer.src) {
             if (playQueue.length > 0 && queueIndex !== -1) {
                 executePlayback(false);
@@ -274,8 +282,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         // Toggle based on user playback intent to prevent ghost state during initial buffering
-        if (window.wasPausedByUser) {
+        if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
+            // Always-on anchor in Mode 2; stop only in Mode 1.
+            if (window.playbackMode === 'mode2') {
+                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            } else if (typeof stopLiveAudioAnchor === 'function') {
+                stopLiveAudioAnchor();
+            }
+            if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -290,7 +305,8 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             window.wasPausedByUser = true;
             setPlayUI(false);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
+            if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
             audioPlayer.instantPause();
         }
     });
@@ -380,14 +396,28 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof updateBufferProgress === 'function') updateBufferProgress();
         if (!audioPlayer.duration || audioPlayer.duration === Infinity) return;
         const buffered = audioPlayer.buffered;
-        if (buffered.length > 0 && buffered.end(buffered.length - 1) >= audioPlayer.duration - 0.5) {
-            if (typeof triggerPreloads === 'function') triggerPreloads();
+        if (buffered.length > 0) {
+            const buffEnd = buffered.end(buffered.length - 1);
+            if (buffEnd >= audioPlayer.duration * 0.85 || audioPlayer._streamDone || buffEnd >= audioPlayer.duration - 2) {
+                if (typeof triggerPreloads === 'function') triggerPreloads();
+            }
         }
     });
     
     audioPlayer.addEventListener("play", () => {
+        if (window.wasPausedByUser) {
+            audioPlayer.instantPause();
+            return;
+        }
         window.wasPausedByUser = false;
-        window.wasInterrupted = false;
+        window.wasPlayingBeforeCall = true;
+        // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+        if (window.playbackMode === 'mode2') {
+            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+        } else if (typeof stopLiveAudioAnchor === 'function') {
+            stopLiveAudioAnchor();
+        }
+        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;
 
@@ -403,6 +433,13 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
+        // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
+        if (window.playbackMode === 'mode2') {
+            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+        } else if (typeof stopLiveAudioAnchor === 'function') {
+            stopLiveAudioAnchor();
+        }
+        if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
@@ -410,30 +447,90 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        // Ignore internal buffering pauses (MSE pending seek / track switch)
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001);
-            if (window.playbackMode === 'mode2') {
-                navigator.mediaSession.playbackState = 'playing';
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+
+            if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
+                // Mode 2 doctrine: ALWAYS 'playing' (spoof pins the card; the
+                // live anchor + honest element state carry the truth)
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'playing';
             } else {
-                navigator.mediaSession.playbackState = window.wasPausedByUser ? 'paused' : 'playing';
+                // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
+                window.wasPausedByUser = true;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                navigator.mediaSession.playbackState = 'paused';
             }
         }
     });
 
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && !audioPlayer.paused) {
-            updateTimeUI(Math.floor(audioPlayer.currentTime));
+        if (!document.hidden) {
+            if (!audioPlayer.paused) {
+                updateTimeUI(Math.floor(audioPlayer.currentTime));
 
-            // Re-sync MediaSession state when PWA is foregrounded
-            if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'playing';
-                const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+                // Re-sync MediaSession state when PWA is foregrounded
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'playing';
+                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                }
+            } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
+                const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                if (!window.wasPausedByUser && window.wasPlayingBeforeCall !== false && !isRecentBtDisconnect) {
+                    // INTERRUPTED (steal killed our native session while music
+                    // played): resurrect HONEST so the triangle delivers. This
+                    // is the attended moment, so honesty is safe; the next
+                    // user-pause re-spoofs via helper. Rebuild metadata fresh
+                    // (old binding may be gone), freeze position, re-arm audio.
+                    try {
+                        const db = (typeof allDatabases !== 'undefined' && globalActivePlaylist) ? allDatabases[globalActivePlaylist] : null;
+                        const track = (db && globalActiveOriginalIndex >= 0) ? db[globalActiveOriginalIndex] : null;
+                        if (track && typeof window.publishTrackMetadata === 'function' && typeof getAudioUrl === 'function') {
+                            window.publishTrackMetadata(track, getThumbUrl(track), globalActiveOriginalIndex);
+                        } else if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    } catch (e) {}
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                        }
+                    }
+                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                    if (typeof startFocusProbe === 'function') startFocusProbe();
+                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
+                } else {
+                    // User-paused: re-arm keepalive + probe. Declare state via helper.
+                    if (typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
+                    if (typeof startFocusProbe === 'function') {
+                        startFocusProbe();
+                    }
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                    }
+                }
+            }
+        } else {
+            // Going hidden while paused in Mode 2: declare state via helper (unattended pin).
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                }
             }
         }
     });
@@ -554,7 +651,8 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             return;
         }
@@ -620,7 +718,8 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(false);
         
         if (hasMediaSession) {
-            navigator.mediaSession.playbackState = "paused";
+            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
         }
         
         errorSkipTimer = setTimeout(() => {
@@ -687,8 +786,7 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         
-        // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
-        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
+        function toggleThumbnailsAndRefresh() {
             thumbsDisabled = !thumbsDisabled;
             updateThumbToggleUI();
             if (!thumbsDisabled && isPlaying) {
@@ -719,6 +817,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             lastStartIndex = -1;
             renderVirtualTracks();
+        }
+
+        // If in collapsed miniplayer, clicking the 44px thumbnail circle directly toggles thumbnails
+        if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
+            toggleThumbnailsAndRefresh();
             return;
         }
 
@@ -744,36 +847,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isLeft) performSeekDelta(-5);
             else if (isRight) performSeekDelta(5);
         } else if (isMiddle || e.target.closest('#thumb-toggle-hint')) {
-            thumbsDisabled = !thumbsDisabled;
-            updateThumbToggleUI();
-            if (!thumbsDisabled && isPlaying) {
-                const track = currentPlaylistData[playQueue[queueIndex]];
-                if (track && getThumbUrl(track)) {
-                    const thumbUrl = getThumbUrl(track);
-                    albumArt.style.display = 'block';
-                    albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
-                    document.documentElement.style.setProperty('--primary-color', activeColor);
-                    if (hasMediaSession && navigator.mediaSession.metadata) {
-                        const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
-                        if (sqCached) {
-                            navigator.mediaSession.metadata.artwork = [{ src: sqCached, sizes: '512x512', type: 'image/jpeg' }];
-                        } else {
-                            getSquareArtwork(thumbUrl, track.id, (sqUrl) => {
-                                if (hasMediaSession && navigator.mediaSession.metadata) {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: track.title,
-                                        artist: track.channel,
-                                        artwork: [{ src: sqUrl, sizes: '512x512', type: 'image/jpeg' }]
-                                    });
-                                }
-                            });
-                        }
-                    }
-                }
-            }
-            lastStartIndex = -1;
-            renderVirtualTracks();
+            toggleThumbnailsAndRefresh();
         }
     });
 
@@ -796,14 +870,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     const rawData = await res.json();
                     const freshData = normalizePlaylistData(rawData, pl);
                     allDatabases[pl] = freshData;
-
-                    // 2. Update the App Shell Cache for the JSON without touching media cache (yt-player-media)
-                    if ('caches' in window) {
-                        try {
-                            const cache = await caches.open(CACHE_NAME);
-                            await cache.put(dbUrl, new Response(JSON.stringify(rawData)));
-                        } catch (e) {}
-                    }
                 }
             }));
 
@@ -874,6 +940,10 @@ document.addEventListener("DOMContentLoaded", () => {
             crossShuffleHistory = [];
             crossShufflePos = -1;
         }
+        if (typeof searchInput !== 'undefined' && searchInput) {
+            searchInput.value = '';
+            if (typeof searchInput.blur === 'function') searchInput.blur();
+        }
         loadPlaylist(e.target.value);
     });
 
@@ -893,7 +963,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         playlistPanel.addEventListener("touchend", (e) => {
             if (window.innerWidth > 800) return;
-            if (document.activeElement === searchInput) return;
             if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
 
             const deltaX = e.changedTouches[0].clientX - plTouchStartX;
@@ -910,6 +979,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const nextPl = ALL_PLAYLISTS[targetIndex];
                 if (nextPl && nextPl !== playlistSelect.value) {
+                    if (typeof searchInput !== 'undefined' && searchInput) {
+                        searchInput.value = '';
+                        if (typeof searchInput.blur === 'function') searchInput.blur();
+                    }
                     playlistSelect.value = nextPl;
                     playlistSelect.dispatchEvent(new Event('change'));
                 }
@@ -965,35 +1038,93 @@ document.addEventListener("DOMContentLoaded", () => {
             btnSync.classList.add("spinning");
             isSyncPolling = true;
 
-            try {
-                await fetch(syncEndpoint, { method: "POST" });
-            } catch (err) {
-                console.warn("Sync trigger:", err);
+            let pollInterval = null;
+            const stopPollingAndRefresh = async () => {
+                if (pollInterval) {
+                    clearInterval(pollInterval);
+                    pollInterval = null;
+                }
+                isSyncPolling = false;
+                btnSync.classList.remove("spinning");
+                await refreshUpdatedPlaylists();
+            };
+
+            // If offline, stop immediately after tactile acknowledgment
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                setTimeout(async () => {
+                    await stopPollingAndRefresh();
+                }, 300);
+                return;
             }
 
-            // Poll /status every 10 seconds until idle
+            try {
+                const syncRes = await fetch(syncEndpoint, { method: "POST" });
+                if (!syncRes.ok) {
+                    setTimeout(async () => {
+                        await stopPollingAndRefresh();
+                    }, 300);
+                    return;
+                }
+
+                const syncData = await syncRes.json().catch(() => ({}));
+                if (syncData.status === "autonomous") {
+                    // Autonomous node mode: check current live status
+                    try {
+                        const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
+                        if (statusRes.ok) {
+                            const statusData = await statusRes.json().catch(() => ({}));
+                            if (statusData.status !== "syncing") {
+                                // Node is not currently syncing, finish after brief tactile spin
+                                setTimeout(async () => {
+                                    await stopPollingAndRefresh();
+                                }, 600);
+                                return;
+                            }
+                        } else {
+                            setTimeout(async () => {
+                                await stopPollingAndRefresh();
+                            }, 600);
+                            return;
+                        }
+                    } catch (_) {
+                        setTimeout(async () => {
+                            await stopPollingAndRefresh();
+                        }, 600);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.warn("Sync trigger:", err);
+                setTimeout(async () => {
+                    await stopPollingAndRefresh();
+                }, 300);
+                return;
+            }
+
+            // Poll /status every 10 seconds until not syncing or max attempts
             let pollAttempts = 0;
-            const maxAttempts = 30; // 5 minutes max
-            
-            const pollInterval = setInterval(async () => {
+            const maxAttempts = 12; // 2 minutes max
+            let errorCount = 0;
+
+            pollInterval = setInterval(async () => {
                 pollAttempts++;
                 try {
                     const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
                     if (statusRes.ok) {
-                        const data = await statusRes.json();
-                        if (data.status === "idle" || pollAttempts >= maxAttempts) {
-                            clearInterval(pollInterval);
-                            isSyncPolling = false;
-                            btnSync.classList.remove("spinning");
-                            await refreshUpdatedPlaylists();
+                        const data = await statusRes.json().catch(() => ({}));
+                        if (data.status === "idle" || data.status === "autonomous" || data.status !== "syncing" || pollAttempts >= maxAttempts) {
+                            await stopPollingAndRefresh();
+                        }
+                    } else {
+                        errorCount++;
+                        if (errorCount >= 3 || pollAttempts >= maxAttempts) {
+                            await stopPollingAndRefresh();
                         }
                     }
                 } catch (e) {
-                    if (pollAttempts >= maxAttempts) {
-                        clearInterval(pollInterval);
-                        isSyncPolling = false;
-                        btnSync.classList.remove("spinning");
-                        await refreshUpdatedPlaylists();
+                    errorCount++;
+                    if (errorCount >= 3 || pollAttempts >= maxAttempts) {
+                        await stopPollingAndRefresh();
                     }
                 }
             }, 10000);
@@ -1065,7 +1196,26 @@ document.addEventListener("DOMContentLoaded", () => {
             ro.observe(albumArt);
         }
     }
-    window.addEventListener('resize', () => requestAnimationFrame(syncArtWidth));
+    if (window.ResizeObserver && playlistContainer) {
+        const playlistRo = new ResizeObserver(() => {
+            lastStartIndex = -1;
+            lastEndIndex = -1;
+            if (typeof renderVirtualTracks === 'function') {
+                renderVirtualTracks();
+            }
+        });
+        playlistRo.observe(playlistContainer);
+    }
+    window.addEventListener('resize', () => {
+        requestAnimationFrame(() => {
+            syncArtWidth();
+            lastStartIndex = -1;
+            lastEndIndex = -1;
+            if (typeof renderVirtualTracks === 'function') {
+                renderVirtualTracks();
+            }
+        });
+    });
     
     // Keyboard Shortcuts (Universal)
     window.addEventListener('keydown', (e) => {
@@ -1126,10 +1276,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'none';
         }
 
-        const standardTimeouts = ['15', '30', '60', '120', 'never'];
+        const standardTimeouts = ['3'];
         const currentTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
             ? String(window.btTimeoutMins).trim()
-            : '30';
+            : '3';
 
         if (standardTimeouts.includes(currentTimeout)) {
             if (btTimeoutSelect) btTimeoutSelect.value = currentTimeout;
@@ -1167,34 +1317,21 @@ document.addEventListener("DOMContentLoaded", () => {
         radio.addEventListener("change", () => {
             const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
             const newMode = checkedRadio ? checkedRadio.value : 'mode1';
-            window.playbackMode = newMode;
-
-            if (typeof window.setStoredSetting === 'function') {
-                window.setStoredSetting('yt_playback_mode', newMode);
-            } else if (typeof setStoredSetting === 'function') {
-                setStoredSetting('yt_playback_mode', newMode);
+            if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
             }
-
-            if (btTimeoutContainer) {
-                btTimeoutContainer.style.display = (newMode === 'mode2') ? 'block' : 'none';
-            }
-
-            const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
-            if (isPaused) {
-                if (newMode === 'mode2') {
-                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
-                    if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
-                } else {
-                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                    if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
-                }
-            }
-
-            if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition();
+            if (typeof togglePlaybackMode === 'function') {
+                togglePlaybackMode(newMode);
             }
         });
     });
+
+    const storedPlaybackMode = (typeof window.getStoredSetting === 'function')
+        ? window.getStoredSetting('yt_playback_mode', 'mode1')
+        : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
+    if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
+        togglePlaybackMode('mode2');
+    }
 
     if (btTimeoutSelect) {
         btTimeoutSelect.addEventListener("change", (e) => {
