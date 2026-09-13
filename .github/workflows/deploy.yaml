@@ -163,7 +163,7 @@ jobs:
           NO_COLOR: "1"
           NODE_NO_WARNINGS: "1"
         run: |
-          PROJECT="${{ secrets.APP_TARGET_SLUG || 'music-player-web' }}"
+          PROJECT="${{ secrets.APP_TARGET_SLUG || secrets.CLOUDFLARE_PAGES_PROJECT || secrets.CF_PAGES_PROJECT || secrets.PAGES_PROJECT || secrets.PROJECT_NAME || 'music-player-web' }}"
           BRANCH="${{ github.ref_name }}"
           echo "Target project: ${PROJECT} (branch: ${BRANCH})"
           wrangler --version
@@ -173,8 +173,8 @@ jobs:
 
           echo "--- Project validation & auto-creation ---"
           if ! wrangler pages project list 2>&1 | grep -q "${PROJECT}"; then
-            echo "Project ${PROJECT} not found on account, creating with production-branch=dev..."
-            wrangler pages project create "${PROJECT}" --production-branch=dev 2>&1 || true
+            echo "Project ${PROJECT} not found on account, creating with production-branch=main..."
+            wrangler pages project create "${PROJECT}" --production-branch=main 2>&1 || true
           fi
 
           echo "--- Executing Pages deployment ---"
