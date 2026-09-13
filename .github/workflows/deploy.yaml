@@ -85,17 +85,23 @@ jobs:
             fi
           fi
 
+      - name: Setup Node LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          check-latest: false
+
       - name: Cache npm global tools
         uses: actions/cache@v4
         id: npm-cache
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-tools-v1
+          key: ${{ runner.os }}-npm-tools-v2
           restore-keys: |
             ${{ runner.os }}-npm-tools-
 
       - name: Install Build Tools
-        run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli
+        run: npm install -g --prefer-offline html-minifier-terser terser clean-css-cli wrangler@latest
 
       - name: Build, Bundle, and Minify Source Files
         env:
@@ -202,11 +208,35 @@ jobs:
 
       - name: Deploy Production Distribution
         id: edge_distribution
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.EDGE_SVC_KEY }}
-          accountId: ${{ secrets.EDGE_ORG_ID }}
-          command: pages deploy site-root --project-name=${{ secrets.APP_TARGET_SLUG || 'music-player-web' }} --branch=${{ github.ref_name }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.EDGE_SVC_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.EDGE_ORG_ID }}
+          CI: "true"
+          NO_COLOR: "1"
+        run: |
+          PROJECT="${{ secrets.APP_TARGET_SLUG || 'music-player-web' }}"
+          BRANCH="${{ github.ref_name }}"
+          echo "Deploying directory site-root to project: ${PROJECT} (branch: ${BRANCH})..."
+          
+          DEPLOY_OUTPUT=$(wrangler pages deploy site-root --project-name="${PROJECT}" --branch="${BRANCH}" --commit-dirty=true 2>&1)
+          EXIT_CODE=$?
+          echo "${DEPLOY_OUTPUT}"
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "Wrangler deployment failed with exit code ${EXIT_CODE}"
+            exit $EXIT_CODE
+          fi
+          
+          DEPLOY_URL=$(echo "${DEPLOY_OUTPUT}" | grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' | head -n 1)
+          if [ -z "$DEPLOY_URL" ]; then
+            if [ "$BRANCH" = "main" ]; then
+              DEPLOY_URL="https://${PROJECT}.pages.dev"
+            else
+              DEPLOY_URL="https://${BRANCH}.${PROJECT}.pages.dev"
+            fi
+          fi
+          echo "Deployment target URL: ${DEPLOY_URL}"
+          echo "deployment-url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
 
       - name: Wait 5s for Edge Network Propagation
         if: steps.edge_distribution.outputs.deployment-url != ''
