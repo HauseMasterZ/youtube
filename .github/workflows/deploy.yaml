@@ -59,10 +59,9 @@ jobs:
           fi
           echo "All source scripts passed syntax verification."
 
-      - name: Inject API Gateway and Origin URLs
+      - name: Inject API Gateway URL
         env:
           GATEWAY_URL: ${{ secrets.FEED_GATEWAY_URL || vars.FEED_GATEWAY_URL }}
-          UPSTREAM_ORIGIN_URL: ${{ secrets.MEDIA_ORIGIN_URL || vars.MEDIA_ORIGIN_URL }}
         run: |
           if [ -n "$GATEWAY_URL" ]; then
             if [ -f site-root/index.html ]; then
@@ -83,21 +82,6 @@ jobs:
             fi
             if [ -f site-root/dev/index.html ]; then
               sed -i '/__API_GATEWAY_URL__/d' site-root/dev/index.html
-            fi
-          fi
-          if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
-            if [ -f site-root/index.html ]; then
-              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/index.html
-            fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" site-root/dev/index.html
-            fi
-          else
-            if [ -f site-root/index.html ]; then
-              sed -i '/__UPSTREAM_ORIGIN_URL__/d' site-root/index.html
-            fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i '/__UPSTREAM_ORIGIN_URL__/d' site-root/dev/index.html
             fi
           fi
 
