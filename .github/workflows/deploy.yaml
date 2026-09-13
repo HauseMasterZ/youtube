@@ -22,26 +22,10 @@ jobs:
       url: ${{ steps.edge_distribution.outputs.deployment-url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout main (Root Site)
+      - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          ref: main
           path: site-root
-
-      - name: Checkout dev (Dev Staging)
-        uses: actions/checkout@v4
-        with:
-          ref: dev
-          path: dev-src
-        continue-on-error: true
-
-      - name: Merge Dev Subdirectory
-        run: |
-          if [ -d "dev-src" ]; then
-            mkdir -p site-root/dev
-            cp -rf dev-src/* site-root/dev/
-            rm -rf site-root/dev/.git site-root/dev/.github
-          fi
 
       - name: Pre-Deployment Syntax & Integrity Guard
         run: |
@@ -51,13 +35,6 @@ jobs:
               node --check "$f"
             fi
           done
-          if [ -d "site-root/dev" ]; then
-            for f in site-root/dev/js/*.js site-root/dev/sw.js; do
-              if [ -f "$f" ]; then
-                node --check "$f"
-              fi
-            done
-          fi
           echo "All source scripts passed syntax verification."
 
       - name: Inject API Gateway URL
@@ -71,18 +48,9 @@ jobs:
             if [ -f site-root/js/utils.js ]; then
               sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/js/utils.js
             fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/index.html
-            fi
-            if [ -f site-root/dev/js/utils.js ]; then
-              sed -i "s|__API_GATEWAY_URL__|$GATEWAY_URL|g" site-root/dev/js/utils.js
-            fi
           else
             if [ -f site-root/index.html ]; then
               sed -i '/__API_GATEWAY_URL__/d' site-root/index.html
-            fi
-            if [ -f site-root/dev/index.html ]; then
-              sed -i '/__API_GATEWAY_URL__/d' site-root/dev/index.html
             fi
           fi
 
@@ -172,38 +140,17 @@ jobs:
             }
           }
 
-          if (branch === 'main') {
-            buildDirectory('site-root');
-            if (fs.existsSync('site-root/dev')) {
-              buildDirectory('site-root/dev');
-            }
-          } else {
-            if (fs.existsSync('site-root/dev')) {
-              buildDirectory('site-root/dev');
-            }
-          }
+          buildDirectory('site-root');
           EOF
 
       - name: Post-Build Integrity Verification
-        env:
-          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           echo "==> Verifying production bundle and Service Worker syntax..."
-          if [ "$BRANCH_NAME" = "main" ]; then
-            if [ -f "site-root/js/bundle.min.js" ]; then
-              node --check site-root/js/bundle.min.js
-            fi
-            if [ -f "site-root/sw.js" ]; then
-              node --check site-root/sw.js
-            fi
+          if [ -f "site-root/js/bundle.min.js" ]; then
+            node --check site-root/js/bundle.min.js
           fi
-          if [ -d "site-root/dev" ]; then
-            if [ -f "site-root/dev/js/bundle.min.js" ]; then
-              node --check site-root/dev/js/bundle.min.js
-            fi
-            if [ -f "site-root/dev/sw.js" ]; then
-              node --check site-root/dev/sw.js
-            fi
+          if [ -f "site-root/sw.js" ]; then
+            node --check site-root/sw.js
           fi
           echo "Production bundles verified successfully."
 
@@ -226,8 +173,8 @@ jobs:
 
           echo "--- Project validation & auto-creation ---"
           if ! wrangler pages project list 2>&1 | grep -q "${PROJECT}"; then
-            echo "Project ${PROJECT} not found on account, creating with production-branch=main..."
-            wrangler pages project create "${PROJECT}" --production-branch=main 2>&1 || true
+            echo "Project ${PROJECT} not found on account, creating with production-branch=dev..."
+            wrangler pages project create "${PROJECT}" --production-branch=dev 2>&1 || true
           fi
 
           echo "--- Executing Pages deployment ---"
@@ -264,7 +211,7 @@ jobs:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ github.ref_name == 'dev' && format('{0}/dev/', steps.edge_distribution.outputs.deployment-url) || steps.edge_distribution.outputs.deployment-url }}
+            ${{ steps.edge_distribution.outputs.deployment-url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
