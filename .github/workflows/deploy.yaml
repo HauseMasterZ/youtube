@@ -86,6 +86,8 @@ jobs:
             TARGET_FILES="$TARGET_FILES cf-root/index.html cf-root/js/utils.js"
           fi
 
+          GATEWAY_URL="${GATEWAY_URL%/}"
+
           if [ -n "$GATEWAY_URL" ]; then
             for f in $TARGET_FILES; do
               if [ -f "$f" ]; then
