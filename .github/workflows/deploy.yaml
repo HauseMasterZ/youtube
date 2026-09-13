@@ -213,21 +213,34 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.EDGE_ORG_ID }}
           CI: "true"
           NO_COLOR: "1"
+          NODE_NO_WARNINGS: "1"
         run: |
           PROJECT="${{ secrets.APP_TARGET_SLUG || 'music-player-web' }}"
           BRANCH="${{ github.ref_name }}"
-          echo "Deploying directory site-root to project: ${PROJECT} (branch: ${BRANCH})..."
-          
-          DEPLOY_OUTPUT=$(wrangler pages deploy site-root --project-name="${PROJECT}" --branch="${BRANCH}" --commit-dirty=true 2>&1)
-          EXIT_CODE=$?
-          echo "${DEPLOY_OUTPUT}"
-          
+          echo "Target project: ${PROJECT} (branch: ${BRANCH})"
+          wrangler --version
+
+          echo "--- Auth verification ---"
+          wrangler whoami 2>&1 || true
+
+          echo "--- Project validation & auto-creation ---"
+          if ! wrangler pages project list 2>&1 | grep -q "${PROJECT}"; then
+            echo "Project ${PROJECT} not found on account, creating with production-branch=main..."
+            wrangler pages project create "${PROJECT}" --production-branch=main 2>&1 || true
+          fi
+
+          echo "--- Executing Pages deployment ---"
+          set +e
+          wrangler pages deploy site-root --project-name="${PROJECT}" --branch="${BRANCH}" --commit-dirty=true 2>&1 | tee deploy.log
+          EXIT_CODE=${PIPESTATUS[0]}
+          set -e
+
           if [ $EXIT_CODE -ne 0 ]; then
-            echo "Wrangler deployment failed with exit code ${EXIT_CODE}"
+            echo "Wrangler deploy failed with exit code ${EXIT_CODE}"
             exit $EXIT_CODE
           fi
-          
-          DEPLOY_URL=$(echo "${DEPLOY_OUTPUT}" | grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' | head -n 1)
+
+          DEPLOY_URL=$(grep -oE 'https://[a-zA-Z0-9.-]+\.pages\.dev' deploy.log | head -n 1)
           if [ -z "$DEPLOY_URL" ]; then
             if [ "$BRANCH" = "main" ]; then
               DEPLOY_URL="https://${PROJECT}.pages.dev"
