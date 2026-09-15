@@ -1,7 +1,8 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v133';
+const CACHE_NAME = 'yt-player-cache-v134';
 
 const CORE_ASSETS = [
+    './',
     './index.html',
     './js/dom.js',
     './js/utils.js',
@@ -189,7 +190,28 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 5. For JSON/CSS/JS and App Shell: Cache-first, no background revalidation
+    // 5. Navigation Fallback: Always return cached App Shell for HTML document navigations
+    if (event.request.mode === 'navigate') {
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) return cached;
+                return caches.match('./').then(cachedRoot => {
+                    if (cachedRoot) return cachedRoot;
+                    return caches.match('./index.html').then(cachedIndex => {
+                        if (cachedIndex) return cachedIndex;
+                        return fetch(event.request);
+                    });
+                });
+            }).catch(() => {
+                return caches.match('./').then(cachedRoot => {
+                    return cachedRoot || caches.match('./index.html');
+                });
+            })
+        );
+        return;
+    }
+
+    // 6. For JSON/CSS/JS and static assets: Cache-first, no background revalidation
     event.respondWith(
         caches.match(event.request).then(cached => {
             return cached || fetch(event.request).then(response => {

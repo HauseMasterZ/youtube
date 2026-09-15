@@ -462,7 +462,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     ? window.declaredPausedState() : 'playing';
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
-                window.wasPausedByUser = true;
+                if (isRecentBtDisconnect) {
+                    window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
+                } else if (!window.wasPausedByUser) {
+                    window.wasPlayingBeforeCall = true;
+                }
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = 'paused';
             }
