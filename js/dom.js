@@ -1,8 +1,12 @@
     const playlistSelect = document.getElementById("playlist-select");
     const searchInput = document.getElementById("search-input");
+    const btnRemoteSearch = document.getElementById("btn-remote-search");
+    const iconSearchGlass = document.getElementById("icon-search-glass");
+    const iconSearchSpinner = document.getElementById("icon-search-spinner");
     const playlistContainer = document.getElementById("playlist-container");
     const playlistMessage = document.getElementById("playlist-message");
     const trackList = document.getElementById("track-list");
+    const ephemeralSearchContainer = document.getElementById("ephemeral-search-container");
 
     class DualAudioPingPong extends EventTarget {
         constructor() {
