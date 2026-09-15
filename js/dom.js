@@ -379,7 +379,7 @@
             } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition(0, expectedDuration || 0);
+                updateMediaSessionPosition(0, expectedDuration || 0, 0.00001);
             }
 
             const bc = document.getElementById("buffer-container");
@@ -761,9 +761,9 @@
                                         if (typeof updateMediaSessionPosition === 'function') {
                                             const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                             if (this._pendingSeek !== null) {
-                                                updateMediaSessionPosition(this._pendingSeek, totalDur);
+                                                updateMediaSessionPosition(this._pendingSeek, totalDur, 0.00001);
                                             } else if (this.switching) {
-                                                updateMediaSessionPosition(0, totalDur);
+                                                updateMediaSessionPosition(0, totalDur, 0.00001);
                                             }
                                         }
 
