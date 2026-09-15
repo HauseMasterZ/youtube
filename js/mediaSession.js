@@ -29,6 +29,15 @@
     let anchorStartTimer = null;
     let _isInternalAnchorStart = false;
     let _isInternalAnchorStop = false;
+    let _anchorGeneration = 0;
+    let _spoofBurstTimer = null;
+
+    function clearSpoofBurst() {
+        if (_spoofBurstTimer) {
+            clearTimeout(_spoofBurstTimer);
+            _spoofBurstTimer = null;
+        }
+    }
 
     function _setupAnchorAutoResume(anchorEl) {
         if (!anchorEl || anchorEl._boundAutoResume) return;
@@ -185,6 +194,8 @@
     }
 
     function stopLiveAudioAnchor() {
+        _anchorGeneration++;
+        clearSpoofBurst();
         if (typeof stopAnchorHeartbeat === 'function') {
             stopAnchorHeartbeat();
         }
@@ -204,6 +215,8 @@
     }
 
     function teardownLiveAudioAnchor() {
+        _anchorGeneration++;
+        clearSpoofBurst();
         if (typeof stopAnchorHeartbeat === 'function') {
             stopAnchorHeartbeat();
         }
@@ -282,9 +295,14 @@
             setTimeout(() => { _isInternalAnchorStop = false; }, 200);
 
             _isInternalAnchorStart = true;
+            const currentGen = _anchorGeneration;
             anchorEl.play().then(() => {
                 _isAnchorPlayPending = false;
                 setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+
+                if (currentGen !== _anchorGeneration || window.playbackMode !== 'mode2') {
+                    return;
+                }
 
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -315,6 +333,7 @@
     }
 
     function stopAnchorHeartbeat() {
+        _anchorGeneration++;
         if (anchorHeartbeatTimeout) {
             clearTimeout(anchorHeartbeatTimeout);
             anchorHeartbeatTimeout = null;
@@ -544,6 +563,7 @@
                 if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
             }
         } else {
+            clearSpoofBurst();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             teardownLiveAudioAnchor();
             cancelAutoKillWatchdog();
@@ -574,29 +594,19 @@
             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
-                updateMediaSessionPosition(pos, dur, 1.0);
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'paused';
-                    if (navigator.mediaSession.metadata) {
-                        try {
-                            navigator.mediaSession.metadata = new MediaMetadata({
-                                title: navigator.mediaSession.metadata.title,
-                                artist: navigator.mediaSession.metadata.artist,
-                                album: navigator.mediaSession.metadata.album,
-                                artwork: navigator.mediaSession.metadata.artwork
-                            });
-                        } catch (e) {}
-                    }
                 }
+                updateMediaSessionPosition(pos, dur, 1.0);
             } else {
-                updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
                     if (typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
                 }
+                updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
             }
         }
     }
@@ -702,13 +712,9 @@
     // Re-asserting 'playing' and re-publishing metadata over a progressive burst (~3s)
     // guarantees that the web app wins the race against the native thread, resurrecting
     // the card if evicted (Occasion 3) and preserving playbackState = 'playing' (Occasion 4).
-    let _spoofBurstTimer = null;
     function reassertSpoofBurst() {
         if (window.playbackMode !== 'mode2') return;
-        if (_spoofBurstTimer) {
-            clearTimeout(_spoofBurstTimer);
-            _spoofBurstTimer = null;
-        }
+        clearSpoofBurst();
         let n = 0;
         const delays = [150, 400, 800, 1500, 2500];
         const tick = () => {
@@ -960,8 +966,11 @@
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                 }
             } else {
-                if (window.playbackMode === 'mode1' || isRecentBtDisconnect) {
+                if (isRecentBtDisconnect) {
                     window.wasPausedByUser = true;
+                    window.wasPlayingBeforeCall = false;
+                } else if (!window.wasPausedByUser) {
+                    window.wasPlayingBeforeCall = true;
                 }
                 if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                 stopLiveAudioAnchor();
