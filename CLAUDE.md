@@ -92,7 +92,7 @@ The player supports two switchable audio engine modes persisted in `localStorage
 - **3-Column Grid**: `@media (min-width: 1111px) and (orientation: landscape)` renders permanent lyrics on left, player in center, playlist on right. Shifting by $1/3$ from center if lyrics are closed.
 - **Keyboard Shortcuts**: `Space` (Play/Pause), `←`/`→` ($\pm 5\text{s}$), `:`/`;` (prev), `"`/`'` (next), `r`/`R` (repeat mode), `s`/`S` (shuffle mode), `Escape` (close modals), and alpha key auto-focusing search.
 - **Context Menus**: Right-click on track items triggers `queuePlayNext()` with enqueue flash animation.
-- **Dropdown Actions**: On desktop, `#playlist-select` exposes `<option value="HARD_RELOAD">Reload Playlists</option>` and `<option value="INSTALL_APP">Install App</option>`.
+- **Dropdown Actions**: On desktop, `#playlist-select` exposes `<option value="__settings__">Settings</option>` and `<option value="INSTALL_APP">Install App</option>`. Playlists refresh autonomously on app foregrounding via `visibilitychange`.
 - **Hover Transitions**: All button glows and row highlights are strictly scoped inside `@media (hover: hover)`.
 
 ---

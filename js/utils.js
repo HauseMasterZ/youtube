@@ -297,6 +297,12 @@
 
     function isValidTrackItem(item) {
         if (!item) return false;
+        if (!Array.isArray(item)) {
+            if (item.is_dead === true || item.lifecycle_status === 'dead') return false;
+            if (item.duration === 0 || item.duration === 'PT0S' || item.duration === '0') return false;
+        } else {
+            if (item[3] === 0 || item[3] === 'PT0S' || item[3] === '0') return false;
+        }
         const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
         return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
     }
