@@ -615,11 +615,15 @@
                 const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) ? rawDur : 0;
                 const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
-                const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching));
+                const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
 
                 let rate;
-                if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
+                if (isBuffering) {
+                    // Buffer stall / track transition freeze: OS interpolates position
+                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
+                    rate = 0.00001;
+                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
                     // Spoofed pause: OS advances the card seekbar by rate while
                     // state reads 'playing', so freeze it with a near-zero rate
                     // (0 is rejected by setPositionState; hence the micro-rate).

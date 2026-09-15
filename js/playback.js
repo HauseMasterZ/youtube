@@ -616,7 +616,7 @@
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: parsedDuration,
-                        playbackRate: 1.0,
+                        playbackRate: 0.00001,
                         position: 0
                     });
                 } catch(e) {}
