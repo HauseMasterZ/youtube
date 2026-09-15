@@ -859,8 +859,6 @@ document.addEventListener("DOMContentLoaded", () => {
         const currentPl = playlistSelect.value;
         const ts = Date.now();
 
-        if (btnSync) btnSync.classList.add("spinning");
-
         try {
             // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
             await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
@@ -884,8 +882,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         } catch (err) {
             console.warn("Failed to reload playlist databases:", err);
-        } finally {
-            if (btnSync) btnSync.classList.remove("spinning");
         }
     }
 
@@ -906,7 +902,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
             playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option>`;
         } else {
-            playlistSelect.innerHTML = `${playlistOptions}<option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option>`;
+            playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option><option value="INSTALL_APP">Install App</option>`;
         }
         if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(currentVal)) {
             playlistSelect.value = currentVal;
@@ -926,12 +922,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (e.target.value === "__settings__") {
             playlistSelect.value = lastValidPlaylist;
             openSettingsModal();
-            return;
-        }
-
-        if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
-            playlistSelect.value = lastValidPlaylist;
-            await reloadPlaylistDatabases();
             return;
         }
         
@@ -990,146 +980,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }, { passive: true });
     }
 
-    // --- On-Demand YouTube Playlist Sync Button & Autonomous Poller ---
-    const btnSync = document.getElementById("btn-sync");
-    let isSyncPolling = false;
-
-    async function refreshUpdatedPlaylists() {
-        const currentPl = playlistSelect.value;
-        const ts = Date.now();
-        
-        for (const pl of ALL_PLAYLISTS) {
-            if (allDatabases[pl]) {
-                try {
-                    const res = await fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${ts}`);
-                    if (res.ok) {
-                        const rawData = await res.json();
-                        const freshData = normalizePlaylistData(rawData, pl);
-                        if (typeof applyPlaylistData === 'function') {
-                            applyPlaylistData(pl, freshData, true);
-                        } else {
-                            allDatabases[pl] = freshData;
-                            if (pl === currentPl) {
-                                currentPlaylistData = freshData;
-                                filteredIndices = currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i }));
-                                trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                                lastStartIndex = -1;
-                                renderVirtualTracks();
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.warn("Failed to check playlist updates for", pl, err);
-                }
-            }
+    // --- Autonomous Silent Playlist Refresh on App Foregrounding ---
+    let lastSilentDbRefresh = Date.now();
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && (Date.now() - lastSilentDbRefresh > 60000)) {
+            lastSilentDbRefresh = Date.now();
+            reloadPlaylistDatabases();
         }
-        const activeTrack = currentPlaylistData ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
-        if (activeTrack && activeTrack.color && activeTrack.color !== '#000000') {
-            document.documentElement.style.setProperty('--primary-color', activeTrack.color);
-        }
-    }
-
-    if (btnSync) {
-        btnSync.addEventListener("click", async () => {
-            if (isSyncPolling) return;
-            const syncEndpoint = `${baseUrl}/sync`;
-            const statusEndpoint = `${baseUrl}/status`;
-
-            btnSync.classList.add("spinning");
-            isSyncPolling = true;
-
-            let pollInterval = null;
-            const stopPollingAndRefresh = async () => {
-                if (pollInterval) {
-                    clearInterval(pollInterval);
-                    pollInterval = null;
-                }
-                isSyncPolling = false;
-                btnSync.classList.remove("spinning");
-                await refreshUpdatedPlaylists();
-            };
-
-            // If offline, stop immediately after tactile acknowledgment
-            if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-                setTimeout(async () => {
-                    await stopPollingAndRefresh();
-                }, 300);
-                return;
-            }
-
-            try {
-                const syncRes = await fetch(syncEndpoint, { method: "POST" });
-                if (!syncRes.ok) {
-                    setTimeout(async () => {
-                        await stopPollingAndRefresh();
-                    }, 300);
-                    return;
-                }
-
-                const syncData = await syncRes.json().catch(() => ({}));
-                if (syncData.status === "autonomous") {
-                    // Autonomous node mode: check current live status
-                    try {
-                        const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
-                        if (statusRes.ok) {
-                            const statusData = await statusRes.json().catch(() => ({}));
-                            if (statusData.status !== "syncing") {
-                                // Node is not currently syncing, finish after brief tactile spin
-                                setTimeout(async () => {
-                                    await stopPollingAndRefresh();
-                                }, 600);
-                                return;
-                            }
-                        } else {
-                            setTimeout(async () => {
-                                await stopPollingAndRefresh();
-                            }, 600);
-                            return;
-                        }
-                    } catch (_) {
-                        setTimeout(async () => {
-                            await stopPollingAndRefresh();
-                        }, 600);
-                        return;
-                    }
-                }
-            } catch (err) {
-                console.warn("Sync trigger:", err);
-                setTimeout(async () => {
-                    await stopPollingAndRefresh();
-                }, 300);
-                return;
-            }
-
-            // Poll /status every 10 seconds until not syncing or max attempts
-            let pollAttempts = 0;
-            const maxAttempts = 12; // 2 minutes max
-            let errorCount = 0;
-
-            pollInterval = setInterval(async () => {
-                pollAttempts++;
-                try {
-                    const statusRes = await fetch(`${statusEndpoint}?ts=${Date.now()}`);
-                    if (statusRes.ok) {
-                        const data = await statusRes.json().catch(() => ({}));
-                        if (data.status === "idle" || data.status === "autonomous" || data.status !== "syncing" || pollAttempts >= maxAttempts) {
-                            await stopPollingAndRefresh();
-                        }
-                    } else {
-                        errorCount++;
-                        if (errorCount >= 3 || pollAttempts >= maxAttempts) {
-                            await stopPollingAndRefresh();
-                        }
-                    }
-                } catch (e) {
-                    errorCount++;
-                    if (errorCount >= 3 || pollAttempts >= maxAttempts) {
-                        await stopPollingAndRefresh();
-                    }
-                }
-            }, 10000);
-        });
-    }
+    });
 
     const btnDownloadPlaylist = document.getElementById("btn-download-playlist");
     if (btnDownloadPlaylist) {
@@ -1263,7 +1121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const btTimeoutContainer = document.getElementById("bt-timeout-container");
     const btTimeoutSelect = document.getElementById("bt-timeout-select");
     const btTimeoutCustom = document.getElementById("bt-timeout-custom");
-    const btnModalReload = document.getElementById("btn-modal-reload");
     const btnModalInstall = document.getElementById("btn-modal-install");
 
     function openSettingsModal() {
@@ -1384,13 +1241,6 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         btTimeoutCustom.addEventListener("input", handleCustomTimeoutInput);
         btTimeoutCustom.addEventListener("change", handleCustomTimeoutInput);
-    }
-
-    if (btnModalReload) {
-        btnModalReload.addEventListener("click", () => {
-            reloadPlaylistDatabases();
-            closeSettingsModal();
-        });
     }
 
     if (btnModalInstall) {

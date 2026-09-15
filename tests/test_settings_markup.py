@@ -148,10 +148,7 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIsNotNone(modal_match, "Could not find #settings-modal")
         modal_content = modal_match.group(1)
 
-        reload_match = re.search(r'<button[^>]*id=["\']btn-modal-reload["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
-        self.assertIsNotNone(reload_match, "Could not find #btn-modal-reload inside #settings-modal")
-        self.assertIn('class="settings-action-btn"', reload_match.group(0))
-        self.assertIn('Reload Playlists', reload_match.group(1))
+        self.assertNotIn('btn-modal-reload', modal_content, "btn-modal-reload should be removed from settings modal")
 
         install_match = re.search(r'<button[^>]*id=["\']btn-modal-install["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
         self.assertIsNotNone(install_match, "Could not find #btn-modal-install inside #settings-modal")
