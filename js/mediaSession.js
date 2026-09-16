@@ -72,6 +72,9 @@
     }
 
     function initLiveAudioAnchor() {
+        if (window.playbackMode !== 'mode2') {
+            return liveAudioContext;
+        }
         if (liveAudioContext) {
             if (liveAudioContext.state === 'suspended') {
                 liveAudioContext.resume().catch(() => {});
@@ -513,6 +516,7 @@
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
+        _anchorGeneration++;
         // Mode switch resets the world: revoke any standing steal flag.
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -561,6 +565,10 @@
                 if (typeof startFocusProbe === 'function') startFocusProbe();
                 armAutoKillWatchdog();
                 if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+            } else {
+                cancelAutoKillWatchdog();
+                if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                if (typeof stopFocusProbe === 'function') stopFocusProbe();
             }
         } else {
             clearSpoofBurst();
@@ -597,8 +605,14 @@
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'paused';
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
                 }
                 updateMediaSessionPosition(pos, dur, 1.0);
+                if (newMode === 'mode2' && typeof reassertSpoofBurst === 'function') {
+                    reassertSpoofBurst();
+                }
             } else {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
@@ -626,7 +640,7 @@
                 const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
-                const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+                const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
 
                 let rate;
                 if (isBuffering) {

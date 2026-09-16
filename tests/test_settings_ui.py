@@ -7,12 +7,15 @@ class TestSettingsUI(unittest.TestCase):
     def setUpClass(cls):
         base_dir = os.path.dirname(os.path.dirname(__file__))
         main_path = os.path.join(base_dir, 'js', 'main.js')
+        dom_path = os.path.join(base_dir, 'js', 'dom.js')
         ms_path = os.path.join(base_dir, 'js', 'mediaSession.js')
         playback_path = os.path.join(base_dir, 'js', 'playback.js')
         ui_path = os.path.join(base_dir, 'js', 'ui.js')
         utils_path = os.path.join(base_dir, 'js', 'utils.js')
         test_path = os.path.join(base_dir, 'tests', 'test_settings_ui.py')
 
+        with open(dom_path, 'r', encoding='utf-8') as f:
+            cls.dom_content = f.read()
         with open(main_path, 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
         with open(ms_path, 'r', encoding='utf-8') as f:
@@ -25,6 +28,15 @@ class TestSettingsUI(unittest.TestCase):
             cls.utils_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
+
+    def test_no_emojis_in_dom_js(self):
+        """Strictly zero emojis anywhere in js/dom.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.dom_content)
+        self.assertEqual(matches, [], f"Found emojis in dom.js: {matches}")
 
     def test_no_emojis_in_utils_js(self):
         """Strictly zero emojis anywhere in js/utils.js"""
@@ -332,6 +344,23 @@ class TestSettingsUI(unittest.TestCase):
             self.main_content,
             r'scrollSettleTimer\s*=\s*setTimeout\s*\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?lastStartIndex\s*=\s*-1;[\s\S]*?lastEndIndex\s*=\s*-1;[\s\S]*?renderVirtualTracks\(\);'
         )
+
+    def test_audio_fetch_explicit_high_priority(self):
+        """dom.js primary audio fetch and recovery declare priority: 'high' for network scheduling"""
+        self.assertRegex(
+            self.dom_content,
+            r'fetch\(\s*fetchUrl\s*,\s*\{[\s\S]*?priority:\s*[\'"]high[\'"]'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'fetch\(\s*resumeUrl\s*,\s*\{[\s\S]*?priority:\s*[\'"]high[\'"]'
+        )
+
+    def test_secondary_assets_explicit_low_priority(self):
+        """utils.js artwork, playback.js preload, and ui.js thumbnails use low priority"""
+        self.assertIn("fetch(url, { priority: 'low' })", self.utils_content)
+        self.assertRegex(self.playback_content, r"fetch\(\s*audioUrl\s*,\s*\{[\s\S]*?priority:\s*['\"]low['\"]")
+        self.assertIn('loader.fetchPriority = "low"', self.ui_content)
 
 if __name__ == '__main__':
     unittest.main()

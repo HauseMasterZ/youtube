@@ -131,7 +131,7 @@
             return;
         }
         try {
-            const resp = await fetch(url);
+            const resp = await fetch(url, { priority: 'low' });
             if (!resp.ok) throw new Error('Fetch failed');
             const blob = await resp.blob();
             const bitmap = await createImageBitmap(blob);
