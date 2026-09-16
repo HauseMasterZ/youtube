@@ -1,9 +1,24 @@
 
+    function isPlaylistDataIdentical(a, b) {
+        if (!a || !b || a.length !== b.length) return false;
+        const len = a.length;
+        if (len === 0) return true;
+        if (a[0]?.id !== b[0]?.id) return false;
+        if (len > 1 && a[1]?.id !== b[1]?.id) return false;
+        if (a[len - 1]?.id !== b[len - 1]?.id) return false;
+        const mid = len >> 1;
+        if (a[mid]?.id !== b[mid]?.id) return false;
+        for (let i = 10; i < len; i += 50) {
+            if (a[i]?.id !== b[i]?.id) return false;
+        }
+        return true;
+    }
+
     function applyPlaylistData(folderName, normalizedData, isRevalidation = false) {
         const prevData = allDatabases[folderName];
         
         // Fast O(1) change detection to prevent main thread blocking and unnecessary DOM mutations
-        if (isRevalidation && prevData && prevData.length === normalizedData.length && prevData[0]?.id === normalizedData[0]?.id && prevData[prevData.length - 1]?.id === normalizedData[normalizedData.length - 1]?.id) {
+        if (isRevalidation && prevData && isPlaylistDataIdentical(prevData, normalizedData)) {
             return; // Zero changes, zero DOM churn
         }
 
@@ -85,17 +100,18 @@
         if (allDatabases[folderName]) {
             applyPlaylistData(folderName, allDatabases[folderName], false);
             hasRendered = true;
-            return;
         }
 
         // 2. If not in memory, immediately show loading state
-        trackList.style.display = 'none';
-        playlistMessage.style.display = 'block';
-        playlistMessage.textContent = 'Loading...';
-        playlistMessage.style.color = 'var(--text-secondary)';
+        if (!hasRendered) {
+            trackList.style.display = 'none';
+            playlistMessage.style.display = 'block';
+            playlistMessage.textContent = 'Loading...';
+            playlistMessage.style.color = 'var(--text-secondary)';
+        }
 
         // 3. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
-        if ('caches' in window) {
+        if ('caches' in window && !hasRendered) {
             caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(cached => {
                 if (cached && !hasRendered) {
                     cached.json().then(rawData => {
@@ -112,10 +128,10 @@
             }).catch(() => {});
         }
 
-        // 4. Direct Network Fetch
+        // 4. Direct Network Fetch with cache-busting timestamp and revalidation
         if (navigator.onLine !== false) {
-            const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
-            fetch(dbUrl)
+            const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
+            fetch(dbUrl, { cache: 'no-store' })
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();

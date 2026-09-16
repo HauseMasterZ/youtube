@@ -349,6 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scrollSettleTimer = setTimeout(() => {
             isScrollingFast = false;
             lastStartIndex = -1;
+            lastEndIndex = -1;
             renderVirtualTracks();
         }, 120);
 
@@ -1091,7 +1092,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
             await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
                 const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                const res = await fetch(`${dbUrl}?t=${ts}`);
+                const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
                 if (res.ok) {
                     const rawData = await res.json();
                     const freshData = normalizePlaylistData(rawData, pl);
@@ -1244,7 +1245,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
         for (const pl of otherPlaylists) {
             if (allDatabases[pl]) continue;
-            fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+            fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : [])
                 .then(rawData => {
                     allDatabases[pl] = normalizePlaylistData(rawData, pl);

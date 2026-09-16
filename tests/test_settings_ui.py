@@ -62,6 +62,15 @@ class TestSettingsUI(unittest.TestCase):
         matches = emoji_pattern.findall(self.test_content)
         self.assertEqual(matches, [], f"Found emojis in test_settings_ui.py: {matches}")
 
+    def test_no_emojis_in_ui_js(self):
+        """Strictly zero emojis anywhere in js/ui.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.ui_content)
+        self.assertEqual(matches, [], f"Found emojis in ui.js: {matches}")
+
     def test_playlist_select_options_configuration(self):
         """updatePlaylistSelectOptions defines __settings__ and INSTALL_APP for desktop and __settings__ for mobile"""
         self.assertRegex(self.main_content, r'function\s+updatePlaylistSelectOptions\s*\(\s*\)')
@@ -300,6 +309,28 @@ class TestSettingsUI(unittest.TestCase):
         self.assertRegex(
             self.utils_content,
             r'const\s+fallbackColor\s*=\s*getVibrantFallbackColor'
+        )
+
+    def test_paint_thumb_nodes_replaces_stale_closure(self):
+        """ui.js defines paintThumbNodes and uses data-target-src query lookup to avoid stale recycled closures"""
+        self.assertRegex(self.ui_content, r'function\s+paintThumbNodes\s*\(')
+        self.assertIn('trackList.querySelectorAll', self.ui_content)
+        self.assertIn('.track-thumb[data-target-src="', self.ui_content)
+        self.assertIn('CSS.escape(thumbUrl)', self.ui_content)
+
+    def test_request_thumb_load_single_flight_and_retry(self):
+        """ui.js defines requestThumbLoad with single-flight check, paintThumbNodes call, and scheduleThumbRetry"""
+        self.assertRegex(self.ui_content, r'function\s+requestThumbLoad\s*\(')
+        self.assertRegex(self.ui_content, r'function\s+scheduleThumbRetry\s*\(')
+        self.assertIn('thumbCache.has(thumbUrl)', self.ui_content)
+        self.assertIn('paintThumbNodes(thumbUrl, thumbUrl)', self.ui_content)
+        self.assertIn('MAX_THUMB_RETRIES', self.ui_content)
+
+    def test_scroll_settle_resets_both_start_and_end_index(self):
+        """main.js scroll settle timeout resets both lastStartIndex and lastEndIndex to -1"""
+        self.assertRegex(
+            self.main_content,
+            r'scrollSettleTimer\s*=\s*setTimeout\s*\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?lastStartIndex\s*=\s*-1;[\s\S]*?lastEndIndex\s*=\s*-1;[\s\S]*?renderVirtualTracks\(\);'
         )
 
 if __name__ == '__main__':

@@ -41,6 +41,97 @@
     const thumbCache = new Map();
     let isScrollingFast = false;
     let scrollSettleTimer = null;
+    const thumbRetryCounts = new Map();
+    const MAX_THUMB_RETRIES = 3;
+
+    // Paint every pooled node currently bound to thumbUrl. Pool nodes are
+    // recycled on scroll, so the closure-captured thumbDiv is stale by the
+    // time the async load completes. Re-query by data-target-src instead.
+    function paintThumbNodes(thumbUrl, resolvedUrl) {
+        if (!thumbUrl || !resolvedUrl || typeof trackList === 'undefined' || !trackList) return;
+        let nodes = null;
+        try {
+            if (typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+                nodes = trackList.querySelectorAll('.track-thumb[data-target-src="' + CSS.escape(thumbUrl) + '"]');
+            }
+        } catch (e) {
+            nodes = null;
+        }
+        if (!nodes) {
+            // Fallback linear scan when CSS.escape or attribute selector is unavailable.
+            nodes = [];
+            const kids = trackList.children;
+            for (let k = 0; k < kids.length; k++) {
+                const td = kids[k].childNodes && kids[k].childNodes[0];
+                if (td && td.dataset && td.dataset.targetSrc === thumbUrl) nodes.push(td);
+            }
+        }
+        for (let n = 0; n < nodes.length; n++) {
+            nodes[n].style.backgroundImage = 'url("' + resolvedUrl + '")';
+        }
+    }
+
+    function scheduleThumbRetry(thumbUrl) {
+        const attempts = (thumbRetryCounts.get(thumbUrl) || 0) + 1;
+        thumbRetryCounts.set(thumbUrl, attempts);
+        if (attempts > MAX_THUMB_RETRIES) return;
+        const delay = Math.min(1000 * attempts, 4000);
+        setTimeout(() => {
+            // Only force a re-render if at least one visible node still wants this URL.
+            let stillWanted = false;
+            try {
+                if (typeof trackList !== 'undefined' && trackList && typeof CSS !== 'undefined' && CSS && typeof CSS.escape === 'function') {
+                    stillWanted = trackList.querySelectorAll('.track-thumb[data-target-src="' + CSS.escape(thumbUrl) + '"]').length > 0;
+                } else if (typeof trackList !== 'undefined' && trackList) {
+                    const kids = trackList.children;
+                    for (let k = 0; k < kids.length; k++) {
+                        const td = kids[k].childNodes && kids[k].childNodes[0];
+                        if (td && td.dataset && td.dataset.targetSrc === thumbUrl) { stillWanted = true; break; }
+                    }
+                }
+            } catch (e) { stillWanted = false; }
+            if (stillWanted && typeof renderVirtualTracks === 'function') {
+                lastStartIndex = -1;
+                lastEndIndex = -1;
+                renderVirtualTracks();
+            } else if (!stillWanted) {
+                thumbRetryCounts.delete(thumbUrl);
+            }
+        }, delay);
+    }
+
+    // Single-flight loader per URL. Completion paints current holders via
+    // paintThumbNodes, never the stale closure node.
+    function requestThumbLoad(thumbUrl, trackId) {
+        if (!thumbUrl || thumbCache.has(thumbUrl)) return;
+        thumbCache.set(thumbUrl, { status: 'loading' });
+
+        const loader = new Image();
+        loader.crossOrigin = "anonymous";
+        loader.fetchPriority = "low";
+        loader.src = thumbUrl;
+
+        const onLoaded = () => {
+            thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
+            thumbRetryCounts.delete(thumbUrl);
+            paintThumbNodes(thumbUrl, thumbUrl);
+            if (typeof getSquareArtwork === 'function' && trackId) {
+                getSquareArtwork(thumbUrl, trackId, () => {});
+            }
+        };
+
+        const onFailed = () => {
+            thumbCache.delete(thumbUrl);
+            scheduleThumbRetry(thumbUrl);
+        };
+
+        if (typeof loader.decode === 'function') {
+            loader.decode().then(onLoaded).catch(onFailed);
+        } else {
+            loader.onload = onLoaded;
+            loader.onerror = onFailed;
+        }
+    }
 
     // Lazy Track Template (Instantiated on first render, zero overhead during bundle evaluation)
     let trackTemplate = null;
@@ -154,55 +245,17 @@
             if (!thumbsDisabled && getThumbUrl(track)) {
                 const thumbUrl = getThumbUrl(track);
                 thumbDiv.dataset.targetSrc = thumbUrl;
-                
+
                 const cached = thumbCache.get(thumbUrl);
                 if (cached && cached.status === 'loaded') {
                     thumbDiv.style.backgroundImage = `url("${cached.resolvedUrl}")`;
                 } else {
+                    // Blank recycled node so a previous track image never flashes as wrong.
+                    // Async completion repaints via paintThumbNodes lookup, not closure node.
                     thumbDiv.style.backgroundImage = 'none';
 
                     if (!cached && !isScrollingFast) {
-                        thumbCache.set(thumbUrl, { status: 'loading' });
-                        
-                        const loader = new Image();
-                        loader.crossOrigin = "anonymous";
-                        loader.fetchPriority = "low";
-                        loader.src = thumbUrl;
-
-                        if (typeof loader.decode === 'function') {
-                            loader.decode()
-                                .then(() => {
-                                    thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
-                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                        thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                                    }
-                                    if (typeof getSquareArtwork === 'function' && track && track.id) {
-                                        getSquareArtwork(thumbUrl, track.id, () => {});
-                                    }
-                                })
-                                .catch(() => {
-                                    thumbCache.delete(thumbUrl);
-                                    if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                        thumbDiv.style.backgroundImage = 'none';
-                                    }
-                                });
-                        } else {
-                            loader.onload = () => {
-                                thumbCache.set(thumbUrl, { status: 'loaded', resolvedUrl: thumbUrl });
-                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                    thumbDiv.style.backgroundImage = `url("${thumbUrl}")`;
-                                }
-                                if (typeof getSquareArtwork === 'function' && track && track.id) {
-                                    getSquareArtwork(thumbUrl, track.id, () => {});
-                                }
-                            };
-                            loader.onerror = () => {
-                                thumbCache.delete(thumbUrl);
-                                if (thumbDiv.dataset.targetSrc === thumbUrl) {
-                                    thumbDiv.style.backgroundImage = 'none';
-                                }
-                            };
-                        }
+                        requestThumbLoad(thumbUrl, track && track.id);
                     }
                 }
                 thumbDiv.style.display = "block";
