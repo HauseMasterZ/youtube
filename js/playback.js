@@ -716,7 +716,7 @@
                 const fetchPromise = caches.open('yt-player-media').then(cache => {
                     return cache.match(audioUrl).then(match => {
                         if (match) return; // Already in media cache
-                        return fetch(audioUrl, { signal: controller.signal });
+                        return fetch(audioUrl, { signal: controller.signal, priority: 'low' });
                     }).then(response => {
                         if (!response) return;
                         if (!response.ok) throw new Error();
