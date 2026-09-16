@@ -2,7 +2,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
-    const queuedRemoteVideoIds = new Set();
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -97,10 +96,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <ul class="ephemeral-track-list">
                 ${results.map((item) => {
                     const vid = item.video_id;
-                    const isQueued = queuedRemoteVideoIds.has(vid);
                     const thumbStyle = item.thumbnail_url ? `background-image: url('${escapeHtml(item.thumbnail_url)}');` : '';
                     const artistsStr = (item.artists && item.artists.length > 0) ? item.artists.join(', ') : (item.channel_name || '');
                     const durStr = item.duration || (item.duration_seconds ? `${Math.floor(item.duration_seconds / 60)}:${String(item.duration_seconds % 60).padStart(2, '0')}` : '');
+                    const ytUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`;
                     return `
                         <li class="ephemeral-track-item" data-vid="${escapeHtml(vid)}">
                             <div class="ephemeral-thumb" style="${thumbStyle}"></div>
@@ -113,10 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
                             </div>
                             <div class="ephemeral-actions">
-                                <button class="ephemeral-action-btn ${isQueued ? 'queued' : ''}" data-action="queue" data-vid="${escapeHtml(vid)}" ${isQueued ? 'disabled' : ''}>
-                                    ${isQueued ? 'Queued' : 'Add to Playlist'}
-                                </button>
-                                <a class="ephemeral-action-btn" href="https://www.youtube.com/watch?v=${encodeURIComponent(vid)}" target="_blank" rel="noopener noreferrer" title="Open on YouTube" aria-label="Open track on YouTube">
+                                <a class="ephemeral-action-btn" href="${escapeHtml(ytUrl)}" target="_blank" rel="noopener noreferrer" title="Open on YouTube" aria-label="Open track on YouTube">
                                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
                                 </a>
                             </div>
@@ -128,40 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const closeBtn = document.getElementById('btn-ephemeral-close');
         if (closeBtn) closeBtn.addEventListener('click', () => exitEphemeralSearch());
-
-        ephemeralSearchContainer.querySelectorAll('button[data-action="queue"]').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const vid = btn.dataset.vid;
-                if (!vid || queuedRemoteVideoIds.has(vid)) return;
-
-                btn.disabled = true;
-                btn.textContent = 'Queueing...';
-
-                try {
-                    const currentPl = (playlistSelect && playlistSelect.value && playlistSelect.value !== '__settings__') ? playlistSelect.value : 'Songs';
-                    const syncUrl = (typeof baseUrl !== 'undefined' && baseUrl ? baseUrl : '') + '/sync';
-                    await fetch(syncUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            source: 'frontend_search',
-                            folder: currentPl,
-                            vid: vid
-                        })
-                    });
-
-                    queuedRemoteVideoIds.add(vid);
-                    btn.classList.add('queued');
-                    btn.textContent = 'Queued';
-                    showEphemeralToast(`Queued for ingestion into ${currentPl}`);
-                } catch {
-                    btn.disabled = false;
-                    btn.textContent = 'Add to Playlist';
-                    showEphemeralToast('Failed to queue track', false);
-                }
-            });
-        });
     }
 
     async function performRemoteSearch(rawQuery) {

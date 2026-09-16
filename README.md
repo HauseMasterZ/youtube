@@ -2,7 +2,7 @@
 
 > A high-performance, offline-capable Progressive Web App for streaming music playlists with lock screen media controls and seamless background playback.
 >
-> **Live:** [https://hausemasterz.github.io/youtube/](https://hausemasterz.github.io/youtube/)
+> **Live:** [https://music.hausemaster.tech](https://music.hausemaster.tech)
 
 ---
 
