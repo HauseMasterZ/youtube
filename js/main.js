@@ -349,6 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scrollSettleTimer = setTimeout(() => {
             isScrollingFast = false;
             lastStartIndex = -1;
+            lastEndIndex = -1;
             renderVirtualTracks();
         }, 120);
 

@@ -18,7 +18,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         with open(cls.main_path, 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
 
-        cls.test_content = open(os.path.abspath(__file__), 'r', encoding='utf-8').read()
+        with open(os.path.abspath(__file__), 'r', encoding='utf-8') as f:
+            cls.test_content = f.read()
 
     def test_zero_emojis(self):
         """Strictly zero emojis in sw.js, playback.js, main.js, and this test."""
@@ -32,8 +33,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v137 to purge stale database caches."""
-        self.assertIn("yt-player-cache-v137", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v138 to purge stale caches."""
+        self.assertIn("yt-player-cache-v138", self.sw_content)
 
     def test_sw_database_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate with waitUntil for database requests."""
