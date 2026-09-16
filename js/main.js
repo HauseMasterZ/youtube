@@ -367,7 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const pl = li.dataset.playlist;
         const idx = parseInt(li.dataset.index);
         const targetTrack = (allDatabases[pl] && allDatabases[pl][idx]) || currentPlaylistData[idx];
-        const songColor = targetTrack ? ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff')) : '#8c73ff';
+        const songColor = targetTrack ? ((typeof getTrackColor === 'function') ? getTrackColor(targetTrack) : ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff'))) : '#8c73ff';
         li.style.setProperty('--enqueued-color', songColor);
         li.classList.add("enqueued-flash");
         setTimeout(() => {
@@ -704,11 +704,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
 
                 // Re-sync MediaSession state when PWA is foregrounded
-                if (hasMediaSession) {
+                if (typeof resyncMediaSessionOnForeground === 'function') {
+                    resyncMediaSessionOnForeground('unlock-playing');
+                } else if (hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
                     const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur);
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
                 const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
@@ -740,16 +741,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                 } else {
-                    // User-paused: re-arm keepalive + probe. Declare state via helper.
+                    // User-paused: re-arm keepalive + probe. Declare state via helper and refresh position timestamp.
                     if (typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();
                     }
                     if (typeof startFocusProbe === 'function') {
                         startFocusProbe();
                     }
-                    if (hasMediaSession) {
+                    if (typeof resyncMediaSessionOnForeground === 'function') {
+                        resyncMediaSessionOnForeground('unlock-mode2-paused');
+                    } else if (hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
+                        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, dur);
+                        }
+                    }
+                    if (typeof startAnchorHeartbeat === 'function') {
+                        startAnchorHeartbeat(0);
                     }
                 }
             }
@@ -966,7 +976,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         const track = isPlaying ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
         if (track) {
-            const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+            const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
             document.documentElement.style.setProperty('--primary-color', activeColor);
         }
 
@@ -1024,7 +1034,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;

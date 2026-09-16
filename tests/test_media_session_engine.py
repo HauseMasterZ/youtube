@@ -857,5 +857,33 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'newCount\s*<\s*knownOutputCount[\s\S]*?window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);[\s\S]*?window\.isCallActive\s*=\s*false;[\s\S]*?window\.wasPausedByUser\s*=\s*true;[\s\S]*?window\.wasPlayingBeforeCall\s*=\s*false;'
         )
 
+    def test_resync_media_session_on_foreground_defined(self):
+        """mediaSession.js defines and exposes resyncMediaSessionOnForeground and shouldRepublishMetadata"""
+        self.assertRegex(self.ms_content, r'function\s+resyncMediaSessionOnForeground\s*\(')
+        self.assertRegex(self.ms_content, r'function\s+shouldRepublishMetadata\s*\(')
+        self.assertIn('window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;', self.ms_content)
+        self.assertIn('window.shouldRepublishMetadata = shouldRepublishMetadata;', self.ms_content)
+
+    def test_resync_media_session_canonical_ordering(self):
+        """resyncMediaSessionOnForeground enforces metadata before position and position last"""
+        self.assertRegex(
+            self.ms_content,
+            r'shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);[\s\S]*?navigator\.mediaSession\.playbackState[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur\);'
+        )
+
+    def test_publish_track_metadata_records_key(self):
+        """playback.js publishTrackMetadata records window.lastPublishedTrackKey"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_src = f.read()
+        self.assertIn('window.lastPublishedTrackKey = track.id || track.title || null;', playback_src)
+
+    def test_visibilitychange_wires_resync_helpers(self):
+        """main.js visibilitychange wires resyncMediaSessionOnForeground for unlock-playing and unlock-mode2-paused"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertIn("resyncMediaSessionOnForeground('unlock-playing')", main_src)
+        self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
+        self.assertIn("startAnchorHeartbeat(0)", main_src)
+
 if __name__ == '__main__':
     unittest.main()

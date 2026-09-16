@@ -148,6 +148,7 @@
             tSpan.style.textOverflow = "ellipsis";
             const tLink = document.createElement("a");
             tLink.target = "_blank";
+            tLink.rel = "noopener noreferrer";
             tLink.className = "yt-link-icon";
             tLink.title = "Open on YouTube";
             tLink.setAttribute("aria-label", "Open track on YouTube");

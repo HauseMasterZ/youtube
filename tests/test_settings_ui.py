@@ -29,6 +29,13 @@ class TestSettingsUI(unittest.TestCase):
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
+        cls.headers_path = os.path.join(base_dir, '_headers')
+        if os.path.exists(cls.headers_path):
+            with open(cls.headers_path, 'r', encoding='utf-8') as f:
+                cls.headers_content = f.read()
+        else:
+            cls.headers_content = ''
+
     def test_no_emojis_in_dom_js(self):
         """Strictly zero emojis anywhere in js/dom.js"""
         emoji_pattern = re.compile(
@@ -361,6 +368,28 @@ class TestSettingsUI(unittest.TestCase):
         self.assertIn("fetch(url, { priority: 'low' })", self.utils_content)
         self.assertRegex(self.playback_content, r"fetch\(\s*audioUrl\s*,\s*\{[\s\S]*?priority:\s*['\"]low['\"]")
         self.assertIn('loader.fetchPriority = "low"', self.ui_content)
+
+    def test_lazy_color_resolution_and_track_color(self):
+        """utils.js defines getTrackColor and memoizes colors lazily on demand"""
+        self.assertRegex(self.utils_content, r'function\s+getTrackColor\s*\(')
+        self.assertIn('window.getTrackColor = getTrackColor;', self.utils_content)
+        self.assertIn('dominantColorCache.set(track.id, fallbackColor);', self.utils_content)
+
+    def test_external_anchor_security_noopener(self):
+        """ui.js sets rel=noopener noreferrer on external YouTube track links"""
+        self.assertIn('tLink.rel = "noopener noreferrer";', self.ui_content)
+
+    def test_chunked_normalization_pipeline(self):
+        """playback.js defines applyNormalizedDataInChunks and utils.js supports slicing"""
+        self.assertRegex(self.playback_content, r'function\s+applyNormalizedDataInChunks\s*\(')
+        self.assertRegex(self.utils_content, r'function\s+normalizePlaylistData\s*\([^)]*startIndex[^)]*count')
+
+    def test_headers_configuration(self):
+        """_headers file exists and defines security policies"""
+        self.assertTrue(len(self.headers_content) > 0, "_headers file must not be empty")
+        self.assertIn('Permissions-Policy:', self.headers_content)
+        self.assertIn('X-Content-Type-Options: nosniff', self.headers_content)
+        self.assertIn('Referrer-Policy: strict-origin-when-cross-origin', self.headers_content)
 
 if __name__ == '__main__':
     unittest.main()
