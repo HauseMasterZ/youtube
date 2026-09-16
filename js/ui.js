@@ -165,6 +165,7 @@
                         thumbCache.set(thumbUrl, { status: 'loading' });
                         
                         const loader = new Image();
+                        loader.crossOrigin = "anonymous";
                         loader.fetchPriority = "low";
                         loader.src = thumbUrl;
 

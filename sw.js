@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v135';
+const CACHE_NAME = 'yt-player-cache-v136';
 
 const CORE_ASSETS = [
     './',
@@ -39,6 +39,17 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
+        }).then(async () => {
+            try {
+                const thumbCache = await caches.open(THUMBS_CACHE);
+                const keys = await thumbCache.keys();
+                for (const key of keys) {
+                    const res = await thumbCache.match(key);
+                    if (res && res.type === 'opaque') {
+                        await thumbCache.delete(key);
+                    }
+                }
+            } catch {}
         }).then(() => clients.claim())
     );
 });
@@ -124,17 +135,26 @@ self.addEventListener('fetch', (event) => {
             caches.open(THUMBS_CACHE).then(async (cache) => {
                 const cached = await cache.match(event.request.url);
                 if (cached) {
-                    return cached;
+                    if (cached.type === 'opaque') {
+                        // Opaque response cannot be returned to a cors request - purge it immediately
+                        cache.delete(event.request.url);
+                    } else {
+                        return cached;
+                    }
                 }
                 try {
                     const response = await fetch(event.request);
-                    if (response.ok || response.type === 'opaque') {
+                    // Never cache opaque responses in THUMBS_CACHE
+                    if (response.ok && response.type !== 'opaque') {
                         cache.put(event.request.url, response.clone());
                         limitCacheSize(THUMBS_CACHE, 1000);
                     }
                     return response;
                 } catch (err) {
-                    return cached || fetch(event.request);
+                    if (cached && cached.type !== 'opaque') {
+                        return cached;
+                    }
+                    return new Response('', { status: 408, statusText: 'Thumbnail request failed' });
                 }
             })
         );
