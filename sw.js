@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v136';
+const CACHE_NAME = 'yt-player-cache-v137';
 
 const CORE_ASSETS = [
     './',
@@ -163,13 +163,13 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. Database JSON: Stale-While-Revalidate Strategy
+    // 3. Database JSON: True Stale-While-Revalidate Strategy
     if (event.request.url.includes('_Playlist_Database.json')) {
         const cleanUrl = event.request.url.split('?')[0];
         // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network and update cache
         if (event.request.url.includes('?t=') || event.request.url.includes('?v=')) {
             event.respondWith(
-                fetch(event.request).then(response => {
+                fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
@@ -180,17 +180,22 @@ self.addEventListener('fetch', (event) => {
             return;
         }
 
-        // Standard request: Instant cache response with network fallback
+        // Standard request: Instant cached response with guaranteed background network revalidation (SWR)
         event.respondWith(
             caches.match(cleanUrl).then(cached => {
-                if (cached) return cached;
-                return fetch(event.request).then(response => {
+                const networkFetch = fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
                     }
                     return response;
-                });
+                }).catch(() => null);
+
+                if (cached) {
+                    event.waitUntil(networkFetch);
+                    return cached;
+                }
+                return networkFetch.then(res => res || caches.match(cleanUrl));
             })
         );
         return;
