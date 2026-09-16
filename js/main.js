@@ -704,11 +704,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
 
                 // Re-sync MediaSession state when PWA is foregrounded
-                if (hasMediaSession) {
+                if (typeof resyncMediaSessionOnForeground === 'function') {
+                    resyncMediaSessionOnForeground('unlock-playing');
+                } else if (hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
                     const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur);
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
                 const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
@@ -740,16 +741,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                 } else {
-                    // User-paused: re-arm keepalive + probe. Declare state via helper.
+                    // User-paused: re-arm keepalive + probe. Declare state via helper and refresh position timestamp.
                     if (typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();
                     }
                     if (typeof startFocusProbe === 'function') {
                         startFocusProbe();
                     }
-                    if (hasMediaSession) {
+                    if (typeof resyncMediaSessionOnForeground === 'function') {
+                        resyncMediaSessionOnForeground('unlock-mode2-paused');
+                    } else if (hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
+                        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, dur);
+                        }
+                    }
+                    if (typeof startAnchorHeartbeat === 'function') {
+                        startAnchorHeartbeat(0);
                     }
                 }
             }

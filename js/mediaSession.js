@@ -720,6 +720,67 @@
     }
     window.republishMediaMetadata = republishMediaMetadata;
 
+    window.lastPublishedTrackKey = window.lastPublishedTrackKey || null;
+
+    function shouldRepublishMetadata() {
+        try {
+            if (window.mediaSessionDestroyed) return true;
+            const md = (typeof navigator !== 'undefined' && navigator.mediaSession) ? navigator.mediaSession.metadata : null;
+            if (!md || !md.title) return true;
+            if (typeof globalActivePlaylist !== 'undefined' && typeof globalActiveOriginalIndex === 'number'
+                && typeof allDatabases !== 'undefined' && allDatabases[globalActivePlaylist]) {
+                const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                const key = track ? (track.id || track.title) : null;
+                if (key && window.lastPublishedTrackKey && key !== window.lastPublishedTrackKey) return true;
+                if (key && md.title !== track.title) return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+    window.shouldRepublishMetadata = shouldRepublishMetadata;
+
+    function resyncMediaSessionOnForeground(reason) {
+        if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
+        if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
+        if (window.isCallActive) return;
+        if (audioPlayer.switching) {
+            setTimeout(() => {
+                if (!audioPlayer.switching) resyncMediaSessionOnForeground(reason + ':deferred');
+            }, 500);
+            return;
+        }
+
+        if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
+            republishMediaMetadata();
+        }
+
+        const isPaused = audioPlayer.paused || window.wasPausedByUser;
+        if (!isPaused) {
+            navigator.mediaSession.playbackState = 'playing';
+        } else {
+            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
+        }
+
+        const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+        updateMediaSessionPosition(audioPlayer.currentTime, dur);
+
+        if (!isPaused) {
+            setTimeout(() => {
+                try {
+                    if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching
+                        && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        updateMediaSessionPosition(audioPlayer.currentTime, d2);
+                    }
+                } catch (e) {}
+            }, 600);
+        }
+    }
+    window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
+
     // Spoof re-assert burst: when an external app takes audio focus (calls or video),
     // Chromium's native Android C++ engine asynchronously rewrites the declared state
     // to 'paused' or hides the notification card on AUDIOFOCUS_LOSS (native override race).
