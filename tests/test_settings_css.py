@@ -199,6 +199,8 @@ class TestSettingsCSS(unittest.TestCase):
         self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*max-height:\s*100%;')
         self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*border-radius:\s*8px;')
         self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*flex-shrink:\s*0;')
+        self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*max-width:\s*700px;')
+        self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*height:\s*clamp\(\s*260px,\s*60vh,\s*680px\s*\);')
 
 if __name__ == '__main__':
     unittest.main()
