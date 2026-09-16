@@ -489,7 +489,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnPlayPause.addEventListener("click", () => {
         window.mediaSessionDestroyed = false;
-        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
         if (typeof primeFocusProbe === 'function') {
@@ -1418,6 +1418,8 @@ document.addEventListener("DOMContentLoaded", () => {
         : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
     if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
         togglePlaybackMode('mode2');
+    } else if (typeof togglePlaybackMode === 'function') {
+        togglePlaybackMode('mode1');
     }
 
     if (btTimeoutSelect) {

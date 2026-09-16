@@ -814,6 +814,42 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*audioPlayer\.active\s*\)\s*\{[\s\S]*?audioPlayer\.active\.pause\(\);[\s\S]*?audioPlayer\.active\.removeAttribute\(\s*[\'"]src[\'"]\s*\);'
         )
 
+    def test_toggle_playback_mode_paused_republishes_metadata_and_bursts(self):
+        """togglePlaybackMode while paused republishes metadata and arms reassertSpoofBurst for Mode 2"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?republishMediaMetadata\(\);[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);[\s\S]*?reassertSpoofBurst\(\);'
+        )
+
+    def test_init_live_audio_anchor_mode2_guard(self):
+        """initLiveAudioAnchor returns immediately if window.playbackMode is not mode2"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+initLiveAudioAnchor\s*\(\s*\)\s*\{\s*if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*\{\s*return\s+liveAudioContext;\s*\}'
+        )
+
+    def test_update_media_session_position_unified_paused(self):
+        """updateMediaSessionPosition checks both audioPlayer.paused and window.wasPausedByUser"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"]\s*&&\s*audioPlayer\s*&&\s*\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\)'
+        )
+
+    def test_init_live_audio_anchor_mode2_gated_in_play_paths(self):
+        """initLiveAudioAnchor is gated behind window.playbackMode === 'mode2' in main.js and playback.js"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice[^\n]+initLiveAudioAnchor'
+        )
+        self.assertRegex(
+            playback_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice[^\n]+initLiveAudioAnchor'
+        )
+
     def test_bt_disconnect_locks_was_paused_by_user(self):
         """Route loss in devicechange marks lastBtDisconnectTime, sets wasPausedByUser true, and clears isCallActive"""
         self.assertRegex(

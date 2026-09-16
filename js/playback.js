@@ -250,7 +250,7 @@
     };
 
     async function playTrackSelection(targetPlaylist, targetOriginalIndex) {
-        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
         if (searchDebounceTimer) {
@@ -418,7 +418,7 @@
             }
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
-            if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+            if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
                 initLiveAudioAnchor();
             }
         }
