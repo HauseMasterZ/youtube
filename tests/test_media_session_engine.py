@@ -885,5 +885,40 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
         self.assertIn("startAnchorHeartbeat(0)", main_src)
 
+    def test_resync_media_session_fast_followers(self):
+        """resyncMediaSessionOnForeground clears buffer stall and schedules fast followers"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?audioPlayer\._isBufferStalled\s*=\s*false;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setTimeout\(syncFollower,\s*80\);[\s\S]*?setTimeout\(syncFollower,\s*250\);'
+        )
+
+    def test_toggle_playback_mode_mode1_paused_settle(self):
+        """togglePlaybackMode Mode 1 paused re-asserts paused state and schedules settle passes"""
+        self.assertRegex(
+            self.ms_content,
+            r'updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);[\s\S]*?playbackState\s*=\s*\(typeof window\.declaredPausedState === \'function\'\)\s*\?\s*window\.declaredPausedState\(\)\s*:\s*\'paused\';'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d3,\s*1\.0\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setTimeout\(settleMode1Paused,\s*50\);[\s\S]*?setTimeout\(settleMode1Paused,\s*150\);'
+        )
+
+    def test_visibilitychange_resets_last_render_time_after_update(self):
+        """main.js visibilitychange sets lastRenderTime = -1 after updateTimeUI to avoid 1Hz suppression"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\S]*?lastRenderTime\s*=\s*-1;'
+        )
+
 if __name__ == '__main__':
     unittest.main()
