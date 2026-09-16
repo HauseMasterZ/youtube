@@ -14,7 +14,9 @@
         return true;
     }
 
-    function applyPlaylistData(folderName, normalizedData, isRevalidation = false) {
+    let currentPlaylistLoadId = 0;
+
+    function applyPlaylistData(folderName, normalizedData, isRevalidation = false, totalCount = 0) {
         const prevData = allDatabases[folderName];
         
         // Fast O(1) change detection to prevent main thread blocking and unnecessary DOM mutations
@@ -61,7 +63,8 @@
             filteredIndices = indices;
         }
 
-        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+        const effectiveTotal = (totalCount > filteredIndices.length && !filterText) ? totalCount : filteredIndices.length;
+        trackList.style.height = `${effectiveTotal * ITEM_HEIGHT}px`;
         if (!poolInitialized || trackList.querySelector('.track-skeleton')) {
             trackList.innerHTML = '';
             poolInitialized = false;
@@ -80,6 +83,93 @@
                 playlistContainer.scrollTop = 0;
             }
         }
+    }
+
+    function applyNormalizedDataInChunks(rawData, folderName, isRevalidation = false) {
+        if (!Array.isArray(rawData)) return;
+
+        const prevData = allDatabases[folderName];
+        if (isRevalidation && prevData && prevData.length === rawData.length) {
+            const getId = (item) => Array.isArray(item) ? item[0] : (item && item.id);
+            const len = rawData.length;
+            let sampleIdentical = true;
+            if (len > 0) {
+                if (prevData[0]?.id !== getId(rawData[0]) || prevData[len - 1]?.id !== getId(rawData[len - 1])) {
+                    sampleIdentical = false;
+                } else {
+                    const mid = len >> 1;
+                    if (prevData[mid]?.id !== getId(rawData[mid])) {
+                        sampleIdentical = false;
+                    } else {
+                        for (let i = 10; i < len; i += 50) {
+                            if (prevData[i]?.id !== getId(rawData[i])) {
+                                sampleIdentical = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if (sampleIdentical) {
+                return;
+            }
+        }
+
+        const loadId = ++currentPlaylistLoadId;
+        const totalCount = rawData.length;
+        const INITIAL_CHUNK = 60;
+        const CHUNK_SIZE = 200;
+
+        const initialSlice = normalizePlaylistData(rawData, folderName, 0, INITIAL_CHUNK);
+        applyPlaylistData(folderName, initialSlice, isRevalidation, totalCount);
+
+        if (totalCount <= INITIAL_CHUNK) {
+            return;
+        }
+
+        let normalizedAccum = initialSlice.slice();
+        let currentIndex = INITIAL_CHUNK;
+
+        function processNextChunk() {
+            if (loadId !== currentPlaylistLoadId) return;
+
+            const chunk = normalizePlaylistData(rawData, folderName, currentIndex, CHUNK_SIZE);
+            for (let i = 0; i < chunk.length; i++) {
+                normalizedAccum.push(chunk[i]);
+            }
+            currentIndex += CHUNK_SIZE;
+
+            allDatabases[folderName] = normalizedAccum;
+
+            if (currentIndex < totalCount) {
+                setTimeout(processNextChunk, 0);
+            } else {
+                if (playlistSelect.value === folderName) {
+                    currentPlaylistData = normalizedAccum;
+                    const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
+                    if (!filterText) {
+                        const len = normalizedAccum.length;
+                        const indices = new Array(len);
+                        for (let i = 0; i < len; i++) {
+                            indices[i] = { playlist: folderName, index: i };
+                        }
+                        filteredIndices = indices;
+                        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                        renderVirtualTracks();
+                    }
+                }
+                if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                    window.rebuildCrossShuffleDeck();
+                }
+                if (!globalActivePlaylist || queueIndex === -1) {
+                    generateQueue(true, folderName);
+                } else if (globalActivePlaylist === folderName) {
+                    generateQueue(false, folderName);
+                }
+            }
+        }
+
+        setTimeout(processNextChunk, 0);
     }
 
     function loadPlaylist(folderName) {
@@ -116,8 +206,7 @@
                 if (cached && !hasRendered) {
                     cached.json().then(rawData => {
                         if (!hasRendered) {
-                            const normalized = normalizePlaylistData(rawData, folderName);
-                            applyPlaylistData(folderName, normalized, false);
+                            applyNormalizedDataInChunks(rawData, folderName, false);
                             hasRendered = true;
                             if (!globalActivePlaylist || queueIndex === -1) {
                                 generateQueue(true, folderName);
@@ -137,8 +226,7 @@
                     return res.json();
                 })
                 .then(rawData => {
-                    const freshData = normalizePlaylistData(rawData, folderName);
-                    applyPlaylistData(folderName, freshData, hasRendered);
+                    applyNormalizedDataInChunks(rawData, folderName, hasRendered);
                     hasRendered = true;
 
                     if (!globalActivePlaylist || queueIndex === -1) {
@@ -559,7 +647,7 @@
         const thumbUrl = getThumbUrl(track);
         const cacheKey = `${baseUrl}/_cache/${track.id}`;
         
-        const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+        const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
         document.documentElement.style.setProperty('--primary-color', activeColor);
 
         if (preloadedFetches.has(cacheKey)) {

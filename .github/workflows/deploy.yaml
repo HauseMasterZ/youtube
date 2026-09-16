@@ -46,6 +46,12 @@ jobs:
           if [ -d "dev-src" ]; then
             mkdir -p site-root/dev
             cp -rf dev-src/* site-root/dev/
+            if [ -f "dev-src/_headers" ]; then
+              cp -f dev-src/_headers site-root/_headers
+              if [ -d "cf-root" ]; then
+                cp -f dev-src/_headers cf-root/_headers
+              fi
+            fi
             rm -rf site-root/dev/.git site-root/dev/.github
           fi
           rm -rf site-root/.git site-root/.github
@@ -181,7 +187,7 @@ jobs:
                 html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${inlinedCss}</style>`);
               }
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
-              html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
+              html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}" defer></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
               execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
             }

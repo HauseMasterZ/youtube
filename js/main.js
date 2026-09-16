@@ -367,7 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const pl = li.dataset.playlist;
         const idx = parseInt(li.dataset.index);
         const targetTrack = (allDatabases[pl] && allDatabases[pl][idx]) || currentPlaylistData[idx];
-        const songColor = targetTrack ? ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff')) : '#8c73ff';
+        const songColor = targetTrack ? ((typeof getTrackColor === 'function') ? getTrackColor(targetTrack) : ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff'))) : '#8c73ff';
         li.style.setProperty('--enqueued-color', songColor);
         li.classList.add("enqueued-flash");
         setTimeout(() => {
@@ -966,7 +966,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         const track = isPlaying ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
         if (track) {
-            const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+            const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
             document.documentElement.style.setProperty('--primary-color', activeColor);
         }
 
@@ -1024,7 +1024,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
