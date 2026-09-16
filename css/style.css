@@ -405,7 +405,7 @@
             align-items: center;
             flex-shrink: 0;
             width: 100%;
-            max-width: 680px;
+            max-width: 700px;
             margin: 0 auto;
             box-sizing: border-box;
         }
@@ -425,8 +425,8 @@
         #album-art-image {
             width: auto;
             height: auto;
-            max-width: min(600px, 85vw);
-            max-height: 48vh;
+            max-width: min(660px, 88vw);
+            max-height: 52vh;
             object-fit: contain;
             border-radius: 8px;
             display: none;
@@ -778,13 +778,13 @@
         /* Desktop layout */
         @media (min-width: 1111px) and (orientation: landscape) {
             .now-playing {
-                max-width: 650px;
+                max-width: 700px;
                 width: 100%;
             }
             #album-art-container {
                 width: 100%;
-                max-width: 650px;
-                height: clamp(260px, 56vh, 620px);
+                max-width: 700px;
+                height: clamp(260px, 60vh, 680px);
                 margin-bottom: clamp(8px, 2vh, 18px);
                 display: flex;
                 justify-content: center;
@@ -815,7 +815,7 @@
             .progress-container,
             .playback-controls {
                 width: var(--art-width, 100%);
-                max-width: var(--art-width, 650px);
+                max-width: var(--art-width, 700px);
                 min-width: 280px;
             }
             #current-title { font-size: clamp(18px, 2.2vh, 24px); }
@@ -848,7 +848,7 @@
             }
             .main-layout:not(:has(#lyrics-container[style*="display: flex"])) .now-playing,
             .main-layout:not(:has(#lyrics-container:not([style*="display: none"]))) .now-playing {
-                margin-left: max(20px, calc((100% - 650px) / 3));
+                margin-left: max(20px, calc((100% - 700px) / 3));
                 margin-right: auto;
             }
         }
@@ -1244,26 +1244,26 @@
             .now-playing:not(.expanded) {
                 padding: 14px 20px 18px 20px;
                 width: 100%;
-                max-width: 540px;
+                max-width: 580px;
             }
             .now-playing:not(.expanded) #album-art-container {
                 width: auto;
                 height: auto;
-                max-width: 520px;
-                max-height: clamp(140px, 44vh, 520px);
+                max-width: 560px;
+                max-height: clamp(140px, 48vh, 560px);
                 margin-bottom: clamp(6px, 1.8vh, 14px);
             }
             .now-playing:not(.expanded) #album-art-image {
                 width: auto;
                 height: auto;
-                max-width: min(520px, 85vw);
-                max-height: clamp(140px, 44vh, 520px);
+                max-width: min(560px, 88vw);
+                max-height: clamp(140px, 48vh, 560px);
                 object-fit: contain;
                 border-radius: 8px;
             }
             .now-playing:not(.expanded) .title-channel-wrapper {
                 width: 100%;
-                max-width: 480px;
+                max-width: 520px;
                 margin-bottom: clamp(2px, 1vh, 6px);
             }
             .now-playing:not(.expanded) #current-title {
@@ -1492,12 +1492,12 @@
             
             .now-playing.expanded #album-art-container,
             .now-playing.expanded #album-art-container.no-art {
-                width: 90%;
-                max-width: 450px;
+                width: 92%;
+                max-width: 480px;
                 height: auto;
-                max-height: 45vh;
+                max-height: 48vh;
                 border-radius: 12px;
-                margin-bottom: 30px;
+                margin-bottom: clamp(16px, 3vh, 30px);
                 background: transparent;
                 background-color: transparent;
                 border: none;
@@ -1508,7 +1508,7 @@
                 width: auto;
                 height: auto;
                 max-width: 100%;
-                max-height: 45vh;
+                max-height: 48vh;
                 object-fit: contain;
                 border-radius: 12px;
             }
