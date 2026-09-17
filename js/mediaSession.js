@@ -621,22 +621,21 @@
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'paused';
                 }
-                // Forced single transition: Mode 2 paused left _lastSentPosition at
-                // this same pos with micro-rate, so the Mode 1 guard would swallow
-                // this write and SystemUI would retain playing plus micro-rate.
-                // Force exactly once; settle passes below stay guarded so OEM skins
-                // do not re-animate on redundant rate 1.0 writes.
-                window._forceNextPosition = true;
-                updateMediaSessionPosition(pos, dur, 1.0);
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
+                if (newMode === 'mode2') {
+                    updateMediaSessionPosition(pos, dur, 1.0);
+                    if (typeof reassertSpoofBurst === 'function') {
+                        reassertSpoofBurst();
+                    }
+                } else {
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
                 }
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Post-settle re-assert: anchor teardown pauses the anchor
                     // element asynchronously after this tail runs. Re-pin the
-                    // honest paused state plus a fresh position once those
-                    // in-flight pause events have settled, resilient to native player teardown.
+                    // honest paused state without trailing position updates,
+                    // resilient to native player teardown.
                     const settleMode1Paused = () => {
                         try {
                             if (window.playbackMode !== 'mode1') return;
@@ -670,18 +669,12 @@
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                                 navigator.mediaSession.playbackState = 'paused';
-                                const d3 = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                                updateMediaSessionPosition(audioPlayer.currentTime, d3, 1.0);
-                                navigator.mediaSession.playbackState = 'paused';
                             }
                         } catch (e) {}
                     };
                     setTimeout(settleMode1Paused, 200);
                     setTimeout(settleMode1Paused, 700);
                     setTimeout(settleMode1Paused, 1500);
-                }
-                if (newMode === 'mode2' && typeof reassertSpoofBurst === 'function') {
-                    reassertSpoofBurst();
                 }
             } else {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -859,6 +852,7 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
+    let _lastForegroundResyncTime = 0;
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
         if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
@@ -870,6 +864,12 @@
             return;
         }
 
+        const now = Date.now();
+        if (now - _lastForegroundResyncTime < 1000) {
+            return;
+        }
+        _lastForegroundResyncTime = now;
+
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
@@ -877,8 +877,8 @@
             // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
             // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
             // height expansion) that freezes the wave animation for ~1s on unlock.
-            // Synchronous forced position update anchors updateTime immediately without
-            // recreating the native MediaControlPanel binding.
+            // Single requestAnimationFrame position update anchors updateTime cleanly post-thaw
+            // without recreating the native MediaControlPanel binding or triggering rapid resets.
             try {
                 if (needsRebind && typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
@@ -887,21 +887,15 @@
             try {
                 navigator.mediaSession.playbackState = 'playing';
             } catch (e) {}
-            try {
-                window._forceNextPosition = true;
-                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-            } catch (e) {}
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 try {
                     if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
                     if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
-                    navigator.mediaSession.playbackState = 'playing';
                     window._forceNextPosition = true;
-                    const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, d2, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
                 } catch (e) {}
-            }, 250);
+            });
             if (needsRebind) {
                 // Retained for diagnostics: token already rebound above unconditionally.
             }
