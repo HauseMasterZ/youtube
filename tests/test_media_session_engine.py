@@ -885,39 +885,42 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
         self.assertIn("startAnchorHeartbeat(0)", main_src)
 
-    def test_resync_media_session_fast_followers(self):
-        """resyncMediaSessionOnForeground clears buffer stall and schedules fast followers"""
+    def test_update_media_session_position_monotonic_guard(self):
+        """updateMediaSessionPosition enforces monotonic position guard to prevent backwards discontinuities"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?audioPlayer\._isBufferStalled\s*=\s*false;'
+            r'pos\s*<\s*_lastSentPosition\s*-\s*0\.5'
         )
         self.assertRegex(
             self.ms_content,
-            r'setTimeout\(syncFollower,\s*80\);[\s\S]*?setTimeout\(syncFollower,\s*250\);'
+            r'_lastSentPosition\s*=\s*validPos;'
+        )
+
+    def test_teardown_live_audio_anchor_stops_tracks_and_loads(self):
+        """teardownLiveAudioAnchor synchronously stops audio tracks and calls load() on anchorEl"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?stream\.getAudioTracks\(\)\.forEach\([\s\S]*?t\.stop\(\)[\s\S]*?anchorEl\.load\(\);'
         )
 
     def test_toggle_playback_mode_mode1_paused_settle(self):
-        """togglePlaybackMode Mode 1 paused re-asserts paused state and schedules settle passes"""
+        """togglePlaybackMode Mode 1 paused re-asserts paused state with extended settle passes and idempotent track kill"""
         self.assertRegex(
             self.ms_content,
-            r'updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);[\s\S]*?playbackState\s*=\s*\(typeof window\.declaredPausedState === \'function\'\)\s*\?\s*window\.declaredPausedState\(\)\s*:\s*\'paused\';'
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?t\.stop\(\)[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d3,\s*1\.0\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';'
         )
         self.assertRegex(
             self.ms_content,
-            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d3,\s*1\.0\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'setTimeout\(settleMode1Paused,\s*50\);[\s\S]*?setTimeout\(settleMode1Paused,\s*150\);'
+            r'setTimeout\(settleMode1Paused,\s*200\);[\s\S]*?setTimeout\(settleMode1Paused,\s*700\);[\s\S]*?setTimeout\(settleMode1Paused,\s*1500\);'
         )
 
-    def test_visibilitychange_resets_last_render_time_after_update(self):
-        """main.js visibilitychange sets lastRenderTime = -1 after updateTimeUI to avoid 1Hz suppression"""
+    def test_visibilitychange_resets_last_render_time(self):
+        """main.js visibilitychange sets lastRenderTime = -1 to allow fresh timeupdate emission"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\S]*?lastRenderTime\s*=\s*-1;'
+            r'lastRenderTime\s*=\s*-1;[\s\S]*?updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);'
         )
 
 if __name__ == '__main__':
