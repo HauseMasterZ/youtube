@@ -630,6 +630,13 @@
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
                     }
+                    // Honest overwrite of Mode 2 micro-rate baseline: state alone
+                    // does not clear PlaybackStateCompat rate. Force once so the
+                    // Mode 1 dedup guard cannot drop the unchanged-pos transition.
+                    try {
+                        window._forceNextPosition = true;
+                        updateMediaSessionPosition(pos, dur, 1.0, true);
+                    } catch (e) {}
                 }
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Post-settle re-assert: anchor teardown pauses the anchor
@@ -669,6 +676,14 @@
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                                 navigator.mediaSession.playbackState = 'paused';
+                                // Re-pin honest tuple after async anchor teardown; each
+                                // settle pass re-asserts in case Home was pressed mid-teardown.
+                                try {
+                                    const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                    const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                    window._forceNextPosition = true;
+                                    updateMediaSessionPosition(sPos, sDur, 1.0, true);
+                                } catch (e) {}
                             }
                         } catch (e) {}
                     };
@@ -873,11 +888,24 @@
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+            // Passive unlock: healthy binding + fresh interpolator needs no IPC.
+            // Any playbackState or setPositionState rewrite restarts SystemUI
+            // SquigglyProgress ValueAnimator (~860ms freeze). The 1Hz timeupdate
+            // owns position from here.
+            let isStale = false;
+            try {
+                if (typeof window.getLastPositionTimestamp === 'function') {
+                    isStale = (Date.now() - window.getLastPositionTimestamp() > 3000);
+                }
+            } catch (e) {}
+            if (!needsRebind && !isStale) {
+                return;
+            }
             // Foreground re-anchor: When metadata is healthy and unchanged, do NOT
             // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
             // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
             // height expansion) that freezes the wave animation for ~1s on unlock.
-            // Single requestAnimationFrame position update anchors updateTime cleanly post-thaw
+            // Single synchronous position update anchors updateTime cleanly post-thaw
             // without recreating the native MediaControlPanel binding or triggering rapid resets.
             try {
                 if (needsRebind && typeof republishMediaMetadata === 'function') {
@@ -887,15 +915,13 @@
             try {
                 navigator.mediaSession.playbackState = 'playing';
             } catch (e) {}
-            requestAnimationFrame(() => {
-                try {
-                    if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
-                    if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
-                    window._forceNextPosition = true;
-                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-                } catch (e) {}
-            });
+            try {
+                if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
+                if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
+                window._forceNextPosition = true;
+                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+            } catch (e) {}
             if (needsRebind) {
                 // Retained for diagnostics: token already rebound above unconditionally.
             }

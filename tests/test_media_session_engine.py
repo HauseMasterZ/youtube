@@ -942,10 +942,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_resync_media_session_reanchors_playing_on_foreground(self):
-        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single requestAnimationFrame position update"""
+        """resyncMediaSessionOnForeground gates on staleness and synchronously re-anchors SystemUI on foreground playing"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(!needsRebind\s*&&\s*!isStale\)\s*\{[\s\S]*?return;\s*\}[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
 
     def test_resync_media_session_debounced_on_foreground(self):
@@ -963,7 +963,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_toggle_playback_mode_mode1_paused_state_only(self):
-        """togglePlaybackMode Mode 1 paused avoids rate-1.0 position write to prevent OEM wave animation leak"""
+        """togglePlaybackMode Mode 1 paused asserts paused state and calls position update"""
         self.assertRegex(
             self.ms_content,
             r'if\s*\(\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);'
@@ -971,6 +971,13 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_toggle_playback_mode_mode1_paused_forced_position(self):
+        """togglePlaybackMode Mode 1 paused forces honest position update to clear Mode 2 micro-rate"""
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);'
         )
 
     def test_update_media_session_position_force_bypass(self):
@@ -990,7 +997,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             main_src,
-            r'staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*roundedSec\s*===\s*lastRenderTime[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+
+    def test_visibilitychange_mode1_paused_reassert_on_hide(self):
+        """main.js visibilitychange re-asserts honest paused tuple when going hidden in Mode 1 paused"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*hDur,\s*1\.0,\s*true\);'
         )
 
     def test_pageshow_listener_wires_resync(self):
