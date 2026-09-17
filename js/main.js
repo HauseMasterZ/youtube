@@ -772,6 +772,19 @@ document.addEventListener("DOMContentLoaded", () => {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
                 }
+            } else if (window.playbackMode === 'mode1' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching && !window.mediaSessionDestroyed) {
+                // Going hidden while paused in Mode 1: re-pin honest paused tuple
+                // so a stale Mode 2 micro-rate baseline cannot surface as playing wave.
+                if (hasMediaSession) {
+                    try {
+                        navigator.mediaSession.playbackState = 'paused';
+                        window._forceNextPosition = true;
+                        const hDur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, hDur, 1.0, true);
+                        }
+                    } catch (e) {}
+                }
             }
         }
     });
@@ -888,7 +901,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             } catch (e) {}
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
-                if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
+                if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
