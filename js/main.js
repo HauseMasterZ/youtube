@@ -703,6 +703,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!audioPlayer.paused) {
                 lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
+                lastRenderTime = -1;
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
