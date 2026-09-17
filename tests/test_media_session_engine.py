@@ -923,5 +923,77 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'lastRenderTime\s*=\s*-1;[\s\S]*?updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);'
         )
 
+    def test_stop_focus_probe_unloads_element(self):
+        """stopFocusProbe unbinds probe element and clears focusProbePrimed"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+stopFocusProbe\s*\(\s*\)\s*\{[\s\S]*?probeEl\.srcObject\s*=\s*null;[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);[\s\S]*?focusProbePrimed\s*=\s*false;'
+        )
+
+    def test_update_media_session_position_stability_guards(self):
+        """updateMediaSessionPosition guards against rapid same-position and mode1-paused redundant writes"""
+        self.assertRegex(
+            self.ms_content,
+            r'Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+
+    def test_resync_media_session_reanchors_playing_on_foreground(self):
+        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with forced position update"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setTimeout\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d2,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*250\);'
+        )
+
+    def test_settle_mode1_paused_unbinds_focus_probe(self):
+        """settleMode1Paused unbinds focus-probe element in settle passes"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?focus-probe[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);'
+        )
+
+    def test_toggle_playback_mode_forces_transition_write(self):
+        """togglePlaybackMode sets _forceNextPosition = true for Mode 1 paused transition"""
+        self.assertRegex(
+            self.ms_content,
+            r'window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);'
+        )
+
+    def test_update_media_session_position_force_bypass(self):
+        """updateMediaSessionPosition honors force parameter and window._forceNextPosition"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+forceBypass\s*=\s*\(force\s*===\s*true\)\s*\|\|\s*\(typeof\s+window\._forceNextPosition\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\._forceNextPosition\s*===\s*true\);'
+        )
+
+    def test_timeupdate_stale_gap_self_heal(self):
+        """main.js timeupdate detects stale gap (>3000ms) and forces position update"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'Date\.now\(\)\s*-\s*window\.getLastPositionTimestamp\(\)\s*>\s*3000'
+        )
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*roundedSec\s*===\s*lastRenderTime[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+
+    def test_pageshow_listener_wires_resync(self):
+        """main.js pageshow listener wires resyncMediaSessionOnForeground"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.addEventListener\([\'"]pageshow[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?resyncMediaSessionOnForeground\([\'"]pageshow-playing[\'"]\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
