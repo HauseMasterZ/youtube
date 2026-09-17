@@ -584,7 +584,47 @@
         } else {
             clearSpoofBurst();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-            teardownLiveAudioAnchor();
+            // Synchronous native kill BEFORE any state declaration.
+            // Order: heartbeat/burst off -> probe kill -> anchor kill ->
+            // context suspend -> declare paused. No await, no setTimeout
+            // in this path; Chromium must observe detached players in the
+            // same task before PlaybackStateCompat is built.
+            try {
+                const probeEl = document.getElementById("focus-probe");
+                if (probeEl) {
+                    try { probeEl.pause(); } catch (e) {}
+                    try { probeEl.srcObject = null; } catch (e) {}
+                    try { probeEl.removeAttribute('src'); } catch (e) {}
+                    try { if (typeof probeEl.load === 'function') probeEl.load(); } catch (e) {}
+                    focusProbePrimed = false;
+                }
+            } catch (e) {}
+            try {
+                const anchorEl = document.getElementById("live-stream-anchor");
+                if (anchorEl) {
+                    try { _isInternalAnchorStop = true; anchorEl.pause(); } catch (e) {} finally { _isInternalAnchorStop = false; }
+                    try {
+                        const s = anchorEl.srcObject;
+                        if (s && typeof s.getAudioTracks === 'function') {
+                            s.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                        }
+                    } catch (e) {}
+                    try { anchorEl.srcObject = null; } catch (e) {}
+                    try { anchorEl.removeAttribute('src'); } catch (e) {}
+                    try { if (typeof anchorEl.load === 'function') anchorEl.load(); } catch (e) {}
+                }
+            } catch (e) {}
+            try {
+                if (liveAudioContext) {
+                    try { if (typeof liveAudioContext.suspend === 'function') liveAudioContext.suspend().catch(() => {}); } catch (e) {}
+                    try { liveAudioContext.close().catch(() => {}); } catch (e) {}
+                }
+            } catch (e) {}
+            liveAudioContext = null;
+            liveAudioOscillator = null;
+            liveAudioGain = null;
+            liveAudioDestination = null;
+            try { teardownLiveAudioAnchor(); } catch (e) {}
             cancelAutoKillWatchdog();
             if (typeof stopFocusProbe === 'function') stopFocusProbe();
             if (isPaused) {
@@ -888,32 +928,25 @@
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
-            // Passive unlock: healthy binding + fresh interpolator needs no IPC.
-            // Any playbackState or setPositionState rewrite restarts SystemUI
-            // SquigglyProgress ValueAnimator (~860ms freeze). The 1Hz timeupdate
-            // owns position from here.
-            let isStale = false;
-            try {
-                if (typeof window.getLastPositionTimestamp === 'function') {
-                    isStale = (Date.now() - window.getLastPositionTimestamp() > 3000);
-                }
-            } catch (e) {}
-            if (!needsRebind && !isStale) {
+            // Passive unlock doctrine: while playing at rate 1.0, SystemUI
+            // interpolates position from last updateTime autonomously.
+            // Any playbackState or setPositionState rewrite restarts
+            // SquigglyProgress entry animator (~860ms freeze). Wall-clock gap
+            // during lock is NOT staleness. Only rebind on track/metadata change.
+            if (!needsRebind) {
                 return;
             }
-            // Foreground re-anchor: When metadata is healthy and unchanged, do NOT
-            // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
-            // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
-            // height expansion) that freezes the wave animation for ~1s on unlock.
-            // Single synchronous position update anchors updateTime cleanly post-thaw
-            // without recreating the native MediaControlPanel binding or triggering rapid resets.
             try {
                 if (needsRebind && typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
                 }
             } catch (e) {}
             try {
-                navigator.mediaSession.playbackState = 'playing';
+                // Only write if actually changed; same-value rewrite still
+                // notifies controller on some OEM skins.
+                if (navigator.mediaSession.playbackState !== 'playing') {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
             } catch (e) {}
             try {
                 if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
@@ -922,9 +955,6 @@
                 const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
             } catch (e) {}
-            if (needsRebind) {
-                // Retained for diagnostics: token already rebound above unconditionally.
-            }
             // The resumed 1Hz timeupdate owns position from here.
             return;
         }

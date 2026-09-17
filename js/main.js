@@ -701,17 +701,18 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
-                lastRenderTime = -1;
-                updateTimeUI(Math.floor(audioPlayer.currentTime));
-                lastRenderTime = -1;
+                // Local DOM only. No MediaSession IPC here. resync decides.
+                // Use float precision to avoid 0:00 dip / seekbar jump.
+                updateTimeUI(audioPlayer.currentTime);
+                lastRenderTime = Math.floor(audioPlayer.currentTime);
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
                     resyncMediaSessionOnForeground('unlock-playing');
                 } else if (hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
-                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur);
+                    if (navigator.mediaSession.playbackState !== 'playing') {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
                 const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
@@ -773,8 +774,29 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? window.declaredPausedState() : 'playing';
                 }
             } else if (window.playbackMode === 'mode1' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching && !window.mediaSessionDestroyed) {
-                // Going hidden while paused in Mode 1: re-pin honest paused tuple
-                // so a stale Mode 2 micro-rate baseline cannot surface as playing wave.
+                // Home pressed after Mode 2 -> Mode 1 switch may find anchor/probe
+                // still detaching. Kill synchronously BEFORE declaring paused,
+                // otherwise Chromium native active-player overrides paused.
+                try {
+                    const aEl = document.getElementById("live-stream-anchor");
+                    if (aEl && (aEl.srcObject || aEl.getAttribute('src') || !aEl.paused)) {
+                        try { aEl.pause(); } catch (e) {}
+                        try {
+                            const s = aEl.srcObject;
+                            if (s && typeof s.getAudioTracks === 'function') s.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                        } catch (e) {}
+                        try { aEl.srcObject = null; } catch (e) {}
+                        try { aEl.removeAttribute('src'); } catch (e) {}
+                        try { if (typeof aEl.load === 'function') aEl.load(); } catch (e) {}
+                    }
+                    const pEl = document.getElementById("focus-probe");
+                    if (pEl && (pEl.srcObject || pEl.getAttribute('src') || !pEl.paused)) {
+                        try { pEl.pause(); } catch (e) {}
+                        try { pEl.srcObject = null; } catch (e) {}
+                        try { pEl.removeAttribute('src'); } catch (e) {}
+                        try { if (typeof pEl.load === 'function') pEl.load(); } catch (e) {}
+                    }
+                } catch (e) {}
                 if (hasMediaSession) {
                     try {
                         navigator.mediaSession.playbackState = 'paused';
@@ -794,7 +816,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // covers unlock-to-home where hidden stays true.
     window.addEventListener("pageshow", () => {
         if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
-            lastRenderTime = -1;
+            updateTimeUI(audioPlayer.currentTime);
+            lastRenderTime = Math.floor(audioPlayer.currentTime);
             if (typeof resyncMediaSessionOnForeground === 'function') {
                 resyncMediaSessionOnForeground('pageshow-playing');
             }

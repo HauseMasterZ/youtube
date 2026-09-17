@@ -914,13 +914,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'setTimeout\(settleMode1Paused,\s*200\);[\s\S]*?setTimeout\(settleMode1Paused,\s*700\);[\s\S]*?setTimeout\(settleMode1Paused,\s*1500\);'
         )
 
-    def test_visibilitychange_resets_last_render_time(self):
-        """main.js visibilitychange sets lastRenderTime = -1 to allow fresh timeupdate emission"""
+    def test_visibilitychange_passive_dom_clock_update(self):
+        """main.js visibilitychange updates DOM clock with float precision and aligns lastRenderTime without MediaSession IPC"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'lastRenderTime\s*=\s*-1;[\s\S]*?updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);'
+            r'updateTimeUI\(audioPlayer\.currentTime\);[\s\S]*?lastRenderTime\s*=\s*Math\.floor\(audioPlayer\.currentTime\);'
         )
 
     def test_stop_focus_probe_unloads_element(self):
@@ -941,11 +941,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
         )
 
-    def test_resync_media_session_reanchors_playing_on_foreground(self):
-        """resyncMediaSessionOnForeground gates on staleness and synchronously re-anchors SystemUI on foreground playing"""
+    def test_resync_media_session_passive_unlock(self):
+        """resyncMediaSessionOnForeground returns passively when metadata does not need rebind"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(!needsRebind\s*&&\s*!isStale\)\s*\{[\s\S]*?return;\s*\}[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(!needsRebind\)\s*\{[\s\S]*?return;\s*\}'
         )
 
     def test_resync_media_session_debounced_on_foreground(self):
@@ -1030,6 +1030,22 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
+        )
+
+    def test_toggle_playback_mode_mode1_synchronous_native_kill(self):
+        """togglePlaybackMode Mode 1 synchronously kills probe and anchor elements before declaring paused"""
+        self.assertRegex(
+            self.ms_content,
+            r'focus-probe[\s\S]*?probeEl\.pause\(\);[\s\S]*?live-stream-anchor[\s\S]*?anchorEl\.pause\(\);[\s\S]*?liveAudioContext\.suspend'
+        )
+
+    def test_visibilitychange_mode1_synchronous_native_kill_on_hide(self):
+        """main.js visibilitychange synchronously kills probe and anchor before declaring paused on hide"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?live-stream-anchor[\s\S]*?aEl\.pause\(\);[\s\S]*?focus-probe[\s\S]*?pEl\.pause\(\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
 if __name__ == '__main__':
