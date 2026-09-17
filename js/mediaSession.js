@@ -603,13 +603,45 @@
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
+                    // Canonical order: metadata first, declared state second,
+                    // position last. A fresh MediaMetadata object rebinds the
+                    // native session token, so a state write issued before the
+                    // rebind lands on the stale token and SystemUI falls back
+                    // to its default (playing), leaving the wave animating
+                    // after a Mode 2 to Mode 1 switch while paused.
                     if (typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
                 }
                 updateMediaSessionPosition(pos, dur, 1.0);
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
+                }
+                if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    // Post-settle re-assert: anchor teardown pauses the anchor
+                    // element asynchronously after this tail runs. Re-pin the
+                    // honest paused state plus a fresh position once those
+                    // in-flight pause events have settled, resilient to anchor teardown.
+                    const settleMode1Paused = () => {
+                        try {
+                            if (window.playbackMode !== 'mode1') return;
+                            if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
+                            if (!audioPlayer.paused && !window.wasPausedByUser) return;
+                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
+                                navigator.mediaSession.playbackState = 'paused';
+                                const d3 = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                updateMediaSessionPosition(audioPlayer.currentTime, d3, 1.0);
+                                navigator.mediaSession.playbackState = 'paused';
+                            }
+                        } catch (e) {}
+                    };
+                    setTimeout(settleMode1Paused, 50);
+                    setTimeout(settleMode1Paused, 150);
+                    setTimeout(settleMode1Paused, 300);
+                }
                 if (newMode === 'mode2' && typeof reassertSpoofBurst === 'function') {
                     reassertSpoofBurst();
                 }
@@ -758,6 +790,7 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
+            if (audioPlayer) audioPlayer._isBufferStalled = false;
             navigator.mediaSession.playbackState = 'playing';
         } else {
             navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -768,15 +801,26 @@
         updateMediaSessionPosition(audioPlayer.currentTime, dur);
 
         if (!isPaused) {
-            setTimeout(() => {
+            // Multi-phase follower: the immediate snapshot above may carry a stale
+            // currentTime (UI thread read before the media pipeline re-syncs
+            // after unlock) and a metadata rebind drops the position bound to
+            // the old token. Re-read fresh on followers with an explicit
+            // live rate so SystemUI restarts interpolation without a gap.
+            // Fast 80ms tick catches pipeline thaw; 250ms catches the first settled frame;
+            // 600ms bridges the 1Hz timeupdate gate until the next second boundary.
+            const syncFollower = () => {
                 try {
                     if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching
                         && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        updateMediaSessionPosition(audioPlayer.currentTime, d2);
+                        const d = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        const r = (audioPlayer && audioPlayer.playbackRate) || 1.0;
+                        updateMediaSessionPosition(audioPlayer.currentTime, d, r);
                     }
                 } catch (e) {}
-            }, 600);
+            };
+            setTimeout(syncFollower, 80);
+            setTimeout(syncFollower, 250);
+            setTimeout(syncFollower, 600);
         }
     }
     window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
