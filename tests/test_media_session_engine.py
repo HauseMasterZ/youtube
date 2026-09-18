@@ -1122,11 +1122,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'restartSquigglyWaveAnimation'
         )
 
-    def test_finish_mode1_switch_silent_probe_play_pause_cycle(self):
-        """finishMode1Switch runs silent play-pause cycle via dedicated silent probe element to trigger native OnPlayerPaused without touching activeEl"""
+    def test_finish_mode1_switch_silent_active_el_cycle(self):
+        """finishMode1Switch runs silent zero-volume muted cycle on activeEl protected by _isMode1SilentCycle"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+cycleEl\s*=\s*document\.getElementById\([\'"]focus-probe[\'"]\);[\s\S]*?cycleEl\.src\s*=\s*SILENT_WAV_DATA_URI;[\s\S]*?cycleEl\.play\(\)[\s\S]*?cycleEl\.pause\(\);'
+            r'const\s+activeEl\s*=\s*\(typeof\s+audioPlayer[\s\S]*?window\._isMode1SilentCycle\s*=\s*true;[\s\S]*?activeEl\.volume\s*=\s*0;[\s\S]*?activeEl\.muted\s*=\s*true;[\s\S]*?activeEl\.play\(\)[\s\S]*?activeEl\.pause\(\);'
         )
 
     def test_settle_mode1_paused_reasserts_position(self):

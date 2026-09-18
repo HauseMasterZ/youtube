@@ -629,6 +629,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
+        if (window._isMode1SilentCycle) return;
         if (window.wasPausedByUser) {
             audioPlayer.instantPause();
             return;

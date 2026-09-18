@@ -666,32 +666,32 @@
                         navigator.mediaSession.playbackState = 'paused';
                     }
 
-                    // Ensure active audio player volume and mute state remain pristine
-                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
-                    if (activeEl) {
-                        activeEl.volume = 1.0;
-                        activeEl.muted = false;
-                    }
-
                     // Native player cycle to clear HyperOS wave animation leak:
                     // In Mode 2 paused, anchorEl was playing silent WebAudio.
                     // Tearing down anchorEl without an active native player transition leaves
                     // Android SystemUI / HyperOS retaining STATE_PLAYING or oscillating wave.
-                    // We trigger Chromium's OnPlayerPlaying and OnPlayerPaused via the dedicated
-                    // silent probe element (#focus-probe) using SILENT_WAV_DATA_URI.
-                    // NEVER call play() on activeEl (the real song) while paused: doing so risks
-                    // leaking decoded music audio buffers to hardware AudioTrack on Android.
-                    const cycleEl = document.getElementById("focus-probe");
-                    if (cycleEl) {
-                        cycleEl.src = SILENT_WAV_DATA_URI;
-                        cycleEl.loop = false;
-                        _isProbeInternal = true;
+                    // We trigger Chromium's native OnPlayerPlaying followed immediately by OnPlayerPaused
+                    // on the primary media player (activeEl).
+                    // Hardened against audio leaks:
+                    // 1. window._isMode1SilentCycle blocks main.js play listener from calling instantPause()
+                    //    which previously reset volume to 1.0.
+                    // 2. activeEl.volume = 0 and activeEl.muted = true are set before play().
+                    // 3. activeEl remains volume = 0 and muted = true while paused (no unmuting timer).
+                    //    DualAudioPingPong.play() restores volume = 1.0 and muted = false on user play.
+                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
+                    if (activeEl && (activeEl.src || activeEl.srcObject)) {
+                        const savedPos = activeEl.currentTime;
+                        window._isMode1SilentCycle = true;
+                        activeEl.volume = 0;
+                        activeEl.muted = true;
                         try {
-                            const p = cycleEl.play();
+                            const p = activeEl.play();
                             const onDone = () => {
-                                try { cycleEl.pause(); } catch (e) {}
-                                try { cycleEl.currentTime = 0; } catch (e) {}
-                                _isProbeInternal = false;
+                                try { activeEl.pause(); } catch (e) {}
+                                try { activeEl.currentTime = savedPos; } catch (e) {}
+                                activeEl.volume = 0;
+                                activeEl.muted = true;
+                                window._isMode1SilentCycle = false;
                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                     navigator.mediaSession.playbackState = 'paused';
                                     window._forceNextPosition = true;
@@ -704,7 +704,9 @@
                                 onDone();
                             }
                         } catch (e) {
-                            _isProbeInternal = false;
+                            window._isMode1SilentCycle = false;
+                            activeEl.volume = 0;
+                            activeEl.muted = true;
                         }
                     }
                 } else {
