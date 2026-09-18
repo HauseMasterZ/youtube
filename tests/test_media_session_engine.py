@@ -1143,5 +1143,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
+    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
+        """Lock gap detection re-publishes MediaMetadata with 5s cooldown to trigger bindPlayer on HyperOS"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
