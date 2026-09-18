@@ -665,6 +665,40 @@
                         updateMediaSessionPosition(pos, dur, 1.0, true);
                         navigator.mediaSession.playbackState = 'paused';
                     }
+
+                    // Native player cycle to clear HyperOS wave animation leak:
+                    // In Mode 2 paused, anchorEl was playing silent WebAudio.
+                    // Tearing down anchorEl without an active native player transition leaves
+                    // Android SystemUI / HyperOS retaining STATE_PLAYING or oscillating wave.
+                    // Automate the exact manual play-pause toggle on audioPlayer silently:
+                    // Muted play triggers Chromium's OnPlayerPlaying, immediate pause triggers
+                    // OnPlayerPaused -> PlaybackStateCompat.STATE_PAUSED (0.0f speed).
+                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
+                    if (activeEl && (activeEl.src || activeEl.srcObject)) {
+                        const savedPos = activeEl.currentTime;
+                        const wasMuted = activeEl.muted;
+                        activeEl.muted = true;
+                        try {
+                            const p = activeEl.play();
+                            const onDone = () => {
+                                try { activeEl.pause(); } catch (e) {}
+                                activeEl.muted = wasMuted;
+                                try { activeEl.currentTime = savedPos; } catch (e) {}
+                                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                    navigator.mediaSession.playbackState = 'paused';
+                                    window._forceNextPosition = true;
+                                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                                }
+                            };
+                            if (p && typeof p.then === 'function') {
+                                p.then(onDone).catch(onDone);
+                            } else {
+                                onDone();
+                            }
+                        } catch (e) {
+                            activeEl.muted = wasMuted;
+                        }
+                    }
                 } else {
                     window.wasPausedByUser = false;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
@@ -752,6 +786,10 @@
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                                 navigator.mediaSession.playbackState = 'paused';
+                                const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                window._forceNextPosition = true;
+                                updateMediaSessionPosition(sPos, sDur, 1.0, true);
                             }
                         } catch (e) {}
                     };
@@ -804,9 +842,11 @@
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
                 const freshnessCeilingMs = 3000;
+                const backgroundCeilingMs = 1200;
+                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
+                    if (now - _lastSentTimestamp > effectiveCeiling || now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }

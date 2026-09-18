@@ -919,7 +919,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
                 }
             } catch (e) {}
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused);
+            const isBackgroundStale = isHiddenPlaying && (typeof window.getLastPositionTimestamp === 'function') && (Date.now() - window.getLastPositionTimestamp() > 1200);
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused) || isBackgroundStale) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -927,9 +929,11 @@ document.addEventListener("DOMContentLoaded", () => {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                     }
+                } else if (isBackgroundStale) {
+                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
