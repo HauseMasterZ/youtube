@@ -658,6 +658,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("playing", () => {
+        if (window._isMode1SilentCycle) return;
         // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
         if (window.playbackMode === 'mode2') {
             if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
@@ -920,7 +921,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
                 }
             } catch (e) {}
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused);
+            const isBackgroundStale = isHiddenPlaying && (typeof window.getLastPositionTimestamp === 'function') && (Date.now() - window.getLastPositionTimestamp() > 1000);
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused) || isBackgroundStale) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -937,9 +940,11 @@ document.addEventListener("DOMContentLoaded", () => {
                             }
                         } catch (e) {}
                     }
+                } else if (isBackgroundStale) {
+                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {

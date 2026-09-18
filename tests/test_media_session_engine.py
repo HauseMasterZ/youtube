@@ -1150,5 +1150,31 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
 
+    def test_main_background_stale_position_force(self):
+        """main.js timeupdate detects background stale playback (>1000ms) and forces position update for home unlock recovery"""
+        self.assertRegex(
+            self.main_content,
+            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*1000'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+
+    def test_main_playing_listener_silent_cycle_guard(self):
+        """main.js playing listener is guarded by _isMode1SilentCycle to prevent state pollution"""
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\([\'"]playing[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(window\._isMode1SilentCycle\)\s*return;'
+        )
+
+    def test_effective_ceiling_background_cadence(self):
+        """updateMediaSessionPosition enforces 1000ms background ceiling when document is hidden"""
+        self.assertRegex(
+            self.ms_content,
+            r'backgroundCeilingMs\s*=\s*1000;[\s\S]*?effectiveCeiling\s*=\s*\(typeof document[\s\S]*?backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
+        )
+
 if __name__ == '__main__':
     unittest.main()
+

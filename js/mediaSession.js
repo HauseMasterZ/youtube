@@ -691,6 +691,7 @@
                         }, 1000);
                         try {
                             const p = activeEl.play();
+                            try { activeEl.pause(); } catch (e) {}
                             const onDone = () => {
                                 clearTimeout(cycleWatchdog);
                                 try { activeEl.pause(); } catch (e) {}
@@ -874,9 +875,11 @@
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
                 const freshnessCeilingMs = 3000;
+                const backgroundCeilingMs = 1000;
+                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
+                    if (now - _lastSentTimestamp > effectiveCeiling || now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }
