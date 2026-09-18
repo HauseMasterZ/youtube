@@ -922,8 +922,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
-                    if (typeof window.restartSquigglyWaveAnimation === 'function') {
-                        window.restartSquigglyWaveAnimation();
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        if (navigator.mediaSession.playbackState !== 'playing') {
+                            navigator.mediaSession.playbackState = 'playing';
+                        }
                     }
                 }
                 updateTimeUI(ct);
