@@ -1088,7 +1088,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """togglePlaybackMode awaits AudioContext.close before declaring paused state on Mode 1 switch"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+ctxToClose\s*=\s*liveAudioContext;[\s\S]*?ctxToClose\.close\(\)\.then\(finishMode1Switch\)'
+            r'const\s+ctxToClose\s*=\s*liveAudioContext;[\s\S]*?ctxToClose\.close\(\)\.then\(finishMode1SwitchOnce\)'
         )
         self.assertRegex(
             self.ms_content,
@@ -1122,11 +1122,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'restartSquigglyWaveAnimation'
         )
 
-    def test_finish_mode1_switch_silent_muted_play_pause_cycle(self):
-        """finishMode1Switch runs silent muted play-pause cycle with zero volume on activeEl to trigger native OnPlayerPaused for HyperOS"""
+    def test_finish_mode1_switch_silent_probe_play_pause_cycle(self):
+        """finishMode1Switch runs silent play-pause cycle via dedicated silent probe element to trigger native OnPlayerPaused without touching activeEl"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+activeEl\s*=\s*\(typeof\s+audioPlayer[\s\S]*?activeEl\.volume\s*=\s*0;[\s\S]*?activeEl\.muted\s*=\s*true;[\s\S]*?activeEl\.play\(\)[\s\S]*?activeEl\.pause\(\);'
+            r'const\s+cycleEl\s*=\s*document\.getElementById\([\'"]focus-probe[\'"]\);[\s\S]*?cycleEl\.src\s*=\s*SILENT_WAV_DATA_URI;[\s\S]*?cycleEl\.play\(\)[\s\S]*?cycleEl\.pause\(\);'
         )
 
     def test_settle_mode1_paused_reasserts_position(self):

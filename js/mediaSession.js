@@ -666,38 +666,37 @@
                         navigator.mediaSession.playbackState = 'paused';
                     }
 
+                    // Ensure active audio player volume and mute state remain pristine
+                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
+                    if (activeEl) {
+                        activeEl.volume = 1.0;
+                        activeEl.muted = false;
+                    }
+
                     // Native player cycle to clear HyperOS wave animation leak:
                     // In Mode 2 paused, anchorEl was playing silent WebAudio.
                     // Tearing down anchorEl without an active native player transition leaves
                     // Android SystemUI / HyperOS retaining STATE_PLAYING or oscillating wave.
-                    // Automate the exact manual play-pause toggle on audioPlayer silently:
-                    // Muted play triggers Chromium's OnPlayerPlaying, immediate pause triggers
-                    // OnPlayerPaused -> PlaybackStateCompat.STATE_PAUSED (0.0f speed).
-                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
-                    if (activeEl && (activeEl.src || activeEl.srcObject)) {
-                        const savedPos = activeEl.currentTime;
-                        const wasMuted = activeEl.muted;
-                        const wasVol = (typeof activeEl.volume === 'number') ? activeEl.volume : 1.0;
-                        activeEl.volume = 0;
-                        activeEl.muted = true;
+                    // We trigger Chromium's OnPlayerPlaying and OnPlayerPaused via the dedicated
+                    // silent probe element (#focus-probe) using SILENT_WAV_DATA_URI.
+                    // NEVER call play() on activeEl (the real song) while paused: doing so risks
+                    // leaking decoded music audio buffers to hardware AudioTrack on Android.
+                    const cycleEl = document.getElementById("focus-probe");
+                    if (cycleEl) {
+                        cycleEl.src = SILENT_WAV_DATA_URI;
+                        cycleEl.loop = false;
+                        _isProbeInternal = true;
                         try {
-                            const p = activeEl.play();
+                            const p = cycleEl.play();
                             const onDone = () => {
-                                try { activeEl.pause(); } catch (e) {}
-                                try { activeEl.currentTime = savedPos; } catch (e) {}
+                                try { cycleEl.pause(); } catch (e) {}
+                                try { cycleEl.currentTime = 0; } catch (e) {}
+                                _isProbeInternal = false;
                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                     navigator.mediaSession.playbackState = 'paused';
                                     window._forceNextPosition = true;
                                     updateMediaSessionPosition(pos, dur, 1.0, true);
                                 }
-                                setTimeout(() => {
-                                    if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
-                                        if (activeEl) {
-                                            activeEl.muted = wasMuted;
-                                            activeEl.volume = wasVol;
-                                        }
-                                    }
-                                }, 500);
                             };
                             if (p && typeof p.then === 'function') {
                                 p.then(onDone).catch(onDone);
@@ -705,8 +704,7 @@
                                 onDone();
                             }
                         } catch (e) {
-                            activeEl.muted = wasMuted;
-                            activeEl.volume = wasVol;
+                            _isProbeInternal = false;
                         }
                     }
                 } else {
@@ -722,15 +720,22 @@
                 }
             };
 
+            let mode1SwitchDone = false;
+            const finishMode1SwitchOnce = () => {
+                if (mode1SwitchDone) return;
+                mode1SwitchDone = true;
+                finishMode1Switch();
+            };
+
             if (ctxToClose) {
                 try {
-                    ctxToClose.close().then(finishMode1Switch).catch(finishMode1Switch);
+                    ctxToClose.close().then(finishMode1SwitchOnce).catch(finishMode1SwitchOnce);
                 } catch (e) {
-                    finishMode1Switch();
+                    finishMode1SwitchOnce();
                 }
-                setTimeout(finishMode1Switch, 500);
+                setTimeout(finishMode1SwitchOnce, 500);
             } else {
-                finishMode1Switch();
+                finishMode1SwitchOnce();
             }
         }
 
