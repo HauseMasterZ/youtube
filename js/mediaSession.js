@@ -594,13 +594,11 @@
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             // Synchronous native kill BEFORE any state declaration.
             // Order: heartbeat/burst off -> probe kill -> anchor kill ->
-            // context suspend -> declare paused. No await, no setTimeout
-            // in this path; Chromium must observe detached players in the
-            // same task before PlaybackStateCompat is built.
+            // WebAudio node disconnect -> await AudioContext close -> declare paused.
             try {
                 const probeEl = document.getElementById("focus-probe");
                 if (probeEl) {
-                    try { probeEl.pause(); } catch (e) {}
+                    try { _isProbeInternal = true; probeEl.pause(); } catch (e) {} finally { _isProbeInternal = false; }
                     try { probeEl.srcObject = null; } catch (e) {}
                     try { probeEl.removeAttribute('src'); } catch (e) {}
                     try { if (typeof probeEl.load === 'function') probeEl.load(); } catch (e) {}
@@ -622,38 +620,73 @@
                     try { if (typeof anchorEl.load === 'function') anchorEl.load(); } catch (e) {}
                 }
             } catch (e) {}
-            try {
-                if (liveAudioContext) {
-                    try { if (typeof liveAudioContext.suspend === 'function') liveAudioContext.suspend().catch(() => {}); } catch (e) {}
-                    try { liveAudioContext.close().catch(() => {}); } catch (e) {}
-                }
-            } catch (e) {}
-            liveAudioContext = null;
-            liveAudioOscillator = null;
-            liveAudioGain = null;
+
+            if (liveAudioOscillator) {
+                try { liveAudioOscillator.stop(); liveAudioOscillator.disconnect(); } catch (e) {}
+                liveAudioOscillator = null;
+            }
+            if (liveAudioGain) {
+                try { liveAudioGain.disconnect(); } catch (e) {}
+                liveAudioGain = null;
+            }
             liveAudioDestination = null;
+
+            // Retain context reference to await termination before state declaration.
+            // In Chromium, closing the AudioContext terminates the audio rendering thread.
+            // If playbackState = 'paused' is declared before close() resolves, Chromium's
+            // C++ MediaSessionImpl aggregate observes an active native player and forces STATE_PLAYING.
+            const ctxToClose = liveAudioContext;
+            liveAudioContext = null;
             try { teardownLiveAudioAnchor(); } catch (e) {}
             cancelAutoKillWatchdog();
             if (typeof stopFocusProbe === 'function') stopFocusProbe();
-            if (isPaused) {
-                window.wasPausedByUser = true;
-                if (typeof setPlayUI === 'function') setPlayUI(false);
-                if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                    if (typeof audioPlayer.instantPause === 'function') {
-                        audioPlayer.instantPause();
-                    } else {
-                        audioPlayer.pause();
+
+            const finishMode1Switch = () => {
+                if (window.playbackMode !== 'mode1') return;
+                const isStillPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+
+                if (isStillPaused) {
+                    window.wasPausedByUser = true;
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
+                    if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                        if (typeof audioPlayer.instantPause === 'function') {
+                            audioPlayer.instantPause();
+                        } else {
+                            audioPlayer.pause();
+                        }
                     }
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                        navigator.mediaSession.playbackState = 'paused';
+                        window._forceNextPosition = true;
+                        updateMediaSessionPosition(pos, dur, 1.0, true);
+                    }
+                } else {
+                    window.wasPausedByUser = false;
+                    if (typeof setPlayUI === 'function') setPlayUI(true);
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'playing';
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    }
+                    updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 }
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+            };
+
+            if (ctxToClose) {
+                try {
+                    ctxToClose.close().then(finishMode1Switch).catch(finishMode1Switch);
+                } catch (e) {
+                    finishMode1Switch();
                 }
+                setTimeout(finishMode1Switch, 500);
             } else {
-                window.wasPausedByUser = false;
-                if (typeof setPlayUI === 'function') setPlayUI(true);
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
-                }
+                finishMode1Switch();
             }
         }
 
@@ -675,19 +708,9 @@
                         reassertSpoofBurst();
                     }
                 } else {
-                    if (typeof republishMediaMetadata === 'function') {
-                        republishMediaMetadata();
-                    }
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                    }
-                    // Honest overwrite of Mode 2 micro-rate baseline: state alone
-                    // does not clear PlaybackStateCompat rate. Force once so the
-                    // Mode 1 dedup guard cannot drop the unchanged-pos transition.
-                    try {
-                        window._forceNextPosition = true;
-                        updateMediaSessionPosition(pos, dur, 1.0, true);
-                    } catch (e) {}
+                    // Mode 1 state declaration and unthrottled position IPC are dispatched
+                    // inside finishMode1Switch after AudioContext.close() resolves, preventing
+                    // Chromium C++ MediaSessionImpl from snapshotting zombie native audio players.
                 }
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Post-settle re-assert: anchor teardown pauses the anchor
@@ -785,7 +808,7 @@
                 //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
-                const freshnessCeilingMs = 10000;
+                const freshnessCeilingMs = 3000;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
                     if (now - _lastSentTimestamp > freshnessCeilingMs) {
@@ -929,6 +952,43 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
+    function restartSquigglyWaveAnimation() {
+        if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
+        if (typeof audioPlayer === 'undefined' || !audioPlayer || audioPlayer.paused) return;
+        if (window.isCallActive || window.mediaSessionDestroyed) return;
+
+        if (window.playbackMode === 'mode1') {
+            // Force state transition to restart SquigglyProgress.heightAnimator.
+            // A single setPositionState() IPC only updates position; it does not clear
+            // the AOSP backing-field guard in SquigglyProgress.animate (if (field == value) return).
+            // Cycling paused -> playing forces animate = false -> true, restarting
+            // the ValueAnimator. The 16ms gap (one vsync frame) allows Chrome's
+            // MediaSession bridge to emit STATE_PAUSED to SystemUI without visual flicker.
+            try {
+                navigator.mediaSession.playbackState = 'paused';
+                setTimeout(() => {
+                    if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused && window.playbackMode === 'mode1') {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
+                }, 16);
+            } catch (e) {}
+        } else if (window.playbackMode === 'mode2') {
+            // Mode 2: anchor element's native player observer keeps STATE_PLAYING in Chromium's aggregate.
+            // Cycle the anchor's native player to force a state pulse without dropping the pinned session.
+            const anchorEl = document.getElementById("live-stream-anchor");
+            if (anchorEl && !anchorEl.paused) {
+                _isInternalAnchorStop = true;
+                try { anchorEl.pause(); } catch (e) {}
+                _isInternalAnchorStop = false;
+                _isInternalAnchorStart = true;
+                anchorEl.play().then(() => {
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                }).catch(() => { _isInternalAnchorStart = false; });
+            }
+        }
+    }
+    window.restartSquigglyWaveAnimation = restartSquigglyWaveAnimation;
+
     let _lastForegroundResyncTime = 0;
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
@@ -962,6 +1022,9 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
             } catch (e) {}
+            if (typeof restartSquigglyWaveAnimation === 'function') {
+                restartSquigglyWaveAnimation();
+            }
             try {
                 if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
                 if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;

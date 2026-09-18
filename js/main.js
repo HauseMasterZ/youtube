@@ -922,6 +922,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
+                    if (typeof window.restartSquigglyWaveAnimation === 'function') {
+                        window.restartSquigglyWaveAnimation();
+                    }
                 }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);

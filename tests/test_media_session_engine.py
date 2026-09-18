@@ -1060,10 +1060,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 10s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        """updateMediaSessionPosition enforces a 3s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+            r'const\s+freshnessCeilingMs\s*=\s*3000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
         )
 
     def test_mode_transition_mutex_guards_resurrectors(self):
@@ -1082,6 +1082,37 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'anchorEl\.play\(\)\.then\(\(\)\s*=>\s*\{[\s\S]*?currentGen\s*!==\s*_anchorGeneration[\s\S]*?anchorEl\.pause\(\);'
+        )
+
+    def test_audiocontext_close_awaited_on_mode1_switch(self):
+        """togglePlaybackMode awaits AudioContext.close before declaring paused state on Mode 1 switch"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+ctxToClose\s*=\s*liveAudioContext;[\s\S]*?ctxToClose\.close\(\)\.then\(finishMode1Switch\)'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+finishMode1Switch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_restart_squiggly_wave_animation_pulse(self):
+        """restartSquigglyWaveAnimation pulses state in Mode 1 and cycles anchor in Mode 2"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+restartSquigglyWaveAnimation\s*\(\s*\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"]'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'window\.restartSquigglyWaveAnimation\s*=\s*restartSquigglyWaveAnimation;'
+        )
+
+    def test_main_stale_gap_triggers_wave_restart(self):
+        """main.js invokes restartSquigglyWaveAnimation when stale gap detected during playback"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\.restartSquigglyWaveAnimation\(\)'
         )
 
 if __name__ == '__main__':
