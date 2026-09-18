@@ -116,11 +116,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("updateMediaSessionPosition(0, totalDur, 0.00001)", self.dom_content)
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*isBuffering\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
+            r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
         )
         self.assertIn("reassertSpoofBurst", self.ms_content)
 
@@ -667,7 +663,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """reassertSpoofBurst re-declares playing with frozen rate, self-terminates, and runs on steal paths"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
         )
         self.assertRegex(
             self.ms_content,
@@ -814,11 +810,330 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*audioPlayer\.active\s*\)\s*\{[\s\S]*?audioPlayer\.active\.pause\(\);[\s\S]*?audioPlayer\.active\.removeAttribute\(\s*[\'"]src[\'"]\s*\);'
         )
 
+    def test_toggle_playback_mode_paused_republishes_metadata_and_bursts(self):
+        """togglePlaybackMode while paused republishes metadata and arms reassertSpoofBurst for Mode 2"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?republishMediaMetadata\(\);[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);[\s\S]*?reassertSpoofBurst\(\);'
+        )
+
+    def test_init_live_audio_anchor_mode2_guard(self):
+        """initLiveAudioAnchor returns immediately if window.playbackMode is not mode2"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+initLiveAudioAnchor\s*\(\s*\)\s*\{\s*if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*\{\s*return\s+liveAudioContext;\s*\}'
+        )
+
+    def test_update_media_session_position_unified_paused(self):
+        """updateMediaSessionPosition checks both audioPlayer.paused and window.wasPausedByUser"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"]\s*&&\s*audioPlayer\s*&&\s*\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\)'
+        )
+
+    def test_init_live_audio_anchor_mode2_gated_in_play_paths(self):
+        """initLiveAudioAnchor is gated behind window.playbackMode === 'mode2' in main.js and playback.js"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice[^\n]+initLiveAudioAnchor'
+        )
+        self.assertRegex(
+            playback_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice[^\n]+initLiveAudioAnchor'
+        )
+
     def test_bt_disconnect_locks_was_paused_by_user(self):
         """Route loss in devicechange marks lastBtDisconnectTime, sets wasPausedByUser true, and clears isCallActive"""
         self.assertRegex(
             self.ms_content,
             r'newCount\s*<\s*knownOutputCount[\s\S]*?window\.lastBtDisconnectTime\s*=\s*Date\.now\(\);[\s\S]*?window\.isCallActive\s*=\s*false;[\s\S]*?window\.wasPausedByUser\s*=\s*true;[\s\S]*?window\.wasPlayingBeforeCall\s*=\s*false;'
+        )
+
+    def test_resync_media_session_on_foreground_defined(self):
+        """mediaSession.js defines and exposes resyncMediaSessionOnForeground and shouldRepublishMetadata"""
+        self.assertRegex(self.ms_content, r'function\s+resyncMediaSessionOnForeground\s*\(')
+        self.assertRegex(self.ms_content, r'function\s+shouldRepublishMetadata\s*\(')
+        self.assertIn('window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;', self.ms_content)
+        self.assertIn('window.shouldRepublishMetadata = shouldRepublishMetadata;', self.ms_content)
+
+    def test_resync_media_session_canonical_ordering(self):
+        """resyncMediaSessionOnForeground enforces metadata before position and position last"""
+        self.assertRegex(
+            self.ms_content,
+            r'shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);[\s\S]*?navigator\.mediaSession\.playbackState[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur\);'
+        )
+
+    def test_publish_track_metadata_records_key(self):
+        """playback.js publishTrackMetadata records window.lastPublishedTrackKey"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            playback_src = f.read()
+        self.assertIn('window.lastPublishedTrackKey = track.id || track.title || null;', playback_src)
+
+    def test_visibilitychange_wires_resync_helpers(self):
+        """main.js visibilitychange wires resyncMediaSessionOnForeground for unlock-playing and unlock-mode2-paused"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertIn("resyncMediaSessionOnForeground('unlock-playing')", main_src)
+        self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
+        self.assertIn("startAnchorHeartbeat(0)", main_src)
+
+    def test_update_media_session_position_monotonic_guard(self):
+        """updateMediaSessionPosition enforces monotonic position guard to prevent backwards discontinuities"""
+        self.assertRegex(
+            self.ms_content,
+            r'pos\s*<\s*_lastSentPosition\s*-\s*0\.5'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'_lastSentPosition\s*=\s*validPos;'
+        )
+
+    def test_teardown_live_audio_anchor_stops_tracks_and_loads(self):
+        """teardownLiveAudioAnchor synchronously stops audio tracks and calls load() on anchorEl"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\s*\(\s*\)[\s\S]*?stream\.getAudioTracks\(\)\.forEach\([\s\S]*?t\.stop\(\)[\s\S]*?anchorEl\.load\(\);'
+        )
+
+    def test_toggle_playback_mode_mode1_paused_settle(self):
+        """togglePlaybackMode Mode 1 paused re-asserts paused state with extended settle passes and idempotent track kill"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?t\.stop\(\)[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\'paused\';'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setTimeout\(settleMode1Paused,\s*180\);[\s\S]*?setTimeout\(settleMode1Paused,\s*1200\);'
+        )
+
+    def test_visibilitychange_passive_dom_clock_update(self):
+        """main.js visibilitychange updates DOM clock with float precision and aligns lastRenderTime without MediaSession IPC"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(audioPlayer\.currentTime\);[\s\S]*?lastRenderTime\s*=\s*Math\.floor\(audioPlayer\.currentTime\);'
+        )
+
+    def test_stop_focus_probe_unloads_element(self):
+        """stopFocusProbe unbinds probe element and clears focusProbePrimed"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+stopFocusProbe\s*\(\s*\)\s*\{[\s\S]*?probeEl\.srcObject\s*=\s*null;[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);[\s\S]*?focusProbePrimed\s*=\s*false;'
+        )
+
+    def test_update_media_session_position_stability_guards(self):
+        """updateMediaSessionPosition guards against rapid same-position and mode1-paused redundant writes"""
+        self.assertRegex(
+            self.ms_content,
+            r'Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+
+    def test_resync_media_session_reanchors_playing_on_foreground(self):
+        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single forced position update"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+
+    def test_resync_media_session_debounced_on_foreground(self):
+        """resyncMediaSessionOnForeground debounces rapid duplicate calls from visibilitychange and pageshow"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+now\s*=\s*Date\.now\(\);[\s\S]*?now\s*-\s*_lastForegroundResyncTime\s*<\s*1000[\s\S]*?_lastForegroundResyncTime\s*=\s*now;'
+        )
+
+    def test_settle_mode1_paused_unbinds_focus_probe(self):
+        """settleMode1Paused unbinds focus-probe element in settle passes"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?focus-probe[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);'
+        )
+
+    def test_toggle_playback_mode_mode1_paused_state_only(self):
+        """togglePlaybackMode Mode 1 paused asserts paused state and calls position update"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*newMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_toggle_playback_mode_mode1_paused_forced_position(self):
+        """togglePlaybackMode Mode 1 paused forces honest position update before setting paused state to clear Mode 2 micro-rate"""
+        self.assertRegex(
+            self.ms_content,
+            r'window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_update_media_session_position_force_bypass(self):
+        """updateMediaSessionPosition honors force parameter and window._forceNextPosition"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+forceBypass\s*=\s*\(force\s*===\s*true\)\s*\|\|\s*\(typeof\s+window\._forceNextPosition\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\._forceNextPosition\s*===\s*true\);'
+        )
+
+    def test_timeupdate_lock_gap_self_heal_and_drift_gating(self):
+        """main.js timeupdate handles lock gaps (>2500ms) to wake up background media card and delegates normal playback to drift-gating"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*=\s*\(lastTs\s*>\s*0\s*&&\s*\(Date\.now\(\)\s*-\s*lastTs\s*>\s*2500\)\);'
+        )
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(ct\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration'
+        )
+
+    def test_visibilitychange_mode1_paused_reassert_on_hide(self):
+        """main.js visibilitychange ensures honest paused state when going hidden in Mode 1 paused without redundant position IPC"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_update_media_session_position_drift_gate(self):
+        """updateMediaSessionPosition drift-gates IPC against autonomous SystemUI extrapolation"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+expectedPos\s*=\s*_lastSentPosition\s*\+\s*\(elapsedSec\s*\*\s*\(rate\s*\|\|\s*1\.0\)\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'Math\.abs\(pos\s*-\s*expectedPos\)\s*<\s*2\.0'
+        )
+
+    def test_pageshow_listener_wires_resync(self):
+        """main.js pageshow listener wires resyncMediaSessionOnForeground"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.addEventListener\([\'"]pageshow[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?resyncMediaSessionOnForeground\([\'"]pageshow-playing[\'"]\);'
+        )
+
+    def test_resync_media_session_guards_republish_metadata_with_needs_rebind(self):
+        """resyncMediaSessionOnForeground only republishes metadata when needsRebind is true to avoid SquigglyProgress freeze"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
+        )
+
+    def test_toggle_playback_mode_guards_republish_metadata_on_pause(self):
+        """togglePlaybackMode guards republishMediaMetadata with shouldRepublishMetadata when paused to prevent animation restarts"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
+        )
+
+    def test_toggle_playback_mode_mode1_synchronous_native_kill(self):
+        """togglePlaybackMode Mode 1 synchronously kills probe and anchor elements before declaring paused"""
+        self.assertRegex(
+            self.ms_content,
+            r'focus-probe[\s\S]*?probeEl\.pause\(\);[\s\S]*?live-stream-anchor[\s\S]*?anchorEl\.pause\(\);[\s\S]*?liveAudioContext\.suspend'
+        )
+
+    def test_visibilitychange_mode1_synchronous_native_kill_on_hide(self):
+        """main.js visibilitychange synchronously kills probe and anchor before declaring paused on hide"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?live-stream-anchor[\s\S]*?aEl\.pause\(\);[\s\S]*?focus-probe[\s\S]*?pEl\.pause\(\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_update_media_session_position_freshness_ceiling(self):
+        """updateMediaSessionPosition enforces a 3s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+freshnessCeilingMs\s*=\s*3000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+        )
+
+    def test_mode_transition_mutex_guards_resurrectors(self):
+        """togglePlaybackMode arms window._modeTransitionUntil and guards resurrectors"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*newMode\s*===\s*[\'"]mode1[\'"]\s*\)\s*\{[\s\S]*?window\._modeTransitionUntil\s*=\s*Date\.now\(\)\s*\+\s*2000;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+startLiveAudioAnchor[\s\S]*?Date\.now\(\)\s*<\s*\(window\._modeTransitionUntil\s*\|\|\s*0\)'
+        )
+
+    def test_anchor_heartbeat_pauses_on_stale_generation(self):
+        """startAnchorHeartbeat pauses anchorEl if generation is stale on play promise resolution"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.play\(\)\.then\(\(\)\s*=>\s*\{[\s\S]*?currentGen\s*!==\s*_anchorGeneration[\s\S]*?anchorEl\.pause\(\);'
+        )
+
+    def test_audiocontext_close_awaited_on_mode1_switch(self):
+        """togglePlaybackMode awaits AudioContext.close before declaring paused state on Mode 1 switch"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+ctxToClose\s*=\s*liveAudioContext;[\s\S]*?ctxToClose\.close\(\)\.then\(finishMode1Switch\)'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+finishMode1Switch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_mode1_paused_rate_scoped_and_not_microrate(self):
+        """Mode 1 paused uses nominal rate (not 0.00001 micro-rate) to avoid HyperOS wave animation leak"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;[\s\S]*?\}\s*else\s*\{[\s\S]*?rate\s*='
+        )
+
+    def test_finish_mode1_switch_position_before_paused_state(self):
+        """finishMode1Switch updates position before setting playbackState to paused to ensure 0.0f speed in Android SystemUI"""
+        self.assertRegex(
+            self.ms_content,
+            r'updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_main_stale_gap_reasserts_playing(self):
+        """main.js reasserts playing state and forces unthrottled position update when stale gap detected during playback"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"]'
+        )
+        self.assertNotRegex(
+            main_src,
+            r'restartSquigglyWaveAnimation'
+        )
+
+    def test_finish_mode1_switch_silent_muted_play_pause_cycle(self):
+        """finishMode1Switch runs silent muted play-pause cycle with zero volume on activeEl to trigger native OnPlayerPaused for HyperOS"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+activeEl\s*=\s*\(typeof\s+audioPlayer[\s\S]*?activeEl\.volume\s*=\s*0;[\s\S]*?activeEl\.muted\s*=\s*true;[\s\S]*?activeEl\.play\(\)[\s\S]*?activeEl\.pause\(\);'
+        )
+
+    def test_settle_mode1_paused_reasserts_position(self):
+        """settleMode1Paused reasserts honest position update alongside paused state"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
 if __name__ == '__main__':

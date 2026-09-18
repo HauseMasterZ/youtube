@@ -36,11 +36,17 @@
                     if (e.type === 'waiting') {
                         if (!this.active.paused) {
                             this._isBufferStalled = true;
+                            if (typeof window !== 'undefined' && !window._stallSince) {
+                                window._stallSince = Date.now();
+                            }
                         }
                     }
 
-                    if (e.type === 'playing' || e.type === 'play' || e.type === 'pause') {
+                    if (e.type === 'playing' || e.type === 'play' || e.type === 'pause' || e.type === 'canplay') {
                         this._isBufferStalled = false;
+                        if (typeof window !== 'undefined') {
+                            window._stallSince = 0;
+                        }
                     }
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;
@@ -582,7 +588,7 @@
 
                         const fetchUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
                         const fetchHeaders = { 'Range': `bytes=${cachedPartialBytes}-` };
-                        response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
+                        response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
                         if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
                         if (!response.body) throw new Error("ReadableStream not supported");
                         reader = response.body.getReader();
@@ -603,7 +609,7 @@
                                     const fetchUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
                                     const fetchHeaders = initialBytes > 0 ? { 'Range': `bytes=${initialBytes}-` } : {};
 
-                                    response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal });
+                                    response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
                                     if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
                                     if (!response.body) throw new Error("ReadableStream not supported");
                                     reader = response.body.getReader();
@@ -824,7 +830,8 @@
                                     const resumeUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
                                     const resumeRes = await fetch(resumeUrl, {
                                         headers: { 'Range': `bytes=${totalBytesAppended}-` },
-                                        signal: currentAbortSignal
+                                        signal: currentAbortSignal,
+                                        priority: 'high'
                                     });
 
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;

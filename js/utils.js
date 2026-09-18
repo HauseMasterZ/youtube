@@ -131,7 +131,7 @@
             return;
         }
         try {
-            const resp = await fetch(url);
+            const resp = await fetch(url, { priority: 'low' });
             if (!resp.ok) throw new Error('Fetch failed');
             const blob = await resp.blob();
             const bitmap = await createImageBitmap(blob);
@@ -247,14 +247,31 @@
     }
     window.getVibrantFallbackColor = getVibrantFallbackColor;
 
+    function getTrackColor(track) {
+        if (!track) return '#8c73ff';
+        if (track.color && track.color !== '#000000' && track.color !== '#8c73ff') {
+            return track.color;
+        }
+        if (track.id && dominantColorCache.has(track.id)) {
+            const cached = dominantColorCache.get(track.id);
+            if (cached && cached !== '#000000' && cached !== '#8c73ff') return cached;
+        }
+        const fallbackColor = getVibrantFallbackColor(track.id || track.title);
+        track.color = fallbackColor;
+        if (track.id) {
+            dominantColorCache.set(track.id, fallbackColor);
+        }
+        return fallbackColor;
+    }
+    window.getTrackColor = getTrackColor;
+
     function normalizeTrackItem(item, folderName) {
         if (!item) return null;
         let normalized;
         if (Array.isArray(item)) {
             const trackId = item[0];
             const rawColor = item[5];
-            const fallbackColor = getVibrantFallbackColor(trackId || item[1]);
-            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : null;
             const fileItem = item[4];
             let filePath;
             if (fileItem && (fileItem.endsWith('.opus') || fileItem.endsWith('.webm') || fileItem.endsWith('.m4a'))) {
@@ -274,8 +291,7 @@
         } else {
             const trackId = item.id;
             const rawColor = item.color;
-            const fallbackColor = getVibrantFallbackColor(trackId || item.title);
-            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : fallbackColor;
+            const validColor = (rawColor && rawColor !== '#000000' && rawColor !== '#8c73ff') ? rawColor : null;
             let filePath = item.file_path || item.audio_path;
             if (!filePath) {
                 filePath = `${folderName}/${trackId}.webm`;
@@ -307,10 +323,12 @@
         return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
     }
 
-    function normalizePlaylistData(data, folderName) {
+    function normalizePlaylistData(data, folderName, startIndex = 0, count = 0) {
         if (!Array.isArray(data)) return [];
+        const start = Math.max(0, startIndex);
+        const end = count > 0 ? Math.min(data.length, start + count) : data.length;
         const result = [];
-        for (let i = 0; i < data.length; i++) {
+        for (let i = start; i < end; i++) {
             const item = data[i];
             if (isValidTrackItem(item)) {
                 result.push(normalizeTrackItem(item, folderName));

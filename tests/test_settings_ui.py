@@ -7,12 +7,15 @@ class TestSettingsUI(unittest.TestCase):
     def setUpClass(cls):
         base_dir = os.path.dirname(os.path.dirname(__file__))
         main_path = os.path.join(base_dir, 'js', 'main.js')
+        dom_path = os.path.join(base_dir, 'js', 'dom.js')
         ms_path = os.path.join(base_dir, 'js', 'mediaSession.js')
         playback_path = os.path.join(base_dir, 'js', 'playback.js')
         ui_path = os.path.join(base_dir, 'js', 'ui.js')
         utils_path = os.path.join(base_dir, 'js', 'utils.js')
         test_path = os.path.join(base_dir, 'tests', 'test_settings_ui.py')
 
+        with open(dom_path, 'r', encoding='utf-8') as f:
+            cls.dom_content = f.read()
         with open(main_path, 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
         with open(ms_path, 'r', encoding='utf-8') as f:
@@ -25,6 +28,22 @@ class TestSettingsUI(unittest.TestCase):
             cls.utils_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
+
+        cls.headers_path = os.path.join(base_dir, '_headers')
+        if os.path.exists(cls.headers_path):
+            with open(cls.headers_path, 'r', encoding='utf-8') as f:
+                cls.headers_content = f.read()
+        else:
+            cls.headers_content = ''
+
+    def test_no_emojis_in_dom_js(self):
+        """Strictly zero emojis anywhere in js/dom.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.dom_content)
+        self.assertEqual(matches, [], f"Found emojis in dom.js: {matches}")
 
     def test_no_emojis_in_utils_js(self):
         """Strictly zero emojis anywhere in js/utils.js"""
@@ -61,6 +80,15 @@ class TestSettingsUI(unittest.TestCase):
         )
         matches = emoji_pattern.findall(self.test_content)
         self.assertEqual(matches, [], f"Found emojis in test_settings_ui.py: {matches}")
+
+    def test_no_emojis_in_ui_js(self):
+        """Strictly zero emojis anywhere in js/ui.js"""
+        emoji_pattern = re.compile(
+            r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
+            flags=re.UNICODE
+        )
+        matches = emoji_pattern.findall(self.ui_content)
+        self.assertEqual(matches, [], f"Found emojis in ui.js: {matches}")
 
     def test_playlist_select_options_configuration(self):
         """updatePlaylistSelectOptions defines __settings__ and INSTALL_APP for desktop and __settings__ for mobile"""
@@ -301,6 +329,67 @@ class TestSettingsUI(unittest.TestCase):
             self.utils_content,
             r'const\s+fallbackColor\s*=\s*getVibrantFallbackColor'
         )
+
+    def test_paint_thumb_nodes_replaces_stale_closure(self):
+        """ui.js defines paintThumbNodes and uses data-target-src query lookup to avoid stale recycled closures"""
+        self.assertRegex(self.ui_content, r'function\s+paintThumbNodes\s*\(')
+        self.assertIn('trackList.querySelectorAll', self.ui_content)
+        self.assertIn('.track-thumb[data-target-src="', self.ui_content)
+        self.assertIn('CSS.escape(thumbUrl)', self.ui_content)
+
+    def test_request_thumb_load_single_flight_and_retry(self):
+        """ui.js defines requestThumbLoad with single-flight check, paintThumbNodes call, and scheduleThumbRetry"""
+        self.assertRegex(self.ui_content, r'function\s+requestThumbLoad\s*\(')
+        self.assertRegex(self.ui_content, r'function\s+scheduleThumbRetry\s*\(')
+        self.assertIn('thumbCache.has(thumbUrl)', self.ui_content)
+        self.assertIn('paintThumbNodes(thumbUrl, thumbUrl)', self.ui_content)
+        self.assertIn('MAX_THUMB_RETRIES', self.ui_content)
+
+    def test_scroll_settle_resets_both_start_and_end_index(self):
+        """main.js scroll settle timeout resets both lastStartIndex and lastEndIndex to -1"""
+        self.assertRegex(
+            self.main_content,
+            r'scrollSettleTimer\s*=\s*setTimeout\s*\(\s*\(\s*\)\s*=>\s*\{[\s\S]*?lastStartIndex\s*=\s*-1;[\s\S]*?lastEndIndex\s*=\s*-1;[\s\S]*?renderVirtualTracks\(\);'
+        )
+
+    def test_audio_fetch_explicit_high_priority(self):
+        """dom.js primary audio fetch and recovery declare priority: 'high' for network scheduling"""
+        self.assertRegex(
+            self.dom_content,
+            r'fetch\(\s*fetchUrl\s*,\s*\{[\s\S]*?priority:\s*[\'"]high[\'"]'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'fetch\(\s*resumeUrl\s*,\s*\{[\s\S]*?priority:\s*[\'"]high[\'"]'
+        )
+
+    def test_secondary_assets_explicit_low_priority(self):
+        """utils.js artwork, playback.js preload, and ui.js thumbnails use low priority"""
+        self.assertIn("fetch(url, { priority: 'low' })", self.utils_content)
+        self.assertRegex(self.playback_content, r"fetch\(\s*audioUrl\s*,\s*\{[\s\S]*?priority:\s*['\"]low['\"]")
+        self.assertIn('loader.fetchPriority = "low"', self.ui_content)
+
+    def test_lazy_color_resolution_and_track_color(self):
+        """utils.js defines getTrackColor and memoizes colors lazily on demand"""
+        self.assertRegex(self.utils_content, r'function\s+getTrackColor\s*\(')
+        self.assertIn('window.getTrackColor = getTrackColor;', self.utils_content)
+        self.assertIn('dominantColorCache.set(track.id, fallbackColor);', self.utils_content)
+
+    def test_external_anchor_security_noopener(self):
+        """ui.js sets rel=noopener noreferrer on external YouTube track links"""
+        self.assertIn('tLink.rel = "noopener noreferrer";', self.ui_content)
+
+    def test_chunked_normalization_pipeline(self):
+        """playback.js defines applyNormalizedDataInChunks and utils.js supports slicing"""
+        self.assertRegex(self.playback_content, r'function\s+applyNormalizedDataInChunks\s*\(')
+        self.assertRegex(self.utils_content, r'function\s+normalizePlaylistData\s*\([^)]*startIndex[^)]*count')
+
+    def test_headers_configuration(self):
+        """_headers file exists and defines security policies"""
+        self.assertTrue(len(self.headers_content) > 0, "_headers file must not be empty")
+        self.assertIn('Permissions-Policy:', self.headers_content)
+        self.assertIn('X-Content-Type-Options: nosniff', self.headers_content)
+        self.assertIn('Referrer-Policy: strict-origin-when-cross-origin', self.headers_content)
 
 if __name__ == '__main__':
     unittest.main()

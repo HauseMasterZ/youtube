@@ -2,7 +2,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
-    const queuedRemoteVideoIds = new Set();
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -97,10 +96,10 @@ document.addEventListener("DOMContentLoaded", () => {
             <ul class="ephemeral-track-list">
                 ${results.map((item) => {
                     const vid = item.video_id;
-                    const isQueued = queuedRemoteVideoIds.has(vid);
                     const thumbStyle = item.thumbnail_url ? `background-image: url('${escapeHtml(item.thumbnail_url)}');` : '';
                     const artistsStr = (item.artists && item.artists.length > 0) ? item.artists.join(', ') : (item.channel_name || '');
                     const durStr = item.duration || (item.duration_seconds ? `${Math.floor(item.duration_seconds / 60)}:${String(item.duration_seconds % 60).padStart(2, '0')}` : '');
+                    const ytUrl = `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`;
                     return `
                         <li class="ephemeral-track-item" data-vid="${escapeHtml(vid)}">
                             <div class="ephemeral-thumb" style="${thumbStyle}"></div>
@@ -113,10 +112,7 @@ document.addEventListener("DOMContentLoaded", () => {
                                 </div>
                             </div>
                             <div class="ephemeral-actions">
-                                <button class="ephemeral-action-btn ${isQueued ? 'queued' : ''}" data-action="queue" data-vid="${escapeHtml(vid)}" ${isQueued ? 'disabled' : ''}>
-                                    ${isQueued ? 'Queued' : 'Add to Playlist'}
-                                </button>
-                                <a class="ephemeral-action-btn" href="https://www.youtube.com/watch?v=${encodeURIComponent(vid)}" target="_blank" rel="noopener noreferrer" title="Open on YouTube" aria-label="Open track on YouTube">
+                                <a class="ephemeral-action-btn" href="${escapeHtml(ytUrl)}" target="_blank" rel="noopener noreferrer" title="Open on YouTube" aria-label="Open track on YouTube">
                                     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
                                 </a>
                             </div>
@@ -128,40 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const closeBtn = document.getElementById('btn-ephemeral-close');
         if (closeBtn) closeBtn.addEventListener('click', () => exitEphemeralSearch());
-
-        ephemeralSearchContainer.querySelectorAll('button[data-action="queue"]').forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const vid = btn.dataset.vid;
-                if (!vid || queuedRemoteVideoIds.has(vid)) return;
-
-                btn.disabled = true;
-                btn.textContent = 'Queueing...';
-
-                try {
-                    const currentPl = (playlistSelect && playlistSelect.value && playlistSelect.value !== '__settings__') ? playlistSelect.value : 'Songs';
-                    const syncUrl = (typeof baseUrl !== 'undefined' && baseUrl ? baseUrl : '') + '/sync';
-                    await fetch(syncUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            source: 'frontend_search',
-                            folder: currentPl,
-                            vid: vid
-                        })
-                    });
-
-                    queuedRemoteVideoIds.add(vid);
-                    btn.classList.add('queued');
-                    btn.textContent = 'Queued';
-                    showEphemeralToast(`Queued for ingestion into ${currentPl}`);
-                } catch {
-                    btn.disabled = false;
-                    btn.textContent = 'Add to Playlist';
-                    showEphemeralToast('Failed to queue track', false);
-                }
-            });
-        });
     }
 
     async function performRemoteSearch(rawQuery) {
@@ -387,6 +349,7 @@ document.addEventListener("DOMContentLoaded", () => {
         scrollSettleTimer = setTimeout(() => {
             isScrollingFast = false;
             lastStartIndex = -1;
+            lastEndIndex = -1;
             renderVirtualTracks();
         }, 120);
 
@@ -404,7 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const pl = li.dataset.playlist;
         const idx = parseInt(li.dataset.index);
         const targetTrack = (allDatabases[pl] && allDatabases[pl][idx]) || currentPlaylistData[idx];
-        const songColor = targetTrack ? ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff')) : '#8c73ff';
+        const songColor = targetTrack ? ((typeof getTrackColor === 'function') ? getTrackColor(targetTrack) : ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff'))) : '#8c73ff';
         li.style.setProperty('--enqueued-color', songColor);
         li.classList.add("enqueued-flash");
         setTimeout(() => {
@@ -526,7 +489,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     btnPlayPause.addEventListener("click", () => {
         window.mediaSessionDestroyed = false;
-        if (typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
+        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
         if (typeof primeFocusProbe === 'function') {
@@ -738,14 +701,18 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
-                updateTimeUI(Math.floor(audioPlayer.currentTime));
+                // Local DOM only. No MediaSession IPC here. resync decides.
+                // Use float precision to avoid 0:00 dip / seekbar jump.
+                updateTimeUI(audioPlayer.currentTime);
+                lastRenderTime = Math.floor(audioPlayer.currentTime);
 
                 // Re-sync MediaSession state when PWA is foregrounded
-                if (hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
-                    const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0);
-                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                if (typeof resyncMediaSessionOnForeground === 'function') {
+                    resyncMediaSessionOnForeground('unlock-playing');
+                } else if (hasMediaSession) {
+                    if (navigator.mediaSession.playbackState !== 'playing') {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
                 }
             } else if (window.playbackMode === 'mode2' && !window.isCallActive && !audioPlayer.switching && !window.mediaSessionDestroyed) {
                 const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
@@ -777,16 +744,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof armAutoKillWatchdog === 'function') armAutoKillWatchdog();
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                 } else {
-                    // User-paused: re-arm keepalive + probe. Declare state via helper.
+                    // User-paused: re-arm keepalive + probe. Declare state via helper and refresh position timestamp.
                     if (typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();
                     }
                     if (typeof startFocusProbe === 'function') {
                         startFocusProbe();
                     }
-                    if (hasMediaSession) {
+                    if (typeof resyncMediaSessionOnForeground === 'function') {
+                        resyncMediaSessionOnForeground('unlock-mode2-paused');
+                    } else if (hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
+                        const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(audioPlayer.currentTime, dur);
+                        }
+                    }
+                    if (typeof startAnchorHeartbeat === 'function') {
+                        startAnchorHeartbeat(0);
                     }
                 }
             }
@@ -797,6 +773,50 @@ document.addEventListener("DOMContentLoaded", () => {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
                 }
+            } else if (window.playbackMode === 'mode1' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching && !window.mediaSessionDestroyed) {
+                // Home pressed after Mode 2 -> Mode 1 switch may find anchor/probe
+                // still detaching. Kill synchronously BEFORE declaring paused,
+                // otherwise Chromium native active-player overrides paused.
+                try {
+                    const aEl = document.getElementById("live-stream-anchor");
+                    if (aEl && (aEl.srcObject || aEl.getAttribute('src') || !aEl.paused)) {
+                        try { aEl.pause(); } catch (e) {}
+                        try {
+                            const s = aEl.srcObject;
+                            if (s && typeof s.getAudioTracks === 'function') s.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                        } catch (e) {}
+                        try { aEl.srcObject = null; } catch (e) {}
+                        try { aEl.removeAttribute('src'); } catch (e) {}
+                        try { if (typeof aEl.load === 'function') aEl.load(); } catch (e) {}
+                    }
+                    const pEl = document.getElementById("focus-probe");
+                    if (pEl && (pEl.srcObject || pEl.getAttribute('src') || !pEl.paused)) {
+                        try { pEl.pause(); } catch (e) {}
+                        try { pEl.srcObject = null; } catch (e) {}
+                        try { pEl.removeAttribute('src'); } catch (e) {}
+                        try { if (typeof pEl.load === 'function') pEl.load(); } catch (e) {}
+                    }
+                } catch (e) {}
+                if (hasMediaSession) {
+                    try {
+                        if (navigator.mediaSession.playbackState !== 'paused') {
+                            navigator.mediaSession.playbackState = 'paused';
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    });
+
+    // pageshow covers bfcache restores and lock-screen foregrounds where
+    // visibilitychange ordering is unreliable. Timeupdate self-heal above
+    // covers unlock-to-home where hidden stays true.
+    window.addEventListener("pageshow", () => {
+        if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
+            updateTimeUI(audioPlayer.currentTime);
+            lastRenderTime = Math.floor(audioPlayer.currentTime);
+            if (typeof resyncMediaSessionOnForeground === 'function') {
+                resyncMediaSessionOnForeground('pageshow-playing');
             }
         }
     });
@@ -890,9 +910,26 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            if (roundedSec !== lastRenderTime) {
+            // Self-heal for lock gaps without visibilitychange (e.g. unlock to home
+            // screen leaves document.hidden true, so unlock-playing never runs).
+            let staleGap = false;
+            try {
+                if (typeof window.getLastPositionTimestamp === 'function') {
+                    const lastTs = window.getLastPositionTimestamp();
+                    staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
+                }
+            } catch (e) {}
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+                if (staleGap && !audioPlayer.paused) {
+                    window._forceNextPosition = true;
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        if (navigator.mediaSession.playbackState !== 'playing') {
+                            navigator.mediaSession.playbackState = 'playing';
+                        }
+                    }
+                }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
@@ -941,6 +978,15 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        if (typeof window !== 'undefined') {
+            window._stallSince = 0;
+        }
+    });
+
+    audioPlayer.addEventListener("waiting", () => {
+        if (typeof window !== 'undefined' && !window._stallSince && typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+            window._stallSince = Date.now();
+        }
     });
 
     audioPlayer.addEventListener("error", () => {
@@ -1003,7 +1049,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isPlaying = queueIndex >= 0 && queueIndex < playQueue.length && Boolean(audioPlayer.src);
         const track = isPlaying ? (currentPlaylistData[playQueue[queueIndex]] || currentPlaylistData[globalActiveOriginalIndex]) : null;
         if (track) {
-            const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+            const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
             document.documentElement.style.setProperty('--primary-color', activeColor);
         }
 
@@ -1061,7 +1107,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     const thumbUrl = getThumbUrl(track);
                     albumArt.style.display = 'block';
                     albumArt.src = thumbUrl;
-                    const activeColor = (track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff');
+                    const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
                     document.documentElement.style.setProperty('--primary-color', activeColor);
                     if (hasMediaSession && navigator.mediaSession.metadata) {
                         const sqCached = artworkSquareCache.has(track.id) ? artworkSquareCache.get(track.id) : null;
@@ -1129,7 +1175,7 @@ document.addEventListener("DOMContentLoaded", () => {
             // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
             await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
                 const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                const res = await fetch(`${dbUrl}?t=${ts}`);
+                const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
                 if (res.ok) {
                     const rawData = await res.json();
                     const freshData = normalizePlaylistData(rawData, pl);
@@ -1282,7 +1328,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
         for (const pl of otherPlaylists) {
             if (allDatabases[pl]) continue;
-            fetch(`${baseUrl}/${pl}/_Playlist_Database.json`)
+            fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
                 .then(r => r.ok ? r.json() : [])
                 .then(rawData => {
                     allDatabases[pl] = normalizePlaylistData(rawData, pl);
@@ -1455,6 +1501,8 @@ document.addEventListener("DOMContentLoaded", () => {
         : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
     if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
         togglePlaybackMode('mode2');
+    } else if (typeof togglePlaybackMode === 'function') {
+        togglePlaybackMode('mode1');
     }
 
     if (btTimeoutSelect) {

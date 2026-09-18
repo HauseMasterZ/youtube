@@ -46,6 +46,12 @@ jobs:
           if [ -d "dev-src" ]; then
             mkdir -p site-root/dev
             cp -rf dev-src/* site-root/dev/
+            if [ -f "dev-src/_headers" ]; then
+              cp -f dev-src/_headers site-root/_headers
+              if [ -d "cf-root" ]; then
+                cp -f dev-src/_headers cf-root/_headers
+              fi
+            fi
             rm -rf site-root/dev/.git site-root/dev/.github
           fi
           rm -rf site-root/.git site-root/.github
@@ -181,7 +187,7 @@ jobs:
                 html = html.replace(/<link\s+rel="stylesheet"\s+href="css\/style\.css(\?v=[^"]*)?">/i, `<style>${inlinedCss}</style>`);
               }
               html = html.replace(/<script\s+src="js\/(dom|utils|state|ui|mediaSession|lyrics|playback|main)\.js(\?v=[^"]*)?"><\/script>(\s*)/g, '');
-              html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}"></script>\n</body>`);
+              html = html.replace(/<\/body>/, `<script src="js/bundle.min.js?v=${buildVer}" defer></script>\n</body>`);
               fs.writeFileSync(indexPath, html, 'utf8');
               execSync(`html-minifier-terser --collapse-whitespace --remove-comments --remove-redundant-attributes --remove-script-type-attributes --remove-style-link-type-attributes --use-short-doctype --minify-css true --minify-js true -o "${indexPath}" "${indexPath}"`);
             }
@@ -394,7 +400,7 @@ jobs:
       deployments: write
     environment:
       name: production-edge
-      url: ${{ steps.edge_distribution.outputs.deployment-url }}
+      url: https://music.hausemaster.tech
     steps:
       - name: Download Cloudflare Distribution
         uses: actions/download-artifact@v4
@@ -448,22 +454,85 @@ jobs:
           if [ -z "$DEPLOY_URL" ]; then
             DEPLOY_URL="https://${PROJECT}.pages.dev"
           fi
-          echo "Deployment target URL: ${DEPLOY_URL}"
+          echo "Preview deployment URL: ${DEPLOY_URL}"
+          echo "preview-url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
           echo "deployment-url=${DEPLOY_URL}" >> "$GITHUB_OUTPUT"
 
-      - name: Wait 5s for Edge Network Propagation
-        if: steps.edge_distribution.outputs.deployment-url != ''
-        run: sleep 5
+      - name: Resolve Production Target URL
+        id: prod_target
+        env:
+          SECRET_PROD_DOMAIN: ${{ secrets.PROD_CUSTOM_DOMAIN }}
+          SECRET_CUSTOM_DOMAIN: ${{ secrets.CUSTOM_DOMAIN }}
+          VARS_PROD_DOMAIN: ${{ vars.PROD_CUSTOM_DOMAIN }}
+          VARS_CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+        run: |
+          PROD_URL=""
+          if [ -n "$SECRET_PROD_DOMAIN" ]; then
+            PROD_URL="$SECRET_PROD_DOMAIN"
+          elif [ -n "$SECRET_CUSTOM_DOMAIN" ]; then
+            PROD_URL="$SECRET_CUSTOM_DOMAIN"
+          elif [ -n "$VARS_PROD_DOMAIN" ]; then
+            PROD_URL="$VARS_PROD_DOMAIN"
+          elif [ -n "$VARS_CUSTOM_DOMAIN" ]; then
+            PROD_URL="$VARS_CUSTOM_DOMAIN"
+          else
+            PROD_URL="https://music.hausemaster.tech"
+          fi
+          PROD_URL="${PROD_URL%/}"
+          case "$PROD_URL" in
+            http://*|https://*) ;;
+            *) PROD_URL="https://${PROD_URL}" ;;
+          esac
+          echo "Production target URL: ${PROD_URL}"
+          echo "prod-url=${PROD_URL}" >> "$GITHUB_OUTPUT"
 
-      - name: Audit Deployed Site with Lighthouse CI
+      - name: Purge Edge Distribution Cache
+        if: steps.prod_target.outputs.prod-url != ''
+        env:
+          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG || secrets.CLOUDFLARE_ZONE_ID }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY || secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$EDGE_ROUTE_TAG" ] || [ -z "$EDGE_SVC_KEY" ]; then
+            echo "Edge purge skipped: missing zone ID or API token. Lighthouse will audit origin without purge."
+            exit 0
+          fi
+          echo "Purging edge cache for zone ${EDGE_ROUTE_TAG} before production audit..."
+          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
+            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')
+          if echo "$RESPONSE" | grep -q '"success":true'; then
+            echo "Edge cache successfully purged."
+          else
+            echo "Edge cache purge notice: ${RESPONSE}"
+          fi
+
+      - name: Wait for Edge Purge Propagation and Warm Origin
+        if: steps.prod_target.outputs.prod-url != ''
+        env:
+          PROD_URL: ${{ steps.prod_target.outputs.prod-url }}
+        run: |
+          echo "Waiting 15s for global purge propagation..."
+          sleep 15
+          echo "Warming production origin: ${PROD_URL}"
+          for i in 1 2 3; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "$PROD_URL" || echo "000")
+            echo "Warmup attempt ${i}: HTTP ${CODE}"
+            if [ "$CODE" = "200" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Audit Production Custom Domain with Lighthouse CI
         id: lighthouse
-        if: steps.edge_distribution.outputs.deployment-url != ''
+        if: steps.prod_target.outputs.prod-url != ''
         uses: treosh/lighthouse-ci-action@v12
         env:
           LHCI_BUILD_CONTEXT__CURRENT_HASH: ${{ github.sha }}
         with:
           urls: |
-            ${{ steps.edge_distribution.outputs.deployment-url }}
+            ${{ steps.prod_target.outputs.prod-url }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true
@@ -554,21 +623,3 @@ jobs:
             console.error("Summary builder notice:", err);
           }
           '
-
-      - name: Purge Edge Distribution Cache
-        if: always() && steps.edge_distribution.outputs.deployment-url != '' && env.EDGE_ROUTE_TAG != '' && env.EDGE_SVC_KEY != ''
-        env:
-          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG || secrets.CLOUDFLARE_ZONE_ID }}
-          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY || secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          echo "Purging edge cache for route ${EDGE_ROUTE_TAG}..."
-          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
-            -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
-            -H "Content-Type: application/json" \
-            --data '{"purge_everything":true}')
-          
-          if echo "$RESPONSE" | grep -q '"success":true'; then
-            echo "Edge cache successfully purged."
-          else
-            echo "Edge cache purge notice: ${RESPONSE}"
-          fi

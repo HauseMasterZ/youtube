@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v135';
+const CACHE_NAME = 'yt-player-cache-v158';
 
 const CORE_ASSETS = [
     './',
@@ -39,6 +39,17 @@ self.addEventListener('activate', (event) => {
                     }
                 })
             );
+        }).then(async () => {
+            try {
+                const thumbCache = await caches.open(THUMBS_CACHE);
+                const keys = await thumbCache.keys();
+                for (const key of keys) {
+                    const res = await thumbCache.match(key);
+                    if (res && res.type === 'opaque') {
+                        await thumbCache.delete(key);
+                    }
+                }
+            } catch {}
         }).then(() => clients.claim())
     );
 });
@@ -124,17 +135,26 @@ self.addEventListener('fetch', (event) => {
             caches.open(THUMBS_CACHE).then(async (cache) => {
                 const cached = await cache.match(event.request.url);
                 if (cached) {
-                    return cached;
+                    if (cached.type === 'opaque') {
+                        // Opaque response cannot be returned to a cors request - purge it immediately
+                        cache.delete(event.request.url);
+                    } else {
+                        return cached;
+                    }
                 }
                 try {
                     const response = await fetch(event.request);
-                    if (response.ok || response.type === 'opaque') {
+                    // Never cache opaque responses in THUMBS_CACHE
+                    if (response.ok && response.type !== 'opaque') {
                         cache.put(event.request.url, response.clone());
                         limitCacheSize(THUMBS_CACHE, 1000);
                     }
                     return response;
                 } catch (err) {
-                    return cached || fetch(event.request);
+                    if (cached && cached.type !== 'opaque') {
+                        return cached;
+                    }
+                    return new Response('', { status: 408, statusText: 'Thumbnail request failed' });
                 }
             })
         );
@@ -143,13 +163,13 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. Database JSON: Stale-While-Revalidate Strategy
+    // 3. Database JSON: True Stale-While-Revalidate Strategy
     if (event.request.url.includes('_Playlist_Database.json')) {
         const cleanUrl = event.request.url.split('?')[0];
         // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network and update cache
         if (event.request.url.includes('?t=') || event.request.url.includes('?v=')) {
             event.respondWith(
-                fetch(event.request).then(response => {
+                fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
@@ -160,17 +180,22 @@ self.addEventListener('fetch', (event) => {
             return;
         }
 
-        // Standard request: Instant cache response with network fallback
+        // Standard request: Instant cached response with guaranteed background network revalidation (SWR)
         event.respondWith(
             caches.match(cleanUrl).then(cached => {
-                if (cached) return cached;
-                return fetch(event.request).then(response => {
+                const networkFetch = fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
                     }
                     return response;
-                });
+                }).catch(() => null);
+
+                if (cached) {
+                    event.waitUntil(networkFetch);
+                    return cached;
+                }
+                return networkFetch.then(res => res || caches.match(cleanUrl));
             })
         );
         return;

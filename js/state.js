@@ -104,6 +104,12 @@
     };
 
     window.playbackMode = 'mode1';
+    try {
+        const _storedPlaybackMode = getStoredSetting('yt_playback_mode', 'mode1');
+        if (_storedPlaybackMode === 'mode2') {
+            window.playbackMode = 'mode2';
+        }
+    } catch (e) {}
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '3');
     window.btSleepTimer = null;
     window.lastPlaybackModeTransitions = [];

@@ -38,6 +38,9 @@ class TestRemoteSearchMarkupAndUI(unittest.TestCase):
         self.assertIn('function performRemoteSearch', self.main_js)
         self.assertIn('function exitEphemeralSearch', self.main_js)
         self.assertIn('/api/search?q=', self.main_js)
+        self.assertNotIn('Copy URL', self.main_js)
+        self.assertNotIn('Add to Playlist', self.main_js)
+        self.assertIn('Open on YouTube', self.main_js)
 
     def test_no_emojis_in_search_code(self):
         """Strictly zero emojis in new search features"""

@@ -175,5 +175,33 @@ class TestSettingsCSS(unittest.TestCase):
         # Touch targets >= 44px
         self.assertRegex(mobile_section, r'(\.settings-action-btn|\.settings-radio-card|\.settings-radio-label)[^{]*\{[^}]*min-height:\s*44px;')
 
+    def test_desktop_album_art_image_sizing(self):
+        """Desktop landscape album-art-image must tight wrap rendered bitmap to prevent ghost margins."""
+        match = re.search(r'@media\s*\(\s*min-width:\s*1111px\s*\)\s*and\s*\(\s*orientation:\s*landscape\s*\)', self.css_content)
+        self.assertIsNotNone(match, "Could not find desktop landscape media query")
+        start_idx = match.start()
+        brace_count = 0
+        end_idx = start_idx
+        started = False
+        for i in range(start_idx, len(self.css_content)):
+            if self.css_content[i] == '{':
+                brace_count += 1
+                started = True
+            elif self.css_content[i] == '}':
+                brace_count -= 1
+                if started and brace_count == 0:
+                    end_idx = i + 1
+                    break
+        desktop_section = self.css_content[start_idx:end_idx]
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*width:\s*auto;')
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*height:\s*auto;')
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*max-width:\s*100%;')
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*max-height:\s*100%;')
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*border-radius:\s*8px;')
+        self.assertRegex(desktop_section, r'#album-art-image\s*\{[^}]*flex-shrink:\s*0;')
+        self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*max-width:\s*700px;')
+        self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*height:\s*clamp\(\s*260px,\s*60vh,\s*680px\s*\);')
+
 if __name__ == '__main__':
     unittest.main()
+

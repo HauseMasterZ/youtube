@@ -31,6 +31,7 @@
     let _isInternalAnchorStop = false;
     let _anchorGeneration = 0;
     let _spoofBurstTimer = null;
+    window._modeTransitionUntil = 0;
 
     function clearSpoofBurst() {
         if (_spoofBurstTimer) {
@@ -72,6 +73,9 @@
     }
 
     function initLiveAudioAnchor() {
+        if (window.playbackMode !== 'mode2') {
+            return liveAudioContext;
+        }
         if (liveAudioContext) {
             if (liveAudioContext.state === 'suspended') {
                 liveAudioContext.resume().catch(() => {});
@@ -161,7 +165,7 @@
 
     function startLiveAudioAnchor() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
         if (window.mediaSessionDestroyed) return;
         initLiveAudioAnchor();
@@ -221,12 +225,19 @@
             stopAnchorHeartbeat();
         }
         const anchorEl = document.getElementById("live-stream-anchor");
+        try {
+            const stream = (anchorEl && anchorEl.srcObject) || (liveAudioDestination && liveAudioDestination.stream);
+            if (stream && typeof stream.getAudioTracks === 'function') {
+                stream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+            }
+        } catch (e) {}
         if (anchorEl) {
             try {
                 _isInternalAnchorStop = true;
                 anchorEl.pause();
                 anchorEl.srcObject = null;
                 anchorEl.removeAttribute('src');
+                anchorEl.load();
             } catch (e) {} finally {
                 _isInternalAnchorStop = false;
             }
@@ -261,11 +272,11 @@
         const initialDelay = (arguments.length > 0 && typeof arguments[0] === 'number') ? arguments[0] : 1000;
         stopAnchorHeartbeat();
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
 
         function runTick() {
             const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-            if (window.playbackMode !== 'mode2' || window.isCallActive || isRecentBt || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+            if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2' || window.isCallActive || isRecentBt || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
                 stopAnchorHeartbeat();
                 return;
             }
@@ -297,12 +308,14 @@
             _isInternalAnchorStart = true;
             const currentGen = _anchorGeneration;
             anchorEl.play().then(() => {
-                _isAnchorPlayPending = false;
-                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-
-                if (currentGen !== _anchorGeneration || window.playbackMode !== 'mode2') {
+                if (currentGen !== _anchorGeneration || window.playbackMode !== 'mode2' || Date.now() < (window._modeTransitionUntil || 0)) {
+                    try { _isInternalAnchorStop = true; anchorEl.pause(); } catch (e) {} finally { _isInternalAnchorStop = false; }
+                    _isAnchorPlayPending = false;
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
                     return;
                 }
+                _isAnchorPlayPending = false;
+                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
 
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -380,7 +393,7 @@
 
     function startFocusProbe() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
         const probeEl = document.getElementById("focus-probe");
         if (!probeEl) return;
@@ -398,10 +411,14 @@
 
     function stopFocusProbe() {
         const probeEl = document.getElementById("focus-probe");
-        if (probeEl && !probeEl.paused) {
+        if (probeEl) {
             try {
                 _isProbeInternal = true;
-                probeEl.pause();
+                if (!probeEl.paused) probeEl.pause();
+                probeEl.srcObject = null;
+                probeEl.removeAttribute('src');
+                if (typeof probeEl.load === 'function') probeEl.load();
+                focusProbePrimed = false;
             } catch (e) {} finally {
                 setTimeout(() => { _isProbeInternal = false; }, 200);
             }
@@ -513,6 +530,12 @@
         const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
+        _anchorGeneration++;
+        if (newMode === 'mode1') {
+            window._modeTransitionUntil = Date.now() + 2000;
+        } else {
+            window._modeTransitionUntil = 0;
+        }
         // Mode switch resets the world: revoke any standing steal flag.
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -561,32 +584,153 @@
                 if (typeof startFocusProbe === 'function') startFocusProbe();
                 armAutoKillWatchdog();
                 if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+            } else {
+                cancelAutoKillWatchdog();
+                if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                if (typeof stopFocusProbe === 'function') stopFocusProbe();
             }
         } else {
             clearSpoofBurst();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-            teardownLiveAudioAnchor();
+            // Synchronous native kill BEFORE any state declaration.
+            // Order: heartbeat/burst off -> probe kill -> anchor kill ->
+            // WebAudio node disconnect -> await AudioContext close -> declare paused.
+            try {
+                const probeEl = document.getElementById("focus-probe");
+                if (probeEl) {
+                    try { _isProbeInternal = true; probeEl.pause(); } catch (e) {} finally { _isProbeInternal = false; }
+                    try { probeEl.srcObject = null; } catch (e) {}
+                    try { probeEl.removeAttribute('src'); } catch (e) {}
+                    try { if (typeof probeEl.load === 'function') probeEl.load(); } catch (e) {}
+                    focusProbePrimed = false;
+                }
+            } catch (e) {}
+            try {
+                const anchorEl = document.getElementById("live-stream-anchor");
+                if (anchorEl) {
+                    try { _isInternalAnchorStop = true; anchorEl.pause(); } catch (e) {} finally { _isInternalAnchorStop = false; }
+                    try {
+                        const s = anchorEl.srcObject;
+                        if (s && typeof s.getAudioTracks === 'function') {
+                            s.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                        }
+                    } catch (e) {}
+                    try { anchorEl.srcObject = null; } catch (e) {}
+                    try { anchorEl.removeAttribute('src'); } catch (e) {}
+                    try { if (typeof anchorEl.load === 'function') anchorEl.load(); } catch (e) {}
+                }
+            } catch (e) {}
+
+            if (liveAudioOscillator) {
+                try { liveAudioOscillator.stop(); liveAudioOscillator.disconnect(); } catch (e) {}
+                liveAudioOscillator = null;
+            }
+            if (liveAudioGain) {
+                try { liveAudioGain.disconnect(); } catch (e) {}
+                liveAudioGain = null;
+            }
+            liveAudioDestination = null;
+
+            // Retain context reference to await termination before state declaration.
+            // In Chromium, closing the AudioContext terminates the audio rendering thread.
+            // If playbackState = 'paused' is declared before close() resolves, Chromium's
+            // C++ MediaSessionImpl aggregate observes an active native player and forces STATE_PLAYING.
+            const ctxToClose = liveAudioContext;
+            liveAudioContext = null;
+            try { teardownLiveAudioAnchor(); } catch (e) {}
             cancelAutoKillWatchdog();
             if (typeof stopFocusProbe === 'function') stopFocusProbe();
-            if (isPaused) {
-                window.wasPausedByUser = true;
-                if (typeof setPlayUI === 'function') setPlayUI(false);
-                if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                    if (typeof audioPlayer.instantPause === 'function') {
-                        audioPlayer.instantPause();
-                    } else {
-                        audioPlayer.pause();
+
+            const finishMode1Switch = () => {
+                if (window.playbackMode !== 'mode1') return;
+                const isStillPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+
+                if (isStillPaused) {
+                    window.wasPausedByUser = true;
+                    if (typeof setPlayUI === 'function') setPlayUI(false);
+                    if (typeof audioPlayer !== 'undefined' && audioPlayer) {
+                        if (typeof audioPlayer.instantPause === 'function') {
+                            audioPlayer.instantPause();
+                        } else {
+                            audioPlayer.pause();
+                        }
                     }
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                        window._forceNextPosition = true;
+                        updateMediaSessionPosition(pos, dur, 1.0, true);
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
+
+                    // Native player cycle to clear HyperOS wave animation leak:
+                    // In Mode 2 paused, anchorEl was playing silent WebAudio.
+                    // Tearing down anchorEl without an active native player transition leaves
+                    // Android SystemUI / HyperOS retaining STATE_PLAYING or oscillating wave.
+                    // Automate the exact manual play-pause toggle on audioPlayer silently:
+                    // Muted play triggers Chromium's OnPlayerPlaying, immediate pause triggers
+                    // OnPlayerPaused -> PlaybackStateCompat.STATE_PAUSED (0.0f speed).
+                    const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
+                    if (activeEl && (activeEl.src || activeEl.srcObject)) {
+                        const savedPos = activeEl.currentTime;
+                        const wasMuted = activeEl.muted;
+                        const wasVol = (typeof activeEl.volume === 'number') ? activeEl.volume : 1.0;
+                        activeEl.volume = 0;
+                        activeEl.muted = true;
+                        try {
+                            const p = activeEl.play();
+                            const onDone = () => {
+                                try { activeEl.pause(); } catch (e) {}
+                                try { activeEl.currentTime = savedPos; } catch (e) {}
+                                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                    navigator.mediaSession.playbackState = 'paused';
+                                    window._forceNextPosition = true;
+                                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                                }
+                                setTimeout(() => {
+                                    if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                                        if (activeEl) {
+                                            activeEl.muted = wasMuted;
+                                            activeEl.volume = wasVol;
+                                        }
+                                    }
+                                }, 500);
+                            };
+                            if (p && typeof p.then === 'function') {
+                                p.then(onDone).catch(onDone);
+                            } else {
+                                onDone();
+                            }
+                        } catch (e) {
+                            activeEl.muted = wasMuted;
+                            activeEl.volume = wasVol;
+                        }
+                    }
+                } else {
+                    window.wasPausedByUser = false;
+                    if (typeof setPlayUI === 'function') setPlayUI(true);
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'playing';
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    }
+                    updateMediaSessionPosition(pos, dur, (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                 }
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'paused';
+            };
+
+            if (ctxToClose) {
+                try {
+                    ctxToClose.close().then(finishMode1Switch).catch(finishMode1Switch);
+                } catch (e) {
+                    finishMode1Switch();
                 }
+                setTimeout(finishMode1Switch, 500);
             } else {
-                window.wasPausedByUser = false;
-                if (typeof setPlayUI === 'function') setPlayUI(true);
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = 'playing';
-                }
+                finishMode1Switch();
             }
         }
 
@@ -594,11 +738,74 @@
             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
+                if (newMode === 'mode2') {
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+                        if (needsRebind && typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                    }
+                    updateMediaSessionPosition(pos, dur, 1.0);
+                    if (typeof reassertSpoofBurst === 'function') {
+                        reassertSpoofBurst();
+                    }
+                } else {
+                    // Mode 1 state declaration and unthrottled position IPC are dispatched
+                    // inside finishMode1Switch after AudioContext.close() resolves, preventing
+                    // Chromium C++ MediaSessionImpl from snapshotting zombie native audio players.
                 }
-                updateMediaSessionPosition(pos, dur, 1.0);
+                if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    // Post-settle re-assert: anchor teardown pauses the anchor
+                    // element asynchronously after this tail runs. Re-pin the
+                    // honest paused state, resilient to native player teardown.
+                    const settleMode1Paused = () => {
+                        try {
+                            if (window.playbackMode !== 'mode1') return;
+                            if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
+                            if (!audioPlayer.paused && !window.wasPausedByUser) return;
+                            const anchorEl = document.getElementById("live-stream-anchor");
+                            if (anchorEl && (anchorEl.srcObject || anchorEl.getAttribute('src') || !anchorEl.paused)) {
+                                try {
+                                    const stream = anchorEl.srcObject;
+                                    if (stream && typeof stream.getAudioTracks === 'function') {
+                                        stream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                                    }
+                                    try { _isInternalAnchorStop = true; anchorEl.pause(); } catch (e) {} finally { _isInternalAnchorStop = false; }
+                                    anchorEl.srcObject = null;
+                                    anchorEl.removeAttribute('src');
+                                    if (typeof anchorEl.load === 'function') anchorEl.load();
+                                } catch (e) {}
+                            }
+                            const probeEl = document.getElementById("focus-probe");
+                            if (probeEl) {
+                                try {
+                                    _isProbeInternal = true;
+                                    try { probeEl.pause(); } catch (e) {}
+                                    probeEl.srcObject = null;
+                                    probeEl.removeAttribute('src');
+                                    if (typeof probeEl.load === 'function') probeEl.load();
+                                    focusProbePrimed = false;
+                                } catch (e) {} finally {
+                                    _isProbeInternal = false;
+                                }
+                            }
+                            if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
+                            }
+                            if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
+                                navigator.mediaSession.playbackState = 'paused';
+                                const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                window._forceNextPosition = true;
+                                updateMediaSessionPosition(sPos, sDur, 1.0, true);
+                            }
+                        } catch (e) {}
+                    };
+                    setTimeout(settleMode1Paused, 180);
+                    setTimeout(settleMode1Paused, 1200);
+                }
             } else {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'playing';
@@ -613,8 +820,14 @@
     window.togglePlaybackMode = togglePlaybackMode;
     window.detectPlaybackModeShortcut = togglePlaybackMode; // Backward compatibility alias
 
+    let _lastSentPosition = -1;
+    let _lastSentTimestamp = 0;
+    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
+    window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
+    window._forceNextPosition = false;
+
     // MediaSession Position State Management
-    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
+    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
                 const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
@@ -626,30 +839,80 @@
                 const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
-                const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused);
+                const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+                const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
+
+                // Position stability and monotonic guard (bypassed exactly once when
+                // window._forceNextPosition is set or force=true: unlock anchors and
+                // mode-switch transitions must reach SystemUI even if unchanged):
+                // 1. Live playback: drop backwards position jumps (> 0.5s within 3000ms),
+                //    same-position fresh-timestamp rewrites (delta < 0.25s within 1500ms),
+                //    and wild forward jumps (> 3.0s within 1500ms) unless actively seeking.
+                //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
+                const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
+                const now = Date.now();
+                const freshnessCeilingMs = 3000;
+                let freshnessForce = false;
+                if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
+                        freshnessForce = true;
+                    }
+                }
+                const effectiveBypass = forceBypass || freshnessForce;
+                if (effectiveBypass) {
+                    window._forceNextPosition = false;
+                }
 
                 let rate;
-                if (isBuffering) {
-                    // Buffer stall / track transition freeze: OS interpolates position
-                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
-                    rate = 0.00001;
-                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
-                    // Spoofed pause: OS advances the card seekbar by rate while
-                    // state reads 'playing', so freeze it with a near-zero rate
-                    // (0 is rejected by setPositionState; hence the micro-rate).
-                    // Scoped strictly to mode2-paused; all other paths below.
-                    rate = 0.00001;
-                } else if (!isPaused) {
-                    // While audio is actively playing, rate must strictly reflect
-                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
-                    // animation animates dynamically and never enters ghost freeze.
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                if (isPaused) {
+                    // Mode 2 pause: micro-rate 0.00001 freezes seekbar drift while anchor loops silence.
+                    // Mode 1 pause: clean 1.0 rate avoids 0.00001f micro-speed leak that animates HyperOS Control Center.
+                    if (window.playbackMode === 'mode2') {
+                        rate = 0.00001;
+                    } else {
+                        rate = (isForcedRateValid && forcedRate > 0) ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                    }
+                } else if (isBuffering) {
+                    // Transient network/thaw blip during lock: keep 1.0 so wave survives.
+                    rate = isForcedRateValid ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                    if (!(rate > 0)) rate = 1.0;
                 } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
-                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
-                    rate = 1.0;
                 } else {
                     rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                }
+
+                if (!effectiveBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    const elapsed = now - _lastSentTimestamp;
+                    const elapsedSec = elapsed / 1000;
+                    const expectedPos = _lastSentPosition + (elapsedSec * (rate || 1.0));
+                    // 1. Monotonic backwards guard: drop backwards position jumps (> 0.5s within 3000ms)
+                    if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
+                        return;
+                    }
+                    // 2. High-frequency same-position deduplication
+                    if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
+                        return;
+                    }
+                    // 3. Autonomous extrapolation drift gate: Android SystemUI extrapolates
+                    // position continuously via SystemClock.elapsedRealtime(). Calling setPositionState
+                    // restarts SquigglyProgress's heightAnimator (~860ms freeze).
+                    // If reality matches Android's extrapolation within 2.0s, send ZERO IPC.
+                    if (Math.abs(pos - expectedPos) < 2.0 && pos >= _lastSentPosition - 0.5) {
+                        return;
+                    }
+                    const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
+                    if (elapsed < 1500 && pos > _lastSentPosition + maxAllowedFwd) {
+                        return;
+                    }
+                }
+
+                // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
+                //    Forced transitions (mode-switch) bypass this once via effectiveBypass above.
+                if (!effectiveBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
+                    if (Math.abs(pos - _lastSentPosition) < 0.25) {
+                        return;
+                    }
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
@@ -660,6 +923,11 @@
                         playbackRate: validRate,
                         position: validPos
                     });
+                    _lastSentPosition = validPos;
+                    _lastSentTimestamp = Date.now();
+                } else if (isSeeking || isPaused) {
+                    _lastSentPosition = Math.max(0, pos);
+                    _lastSentTimestamp = Date.now();
                 }
             } catch (e) {
                 // Ignore transient errors
@@ -706,6 +974,83 @@
     }
     window.republishMediaMetadata = republishMediaMetadata;
 
+    window.lastPublishedTrackKey = window.lastPublishedTrackKey || null;
+
+    function shouldRepublishMetadata() {
+        try {
+            if (window.mediaSessionDestroyed) return true;
+            const md = (typeof navigator !== 'undefined' && navigator.mediaSession) ? navigator.mediaSession.metadata : null;
+            if (!md || !md.title) return true;
+            if (typeof globalActivePlaylist !== 'undefined' && typeof globalActiveOriginalIndex === 'number'
+                && typeof allDatabases !== 'undefined' && allDatabases[globalActivePlaylist]) {
+                const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                const key = track ? (track.id || track.title) : null;
+                if (key && window.lastPublishedTrackKey && key !== window.lastPublishedTrackKey) return true;
+                if (key && md.title !== track.title) return true;
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    }
+    window.shouldRepublishMetadata = shouldRepublishMetadata;
+
+    let _lastForegroundResyncTime = 0;
+    function resyncMediaSessionOnForeground(reason) {
+        if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
+        if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
+        if (window.isCallActive) return;
+        if (audioPlayer.switching) {
+            setTimeout(() => {
+                if (!audioPlayer.switching) resyncMediaSessionOnForeground(reason + ':deferred');
+            }, 500);
+            return;
+        }
+
+        const now = Date.now();
+        if (now - _lastForegroundResyncTime < 1000) {
+            return;
+        }
+        _lastForegroundResyncTime = now;
+
+        const isPaused = audioPlayer.paused || window.wasPausedByUser;
+        if (!isPaused) {
+            const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+            try {
+                if (needsRebind && typeof republishMediaMetadata === 'function') {
+                    republishMediaMetadata();
+                }
+            } catch (e) {}
+            try {
+                // Only write if actually changed; same-value rewrite still
+                // notifies controller on some OEM skins.
+                if (navigator.mediaSession.playbackState !== 'playing') {
+                    navigator.mediaSession.playbackState = 'playing';
+                }
+            } catch (e) {}
+            try {
+                if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
+                if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
+                window._forceNextPosition = true;
+                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+            } catch (e) {}
+            // The resumed 1Hz timeupdate owns position from here.
+            return;
+        }
+
+        if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
+            republishMediaMetadata();
+        }
+
+        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+            ? window.declaredPausedState() : 'paused';
+
+        const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+        updateMediaSessionPosition(audioPlayer.currentTime, dur);
+    }
+    window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
+
     // Spoof re-assert burst: when an external app takes audio focus (calls or video),
     // Chromium's native Android C++ engine asynchronously rewrites the declared state
     // to 'paused' or hides the notification card on AUDIOFOCUS_LOSS (native override race).
@@ -713,13 +1058,13 @@
     // guarantees that the web app wins the race against the native thread, resurrecting
     // the card if evicted (Occasion 3) and preserving playbackState = 'playing' (Occasion 4).
     function reassertSpoofBurst() {
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         clearSpoofBurst();
         let n = 0;
         const delays = [150, 400, 800, 1500, 2500];
         const tick = () => {
             try {
-                if (window.playbackMode !== 'mode2') return;
+                if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
