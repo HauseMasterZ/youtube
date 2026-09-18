@@ -677,18 +677,27 @@
                     if (activeEl && (activeEl.src || activeEl.srcObject)) {
                         const savedPos = activeEl.currentTime;
                         const wasMuted = activeEl.muted;
+                        const wasVol = (typeof activeEl.volume === 'number') ? activeEl.volume : 1.0;
+                        activeEl.volume = 0;
                         activeEl.muted = true;
                         try {
                             const p = activeEl.play();
                             const onDone = () => {
                                 try { activeEl.pause(); } catch (e) {}
-                                activeEl.muted = wasMuted;
                                 try { activeEl.currentTime = savedPos; } catch (e) {}
                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                     navigator.mediaSession.playbackState = 'paused';
                                     window._forceNextPosition = true;
                                     updateMediaSessionPosition(pos, dur, 1.0, true);
                                 }
+                                setTimeout(() => {
+                                    if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                                        if (activeEl) {
+                                            activeEl.muted = wasMuted;
+                                            activeEl.volume = wasVol;
+                                        }
+                                    }
+                                }, 500);
                             };
                             if (p && typeof p.then === 'function') {
                                 p.then(onDone).catch(onDone);
@@ -697,6 +706,7 @@
                             }
                         } catch (e) {
                             activeEl.muted = wasMuted;
+                            activeEl.volume = wasVol;
                         }
                     }
                 } else {
@@ -842,11 +852,9 @@
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
                 const freshnessCeilingMs = 3000;
-                const backgroundCeilingMs = 1200;
-                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > effectiveCeiling || now - _lastSentTimestamp > freshnessCeilingMs) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }
