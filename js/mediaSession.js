@@ -661,9 +661,9 @@
                         if (typeof republishMediaMetadata === 'function') {
                             republishMediaMetadata();
                         }
-                        navigator.mediaSession.playbackState = 'paused';
                         window._forceNextPosition = true;
                         updateMediaSessionPosition(pos, dur, 1.0, true);
+                        navigator.mediaSession.playbackState = 'paused';
                     }
                 } else {
                     window.wasPausedByUser = false;
@@ -694,15 +694,15 @@
             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
-                    if (needsRebind && typeof republishMediaMetadata === 'function') {
-                        republishMediaMetadata();
-                    }
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
-                }
                 if (newMode === 'mode2') {
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+                        if (needsRebind && typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                            ? window.declaredPausedState() : 'playing';
+                    }
                     updateMediaSessionPosition(pos, dur, 1.0);
                     if (typeof reassertSpoofBurst === 'function') {
                         reassertSpoofBurst();
@@ -715,8 +715,7 @@
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Post-settle re-assert: anchor teardown pauses the anchor
                     // element asynchronously after this tail runs. Re-pin the
-                    // honest paused state, metadata and micro-rate position,
-                    // resilient to native player teardown.
+                    // honest paused state, resilient to native player teardown.
                     const settleMode1Paused = () => {
                         try {
                             if (window.playbackMode !== 'mode1') return;
@@ -753,10 +752,6 @@
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                                 navigator.mediaSession.playbackState = 'paused';
-                                const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                                const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                                window._forceNextPosition = true;
-                                updateMediaSessionPosition(sPos, sDur, 0.00001, true);
                             }
                         } catch (e) {}
                     };
@@ -822,16 +817,16 @@
 
                 let rate;
                 if (isPaused) {
-                    // Universal micro-rate when paused: OS interpolates
-                    // position if rate > 0. W3C requires rate > 0. Rate 0.00001 satisfies
-                    // W3C while freezing Android SystemUI SquigglyProgress wave animation
-                    // (phase delta = 0) and seekbar drift to absolute zero across both Mode 1 and Mode 2.
-                    rate = 0.00001;
+                    // Mode 2 pause: micro-rate 0.00001 freezes seekbar drift while anchor loops silence.
+                    // Mode 1 pause: clean 1.0 rate avoids 0.00001f micro-speed leak that animates HyperOS Control Center.
+                    if (window.playbackMode === 'mode2') {
+                        rate = 0.00001;
+                    } else {
+                        rate = (isForcedRateValid && forcedRate > 0) ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
+                    }
                 } else if (isBuffering) {
                     // Transient network/thaw blip during lock: keep 1.0 so wave survives.
-                    // Only freeze after proven sustained stall (> 3000ms).
-                    const stallMs = (typeof window._stallSince === 'number' && window._stallSince > 0) ? (now - window._stallSince) : 0;
-                    rate = (stallMs > 3000 && isForcedRateValid) ? 0.00001 : (isForcedRateValid ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0));
+                    rate = isForcedRateValid ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
                     if (!(rate > 0)) rate = 1.0;
                 } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
@@ -952,43 +947,6 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
-    function restartSquigglyWaveAnimation() {
-        if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
-        if (typeof audioPlayer === 'undefined' || !audioPlayer || audioPlayer.paused) return;
-        if (window.isCallActive || window.mediaSessionDestroyed) return;
-
-        if (window.playbackMode === 'mode1') {
-            // Force state transition to restart SquigglyProgress.heightAnimator.
-            // A single setPositionState() IPC only updates position; it does not clear
-            // the AOSP backing-field guard in SquigglyProgress.animate (if (field == value) return).
-            // Cycling paused -> playing forces animate = false -> true, restarting
-            // the ValueAnimator. The 16ms gap (one vsync frame) allows Chrome's
-            // MediaSession bridge to emit STATE_PAUSED to SystemUI without visual flicker.
-            try {
-                navigator.mediaSession.playbackState = 'paused';
-                setTimeout(() => {
-                    if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused && window.playbackMode === 'mode1') {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
-                }, 16);
-            } catch (e) {}
-        } else if (window.playbackMode === 'mode2') {
-            // Mode 2: anchor element's native player observer keeps STATE_PLAYING in Chromium's aggregate.
-            // Cycle the anchor's native player to force a state pulse without dropping the pinned session.
-            const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && !anchorEl.paused) {
-                _isInternalAnchorStop = true;
-                try { anchorEl.pause(); } catch (e) {}
-                _isInternalAnchorStop = false;
-                _isInternalAnchorStart = true;
-                anchorEl.play().then(() => {
-                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                }).catch(() => { _isInternalAnchorStart = false; });
-            }
-        }
-    }
-    window.restartSquigglyWaveAnimation = restartSquigglyWaveAnimation;
-
     let _lastForegroundResyncTime = 0;
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
@@ -1022,9 +980,6 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
             } catch (e) {}
-            if (typeof restartSquigglyWaveAnimation === 'function') {
-                restartSquigglyWaveAnimation();
-            }
             try {
                 if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
                 if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;

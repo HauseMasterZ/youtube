@@ -970,10 +970,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_toggle_playback_mode_mode1_paused_forced_position(self):
-        """togglePlaybackMode Mode 1 paused forces honest position update to clear Mode 2 micro-rate"""
+        """togglePlaybackMode Mode 1 paused forces honest position update before setting paused state to clear Mode 2 micro-rate"""
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);'
+            r'window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_update_media_session_position_force_bypass(self):
@@ -1095,24 +1095,31 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+finishMode1Switch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
-    def test_restart_squiggly_wave_animation_pulse(self):
-        """restartSquigglyWaveAnimation pulses state in Mode 1 and cycles anchor in Mode 2"""
+    def test_mode1_paused_rate_scoped_and_not_microrate(self):
+        """Mode 1 paused uses nominal rate (not 0.00001 micro-rate) to avoid HyperOS wave animation leak"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+restartSquigglyWaveAnimation\s*\(\s*\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"]'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'window\.restartSquigglyWaveAnimation\s*=\s*restartSquigglyWaveAnimation;'
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;[\s\S]*?\}\s*else\s*\{[\s\S]*?rate\s*='
         )
 
-    def test_main_stale_gap_triggers_wave_restart(self):
-        """main.js invokes restartSquigglyWaveAnimation when stale gap detected during playback"""
+    def test_finish_mode1_switch_position_before_paused_state(self):
+        """finishMode1Switch updates position before setting playbackState to paused to ensure 0.0f speed in Android SystemUI"""
+        self.assertRegex(
+            self.ms_content,
+            r'updateMediaSessionPosition\(pos,\s*dur,\s*1\.0,\s*true\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_main_stale_gap_reasserts_playing(self):
+        """main.js reasserts playing state and forces unthrottled position update when stale gap detected during playback"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\.restartSquigglyWaveAnimation\(\)'
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"]'
+        )
+        self.assertNotRegex(
+            main_src,
+            r'restartSquigglyWaveAnimation'
         )
 
 if __name__ == '__main__':
