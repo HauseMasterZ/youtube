@@ -1122,5 +1122,32 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'restartSquigglyWaveAnimation'
         )
 
+    def test_finish_mode1_switch_silent_muted_play_pause_cycle(self):
+        """finishMode1Switch runs silent muted play-pause cycle on activeEl to trigger native OnPlayerPaused for HyperOS"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+activeEl\s*=\s*\(typeof\s+audioPlayer[\s\S]*?activeEl\.muted\s*=\s*true;[\s\S]*?activeEl\.play\(\)[\s\S]*?activeEl\.pause\(\);[\s\S]*?activeEl\.muted\s*=\s*wasMuted;'
+        )
+
+    def test_settle_mode1_paused_reasserts_position(self):
+        """settleMode1Paused reasserts honest position update alongside paused state"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
+        )
+
+    def test_main_background_stale_position_force(self):
+        """main.js timeupdate detects background stale playback (>1200ms) and forces position update to wake up home screen unlock"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*1200'
+        )
+        self.assertRegex(
+            main_src,
+            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+
 if __name__ == '__main__':
     unittest.main()
