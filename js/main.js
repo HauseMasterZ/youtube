@@ -910,7 +910,19 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            if (roundedSec !== lastRenderTime) {
+            // Self-heal for lock gaps without visibilitychange (e.g. unlock to home
+            // screen leaves document.hidden true, so unlock-playing never runs).
+            let staleGap = false;
+            try {
+                if (typeof window.getLastPositionTimestamp === 'function') {
+                    const lastTs = window.getLastPositionTimestamp();
+                    staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
+                }
+            } catch (e) {}
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+                if (staleGap && !audioPlayer.paused) {
+                    window._forceNextPosition = true;
+                }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }
