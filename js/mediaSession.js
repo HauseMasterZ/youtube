@@ -672,31 +672,43 @@
                     // Android SystemUI / HyperOS retaining STATE_PLAYING or oscillating wave.
                     // We trigger Chromium's native OnPlayerPlaying followed immediately by OnPlayerPaused
                     // on the primary media player (activeEl).
-                    // Hardened against audio leaks:
+                    // Hardened against audio leaks and wave freeze:
                     // 1. window._isMode1SilentCycle blocks main.js play listener from calling instantPause()
-                    //    which previously reset volume to 1.0.
+                    //    which previously reset volume to 1.0 during active playback.
                     // 2. activeEl.volume = 0 and activeEl.muted = true are set before play().
-                    // 3. activeEl remains volume = 0 and muted = true while paused (no unmuting timer).
-                    //    DualAudioPingPong.play() restores volume = 1.0 and muted = false on user play.
+                    // 3. activeEl is paused, then 500ms after pause settles, volume = 1.0 and muted = false
+                    //    are safely restored so Android AudioPlaybackConfiguration marks the player unmuted
+                    //    for subsequent playback and in-app screen unlock wave animation.
                     const activeEl = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active) ? audioPlayer.active : null;
                     if (activeEl && (activeEl.src || activeEl.srcObject)) {
                         const savedPos = activeEl.currentTime;
                         window._isMode1SilentCycle = true;
                         activeEl.volume = 0;
                         activeEl.muted = true;
+                        // Safety watchdog: ensure silent cycle flag is never leaked
+                        const cycleWatchdog = setTimeout(() => {
+                            window._isMode1SilentCycle = false;
+                        }, 1000);
                         try {
                             const p = activeEl.play();
                             const onDone = () => {
+                                clearTimeout(cycleWatchdog);
                                 try { activeEl.pause(); } catch (e) {}
                                 try { activeEl.currentTime = savedPos; } catch (e) {}
-                                activeEl.volume = 0;
-                                activeEl.muted = true;
                                 window._isMode1SilentCycle = false;
                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                     navigator.mediaSession.playbackState = 'paused';
                                     window._forceNextPosition = true;
                                     updateMediaSessionPosition(pos, dur, 1.0, true);
                                 }
+                                setTimeout(() => {
+                                    if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
+                                        if (activeEl) {
+                                            activeEl.volume = 1.0;
+                                            activeEl.muted = false;
+                                        }
+                                    }
+                                }, 500);
                             };
                             if (p && typeof p.then === 'function') {
                                 p.then(onDone).catch(onDone);
@@ -704,9 +716,12 @@
                                 onDone();
                             }
                         } catch (e) {
+                            clearTimeout(cycleWatchdog);
                             window._isMode1SilentCycle = false;
-                            activeEl.volume = 0;
-                            activeEl.muted = true;
+                            if (activeEl) {
+                                activeEl.volume = 1.0;
+                                activeEl.muted = false;
+                            }
                         }
                     }
                 } else {

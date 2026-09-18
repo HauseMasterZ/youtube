@@ -384,6 +384,8 @@
 
             // Stop old playhead immediately before clearing buffer
             this.active.pause();
+            this.active.volume = 1.0;
+            this.active.muted = false;
             try {
                 this.active.currentTime = 0;
             } catch (e) {}

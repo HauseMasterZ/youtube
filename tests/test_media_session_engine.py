@@ -1129,6 +1129,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+activeEl\s*=\s*\(typeof\s+audioPlayer[\s\S]*?window\._isMode1SilentCycle\s*=\s*true;[\s\S]*?activeEl\.volume\s*=\s*0;[\s\S]*?activeEl\.muted\s*=\s*true;[\s\S]*?activeEl\.play\(\)[\s\S]*?activeEl\.pause\(\);'
         )
 
+    def test_finish_mode1_switch_restores_volume_and_unmutes_after_settle(self):
+        """finishMode1Switch restores volume 1.0 and muted false 500ms after pause settles to prevent squiggly wave freeze"""
+        self.assertRegex(
+            self.ms_content,
+            r'activeEl\.pause\(\);[\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?activeEl\.volume\s*=\s*1\.0;[\s\S]*?activeEl\.muted\s*=\s*false;'
+        )
+
     def test_settle_mode1_paused_reasserts_position(self):
         """settleMode1Paused reasserts honest position update alongside paused state"""
         self.assertRegex(
