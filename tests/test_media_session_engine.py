@@ -116,11 +116,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("updateMediaSessionPosition(0, totalDur, 0.00001)", self.dom_content)
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*isBuffering\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'isPaused\s*&&\s*\(typeof\s+window\.playbackMode[\s\S]*?mode2[\s\S]*?rate\s*=\s*0\.00001;'
+            r'if\s*\(\s*isBuffering\s*\|\|\s*isPaused\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
         )
         self.assertIn("reassertSpoofBurst", self.ms_content)
 
@@ -987,26 +983,34 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+forceBypass\s*=\s*\(force\s*===\s*true\)\s*\|\|\s*\(typeof\s+window\._forceNextPosition\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\._forceNextPosition\s*===\s*true\);'
         )
 
-    def test_timeupdate_stale_gap_self_heal(self):
-        """main.js timeupdate detects stale gap (>3000ms) and forces position update"""
+    def test_timeupdate_drift_gated_delegation(self):
+        """main.js timeupdate updates DOM clock and delegates position to drift-gated updateMediaSessionPosition without false staleness"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'Date\.now\(\)\s*-\s*window\.getLastPositionTimestamp\(\)\s*>\s*3000'
+            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?updateTimeUI\(ct\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration'
         )
-        self.assertRegex(
-            main_src,
-            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
-        )
+        self.assertNotIn('staleGap', main_src)
 
     def test_visibilitychange_mode1_paused_reassert_on_hide(self):
-        """main.js visibilitychange re-asserts honest paused tuple when going hidden in Mode 1 paused"""
+        """main.js visibilitychange ensures honest paused state when going hidden in Mode 1 paused without redundant position IPC"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*hDur,\s*1\.0,\s*true\);'
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_update_media_session_position_drift_gate(self):
+        """updateMediaSessionPosition drift-gates IPC against autonomous SystemUI extrapolation"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+expectedPos\s*=\s*_lastSentPosition\s*\+\s*\(elapsedSec\s*\*\s*\(rate\s*\|\|\s*1\.0\)\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'Math\.abs\(pos\s*-\s*expectedPos\)\s*<\s*2\.0'
         )
 
     def test_pageshow_listener_wires_resync(self):

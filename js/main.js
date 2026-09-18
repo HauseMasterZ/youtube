@@ -799,11 +799,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 } catch (e) {}
                 if (hasMediaSession) {
                     try {
-                        navigator.mediaSession.playbackState = 'paused';
-                        window._forceNextPosition = true;
-                        const hDur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        if (typeof updateMediaSessionPosition === 'function') {
-                            updateMediaSessionPosition(audioPlayer.currentTime, hDur, 1.0, true);
+                        if (navigator.mediaSession.playbackState !== 'paused') {
+                            navigator.mediaSession.playbackState = 'paused';
                         }
                     } catch (e) {}
                 }
@@ -913,20 +910,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            // Self-heal for lock gaps without visibilitychange (unlock to home
-            // screen leaves document.hidden true, so unlock-playing never runs).
-            // If SystemUI interpolator starved over 3s, force one anchor even
-            // when the second is unchanged.
-            let staleGap = false;
-            try {
-                if (typeof window.getLastPositionTimestamp === 'function') {
-                    staleGap = (Date.now() - window.getLastPositionTimestamp() > 3000);
-                }
-            } catch (e) {}
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
-                if (staleGap && !audioPlayer.paused) {
-                    window._forceNextPosition = true;
-                }
+            if (roundedSec !== lastRenderTime) {
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }

@@ -715,15 +715,9 @@
                                 }
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
-                                navigator.mediaSession.playbackState = 'paused';
-                                // Re-pin honest tuple after async anchor teardown; each
-                                // settle pass re-asserts in case Home was pressed mid-teardown.
-                                try {
-                                    const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                                    const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                                    window._forceNextPosition = true;
-                                    updateMediaSessionPosition(sPos, sDur, 1.0, true);
-                                } catch (e) {}
+                                if (navigator.mediaSession.playbackState !== 'paused') {
+                                    navigator.mediaSession.playbackState = 'paused';
+                                }
                             }
                         } catch (e) {}
                     };
@@ -778,12 +772,37 @@
                 if (forceBypass) {
                     window._forceNextPosition = false;
                 }
+
+                let rate;
+                if (isBuffering || isPaused) {
+                    // Universal micro-rate when buffering or paused: OS interpolates
+                    // position if rate > 0. W3C requires rate > 0. Rate 0.00001 satisfies
+                    // W3C while freezing Android SystemUI SquigglyProgress wave animation
+                    // (phase delta = 0) and seekbar drift to absolute zero across both Mode 1 and Mode 2.
+                    rate = 0.00001;
+                } else if (isForcedRateValid && forcedRate > 0) {
+                    rate = forcedRate;
+                } else {
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                }
+
                 if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
                     const elapsed = Date.now() - _lastSentTimestamp;
+                    const elapsedSec = elapsed / 1000;
+                    const expectedPos = _lastSentPosition + (elapsedSec * (rate || 1.0));
+                    // 1. Monotonic backwards guard: drop backwards position jumps (> 0.5s within 3000ms)
                     if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
                         return;
                     }
+                    // 2. High-frequency same-position deduplication
                     if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
+                        return;
+                    }
+                    // 3. Autonomous extrapolation drift gate: Android SystemUI extrapolates
+                    // position continuously via SystemClock.elapsedRealtime(). Calling setPositionState
+                    // restarts SquigglyProgress's heightAnimator (~860ms freeze).
+                    // If reality matches Android's extrapolation within 2.0s, send ZERO IPC.
+                    if (Math.abs(pos - expectedPos) < 2.0 && pos >= _lastSentPosition - 0.5) {
                         return;
                     }
                     const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
@@ -793,38 +812,11 @@
                 }
 
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
-                //    Re-sending rate 1.0 position updates after pausing re-animates the wave on OEM skins (OneUI/ColorOS).
                 //    Forced transitions (mode-switch) bypass this once via forceBypass above.
                 if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
                     if (Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
-                }
-
-                let rate;
-                if (isBuffering) {
-                    // Buffer stall / track transition freeze: OS interpolates position
-                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
-                    rate = 0.00001;
-                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
-                    // Spoofed pause: OS advances the card seekbar by rate while
-                    // state reads 'playing', so freeze it with a near-zero rate
-                    // (0 is rejected by setPositionState; hence the micro-rate).
-                    // Scoped strictly to mode2-paused; all other paths below.
-                    rate = 0.00001;
-                } else if (!isPaused) {
-                    // While audio is actively playing, rate must strictly reflect
-                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
-                    // animation animates dynamically and never enters ghost freeze.
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                } else if (isForcedRateValid && forcedRate > 0) {
-                    rate = forcedRate;
-                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
-                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
-                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
-                    rate = 1.0;
-                } else {
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
