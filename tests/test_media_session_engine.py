@@ -116,7 +116,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("updateMediaSessionPosition(0, totalDur, 0.00001)", self.dom_content)
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*isBuffering\s*\|\|\s*isPaused\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
+            r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?rate\s*=\s*0\.00001;'
         )
         self.assertIn("reassertSpoofBurst", self.ms_content)
 
@@ -663,7 +663,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """reassertSpoofBurst re-declares playing with frozen rate, self-terminates, and runs on steal paths"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
         )
         self.assertRegex(
             self.ms_content,
@@ -907,7 +907,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'setTimeout\(settleMode1Paused,\s*200\);[\s\S]*?setTimeout\(settleMode1Paused,\s*700\);[\s\S]*?setTimeout\(settleMode1Paused,\s*1500\);'
+            r'setTimeout\(settleMode1Paused,\s*180\);[\s\S]*?setTimeout\(settleMode1Paused,\s*1200\);'
         )
 
     def test_visibilitychange_passive_dom_clock_update(self):
@@ -1057,6 +1057,31 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             main_src,
             r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?live-stream-anchor[\s\S]*?aEl\.pause\(\);[\s\S]*?focus-probe[\s\S]*?pEl\.pause\(\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_update_media_session_position_freshness_ceiling(self):
+        """updateMediaSessionPosition enforces a 10s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+        )
+
+    def test_mode_transition_mutex_guards_resurrectors(self):
+        """togglePlaybackMode arms window._modeTransitionUntil and guards resurrectors"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*newMode\s*===\s*[\'"]mode1[\'"]\s*\)\s*\{[\s\S]*?window\._modeTransitionUntil\s*=\s*Date\.now\(\)\s*\+\s*2000;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+startLiveAudioAnchor[\s\S]*?Date\.now\(\)\s*<\s*\(window\._modeTransitionUntil\s*\|\|\s*0\)'
+        )
+
+    def test_anchor_heartbeat_pauses_on_stale_generation(self):
+        """startAnchorHeartbeat pauses anchorEl if generation is stale on play promise resolution"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.play\(\)\.then\(\(\)\s*=>\s*\{[\s\S]*?currentGen\s*!==\s*_anchorGeneration[\s\S]*?anchorEl\.pause\(\);'
         )
 
 if __name__ == '__main__':

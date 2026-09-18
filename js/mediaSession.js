@@ -31,6 +31,7 @@
     let _isInternalAnchorStop = false;
     let _anchorGeneration = 0;
     let _spoofBurstTimer = null;
+    window._modeTransitionUntil = 0;
 
     function clearSpoofBurst() {
         if (_spoofBurstTimer) {
@@ -164,7 +165,7 @@
 
     function startLiveAudioAnchor() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
         if (window.mediaSessionDestroyed) return;
         initLiveAudioAnchor();
@@ -271,11 +272,11 @@
         const initialDelay = (arguments.length > 0 && typeof arguments[0] === 'number') ? arguments[0] : 1000;
         stopAnchorHeartbeat();
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2' || window.isCallActive || window.mediaSessionDestroyed) return;
 
         function runTick() {
             const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-            if (window.playbackMode !== 'mode2' || window.isCallActive || isRecentBt || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
+            if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2' || window.isCallActive || isRecentBt || window.mediaSessionDestroyed || (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused)) {
                 stopAnchorHeartbeat();
                 return;
             }
@@ -307,12 +308,14 @@
             _isInternalAnchorStart = true;
             const currentGen = _anchorGeneration;
             anchorEl.play().then(() => {
-                _isAnchorPlayPending = false;
-                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-
-                if (currentGen !== _anchorGeneration || window.playbackMode !== 'mode2') {
+                if (currentGen !== _anchorGeneration || window.playbackMode !== 'mode2' || Date.now() < (window._modeTransitionUntil || 0)) {
+                    try { _isInternalAnchorStop = true; anchorEl.pause(); } catch (e) {} finally { _isInternalAnchorStop = false; }
+                    _isAnchorPlayPending = false;
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
                     return;
                 }
+                _isAnchorPlayPending = false;
+                setTimeout(() => { _isInternalAnchorStart = false; }, 200);
 
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -390,7 +393,7 @@
 
     function startFocusProbe() {
         if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         if (window.isCallActive) return;
         const probeEl = document.getElementById("focus-probe");
         if (!probeEl) return;
@@ -528,6 +531,11 @@
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
         _anchorGeneration++;
+        if (newMode === 'mode1') {
+            window._modeTransitionUntil = Date.now() + 2000;
+        } else {
+            window._modeTransitionUntil = 0;
+        }
         // Mode switch resets the world: revoke any standing steal flag.
         if (anchorStartTimer) {
             clearTimeout(anchorStartTimer);
@@ -717,7 +725,7 @@
                                     _isProbeInternal = false;
                                 }
                             }
-                            if (typeof republishMediaMetadata === 'function') {
+                            if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                                 republishMediaMetadata();
                             }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
@@ -729,9 +737,8 @@
                             }
                         } catch (e) {}
                     };
-                    setTimeout(settleMode1Paused, 200);
-                    setTimeout(settleMode1Paused, 700);
-                    setTimeout(settleMode1Paused, 1500);
+                    setTimeout(settleMode1Paused, 180);
+                    setTimeout(settleMode1Paused, 1200);
                 }
             } else {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -777,25 +784,40 @@
                 //    and wild forward jumps (> 3.0s within 1500ms) unless actively seeking.
                 //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
-                if (forceBypass) {
+                const now = Date.now();
+                const freshnessCeilingMs = 10000;
+                let freshnessForce = false;
+                if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
+                        freshnessForce = true;
+                    }
+                }
+                const effectiveBypass = forceBypass || freshnessForce;
+                if (effectiveBypass) {
                     window._forceNextPosition = false;
                 }
 
                 let rate;
-                if (isBuffering || isPaused) {
-                    // Universal micro-rate when buffering or paused: OS interpolates
+                if (isPaused) {
+                    // Universal micro-rate when paused: OS interpolates
                     // position if rate > 0. W3C requires rate > 0. Rate 0.00001 satisfies
                     // W3C while freezing Android SystemUI SquigglyProgress wave animation
                     // (phase delta = 0) and seekbar drift to absolute zero across both Mode 1 and Mode 2.
                     rate = 0.00001;
+                } else if (isBuffering) {
+                    // Transient network/thaw blip during lock: keep 1.0 so wave survives.
+                    // Only freeze after proven sustained stall (> 3000ms).
+                    const stallMs = (typeof window._stallSince === 'number' && window._stallSince > 0) ? (now - window._stallSince) : 0;
+                    rate = (stallMs > 3000 && isForcedRateValid) ? 0.00001 : (isForcedRateValid ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0));
+                    if (!(rate > 0)) rate = 1.0;
                 } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
                 } else {
                     rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
                 }
 
-                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    const elapsed = Date.now() - _lastSentTimestamp;
+                if (!effectiveBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    const elapsed = now - _lastSentTimestamp;
                     const elapsedSec = elapsed / 1000;
                     const expectedPos = _lastSentPosition + (elapsedSec * (rate || 1.0));
                     // 1. Monotonic backwards guard: drop backwards position jumps (> 0.5s within 3000ms)
@@ -820,8 +842,8 @@
                 }
 
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
-                //    Forced transitions (mode-switch) bypass this once via forceBypass above.
-                if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
+                //    Forced transitions (mode-switch) bypass this once via effectiveBypass above.
+                if (!effectiveBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
                     if (Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
@@ -970,13 +992,13 @@
     // guarantees that the web app wins the race against the native thread, resurrecting
     // the card if evicted (Occasion 3) and preserving playbackState = 'playing' (Occasion 4).
     function reassertSpoofBurst() {
-        if (window.playbackMode !== 'mode2') return;
+        if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
         clearSpoofBurst();
         let n = 0;
         const delays = [150, 400, 800, 1500, 2500];
         const tick = () => {
             try {
-                if (window.playbackMode !== 'mode2') return;
+                if (Date.now() < (window._modeTransitionUntil || 0) || window.playbackMode !== 'mode2') return;
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')

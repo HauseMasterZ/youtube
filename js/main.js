@@ -924,7 +924,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
@@ -973,6 +973,15 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        if (typeof window !== 'undefined') {
+            window._stallSince = 0;
+        }
+    });
+
+    audioPlayer.addEventListener("waiting", () => {
+        if (typeof window !== 'undefined' && !window._stallSince && typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+            window._stallSince = Date.now();
+        }
     });
 
     audioPlayer.addEventListener("error", () => {
