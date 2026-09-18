@@ -667,6 +667,9 @@
                         reassertSpoofBurst();
                     }
                 } else {
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
                     }
@@ -681,7 +684,7 @@
                 if (newMode === 'mode1' && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     // Post-settle re-assert: anchor teardown pauses the anchor
                     // element asynchronously after this tail runs. Re-pin the
-                    // honest paused state without trailing position updates,
+                    // honest paused state, metadata and micro-rate position,
                     // resilient to native player teardown.
                     const settleMode1Paused = () => {
                         try {
@@ -714,10 +717,15 @@
                                     _isProbeInternal = false;
                                 }
                             }
+                            if (typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
+                            }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
-                                if (navigator.mediaSession.playbackState !== 'paused') {
-                                    navigator.mediaSession.playbackState = 'paused';
-                                }
+                                navigator.mediaSession.playbackState = 'paused';
+                                const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                                window._forceNextPosition = true;
+                                updateMediaSessionPosition(sPos, sDur, 0.00001, true);
                             }
                         } catch (e) {}
                     };
@@ -920,14 +928,6 @@
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
-            // Passive unlock doctrine: while playing at rate 1.0, SystemUI
-            // interpolates position from last updateTime autonomously.
-            // Any playbackState or setPositionState rewrite restarts
-            // SquigglyProgress entry animator (~860ms freeze). Wall-clock gap
-            // during lock is NOT staleness. Only rebind on track/metadata change.
-            if (!needsRebind) {
-                return;
-            }
             try {
                 if (needsRebind && typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();

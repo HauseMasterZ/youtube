@@ -937,11 +937,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
         )
 
-    def test_resync_media_session_passive_unlock(self):
-        """resyncMediaSessionOnForeground returns passively when metadata does not need rebind"""
+    def test_resync_media_session_reanchors_playing_on_foreground(self):
+        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single forced position update"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(!needsRebind\)\s*\{[\s\S]*?return;\s*\}'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
 
     def test_resync_media_session_debounced_on_foreground(self):
@@ -983,15 +983,22 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+forceBypass\s*=\s*\(force\s*===\s*true\)\s*\|\|\s*\(typeof\s+window\._forceNextPosition\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\._forceNextPosition\s*===\s*true\);'
         )
 
-    def test_timeupdate_drift_gated_delegation(self):
-        """main.js timeupdate updates DOM clock and delegates position to drift-gated updateMediaSessionPosition without false staleness"""
+    def test_timeupdate_lock_gap_self_heal_and_drift_gating(self):
+        """main.js timeupdate handles lock gaps (>2500ms) to wake up background media card and delegates normal playback to drift-gating"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?updateTimeUI\(ct\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration'
+            r'staleGap\s*=\s*\(lastTs\s*>\s*0\s*&&\s*\(Date\.now\(\)\s*-\s*lastTs\s*>\s*2500\)\);'
         )
-        self.assertNotIn('staleGap', main_src)
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(ct\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration'
+        )
 
     def test_visibilitychange_mode1_paused_reassert_on_hide(self):
         """main.js visibilitychange ensures honest paused state when going hidden in Mode 1 paused without redundant position IPC"""
