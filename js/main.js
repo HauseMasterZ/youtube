@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let remoteSearchAbortController = null;
+    let lastTimeupdateFire = 0;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -695,6 +696,8 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
+        lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -900,6 +903,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
+        lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -932,15 +937,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            // Self-heal for lock gaps without visibilitychange (e.g. unlock to home
-            // screen leaves document.hidden true, so unlock-playing never runs).
-            let staleGap = false;
-            try {
-                if (typeof window.getLastPositionTimestamp === 'function') {
-                    const lastTs = window.getLastPositionTimestamp();
-                    staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
-                }
-            } catch (e) {}
+            // Self-heal for lock/Doze gaps where the JS event loop was suspended.
+            // Inter-arrival delta between consecutive timeupdates measures true loop
+            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
+            const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const eventDelta = (lastTimeupdateFire > 0) ? (nowMonotonic - lastTimeupdateFire) : 0;
+            lastTimeupdateFire = nowMonotonic;
+            window.lastTimeupdateFire = nowMonotonic;
+            const staleGap = (eventDelta > 2500);
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
@@ -972,6 +976,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
+        lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;

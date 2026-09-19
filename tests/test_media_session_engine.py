@@ -989,7 +989,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'staleGap\s*=\s*\(lastTs\s*>\s*0\s*&&\s*\(Date\.now\(\)\s*-\s*lastTs\s*>\s*2500\)\);'
+            r'eventDelta\s*=\s*\(lastTimeupdateFire\s*>\s*0\)\s*\?\s*\(nowMonotonic\s*-\s*lastTimeupdateFire\)\s*:\s*0;'
+        )
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
         )
         self.assertRegex(
             main_src,
@@ -1164,6 +1168,30 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.main_content,
             r'audioPlayer\.addEventListener\([\'"]playing[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(window\._isMode1SilentCycle\)\s*return;'
+        )
+
+    def test_monotonic_event_delta_and_reset_hygiene(self):
+        """main.js resets lastTimeupdateFire on pause, ended, and endSeek to prevent false lock gaps"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'state.js'), 'r', encoding='utf-8') as f:
+            state_src = f.read()
+        self.assertIn("window.lastTimeupdateFire = 0;", state_src)
+        self.assertRegex(
+            main_src,
+            r'audioPlayer\.addEventListener\([\'"]pause[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?lastTimeupdateFire\s*=\s*0;'
+        )
+        self.assertRegex(
+            main_src,
+            r'audioPlayer\.addEventListener\([\'"]ended[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?lastTimeupdateFire\s*=\s*0;'
+        )
+        self.assertRegex(
+            main_src,
+            r'const\s+endSeek\s*=\s*\(e\)\s*=>\s*\{[\s\S]*?lastTimeupdateFire\s*=\s*0;'
+        )
+        self.assertRegex(
+            main_src,
+            r'nowMonotonic\s*=\s*\(typeof\s+performance\s*!==\s*[\'"]undefined[\'"]\s*&&\s*performance\.now\)\s*\?\s*performance\.now\(\)\s*:\s*Date\.now\(\);'
         )
 
 if __name__ == '__main__':
