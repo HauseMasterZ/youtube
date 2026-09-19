@@ -63,6 +63,11 @@
             filteredIndices = indices;
         }
 
+        // View gate: data is already updated, do not touch DOM while ephemeral search is active.
+        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
+            return;
+        }
+
         const effectiveTotal = (totalCount > filteredIndices.length && !filterText) ? totalCount : filteredIndices.length;
         trackList.style.height = `${effectiveTotal * ITEM_HEIGHT}px`;
         if (!poolInitialized || trackList.querySelector('.track-skeleton')) {
@@ -166,8 +171,12 @@
                             indices[i] = { playlist: folderName, index: i };
                         }
                         filteredIndices = indices;
-                        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                        renderVirtualTracks();
+                        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
+                            // Data update complete, view deferred to exitEphemeralSearch
+                        } else {
+                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                            renderVirtualTracks();
+                        }
                     }
                 }
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
@@ -185,6 +194,9 @@
     }
 
     function loadPlaylist(folderName) {
+        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive() && typeof window.exitEphemeralSearch === 'function') {
+            window.exitEphemeralSearch(true);
+        }
         selectedSearchIndex = -1;
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);

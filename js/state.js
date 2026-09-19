@@ -51,6 +51,23 @@
     window.mediaSessionDestroyed = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
+    // Search Mode State & Mutual Exclusion
+    window.searchMode = 'local';
+    window.isEphemeralSearchActive = function() {
+        return (typeof window !== 'undefined' && window.searchMode === 'ephemeral');
+    };
+    window.setSearchMode = function(mode) {
+        if (typeof window !== 'undefined') {
+            window.searchMode = mode;
+        }
+        try {
+            if (typeof document !== 'undefined' && document.body) {
+                if (mode === 'ephemeral') document.body.classList.add('ephemeral-active');
+                else document.body.classList.remove('ephemeral-active');
+            }
+        } catch (e) {}
+    };
+
     // Virtual Scroller state
     const ITEM_HEIGHT = 48;
     let lastStartIndex = -1;

@@ -90,6 +90,9 @@
                     }
                 }
             } catch (e) { stillWanted = false; }
+            if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
+                return;
+            }
             if (stillWanted && typeof renderVirtualTracks === 'function') {
                 lastStartIndex = -1;
                 lastEndIndex = -1;
@@ -163,6 +166,10 @@
     applyShuffleUI();
     applyRepeatUI();
     function renderVirtualTracks() {
+        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
+            isRendering = false;
+            return;
+        }
         if (!currentPlaylistData || currentPlaylistData.length === 0) return;
         
         if (filteredIndices.length === 0) {

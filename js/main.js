@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
-    let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
 
     function escapeHtml(str) {
@@ -26,9 +25,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 2800);
     }
 
-    function exitEphemeralSearch() {
-        if (searchMode !== 'ephemeral') return;
-        searchMode = 'local';
+    function exitEphemeralSearch(silent = false) {
+        if (typeof window.isEphemeralSearchActive === 'function' && !window.isEphemeralSearchActive()) return;
+        if (typeof window.setSearchMode === 'function') {
+            window.setSearchMode('local');
+        } else {
+            window.searchMode = 'local';
+        }
         if (remoteSearchAbortController) {
             remoteSearchAbortController.abort();
             remoteSearchAbortController = null;
@@ -50,8 +53,12 @@ document.addEventListener("DOMContentLoaded", () => {
             playlistMessage.style.color = 'var(--text-secondary)';
         }
         lastStartIndex = -1;
-        renderVirtualTracks();
+        lastEndIndex = -1;
+        if (!silent) {
+            renderVirtualTracks();
+        }
     }
+    window.exitEphemeralSearch = exitEphemeralSearch;
 
     function renderEphemeralError(query, message) {
         if (!ephemeralSearchContainer) return;
@@ -133,6 +140,11 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        if (typeof searchDebounceTimer !== 'undefined' && searchDebounceTimer) {
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = null;
+        }
+
         if (remoteSearchAbortController) {
             remoteSearchAbortController.abort();
             remoteSearchAbortController = null;
@@ -140,7 +152,11 @@ document.addEventListener("DOMContentLoaded", () => {
         remoteSearchAbortController = new AbortController();
         const signal = remoteSearchAbortController.signal;
 
-        searchMode = 'ephemeral';
+        if (typeof window.setSearchMode === 'function') {
+            window.setSearchMode('ephemeral');
+        } else {
+            window.searchMode = 'ephemeral';
+        }
         trackList.style.display = 'none';
         playlistMessage.style.display = 'none';
         if (iconSearchGlass) iconSearchGlass.style.display = 'none';
@@ -213,11 +229,13 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     searchInput.addEventListener("input", (e) => {
-        if (searchMode === 'ephemeral') {
+        if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
             exitEphemeralSearch();
         }
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
+            searchDebounceTimer = null;
+            if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
             selectedSearchIndex = -1;
             const query = e.target.value.toLowerCase().trim();
             const currentPl = playlistSelect.value;
@@ -335,6 +353,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let scrollRafId = null;
     function scheduleVirtualRender() {
+        if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
         if (scrollRafId !== null) return;
         scrollRafId = window.requestAnimationFrame(() => {
             scrollRafId = null;
@@ -348,6 +367,7 @@ document.addEventListener("DOMContentLoaded", () => {
         clearTimeout(scrollSettleTimer);
         scrollSettleTimer = setTimeout(() => {
             isScrollingFast = false;
+            if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
             lastStartIndex = -1;
             lastEndIndex = -1;
             renderVirtualTracks();

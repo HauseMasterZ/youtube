@@ -216,6 +216,14 @@
             transform: scale(0.95);
         }
 
+        body.ephemeral-active #track-list {
+            display: none !important;
+        }
+
+        body.ephemeral-active #ephemeral-search-container {
+            display: block !important;
+        }
+
         .ephemeral-search-container {
             width: 100%;
             box-sizing: border-box;
