@@ -949,7 +949,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        if (navigator.mediaSession.playbackState !== 'playing') {
+                        if (typeof document !== 'undefined' && document.hidden && typeof window.hiddenPlayingPulse === 'function') {
+                            window.hiddenPlayingPulse(ct, audioPlayer.duration);
+                        } else if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                         try {

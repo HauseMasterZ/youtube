@@ -1194,6 +1194,24 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'nowMonotonic\s*=\s*\(typeof\s+performance\s*!==\s*[\'"]undefined[\'"]\s*&&\s*performance\.now\)\s*\?\s*performance\.now\(\)\s*:\s*Date\.now\(\);'
         )
 
+    def test_hidden_playing_pulse_unstick_wave(self):
+        """mediaSession.js implements hiddenPlayingPulse with 30s cooldown and 280ms duration to unstick SquigglyProgress"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+hiddenPlayingPulse\(pos,\s*dur\)\s*\{[\s\S]*?now\s*-\s*_lastPulseAt\s*<\s*30000[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\},\s*280\);'
+        )
+        self.assertIn("window.hiddenPlayingPulse = hiddenPlayingPulse;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs\)\s*\{[\s\S]*?hiddenPlayingPulse\(pos,\s*dur\);'
+        )
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'if\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*typeof\s+window\.hiddenPlayingPulse\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?window\.hiddenPlayingPulse\(ct,\s*audioPlayer\.duration\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
 
