@@ -7,11 +7,15 @@
 
 ## 2. Mandatory Muse Consultation & Debate
 - On EVERY prompt involving architectural audits, bug investigations, design choices, root cause analysis, or verification, Antigravity MUST consult and debate with Muse first before proposing solutions or writing code.
-- Invocation command:
+- Working Directory & Context Preservation:
+  - ALWAYS run Muse directly in the **project root directory** (e.g., `c:\Users\Hause\Documents\Code\youtube_frontend` or `c:\Users\Hause\Documents\Code\alwaysdata-pi-setup`).
+  - ALWAYS pass the `-c` (`--continue`) flag so Muse retains and accumulates conversational context across every single invocation.
+  - If Muse does not have or loses context, explicitly bootstrap it with existing architectural state, code references, and invariants.
+- Invocation command pattern:
   ```bash
-  C:\Users\Hause\AppData\Local\Microsoft\WinGet\Packages\SST.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe\opencode.exe run -m opencode/muse-spark-1.3-contributor-free --variant xhigh "<prompt>"
+  python -c "import subprocess; cmd = [r'C:\Users\Hause\AppData\Local\Microsoft\WinGet\Packages\SST.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe\opencode.exe', 'run', '-c', '-m', 'opencode/muse-spark-1.3-contributor-free', '--variant', 'xhigh', '<prompt>']; p = subprocess.Popen(cmd, cwd=r'<project_root>', stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8'); out, err = p.communicate(timeout=180); print(out)"
   ```
-- Always retain conversation context (`-s <session_id>` or active context) when continuing an investigation.
+  *(Note: Passing `stdin=subprocess.DEVNULL` ensures non-blocking automated execution on Windows).*
 - Antigravity must apply critical thinking to Muse's responses and debate back and forth if necessary, combining the cognitive throughput of both agents.
 - Antigravity must NEVER substitute its own unverified assumptions for a rigorous architectural debate with Muse.
 
