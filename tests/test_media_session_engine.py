@@ -335,7 +335,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """Ensure nexttrack, previoustrack, seekforward, and seekbackward handlers detect combo and call togglePlaybackMode"""
         self.assertIn("lastPlaybackModeTransitions", self.ms_content)
         self.assertIn("2500", self.ms_content)
-        self.assertIn("togglePlaybackMode()", self.ms_content)
+        self.assertIn("togglePlaybackMode", self.ms_content)
 
     def test_hardware_combo_scoped_to_mobile(self):
         """Ensure combo shortcut is only active on mobile devices"""
@@ -344,15 +344,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'isMobile\s*&&\s*window\.lastPlaybackModeTransitions\.action\s*===\s*[\'"]next[\'"]'
         )
 
-    def test_hardware_combo_executes_track_navigation(self):
-        """Ensure nexttrack and previoustrack execute playNext and playPrev alongside togglePlaybackMode"""
+    def test_hardware_combo_consumes_shortcut(self):
+        """Ensure nexttrack and previoustrack consume combo gesture and execute navigation on normal tap"""
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]previoustrack[\'"][\s\S]*?togglePlaybackMode\(\);[\s\S]*?playPrev\(\);'
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]previoustrack[\'"][\s\S]*?togglePlaybackMode\(null,[\s\S]*?\);\s*return;[\s\S]*?playPrev\(\);'
         )
         self.assertRegex(
             self.ms_content,
-            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]nexttrack[\'"][\s\S]*?togglePlaybackMode\(\);[\s\S]*?playNext\(\);'
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]nexttrack[\'"][\s\S]*?togglePlaybackMode\(null,[\s\S]*?\);\s*return;[\s\S]*?playNext\(\);'
         )
 
     def test_buffer_stalled_guard_in_dom_js(self):
@@ -1096,7 +1096,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'const\s+finishMode1Switch\s*=\s*\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'const\s+finishMode1Switch\s*=\s*\([^)]*\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_mode1_paused_rate_scoped_and_not_microrate(self):
@@ -1194,22 +1194,43 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'nowMonotonic\s*=\s*\(typeof\s+performance\s*!==\s*[\'"]undefined[\'"]\s*&&\s*performance\.now\)\s*\?\s*performance\.now\(\)\s*:\s*Date\.now\(\);'
         )
 
-    def test_hidden_playing_pulse_unstick_wave(self):
-        """mediaSession.js implements hiddenPlayingPulse with 30s cooldown and 280ms duration to unstick SquigglyProgress"""
+    def test_shortcut_intent_preservation_and_mode_switch_retry(self):
+        """mediaSession.js preserves playing intent during shortcut mode switch and retries if switching."""
         self.assertRegex(
             self.ms_content,
-            r'function\s+hiddenPlayingPulse\(pos,\s*dur\)\s*\{[\s\S]*?now\s*-\s*_lastPulseAt\s*<\s*30000[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\},\s*280\);'
+            r'function\s+togglePlaybackMode\(targetMode\s*=\s*null,\s*opts\s*=\s*\{\}\)\s*\{'
         )
-        self.assertIn("window.hiddenPlayingPulse = hiddenPlayingPulse;", self.ms_content)
+        self.assertIn("const hasIntent = (typeof opts.intentPlaying === 'boolean');", self.ms_content)
+        self.assertIn("const transportSwitching = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.switching || audioPlayer._pendingSeek !== null));", self.ms_content)
+        self.assertIn("const transportPausedHonest = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !transportSwitching);", self.ms_content)
+        self.assertIn("const isPaused = hasIntent ? !opts.intentPlaying : (window.wasPausedByUser || transportPausedHonest);", self.ms_content)
+
+        # finishMode1Switch retry and sequence preservation
+        self.assertIn("const finishMode1Switch = (attempt = 0) => {", self.ms_content)
+        self.assertIn("if (stillSwitching && attempt < 8) {", self.ms_content)
+        self.assertIn("setTimeout(() => finishMode1Switch(attempt + 1), 300);", self.ms_content)
+        self.assertIn("if (typeof opts.seqBefore !== 'undefined' && curSeq !== opts.seqBefore && hasIntent && opts.intentPlaying) {", self.ms_content)
+
+        # settleMode1Paused guards
+        self.assertIn("if (hasIntent && opts.intentPlaying) return;", self.ms_content)
+        self.assertIn("if (audioPlayer.switching || audioPlayer._pendingSeek !== null) return;", self.ms_content)
+
+        # Action handlers shortcut consumption
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs\)\s*\{[\s\S]*?hiddenPlayingPulse\(pos,\s*dur\);'
+            r"setActionHandler\('previoustrack'[\s\S]*?togglePlaybackMode\(null,\s*\{\s*intentPlaying:\s*intentPlayingBefore,\s*seqBefore:\s*seqBefore\s*\}\);\s*return;"
         )
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
-            main_src = f.read()
         self.assertRegex(
-            main_src,
-            r'if\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*typeof\s+window\.hiddenPlayingPulse\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?window\.hiddenPlayingPulse\(ct,\s*audioPlayer\.duration\);'
+            self.ms_content,
+            r"setActionHandler\('nexttrack'[\s\S]*?togglePlaybackMode\(null,\s*\{\s*intentPlaying:\s*intentPlayingBefore,\s*seqBefore:\s*seqBefore\s*\}\);\s*return;"
+        )
+        self.assertRegex(
+            self.ms_content,
+            r"setActionHandler\('seekbackward'[\s\S]*?togglePlaybackMode\(null,\s*\{\s*intentPlaying:\s*intentPlayingBefore,\s*seqBefore:\s*seqBefore\s*\}\);\s*return;"
+        )
+        self.assertRegex(
+            self.ms_content,
+            r"setActionHandler\('seekforward'[\s\S]*?togglePlaybackMode\(null,\s*\{\s*intentPlaying:\s*intentPlayingBefore,\s*seqBefore:\s*seqBefore\s*\}\);\s*return;"
         )
 
 if __name__ == '__main__':
