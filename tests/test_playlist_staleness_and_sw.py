@@ -33,8 +33,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v163 to purge stale caches."""
-        self.assertIn("yt-player-cache-v163", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v164 to purge stale caches."""
+        self.assertIn("yt-player-cache-v164", self.sw_content)
 
     def test_sw_database_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate with waitUntil for database requests."""
@@ -48,7 +48,7 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
             r'_Playlist_Database\.json\?t=\$\{Date\.now\(\)\}',
             "dbUrl must include ?t=${Date.now()}"
         )
-        self.assertIn("fetch(dbUrl, { cache: 'no-store' })", self.playback_content)
+        self.assertIn("cache: 'no-store'", self.playback_content)
 
     def test_playback_has_robust_change_detection(self):
         """playback.js must define isPlaylistDataIdentical and use it in applyPlaylistData."""

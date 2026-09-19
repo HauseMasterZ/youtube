@@ -88,6 +88,19 @@
     function applyNormalizedDataInChunks(rawData, folderName, isRevalidation = false) {
         if (!Array.isArray(rawData)) return;
 
+        const totalCount = rawData.length;
+        if (totalCount === 0) {
+            allDatabases[folderName] = [];
+            if (playlistSelect.value === folderName) {
+                currentPlaylistData = [];
+                trackList.style.display = 'none';
+                playlistMessage.style.display = 'block';
+                playlistMessage.textContent = 'Playlist is empty.';
+                playlistMessage.style.color = 'var(--text-secondary)';
+            }
+            return;
+        }
+
         const prevData = allDatabases[folderName];
         if (isRevalidation && prevData && prevData.length === rawData.length) {
             const getId = (item) => Array.isArray(item) ? item[0] : (item && item.id);
@@ -116,7 +129,6 @@
         }
 
         const loadId = ++currentPlaylistLoadId;
-        const totalCount = rawData.length;
         const INITIAL_CHUNK = 60;
         const CHUNK_SIZE = 200;
 
@@ -220,12 +232,16 @@
         // 4. Direct Network Fetch with cache-busting timestamp and revalidation
         if (navigator.onLine !== false) {
             const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
-            fetch(dbUrl, { cache: 'no-store' })
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            const fetchTimeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
+
+            fetch(dbUrl, { cache: 'no-store', signal: controller ? controller.signal : undefined })
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
                 })
                 .then(rawData => {
+                    if (fetchTimeout) clearTimeout(fetchTimeout);
                     applyNormalizedDataInChunks(rawData, folderName, hasRendered);
                     hasRendered = true;
 
@@ -233,13 +249,49 @@
                         generateQueue(true, folderName);
                     }
                 })
-                .catch(err => {
+                .catch(async (err) => {
+                    if (fetchTimeout) clearTimeout(fetchTimeout);
                     if (!hasRendered) {
+                        if ('caches' in window) {
+                            try {
+                                const cleanUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+                                const dbCache = await caches.open('yt-player-database').catch(() => null);
+                                const cached = (dbCache && await dbCache.match(cleanUrl)) || (await caches.match(cleanUrl));
+                                if (cached && !hasRendered) {
+                                    const rawData = await cached.json();
+                                    if (!hasRendered && Array.isArray(rawData) && rawData.length > 0) {
+                                        applyNormalizedDataInChunks(rawData, folderName, false);
+                                        hasRendered = true;
+                                        if (!globalActivePlaylist || queueIndex === -1) {
+                                            generateQueue(true, folderName);
+                                        }
+                                        return;
+                                    }
+                                }
+                            } catch (e) {}
+                        }
+
                         console.error("Failed to load playlist:", err);
                         trackList.style.display = 'none';
                         playlistMessage.style.display = 'block';
-                        playlistMessage.textContent = 'Failed to load playlist database.';
-                        playlistMessage.style.color = '#ff5555';
+                        playlistMessage.innerHTML = '';
+                        const msgText = document.createElement('div');
+                        msgText.textContent = 'Failed to load playlist database.';
+                        msgText.style.marginBottom = '12px';
+                        msgText.style.color = '#ff5555';
+
+                        const retryBtn = document.createElement('button');
+                        retryBtn.textContent = 'Retry';
+                        retryBtn.style.cssText = 'padding: 8px 18px; border-radius: 20px; border: 1px solid var(--accent-color, #ff4e4e); background: transparent; color: var(--text-primary, #fff); cursor: pointer; font-size: 14px;';
+                        retryBtn.onclick = () => {
+                            playlistMessage.innerHTML = '';
+                            playlistMessage.textContent = 'Loading...';
+                            playlistMessage.style.color = 'var(--text-secondary)';
+                            loadPlaylist(folderName);
+                        };
+
+                        playlistMessage.appendChild(msgText);
+                        playlistMessage.appendChild(retryBtn);
                     }
                 });
         }
