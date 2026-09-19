@@ -1060,10 +1060,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 3s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        """updateMediaSessionPosition enforces a 10s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*3000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
         )
 
     def test_mode_transition_mutex_guards_resurrectors(self):
@@ -1143,36 +1143,27 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
-        """Lock gap detection re-publishes MediaMetadata with 5s cooldown to trigger bindPlayer on HyperOS"""
+    def test_lock_gap_republishes_metadata_if_needed(self):
+        """Lock gap detection re-publishes MediaMetadata only when shouldRepublishMetadata is satisfied"""
         self.assertRegex(
             self.main_content,
-            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_main_background_stale_position_force(self):
-        """main.js timeupdate detects background stale playback (>1000ms) and forces position update for home unlock recovery"""
+    def test_main_sparse_lock_gap_wake(self):
+        """main.js timeupdate handles lock gap with single forced position update without high-frequency background polling"""
         self.assertRegex(
             self.main_content,
-            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*1000'
+            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(\s*staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\)\s*\{'
         )
-        self.assertRegex(
-            self.main_content,
-            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
-        )
+        self.assertNotIn("isBackgroundStale", self.main_content)
+        self.assertNotIn("backgroundCeilingMs", self.ms_content)
 
     def test_main_playing_listener_silent_cycle_guard(self):
         """main.js playing listener is guarded by _isMode1SilentCycle to prevent state pollution"""
         self.assertRegex(
             self.main_content,
             r'audioPlayer\.addEventListener\([\'"]playing[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(window\._isMode1SilentCycle\)\s*return;'
-        )
-
-    def test_effective_ceiling_background_cadence(self):
-        """updateMediaSessionPosition enforces 1000ms background ceiling when document is hidden"""
-        self.assertRegex(
-            self.ms_content,
-            r'backgroundCeilingMs\s*=\s*1000;[\s\S]*?effectiveCeiling\s*=\s*\(typeof document[\s\S]*?backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
         )
 
 if __name__ == '__main__':

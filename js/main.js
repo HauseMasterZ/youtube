@@ -921,9 +921,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     staleGap = (lastTs > 0 && (Date.now() - lastTs > 2500));
                 }
             } catch (e) {}
-            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused);
-            const isBackgroundStale = isHiddenPlaying && (typeof window.getLastPositionTimestamp === 'function') && (Date.now() - window.getLastPositionTimestamp() > 1000);
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused) || isBackgroundStale) {
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -931,20 +929,14 @@ document.addEventListener("DOMContentLoaded", () => {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                         try {
-                            const now = Date.now();
-                            if (!window._lastLockGapRepublish || now - window._lastLockGapRepublish > 5000) {
-                                window._lastLockGapRepublish = now;
-                                if (typeof republishMediaMetadata === 'function') {
-                                    republishMediaMetadata();
-                                }
+                            if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
                             }
                         } catch (e) {}
                     }
-                } else if (isBackgroundStale) {
-                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {

@@ -874,12 +874,10 @@
                 //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
-                const freshnessCeilingMs = 3000;
-                const backgroundCeilingMs = 1000;
-                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
+                const freshnessCeilingMs = 10000;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > effectiveCeiling || now - _lastSentTimestamp > freshnessCeilingMs) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }
