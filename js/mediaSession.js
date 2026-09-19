@@ -871,6 +871,7 @@
 
     let _lastSentPosition = -1;
     let _lastSentTimestamp = 0;
+    let _lastBgMetadataRefresh = 0;
     window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
     window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
     window._forceNextPosition = false;
@@ -900,6 +901,17 @@
                 //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
                 const now = Date.now();
+
+                const isCallOrStealActive = (typeof window.isCallActive !== 'undefined' && window.isCallActive) || (typeof window.mediaSessionDestroyed !== 'undefined' && window.mediaSessionDestroyed);
+                if (!isPaused && !isBuffering && !isSeeking && !isCallOrStealActive) {
+                    if (now - _lastBgMetadataRefresh > 30000) {
+                        _lastBgMetadataRefresh = now;
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    }
+                }
+
                 const freshnessCeilingMs = 10000;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
@@ -1064,9 +1076,8 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
-            const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
             try {
-                if (needsRebind && typeof republishMediaMetadata === 'function') {
+                if (typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
                 }
             } catch (e) {}
@@ -1509,6 +1520,7 @@
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
                     }
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
@@ -1553,6 +1565,7 @@
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'paused';
                     }
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
@@ -1639,6 +1652,7 @@
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'paused';
                     }
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
@@ -1710,6 +1724,7 @@
             // Explicitly pass seek target and total duration to prevent 0:00 dip
             const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             updateMediaSessionPosition(seekTarget, totalDur);
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const now = Date.now();
@@ -1733,6 +1748,7 @@
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             updateMediaSessionPosition(newTime, dur);
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
             // Mode 2 seek-resume: center Play is swallowed by C++ under spoof,
             // so discrete seek buttons double as the guaranteed resume gesture
             // after video steals (both paused/playing occasions). Seekbar
@@ -1779,6 +1795,7 @@
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
             updateMediaSessionPosition(newTime, dur);
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
             // Mode 2 seek-resume (mirror of seekbackward): guaranteed resume
             // gesture after video steals; seekto stays positioning-only.
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
