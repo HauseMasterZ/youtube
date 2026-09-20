@@ -903,11 +903,9 @@
 
 
                 const freshnessCeilingMs = 10000;
-                const backgroundCeilingMs = 600;
-                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > effectiveCeiling) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }
@@ -1091,18 +1089,9 @@
                 const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
                 window.lastTimeupdateFire = monoNow;
 
-                const lastSent = (typeof getLastPositionTimestamp === 'function') ? getLastPositionTimestamp() : 0;
-                const isFresh = (lastSent > 0 && (Date.now() - lastSent < 1000));
-                const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-
-                if (isFresh && !isBuffering) {
-                    // Downgrade to drift-gated position update: suppresses redundant animator reset if a background gap heal just fired
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, false);
-                } else {
-                    window._forceNextPosition = true;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-                }
+                window._forceNextPosition = true;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
             } catch (e) {}
             // The resumed 1Hz timeupdate owns position from here.
             return;
