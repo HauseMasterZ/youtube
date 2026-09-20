@@ -1068,14 +1068,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 10s visible ceiling and 1000ms background ceiling to prevent SystemUI starvation and ensure fast homescreen unfreeze"""
+        """updateMediaSessionPosition enforces a 10s freshness ceiling to prevent SystemUI starvation while visible"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?backgroundCeilingMs\s*=\s*1000;[\s\S]*?effectiveCeiling\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\)\s*\?\s*backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
+            r'const\s+freshnessCeilingMs\s*=\s*10000;'
         )
         self.assertRegex(
             self.ms_content,
-            r'now\s*-\s*_lastSentTimestamp\s*>\s*effectiveCeiling'
+            r'now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs'
         )
 
     def test_mode_transition_mutex_guards_resurrectors(self):
@@ -1155,26 +1155,23 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
-        """Lock gap and background rebind in timeupdate republish MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
-        self.assertRegex(
-            self.main_content,
-            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'shouldRebindHidden[\s\S]*?republishMediaMetadata\(\);'
-        )
+    def test_lock_gap_does_not_republish_metadata_in_timeupdate(self):
+        """timeupdate does NOT republish MediaMetadata to preserve session identity and prevent view recreation"""
+        self.assertNotIn('shouldRebindHidden', self.main_content)
+        self.assertNotIn('isBackgroundStale', self.main_content)
+        stale_block_match = re.search(r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*!isCallOrQuarantine\)\s*\)\s*\{([\s\S]*?)\n\s*if\s*\(window\.lyricsActive', self.main_content)
+        self.assertIsNotNone(stale_block_match)
+        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
 
-    def test_foreground_quiet_guards_background_rebind(self):
-        """timeupdate checks isForegroundQuiet to eliminate in-app double-rebind race condition"""
+    def test_drift_gate_bypassed_when_hidden_playing(self):
+        """updateMediaSessionPosition bypasses 2.0s drift extrapolation gate when hidden playing to deliver 1Hz position updates to SystemUI"""
         self.assertRegex(
-            self.main_content,
-            r'isForegroundQuiet\s*=\s*\(!window\._lastForegroundResyncTime\s*\|\|\s*\(nowWall\s*-\s*window\._lastForegroundResyncTime\s*>\s*1500\)\);'
+            self.ms_content,
+            r'const\s+isHiddenPlaying\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\s*&&\s*!isSeeking\);'
         )
         self.assertRegex(
-            self.main_content,
-            r'shouldRebindHidden\s*=\s*isHiddenPlaying[\s\S]*?isForegroundQuiet'
+            self.ms_content,
+            r'if\s*\(\s*!isHiddenPlaying\s*&&\s*Math\.abs\(pos\s*-\s*expectedPos\)\s*<\s*2\.0\s*&&\s*pos\s*>=\s*_lastSentPosition\s*-\s*0\.5\s*\)\s*\{'
         )
 
     def test_resync_media_session_stamps_foreground_resync_and_lock_gap_timestamps(self):
@@ -1193,15 +1190,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\._lastLockGapRepublish\s*=\s*Date\.now\(\);'
         )
 
-    def test_should_rebind_hidden_requires_position_age(self):
-        """main.js shouldRebindHidden requires isAgeDue to prevent torn-holder race on home press"""
+    def test_timeupdate_calls_update_media_session_position_at_1hz(self):
+        """main.js timeupdate sends position updates on every second tick and passes staleGap force"""
         self.assertRegex(
             self.main_content,
-            r'isAgeDue\s*=\s*\(lastSent\s*>\s*0\)\s*&&\s*\(nowWall\s*-\s*lastSent\s*>\s*1000\);'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'shouldRebindHidden\s*=\s*isHiddenPlaying[\s\S]*?isAgeDue'
+            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*!isCallOrQuarantine\)\s*\)\s*\{[\s\S]*?updateTimeUI\(ct\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*staleGap\s*&&\s*!audioPlayer\.paused\);'
         )
 
     def test_resync_media_session_reanchors_playing_on_foreground(self):
@@ -1248,15 +1241,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.setActionHandler\([\'"]playpause[\'"][\s\S]*?if\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_main_background_stale_position_force(self):
-        """main.js timeupdate detects background stale playback (>1000ms) and forces position update for fast home unlock recovery"""
+    def test_main_stale_gap_position_force(self):
+        """main.js timeupdate detects true lock/Doze gaps (>2500ms) and forces position update for fast recovery"""
         self.assertRegex(
             self.main_content,
-            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*1000'
+            r'const\s+staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
         )
         self.assertRegex(
             self.main_content,
-            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
         )
 
     def test_main_playing_listener_silent_cycle_guard(self):

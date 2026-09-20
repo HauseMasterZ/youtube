@@ -903,11 +903,9 @@
 
 
                 const freshnessCeilingMs = 10000;
-                const backgroundCeilingMs = 1000;
-                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > effectiveCeiling) {
+                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
                         freshnessForce = true;
                     }
                 }
@@ -950,8 +948,11 @@
                     // 3. Autonomous extrapolation drift gate: Android SystemUI extrapolates
                     // position continuously via SystemClock.elapsedRealtime(). Calling setPositionState
                     // restarts SquigglyProgress's heightAnimator (~860ms freeze).
-                    // If reality matches Android's extrapolation within 2.0s, send ZERO IPC.
-                    if (Math.abs(pos - expectedPos) < 2.0 && pos >= _lastSentPosition - 0.5) {
+                    // If reality matches Android's extrapolation within 2.0s, send ZERO IPC when visible.
+                    // When hidden playing, bypass this gate so natural 1Hz position updates reach SystemUI
+                    // to unfreeze the homescreen media card within ~1s, exactly as in commit 0dc561d.
+                    const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !isPaused && !isSeeking);
+                    if (!isHiddenPlaying && Math.abs(pos - expectedPos) < 2.0 && pos >= _lastSentPosition - 0.5) {
                         return;
                     }
                     const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
