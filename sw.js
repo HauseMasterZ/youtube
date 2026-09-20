@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v173';
+const CACHE_NAME = 'yt-player-cache-v174';
 
 const CORE_ASSETS = [
     './',

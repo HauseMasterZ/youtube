@@ -1068,12 +1068,15 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 10s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        """updateMediaSessionPosition enforces a 10s visible ceiling and 1000ms background ceiling to prevent SystemUI starvation and ensure fast homescreen unfreeze"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?backgroundCeilingMs\s*=\s*1000;[\s\S]*?effectiveCeiling\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\)\s*\?\s*backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
         )
-        self.assertNotIn("backgroundCeilingMs", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'now\s*-\s*_lastSentTimestamp\s*>\s*effectiveCeiling'
+        )
 
     def test_mode_transition_mutex_guards_resurrectors(self):
         """togglePlaybackMode arms window._modeTransitionUntil and guards resurrectors"""
@@ -1202,13 +1205,16 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'navigator\.mediaSession\.setActionHandler\([\'"]playpause[\'"][\s\S]*?if\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_main_sparse_lock_gap_wake(self):
-        """main.js timeupdate handles lock gap with single forced position update without high-frequency background polling"""
+    def test_main_background_stale_position_force(self):
+        """main.js timeupdate detects background stale playback (>1000ms) and forces position update for fast home unlock recovery"""
         self.assertRegex(
             self.main_content,
-            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(\s*staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\)\s*\{'
+            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*1000'
         )
-        self.assertNotIn("isBackgroundStale", self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
 
     def test_main_playing_listener_silent_cycle_guard(self):
         """main.js playing listener is guarded by _isMode1SilentCycle to prevent state pollution"""

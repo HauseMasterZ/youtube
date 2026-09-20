@@ -903,9 +903,11 @@
 
 
                 const freshnessCeilingMs = 10000;
+                const backgroundCeilingMs = 1000;
+                const effectiveCeiling = (typeof document !== 'undefined' && document.hidden && !isPaused) ? backgroundCeilingMs : freshnessCeilingMs;
                 let freshnessForce = false;
                 if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
+                    if (now - _lastSentTimestamp > effectiveCeiling) {
                         freshnessForce = true;
                     }
                 }
