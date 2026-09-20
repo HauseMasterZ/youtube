@@ -42,10 +42,11 @@
 - Mode 2: Car & Bluetooth keepalive. Uses silent audio anchor oscillator to keep DACs awake and micro-rate `0.00001` with `playbackState = 'playing'` when paused to freeze seekbar while pinning notification.
 - Zero Audio Leak: Immediate synchronous pause during Mode 2 -> Mode 1 switch; zero audio frames leaked.
 
-## 7. Security, Secrets & Privacy
+## 7. Security, Secrets & Dataset Write Invariants
 - Never hardcode API keys, tokens, or credentials in client-side code or public repositories.
 - Upstream storage details and backend infrastructure must remain unexposed to client-side HTML/JS.
-- The only trigger for dataset writes is verified YouTube playlist changes.
+- Rule 7a (Playlist Membership Invariant): External write triggers for new track additions or membership mutations strictly require verified YouTube playlist changes.
+- Rule 7b (Catalogue Self-Healing Protocol): Autonomous daily downtime self-healing (02:00 to 09:00 IST / 22:00 UTC) on the Raspberry Pi is authorized to detect and repair broken audio, playlist order divergence, missing synchronized .lrc lyrics, missing square .webp thumbnails, and default dominant colors, preserving 1:1 catalogue fidelity without altering playlist membership.
 
 ## 8. Empirical Verification Before Completion
 - Be empirical, tenacious, and verify actual changes before claiming fixes.
