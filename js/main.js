@@ -941,26 +941,29 @@ document.addEventListener("DOMContentLoaded", () => {
             // Inter-arrival delta between consecutive timeupdates measures true loop
             // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
             const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const eventDelta = (lastTimeupdateFire > 0) ? (nowMonotonic - lastTimeupdateFire) : 0;
+            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
+            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
             lastTimeupdateFire = nowMonotonic;
             window.lastTimeupdateFire = nowMonotonic;
             const staleGap = (eventDelta > 2500);
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
+            const nowWall = Date.now();
+            const lastSent = (typeof window.getLastPositionTimestamp === 'function') ? window.getLastPositionTimestamp() : 0;
+            const isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 600);
+
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused) || isBackgroundStale) {
                 if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
-                        try {
-                            if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
-                                republishMediaMetadata();
-                            }
-                        } catch (e) {}
                     }
+                } else if (isBackgroundStale) {
+                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {

@@ -984,12 +984,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_timeupdate_lock_gap_self_heal_and_drift_gating(self):
-        """main.js timeupdate handles lock gaps (>2500ms) to wake up background media card and delegates normal playback to drift-gating"""
+        """main.js timeupdate handles lock gaps (>2500ms) with Math.max to prevent double-fire and delegates to drift-gating"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'eventDelta\s*=\s*\(lastTimeupdateFire\s*>\s*0\)\s*\?\s*\(nowMonotonic\s*-\s*lastTimeupdateFire\)\s*:\s*0;'
+            r'effectiveLastFire\s*=\s*Math\.max\(lastTimeupdateFire,\s*\(typeof\s+window\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\.lastTimeupdateFire\)\s*\|\|\s*0\);'
+        )
+        self.assertRegex(
+            main_src,
+            r'eventDelta\s*=\s*\(effectiveLastFire\s*>\s*0\)\s*\?\s*\(nowMonotonic\s*-\s*effectiveLastFire\)\s*:\s*0;'
         )
         self.assertRegex(
             main_src,
@@ -1064,10 +1068,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 10s freshness ceiling while playing to prevent SystemUI starvation on rebind"""
+        """updateMediaSessionPosition enforces a 10s visible ceiling and 600ms background ceiling to prevent SystemUI starvation and ensure fast homescreen unfreeze"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs[\s\S]*?effectiveBypass\s*=\s*forceBypass\s*\|\|\s*freshnessForce;'
+            r'const\s+freshnessCeilingMs\s*=\s*10000;[\s\S]*?backgroundCeilingMs\s*=\s*600;[\s\S]*?effectiveCeiling\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\)\s*\?\s*backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'now\s*-\s*_lastSentTimestamp\s*>\s*effectiveCeiling'
         )
 
     def test_mode_transition_mutex_guards_resurrectors(self):
@@ -1147,21 +1155,73 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_if_needed(self):
-        """Lock gap detection re-publishes MediaMetadata only when shouldRepublishMetadata is satisfied"""
+    def test_lock_gap_does_not_republish_metadata(self):
+        """Lock gap detection in timeupdate does NOT republish MediaMetadata to preserve session identity and avoid wave freeze"""
+        stale_block_match = re.search(r'if\s*\(\s*staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\{([\s\S]*?)\n\s*updateTimeUI', self.main_content)
+        self.assertIsNotNone(stale_block_match)
+        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
+
+    def test_resync_media_session_downgrades_fresh_position_ipc(self):
+        """resyncMediaSessionOnForeground downgrades position update to drift-gated when lastSent < 1000ms"""
         self.assertRegex(
-            self.main_content,
-            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);'
+            self.ms_content,
+            r'const\s+lastSent\s*=\s*\(typeof\s+getLastPositionTimestamp\s*===\s*[\'"]function[\'"]\)\s*\?\s*getLastPositionTimestamp\(\)\s*:\s*0;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isFresh\s*=\s*\(lastSent\s*>\s*0\s*&&\s*\(Date\.now\(\)\s*-\s*lastSent\s*<\s*1000\)\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*isFresh\s*&&\s*!isBuffering\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*false\);[\s\S]*?\}\s*else\s*\{[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
 
-    def test_main_sparse_lock_gap_wake(self):
-        """main.js timeupdate handles lock gap with single forced position update without high-frequency background polling"""
+    def test_resync_media_session_synchronizes_last_timeupdate_fire(self):
+        """resyncMediaSessionOnForeground synchronizes window.lastTimeupdateFire with monotonic clock to suppress double-fire"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+monoNow\s*=\s*\(typeof\s+performance\s*!==\s*[\'"]undefined[\'"]\s*&&\s*performance\.now\)\s*\?\s*performance\.now\(\)\s*:\s*Date\.now\(\);[\s\S]*?window\.lastTimeupdateFire\s*=\s*monoNow;'
+        )
+
+    def test_resync_media_session_guards_quarantine_and_recent_bt_disconnect(self):
+        """resyncMediaSessionOnForeground early-returns on call quarantine and recent bluetooth disconnect"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(typeof\s+window\.isPostCallQuarantine\s*===\s*[\'"]function[\'"]\s*&&\s*window\.isPostCallQuarantine\(\)\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isRecentBtDisconnect\s*=\s*\(typeof\s+window\.lastBtDisconnectTime\s*===\s*[\'"]number[\'"]\s*&&\s*Date\.now\(\)\s*-\s*window\.lastBtDisconnectTime\s*<\s*2500\);[\s\S]*?if\s*\(isRecentBtDisconnect\)\s*return;'
+        )
+
+    def test_action_handlers_guard_republish_metadata(self):
+        """handlePlayAction, pause handler resume, and playpause handler resume guard republishMediaMetadata with shouldRepublishMetadata"""
+        # handlePlayAction
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+handlePlayAction\s*\(\s*\)\s*\{[\s\S]*?if\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
+        # pause action handler resume path
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]pause[\'"][\s\S]*?if\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
+        # playpause action handler resume path
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]playpause[\'"][\s\S]*?if\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
+
+    def test_main_background_stale_position_force(self):
+        """main.js timeupdate detects background stale playback (>600ms) and forces position update for fast home unlock recovery"""
         self.assertRegex(
             self.main_content,
-            r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(\s*staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\)\s*\{'
+            r'isBackgroundStale\s*=\s*isHiddenPlaying[\s\S]*?>\s*600'
         )
-        self.assertNotIn("isBackgroundStale", self.main_content)
-        self.assertNotIn("backgroundCeilingMs", self.ms_content)
+        self.assertRegex(
+            self.main_content,
+            r'isBackgroundStale[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
 
     def test_main_playing_listener_silent_cycle_guard(self):
         """main.js playing listener is guarded by _isMode1SilentCycle to prevent state pollution"""
