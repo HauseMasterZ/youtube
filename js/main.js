@@ -946,24 +946,48 @@ document.addEventListener("DOMContentLoaded", () => {
             lastTimeupdateFire = nowMonotonic;
             window.lastTimeupdateFire = nowMonotonic;
             const staleGap = (eventDelta > 2500);
-            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
             const nowWall = Date.now();
             const lastSent = (typeof window.getLastPositionTimestamp === 'function') ? window.getLastPositionTimestamp() : 0;
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
             const isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 1000);
 
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused) || isBackgroundStale) {
-                if (staleGap && !audioPlayer.paused) {
+            const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
+            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && (nowWall - window.lastBtDisconnectTime < 2500));
+            const isForegroundQuiet = (!window._lastForegroundResyncTime || (nowWall - window._lastForegroundResyncTime > 1500));
+            const isSafeToRebind = !isCallOrQuarantine && !isRecentBt && !window.mediaSessionDestroyed && !audioPlayer.switching && audioPlayer._pendingSeek === null && !window.wasPausedByUser && !audioPlayer.paused;
+            const isBindDue = (!window._lastLockGapRepublish || (nowWall - window._lastLockGapRepublish > 5000));
+            const isAgeDue = (lastSent > 0) && (nowWall - lastSent > 1000);
+            const shouldRebindHidden = isHiddenPlaying && isSafeToRebind && isForegroundQuiet && isBindDue && isAgeDue;
+
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine) || isBackgroundStale || shouldRebindHidden) {
+                if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
+                        try {
+                            if (isSafeToRebind && isForegroundQuiet && isBindDue) {
+                                window._lastLockGapRepublish = nowWall;
+                                if (typeof republishMediaMetadata === 'function') {
+                                    republishMediaMetadata();
+                                }
+                            }
+                        } catch (e) {}
                     }
+                } else if (shouldRebindHidden) {
+                    window._forceNextPosition = true;
+                    try {
+                        window._lastLockGapRepublish = nowWall;
+                        if (typeof republishMediaMetadata === 'function') {
+                            republishMediaMetadata();
+                        }
+                    } catch (e) {}
                 } else if (isBackgroundStale) {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale || shouldRebindHidden);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {

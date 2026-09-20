@@ -50,6 +50,8 @@
     window.isCallActive = false;
     window.mediaSessionDestroyed = false;
     window.lastTimeupdateFire = 0;
+    window._lastForegroundResyncTime = 0;
+    window._lastLockGapRepublish = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
     // Search Mode State & Mutual Exclusion

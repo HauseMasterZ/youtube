@@ -1155,11 +1155,54 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_does_not_republish_metadata(self):
-        """Lock gap detection in timeupdate does NOT republish MediaMetadata to preserve session identity and avoid wave freeze"""
-        stale_block_match = re.search(r'if\s*\(\s*staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\{([\s\S]*?)\n\s*updateTimeUI', self.main_content)
-        self.assertIsNotNone(stale_block_match)
-        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
+    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
+        """Lock gap and background rebind in timeupdate republish MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'shouldRebindHidden[\s\S]*?republishMediaMetadata\(\);'
+        )
+
+    def test_foreground_quiet_guards_background_rebind(self):
+        """timeupdate checks isForegroundQuiet to eliminate in-app double-rebind race condition"""
+        self.assertRegex(
+            self.main_content,
+            r'isForegroundQuiet\s*=\s*\(!window\._lastForegroundResyncTime\s*\|\|\s*\(nowWall\s*-\s*window\._lastForegroundResyncTime\s*>\s*1500\)\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'shouldRebindHidden\s*=\s*isHiddenPlaying[\s\S]*?isForegroundQuiet'
+        )
+
+    def test_resync_media_session_stamps_foreground_resync_and_lock_gap_timestamps(self):
+        """resyncMediaSessionOnForeground stamps _lastForegroundResyncTime and _lastLockGapRepublish"""
+        self.assertRegex(
+            self.ms_content,
+            r'_lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastLockGapRepublish\s*=\s*now;'
+        )
+
+    def test_publish_track_metadata_seeds_lock_gap_republish(self):
+        """publishTrackMetadata seeds window._lastLockGapRepublish to suppress immediate rebind on home press"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            pb_src = f.read()
+        self.assertRegex(
+            pb_src,
+            r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\._lastLockGapRepublish\s*=\s*Date\.now\(\);'
+        )
+
+    def test_should_rebind_hidden_requires_position_age(self):
+        """main.js shouldRebindHidden requires isAgeDue to prevent torn-holder race on home press"""
+        self.assertRegex(
+            self.main_content,
+            r'isAgeDue\s*=\s*\(lastSent\s*>\s*0\)\s*&&\s*\(nowWall\s*-\s*lastSent\s*>\s*1000\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'shouldRebindHidden\s*=\s*isHiddenPlaying[\s\S]*?isAgeDue'
+        )
 
     def test_resync_media_session_reanchors_playing_on_foreground(self):
         """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single forced position update"""
