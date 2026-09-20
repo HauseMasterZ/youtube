@@ -953,7 +953,7 @@ document.addEventListener("DOMContentLoaded", () => {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                         try {
-                            if (typeof republishMediaMetadata === 'function') {
+                            if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                                 republishMediaMetadata();
                             }
                         } catch (e) {}

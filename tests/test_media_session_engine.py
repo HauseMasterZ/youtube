@@ -1033,11 +1033,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.addEventListener\([\'"]pageshow[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?resyncMediaSessionOnForeground\([\'"]pageshow-playing[\'"]\);'
         )
 
-    def test_resync_media_session_republishes_metadata_on_foreground_when_playing(self):
-        """resyncMediaSessionOnForeground unconditionally republishes metadata when !isPaused to rebind HyperOS/SystemUI capsule view"""
+    def test_resync_media_session_guards_republish_metadata_with_needs_rebind(self):
+        """resyncMediaSessionOnForeground only republishes metadata when needsRebind is true to avoid SquigglyProgress freeze"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*republishMediaMetadata\(\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
         )
 
     def test_toggle_playback_mode_guards_republish_metadata_on_pause(self):
@@ -1147,37 +1147,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_on_wake(self):
-        """Lock gap detection re-publishes MediaMetadata unconditionally on wake to rebind capsule view"""
+    def test_lock_gap_republishes_metadata_if_needed(self):
+        """Lock gap detection re-publishes MediaMetadata only when shouldRepublishMetadata is satisfied"""
         self.assertRegex(
             self.main_content,
-            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
-        )
-
-    def test_background_periodic_metadata_refresh_cooldown(self):
-        """updateMediaSessionPosition triggers 30s background metadata refresh to unfreeze capsule animators"""
-        self.assertRegex(
-            self.ms_content,
-            r'now\s*-\s*_lastBgMetadataRefresh\s*>\s*30000[\s\S]*?republishMediaMetadata\(\);'
-        )
-
-    def test_action_handlers_republish_metadata(self):
-        """Action handlers (pause, seekto, seekbackward, seekforward) call republishMediaMetadata to rebind capsule view"""
-        self.assertRegex(
-            self.ms_content,
-            r'setActionHandler\([\'"]pause[\'"][\s\S]*?republishMediaMetadata\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'setActionHandler\([\'"]seekto[\'"][\s\S]*?republishMediaMetadata\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'setActionHandler\([\'"]seekbackward[\'"][\s\S]*?republishMediaMetadata\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'setActionHandler\([\'"]seekforward[\'"][\s\S]*?republishMediaMetadata\(\);'
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)\s*\{[\s\S]*?shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);'
         )
 
     def test_main_sparse_lock_gap_wake(self):
