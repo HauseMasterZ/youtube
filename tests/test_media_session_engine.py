@@ -984,7 +984,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_timeupdate_lock_gap_self_heal_and_drift_gating(self):
-        """main.js timeupdate handles lock gaps (>2500ms) with eventDelta and forces next position"""
+        """main.js timeupdate handles lock gaps with dual-clock staleness check and forces next position"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
@@ -993,7 +993,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             main_src,
-            r'staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
+            r'staleGap\s*=\s*\(eventDelta\s*>\s*2000\)\s*\|\|\s*\(wallGap\s*>\s*2500\);'
         )
         self.assertRegex(
             main_src,
@@ -1138,9 +1138,9 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_avoids_republish_metadata_for_wave_stability(self):
-        """Lock gap detection in timeupdate does not call republishMediaMetadata to avoid resetting SquigglyProgress"""
-        self.assertNotRegex(
+    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
+        """Lock gap detection in timeupdate republishes MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
+        self.assertRegex(
             self.main_content,
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
@@ -1157,23 +1157,21 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_resync_media_session_stamps_foreground_resync_and_lock_gap_timestamps(self):
-        """resyncMediaSessionOnForeground stamps _lastForegroundResyncTime without polluting window"""
+        """resyncMediaSessionOnForeground stamps _lastForegroundResyncTime and window._lastLockGapRepublish"""
         self.assertRegex(
             self.ms_content,
-            r'_lastForegroundResyncTime\s*=\s*now;'
+            r'_lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastLockGapRepublish\s*=\s*now;'
         )
         self.assertNotIn("window._lastForegroundResyncTime", self.ms_content)
-        self.assertNotIn("window._lastLockGapRepublish", self.ms_content)
 
     def test_publish_track_metadata_seeds_lock_gap_republish(self):
-        """publishTrackMetadata sets lastPublishedTrackKey without dead window._lastLockGapRepublish"""
+        """publishTrackMetadata sets lastPublishedTrackKey and seeds window._lastLockGapRepublish"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             pb_src = f.read()
         self.assertRegex(
             pb_src,
-            r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\.lastPublishedTrackKey\s*='
+            r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\.lastPublishedTrackKey\s*=[\s\S]*?window\._lastLockGapRepublish\s*=\s*Date\.now\(\);'
         )
-        self.assertNotIn("window._lastLockGapRepublish", pb_src)
 
     def test_timeupdate_calls_update_media_session_position_at_1hz(self):
         """main.js timeupdate sends position updates on every second tick and passes staleGap force"""
@@ -1224,10 +1222,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_main_stale_gap_position_force(self):
-        """main.js timeupdate detects true lock/Doze gaps (>2500ms) and forces position update for fast recovery"""
+        """main.js timeupdate detects true lock/Doze gaps (>2000ms eventDelta or >2500ms wallGap) and forces position update for fast recovery"""
         self.assertRegex(
             self.main_content,
-            r'const\s+staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
+            r'const\s+staleGap\s*=\s*\(eventDelta\s*>\s*2000\)\s*\|\|\s*\(wallGap\s*>\s*2500\);'
         )
         self.assertRegex(
             self.main_content,

@@ -1047,6 +1047,7 @@
             return;
         }
         _lastForegroundResyncTime = now;
+        window._lastLockGapRepublish = now;
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {

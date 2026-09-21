@@ -49,6 +49,7 @@
     window.lastCallEndTime = 0;
     window.isCallActive = false;
     window.mediaSessionDestroyed = false;
+    window._lastLockGapRepublish = 0;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
     // Search Mode State & Mutual Exclusion
