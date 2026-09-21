@@ -1037,11 +1037,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.addEventListener\([\'"]pageshow[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?resyncMediaSessionOnForeground\([\'"]pageshow-playing[\'"]\);'
         )
 
-    def test_resync_media_session_guards_republish_metadata_with_needs_rebind(self):
-        """resyncMediaSessionOnForeground only republishes metadata when needsRebind is true to avoid SquigglyProgress freeze"""
+    def test_resync_media_session_republishes_metadata_on_foreground_when_playing(self):
+        """resyncMediaSessionOnForeground unconditionally republishes metadata when !isPaused to rebind HyperOS/SystemUI capsule view"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*republishMediaMetadata\(\);'
         )
 
     def test_toggle_playback_mode_guards_republish_metadata_on_pause(self):

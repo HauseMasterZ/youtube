@@ -1074,18 +1074,13 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
-            const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
             try {
-                if (needsRebind && typeof republishMediaMetadata === 'function') {
+                if (typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
                 }
             } catch (e) {}
             try {
-                // Only write if actually changed; same-value rewrite still
-                // notifies controller on some OEM skins.
-                if (navigator.mediaSession.playbackState !== 'playing') {
-                    navigator.mediaSession.playbackState = 'playing';
-                }
+                navigator.mediaSession.playbackState = 'playing';
             } catch (e) {}
             try {
                 if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
@@ -1098,6 +1093,16 @@
                 window._forceNextPosition = true;
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
             } catch (e) {}
+            setTimeout(() => {
+                try {
+                    if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
+                    if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
+                    navigator.mediaSession.playbackState = 'playing';
+                    window._forceNextPosition = true;
+                    const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, d2, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                } catch (e) {}
+            }, 250);
             // The resumed 1Hz timeupdate owns position from here.
             return;
         }
