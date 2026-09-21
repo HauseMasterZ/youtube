@@ -984,16 +984,20 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_timeupdate_lock_gap_self_heal_and_drift_gating(self):
-        """main.js timeupdate handles lock gaps with dual-clock staleness check and forces next position"""
+        """main.js timeupdate handles lock gaps (>2500ms) with Math.max to prevent double-fire and delegates to drift-gating"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'eventDelta\s*=\s*\(lastTimeupdateFire\s*>\s*0\)\s*\?\s*\(nowMonotonic\s*-\s*lastTimeupdateFire\)\s*:\s*0;'
+            r'effectiveLastFire\s*=\s*Math\.max\(lastTimeupdateFire,\s*\(typeof\s+window\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\.lastTimeupdateFire\)\s*\|\|\s*0\);'
         )
         self.assertRegex(
             main_src,
-            r'staleGap\s*=\s*\(eventDelta\s*>\s*2000\)\s*\|\|\s*\(wallGap\s*>\s*2500\);'
+            r'eventDelta\s*=\s*\(effectiveLastFire\s*>\s*0\)\s*\?\s*\(nowMonotonic\s*-\s*effectiveLastFire\)\s*:\s*0;'
+        )
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
         )
         self.assertRegex(
             main_src,
@@ -1138,9 +1142,9 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
-        """Lock gap detection in timeupdate republishes MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
-        self.assertRegex(
+    def test_lock_gap_avoids_republish_metadata_for_wave_stability(self):
+        """Lock gap detection in timeupdate does not call republishMediaMetadata to avoid resetting SquigglyProgress"""
+        self.assertNotRegex(
             self.main_content,
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
@@ -1157,20 +1161,19 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_resync_media_session_stamps_foreground_resync_and_lock_gap_timestamps(self):
-        """resyncMediaSessionOnForeground stamps _lastForegroundResyncTime and window._lastLockGapRepublish"""
+        """resyncMediaSessionOnForeground stamps _lastForegroundResyncTime and _lastLockGapRepublish"""
         self.assertRegex(
             self.ms_content,
-            r'_lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastLockGapRepublish\s*=\s*now;'
+            r'_lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastForegroundResyncTime\s*=\s*now;[\s\S]*?window\._lastLockGapRepublish\s*=\s*now;'
         )
-        self.assertNotIn("window._lastForegroundResyncTime", self.ms_content)
 
     def test_publish_track_metadata_seeds_lock_gap_republish(self):
-        """publishTrackMetadata sets lastPublishedTrackKey and seeds window._lastLockGapRepublish"""
+        """publishTrackMetadata seeds window._lastLockGapRepublish to suppress immediate rebind on home press"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             pb_src = f.read()
         self.assertRegex(
             pb_src,
-            r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\.lastPublishedTrackKey\s*=[\s\S]*?window\._lastLockGapRepublish\s*=\s*Date\.now\(\);'
+            r'window\.publishTrackMetadata\s*=\s*function[\s\S]*?window\._lastLockGapRepublish\s*=\s*Date\.now\(\);'
         )
 
     def test_timeupdate_calls_update_media_session_position_at_1hz(self):
@@ -1189,8 +1192,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("isFresh", self.ms_content)
 
     def test_resync_media_session_synchronizes_last_timeupdate_fire(self):
-        """resyncMediaSessionOnForeground does not pollute window.lastTimeupdateFire"""
-        self.assertNotIn("window.lastTimeupdateFire", self.ms_content)
+        """resyncMediaSessionOnForeground synchronizes window.lastTimeupdateFire with monotonic clock to suppress double-fire"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+monoNow\s*=\s*\(typeof\s+performance\s*!==\s*[\'"]undefined[\'"]\s*&&\s*performance\.now\)\s*\?\s*performance\.now\(\)\s*:\s*Date\.now\(\);[\s\S]*?window\.lastTimeupdateFire\s*=\s*monoNow;'
+        )
 
     def test_resync_media_session_guards_quarantine_and_recent_bt_disconnect(self):
         """resyncMediaSessionOnForeground early-returns on call quarantine and recent bluetooth disconnect"""
@@ -1222,10 +1228,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_main_stale_gap_position_force(self):
-        """main.js timeupdate detects true lock/Doze gaps (>2000ms eventDelta or >2500ms wallGap) and forces position update for fast recovery"""
+        """main.js timeupdate detects true lock/Doze gaps (>2500ms) and forces position update for fast recovery"""
         self.assertRegex(
             self.main_content,
-            r'const\s+staleGap\s*=\s*\(eventDelta\s*>\s*2000\)\s*\|\|\s*\(wallGap\s*>\s*2500\);'
+            r'const\s+staleGap\s*=\s*\(eventDelta\s*>\s*2500\);'
         )
         self.assertRegex(
             self.main_content,
@@ -1245,7 +1251,7 @@ class TestMediaSessionEngine(unittest.TestCase):
             main_src = f.read()
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'state.js'), 'r', encoding='utf-8') as f:
             state_src = f.read()
-        self.assertNotIn("window.lastTimeupdateFire", state_src)
+        self.assertIn("window.lastTimeupdateFire = 0;", state_src)
         self.assertRegex(
             main_src,
             r'audioPlayer\.addEventListener\([\'"]pause[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?lastTimeupdateFire\s*=\s*0;'

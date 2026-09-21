@@ -697,6 +697,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -903,6 +904,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking) return;
         isSeeking = false;
         lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -936,15 +938,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
             // Self-heal for lock/Doze gaps where the JS event loop was suspended.
-            // Dual-clock detection: inter-arrival eventDelta (monotonic) detects loop suspension;
-            // wallGap (Date.now() - window.getLastPositionTimestamp()) detects background IPC starvation.
+            // Inter-arrival delta between consecutive timeupdates measures true loop
+            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
             const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const nowWall = Date.now();
-            const lastSent = (typeof window.getLastPositionTimestamp === 'function') ? window.getLastPositionTimestamp() : 0;
-            const wallGap = (lastSent > 0) ? (nowWall - lastSent) : 0;
-            const eventDelta = (lastTimeupdateFire > 0) ? (nowMonotonic - lastTimeupdateFire) : 0;
+            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
+            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
             lastTimeupdateFire = nowMonotonic;
-            const staleGap = (eventDelta > 2000) || (wallGap > 2500);
+            window.lastTimeupdateFire = nowMonotonic;
+            const staleGap = (eventDelta > 2500);
 
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
 
@@ -955,15 +956,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
-                        try {
-                            const lastRebind = window._lastLockGapRepublish || 0;
-                            if (nowWall - lastRebind > 3000) {
-                                window._lastLockGapRepublish = nowWall;
-                                if (typeof republishMediaMetadata === 'function') {
-                                    republishMediaMetadata();
-                                }
-                            }
-                        } catch (e) {}
                     }
                 }
                 updateTimeUI(ct);
@@ -984,6 +976,7 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
         lastTimeupdateFire = 0;
+        window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
@@ -1017,6 +1010,15 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        if (typeof window !== 'undefined') {
+            window._stallSince = 0;
+        }
+    });
+
+    audioPlayer.addEventListener("waiting", () => {
+        if (typeof window !== 'undefined' && !window._stallSince && typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+            window._stallSince = Date.now();
+        }
     });
 
     audioPlayer.addEventListener("error", () => {
