@@ -697,7 +697,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         lastTimeupdateFire = 0;
-        window.lastTimeupdateFire = 0;
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -904,7 +903,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking) return;
         isSeeking = false;
         lastTimeupdateFire = 0;
-        window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -941,10 +939,8 @@ document.addEventListener("DOMContentLoaded", () => {
             // Inter-arrival delta between consecutive timeupdates measures true loop
             // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
             const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
-            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
+            const eventDelta = (lastTimeupdateFire > 0) ? (nowMonotonic - lastTimeupdateFire) : 0;
             lastTimeupdateFire = nowMonotonic;
-            window.lastTimeupdateFire = nowMonotonic;
             const staleGap = (eventDelta > 2500);
 
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
@@ -976,7 +972,6 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
         lastTimeupdateFire = 0;
-        window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
@@ -1010,15 +1005,6 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
-        if (typeof window !== 'undefined') {
-            window._stallSince = 0;
-        }
-    });
-
-    audioPlayer.addEventListener("waiting", () => {
-        if (typeof window !== 'undefined' && !window._stallSince && typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
-            window._stallSince = Date.now();
-        }
     });
 
     audioPlayer.addEventListener("error", () => {

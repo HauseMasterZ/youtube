@@ -36,17 +36,11 @@
                     if (e.type === 'waiting') {
                         if (!this.active.paused) {
                             this._isBufferStalled = true;
-                            if (typeof window !== 'undefined' && !window._stallSince) {
-                                window._stallSince = Date.now();
-                            }
                         }
                     }
 
                     if (e.type === 'playing' || e.type === 'play' || e.type === 'pause' || e.type === 'canplay') {
                         this._isBufferStalled = false;
-                        if (typeof window !== 'undefined') {
-                            window._stallSince = 0;
-                        }
                     }
                     if (e.type === 'timeupdate') {
                         if (this._pendingSeek !== null) return;

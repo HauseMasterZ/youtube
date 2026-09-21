@@ -1047,8 +1047,6 @@
             return;
         }
         _lastForegroundResyncTime = now;
-        window._lastForegroundResyncTime = now;
-        window._lastLockGapRepublish = now;
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
@@ -1081,9 +1079,6 @@
             }
             return;
         }
-
-        const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        window.lastTimeupdateFire = monoNow;
 
         if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
             republishMediaMetadata();
