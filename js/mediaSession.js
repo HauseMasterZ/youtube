@@ -899,20 +899,10 @@
                 //    and wild forward jumps (> 3.0s within 1500ms) unless actively seeking.
                 //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
                 const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
-                const now = Date.now();
-
-
-                const freshnessCeilingMs = 10000;
-                let freshnessForce = false;
-                if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    if (now - _lastSentTimestamp > freshnessCeilingMs) {
-                        freshnessForce = true;
-                    }
-                }
-                const effectiveBypass = forceBypass || freshnessForce;
-                if (effectiveBypass) {
+                if (forceBypass) {
                     window._forceNextPosition = false;
                 }
+                const now = Date.now();
 
                 let rate;
                 if (isPaused) {
@@ -933,26 +923,14 @@
                     rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
                 }
 
-                if (!effectiveBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
                     const elapsed = now - _lastSentTimestamp;
-                    const elapsedSec = elapsed / 1000;
-                    const expectedPos = _lastSentPosition + (elapsedSec * (rate || 1.0));
                     // 1. Monotonic backwards guard: drop backwards position jumps (> 0.5s within 3000ms)
                     if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
                         return;
                     }
                     // 2. High-frequency same-position deduplication
                     if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
-                        return;
-                    }
-                    // 3. Autonomous extrapolation drift gate: Android SystemUI extrapolates
-                    // position continuously via SystemClock.elapsedRealtime(). Calling setPositionState
-                    // restarts SquigglyProgress's heightAnimator (~860ms freeze).
-                    // If reality matches Android's extrapolation within 2.0s, send ZERO IPC when visible.
-                    // When hidden playing, bypass this gate so natural 1Hz position updates reach SystemUI
-                    // to unfreeze the homescreen media card within ~1s, exactly as in commit 0dc561d.
-                    const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !isPaused && !isSeeking);
-                    if (!isHiddenPlaying && Math.abs(pos - expectedPos) < 2.0 && pos >= _lastSentPosition - 0.5) {
                         return;
                     }
                     const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
@@ -962,8 +940,8 @@
                 }
 
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
-                //    Forced transitions (mode-switch) bypass this once via effectiveBypass above.
-                if (!effectiveBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
+                //    Forced transitions (mode-switch) bypass this once via forceBypass above.
+                if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
                     if (Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
@@ -1074,36 +1052,33 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
+            const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+            // During active playback, NEVER unconditionally rebind metadata or
+            // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
+            // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
+            // height expansion) that freezes the wave animation for ~1s on unlock.
+            // Single requestAnimationFrame position update anchors updateTime cleanly post-thaw
+            // without recreating the native MediaControlPanel binding or triggering rapid resets.
             try {
-                if (typeof republishMediaMetadata === 'function') {
+                if (needsRebind && typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
                 }
             } catch (e) {}
             try {
                 navigator.mediaSession.playbackState = 'playing';
             } catch (e) {}
-            try {
-                if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
-                if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
-
-                const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-                window.lastTimeupdateFire = monoNow;
-
-                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                window._forceNextPosition = true;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-            } catch (e) {}
-            setTimeout(() => {
+            requestAnimationFrame(() => {
                 try {
                     if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
                     if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
-                    navigator.mediaSession.playbackState = 'playing';
                     window._forceNextPosition = true;
-                    const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, d2, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
                 } catch (e) {}
-            }, 250);
-            // The resumed 1Hz timeupdate owns position from here.
+            });
+            if (needsRebind) {
+                // Retained for diagnostics: token already rebound above unconditionally.
+            }
             return;
         }
 

@@ -956,15 +956,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
-                        try {
-                            const nowWall = Date.now();
-                            if (!window._lastLockGapRepublish || nowWall - window._lastLockGapRepublish > 3000) {
-                                window._lastLockGapRepublish = nowWall;
-                                if (typeof republishMediaMetadata === 'function') {
-                                    republishMediaMetadata();
-                                }
-                            }
-                        } catch (e) {}
                     }
                 }
                 updateTimeUI(ct);

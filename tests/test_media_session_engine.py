@@ -1017,16 +1017,10 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
-    def test_update_media_session_position_drift_gate(self):
-        """updateMediaSessionPosition drift-gates IPC against autonomous SystemUI extrapolation"""
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+expectedPos\s*=\s*_lastSentPosition\s*\+\s*\(elapsedSec\s*\*\s*\(rate\s*\|\|\s*1\.0\)\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'Math\.abs\(pos\s*-\s*expectedPos\)\s*<\s*2\.0'
-        )
+    def test_update_media_session_position_no_drift_gate(self):
+        """updateMediaSessionPosition does not drop position updates via drift gate to preserve 1Hz SystemUI wave animation"""
+        self.assertNotIn('Math.abs(pos - expectedPos)', self.ms_content)
+        self.assertNotIn('isHiddenPlaying', self.ms_content)
 
     def test_pageshow_listener_wires_resync(self):
         """main.js pageshow listener wires resyncMediaSessionOnForeground"""
@@ -1037,11 +1031,11 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.addEventListener\([\'"]pageshow[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?resyncMediaSessionOnForeground\([\'"]pageshow-playing[\'"]\);'
         )
 
-    def test_resync_media_session_republishes_metadata_on_foreground_when_playing(self):
-        """resyncMediaSessionOnForeground unconditionally republishes metadata when !isPaused to rebind HyperOS/SystemUI capsule view"""
+    def test_resync_media_session_guards_republish_metadata_with_needs_rebind(self):
+        """resyncMediaSessionOnForeground only republishes metadata when needsRebind is true to avoid SquigglyProgress freeze"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(!isPaused\)\s*\{[\s\S]*?if\s*\(\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*republishMediaMetadata\(\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
         )
 
     def test_toggle_playback_mode_guards_republish_metadata_on_pause(self):
@@ -1067,16 +1061,9 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?live-stream-anchor[\s\S]*?aEl\.pause\(\);[\s\S]*?focus-probe[\s\S]*?pEl\.pause\(\);[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
-    def test_update_media_session_position_freshness_ceiling(self):
-        """updateMediaSessionPosition enforces a 10s freshness ceiling to prevent SystemUI starvation while visible"""
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+freshnessCeilingMs\s*=\s*10000;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs'
-        )
+    def test_update_media_session_position_no_freshness_ceiling_needed(self):
+        """updateMediaSessionPosition does not require artificial freshness ceiling because 1Hz cadence updates continuously"""
+        self.assertNotIn('freshnessCeilingMs', self.ms_content)
 
     def test_mode_transition_mutex_guards_resurrectors(self):
         """togglePlaybackMode arms window._modeTransitionUntil and guards resurrectors"""
@@ -1155,22 +1142,22 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
-        """Lock gap detection in timeupdate republishes MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
-        self.assertRegex(
+    def test_lock_gap_avoids_republish_metadata_for_wave_stability(self):
+        """Lock gap detection in timeupdate does not call republishMediaMetadata to avoid resetting SquigglyProgress"""
+        self.assertNotRegex(
             self.main_content,
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_drift_gate_bypassed_when_hidden_playing(self):
-        """updateMediaSessionPosition bypasses 2.0s drift extrapolation gate when hidden playing to deliver 1Hz position updates to SystemUI"""
+    def test_update_media_session_position_stability_guards_preserved(self):
+        """updateMediaSessionPosition preserves monotonic backward and jump stability guards without dropping 1Hz cadence"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+isHiddenPlaying\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\s*&&\s*!isSeeking\);'
+            r'if\s*\(\s*pos\s*<\s*_lastSentPosition\s*-\s*0\.5\s*&&\s*elapsed\s*<\s*3000\s*\)'
         )
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!isHiddenPlaying\s*&&\s*Math\.abs\(pos\s*-\s*expectedPos\)\s*<\s*2\.0\s*&&\s*pos\s*>=\s*_lastSentPosition\s*-\s*0\.5\s*\)\s*\{'
+            r'if\s*\(\s*elapsed\s*<\s*1500\s*&&\s*Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25\s*\)'
         )
 
     def test_resync_media_session_stamps_foreground_resync_and_lock_gap_timestamps(self):
@@ -1197,10 +1184,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_resync_media_session_reanchors_playing_on_foreground(self):
-        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single forced position update"""
+        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single requestAnimationFrame position update"""
         self.assertRegex(
             self.ms_content,
-            r'window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
         self.assertNotIn("isFresh", self.ms_content)
 
