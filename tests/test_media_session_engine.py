@@ -1155,13 +1155,12 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(sPos,\s*sDur,\s*1\.0,\s*true\);'
         )
 
-    def test_lock_gap_does_not_republish_metadata_in_timeupdate(self):
-        """timeupdate does NOT republish MediaMetadata to preserve session identity and prevent view recreation"""
-        self.assertNotIn('shouldRebindHidden', self.main_content)
-        self.assertNotIn('isBackgroundStale', self.main_content)
-        stale_block_match = re.search(r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*!isCallOrQuarantine\)\s*\)\s*\{([\s\S]*?)\n\s*if\s*\(window\.lyricsActive', self.main_content)
-        self.assertIsNotNone(stale_block_match)
-        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
+    def test_lock_gap_republishes_metadata_for_hyperos_rebind(self):
+        """Lock gap detection in timeupdate republishes MediaMetadata with cooldown to trigger HyperOS bindPlayer and unfreeze squiggly wave"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
+        )
 
     def test_drift_gate_bypassed_when_hidden_playing(self):
         """updateMediaSessionPosition bypasses 2.0s drift extrapolation gate when hidden playing to deliver 1Hz position updates to SystemUI"""
