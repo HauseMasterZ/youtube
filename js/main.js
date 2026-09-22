@@ -948,8 +948,34 @@ document.addEventListener("DOMContentLoaded", () => {
             const staleGap = (eventDelta > 2500);
 
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && (Date.now() - window.lastBtDisconnectTime < 2500));
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect);
 
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
+            // Single-shot unlock kickstart: when waking/unlocking from screen-off directly to
+            // launcher homescreen, SystemUI recreates the MediaControlPanel / floating pill.
+            // setPositionState alone cannot restart the canceled SquigglyProgress heightAnimator (~860ms expansion).
+            // Main-thread wake jank (biometrics + Keyguard + Launcher inflation) causes eventDelta > 600ms.
+            // A cooldown (3500ms) ensures exactly ONE clean kickstart fires per unlock sequence,
+            // avoiding any continuous shimmer or resets while the user stays on the homescreen.
+            const nowWall = Date.now();
+            const lastRebind = (typeof window !== 'undefined' && window._lastLockGapRepublish) || 0;
+            const isUnlockJank = (eventDelta > 600 || staleGap);
+            const isCooldownPassed = (nowWall - lastRebind > 3500);
+
+            if (isHiddenPlaying && isUnlockJank && isCooldownPassed) {
+                if (typeof window !== 'undefined') window._lastLockGapRepublish = nowWall;
+                window._forceNextPosition = true;
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    if (navigator.mediaSession.playbackState !== 'playing') {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
+                }
+                if (typeof republishMediaMetadata === 'function') {
+                    republishMediaMetadata();
+                }
+                updateTimeUI(ct);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
                 if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {

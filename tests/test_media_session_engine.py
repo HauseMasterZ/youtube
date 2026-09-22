@@ -1149,6 +1149,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
 
+    def test_lock_gap_unlock_jank_kickstart_republishes_metadata(self):
+        """Hidden unlock jank (eventDelta > 600) kickstarts SquigglyProgress with throttled republishMediaMetadata"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*isHiddenPlaying\s*&&\s*isUnlockJank\s*&&\s*isCooldownPassed\s*\)\s*\{[\s\S]*?republishMediaMetadata\(\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+
     def test_update_media_session_position_stability_guards_preserved(self):
         """updateMediaSessionPosition preserves monotonic backward and jump stability guards without dropping 1Hz cadence"""
         self.assertRegex(
