@@ -627,8 +627,14 @@
     window.togglePlaybackMode = togglePlaybackMode;
     window.detectPlaybackModeShortcut = togglePlaybackMode; // Backward compatibility alias
 
+    let _lastSentPosition = -1;
+    let _lastSentTimestamp = 0;
+    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
+    window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
+    window._forceNextPosition = false;
+
     // MediaSession Position State Management
-    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
+    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
                 const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
@@ -641,6 +647,21 @@
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+                const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
+
+                const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
+                if (forceBypass) {
+                    window._forceNextPosition = false;
+                }
+
+                // Monotonic position guard: drop backwards position jumps (> 0.5s)
+                // during live uninterrupted playback caused by thawed UI-thread clock reads.
+                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    const elapsed = Date.now() - _lastSentTimestamp;
+                    if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
+                        return;
+                    }
+                }
 
                 let rate;
                 if (isBuffering) {
@@ -674,6 +695,11 @@
                         playbackRate: validRate,
                         position: validPos
                     });
+                    _lastSentPosition = validPos;
+                    _lastSentTimestamp = Date.now();
+                } else if (isSeeking || isPaused) {
+                    _lastSentPosition = Math.max(0, pos);
+                    _lastSentTimestamp = Date.now();
                 }
             } catch (e) {
                 // Ignore transient errors
@@ -697,25 +723,13 @@
                         album: current.album,
                         artwork: current.artwork
                     };
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: current.title,
-                        artist: current.artist,
-                        album: current.album,
-                        artwork: current.artwork
-                    });
-                } else if (lastValidMetadata) {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: lastValidMetadata.title,
-                        artist: lastValidMetadata.artist,
-                        album: lastValidMetadata.album,
-                        artwork: lastValidMetadata.artwork
-                    });
-                } else if (typeof allDatabases !== 'undefined' && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && allDatabases[globalActivePlaylist][globalActiveOriginalIndex] && typeof window.publishTrackMetadata === 'function') {
-                    const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
-                    const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
-                    window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
                 }
-            } catch (e) {}
+                if (lastValidMetadata && typeof MediaMetadata !== 'undefined') {
+                    navigator.mediaSession.metadata = new MediaMetadata(lastValidMetadata);
+                }
+            } catch (e) {
+                console.warn("republishMediaMetadata error:", e);
+            }
         }
     }
     window.republishMediaMetadata = republishMediaMetadata;
@@ -741,6 +755,7 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
+    let _lastForegroundResyncTime = 0;
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
         if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
@@ -751,6 +766,12 @@
             }, 500);
             return;
         }
+
+        const now = Date.now();
+        if (now - _lastForegroundResyncTime < 500) {
+            return;
+        }
+        _lastForegroundResyncTime = now;
 
         if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
             republishMediaMetadata();
@@ -764,20 +785,9 @@
                 ? window.declaredPausedState() : 'paused';
         }
 
+        window._forceNextPosition = true;
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
         updateMediaSessionPosition(audioPlayer.currentTime, dur);
-
-        if (!isPaused) {
-            setTimeout(() => {
-                try {
-                    if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching
-                        && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        updateMediaSessionPosition(audioPlayer.currentTime, d2);
-                    }
-                } catch (e) {}
-            }, 600);
-        }
     }
     window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
 
