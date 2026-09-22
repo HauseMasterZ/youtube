@@ -56,3 +56,16 @@
 
 ## 9. Strict Zero-Emoji Policy
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
+
+## 10. Android SystemUI & HyperOS Wave Animation Resilience
+- In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `field = true`.
+- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the media view without rebinding. Because `field` remains `true`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen.
+- To unfreeze the wave, SystemUI must receive a false edge (`STATE_PAUSED`) clearing `field = false`, followed by a true edge (`STATE_PLAYING`) restarting `heightAnimator`.
+- Transient Unlock Pulse Protocol:
+  - Trigger strictly while `document.hidden` and actively playing (`!audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect`).
+  - Detect unlock jank via `eventDelta > 380` (with 5000ms cooldown) or `staleGap > 2500` (with 3000ms cooldown).
+  - Leg 1: Declare `playbackState = 'paused'` (state only, no redundant `setPositionState` IPC).
+  - Leg 2: After 75ms `setTimeout`, declare `playbackState = 'playing'` and push fresh forced `setPositionState`.
+  - 75ms duration is strictly inside the 60-100ms window: passes Chromium Mojo as discrete IPCs to clear `field`, but coalesces under Android's 150ms icon fade and >200ms BlueDroid AVRCP debounce, producing zero visual glyph flicker and zero Bluetooth head-unit glitch.
+  - Omit `republishMediaMetadata()` to avoid album art reloads and view recreation.
+

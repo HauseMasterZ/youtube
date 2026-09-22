@@ -951,30 +951,47 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && (Date.now() - window.lastBtDisconnectTime < 2500));
             const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect);
 
-            // Single-shot unlock kickstart: when waking/unlocking from screen-off directly to
-            // launcher homescreen, SystemUI recreates the MediaControlPanel / floating pill.
-            // setPositionState alone cannot restart the canceled SquigglyProgress heightAnimator (~860ms expansion).
-            // Main-thread wake jank (biometrics + Keyguard + Launcher inflation) causes eventDelta > 600ms.
-            // A cooldown (3500ms) ensures exactly ONE clean kickstart fires per unlock sequence,
-            // avoiding any continuous shimmer or resets while the user stays on the homescreen.
+            // Transient unlock pulse: when unlocking from black screen directly to launcher
+            // homescreen (com.miui.home), SystemUI reuses the MediaControlPanel without rebinding.
+            // Screen-off canceled heightAnimator without clearing SquigglyProgress.field = true.
+            // Any update with playbackState = 'playing' hits 'if (field == value) return' in SystemUI.
+            // To unfreeze the wave, SystemUI must receive a false edge (STATE_PAUSED) clearing field = false,
+            // followed by a true edge (STATE_PLAYING) restarting heightAnimator.
+            // Main-thread wake jank (biometrics + Keyguard exit + Launcher draw) causes eventDelta > 380ms.
+            // Cooldowns (5000ms for jank, 3000ms for staleGap) prevent any periodic re-triggering on homescreen.
             const nowWall = Date.now();
-            const lastRebind = (typeof window !== 'undefined' && window._lastLockGapRepublish) || 0;
-            const isUnlockJank = (eventDelta > 600 || staleGap);
-            const isCooldownPassed = (nowWall - lastRebind > 3500);
+            const lastPulse = (typeof window !== 'undefined' && (window._lastUnlockPulse || window._lastLockGapRepublish)) || 0;
+            const isUnlockJank = (eventDelta > 380 && (nowWall - lastPulse > 5000));
+            const isStaleWake = (staleGap && (nowWall - lastPulse > 3000));
 
-            if (isHiddenPlaying && isUnlockJank && isCooldownPassed) {
-                if (typeof window !== 'undefined') window._lastLockGapRepublish = nowWall;
-                window._forceNextPosition = true;
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    if (navigator.mediaSession.playbackState !== 'playing') {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
+            if (isHiddenPlaying && (isUnlockJank || isStaleWake)) {
+                if (typeof window !== 'undefined') {
+                    window._lastUnlockPulse = nowWall;
+                    window._lastLockGapRepublish = nowWall;
                 }
-                if (typeof republishMediaMetadata === 'function') {
-                    republishMediaMetadata();
+                // Leg 1: Declare paused state to force SquigglyProgress field = false.
+                // State only without setPositionState avoids Mojo batching and redundant seekbar redraw.
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    try {
+                        navigator.mediaSession.playbackState = 'paused';
+                    } catch (e) {}
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                // Leg 2: After 75ms (within 60-100ms sweet spot), restore playing state and push fresh position.
+                // 75ms passes Mojo as discrete IPCs to clear field, but coalesces under Android 150ms icon fade
+                // and >200ms BlueDroid AVRCP debounce, producing zero visual glyph flicker and zero audio glitch.
+                setTimeout(() => {
+                    if (typeof audioPlayer === 'undefined' || !audioPlayer || audioPlayer.paused || window.wasPausedByUser) return;
+                    if (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine())) return;
+                    if (typeof window.mediaSessionDestroyed !== 'undefined' && window.mediaSessionDestroyed) return;
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        try {
+                            navigator.mediaSession.playbackState = 'playing';
+                        } catch (e) {}
+                    }
+                    window._forceNextPosition = true;
+                    updateMediaSessionPosition(audioPlayer.currentTime, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                }, 75);
             } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
                 if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
