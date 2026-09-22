@@ -685,8 +685,7 @@
                         if (typeof republishMediaMetadata === 'function') {
                             republishMediaMetadata();
                         }
-                        window._forceNextPosition = true;
-                        updateMediaSessionPosition(pos, dur, 1.0, true);
+                        updateMediaSessionPosition(pos, dur, 1.0);
                         navigator.mediaSession.playbackState = 'paused';
                     }
 
@@ -723,8 +722,7 @@
                                 window._isMode1SilentCycle = false;
                                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                     navigator.mediaSession.playbackState = 'paused';
-                                    window._forceNextPosition = true;
-                                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                                    updateMediaSessionPosition(pos, dur, 1.0);
                                 }
                                 setTimeout(() => {
                                     if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
@@ -847,8 +845,7 @@
                                 navigator.mediaSession.playbackState = 'paused';
                                 const sDur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                                 const sPos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                                window._forceNextPosition = true;
-                                updateMediaSessionPosition(sPos, sDur, 1.0, true);
+                                updateMediaSessionPosition(sPos, sDur, 1.0);
                             }
                         } catch (e) {}
                     };
@@ -873,10 +870,9 @@
     let _lastSentTimestamp = 0;
     window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
     window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
-    window._forceNextPosition = false;
 
     // MediaSession Position State Management
-    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
+    function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
                 const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
@@ -891,60 +887,39 @@
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
                 const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
 
-                // Position stability and monotonic guard (bypassed exactly once when
-                // window._forceNextPosition is set or force=true: unlock anchors and
-                // mode-switch transitions must reach SystemUI even if unchanged):
-                // 1. Live playback: drop backwards position jumps (> 0.5s within 3000ms),
-                //    same-position fresh-timestamp rewrites (delta < 0.25s within 1500ms),
-                //    and wild forward jumps (> 3.0s within 1500ms) unless actively seeking.
-                //    Backwards discontinuities or stall-asserts cancel Android SystemUI's SquigglyProgress wave animator.
-                const forceBypass = (force === true) || (typeof window._forceNextPosition !== 'undefined' && window._forceNextPosition === true);
-                if (forceBypass) {
-                    window._forceNextPosition = false;
+                // Monotonic position guard: drop backwards position jumps (> 0.5s)
+                // during live uninterrupted playback caused by thawed UI-thread clock reads.
+                // Backwards position discontinuities cancel Android SystemUI's SquigglyProgress wave animator.
+                if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    if (pos < _lastSentPosition - 0.5 && (Date.now() - _lastSentTimestamp < 3000)) {
+                        return;
+                    }
                 }
-                const now = Date.now();
 
                 let rate;
-                if (isPaused) {
-                    // Mode 2 pause: micro-rate 0.00001 freezes seekbar drift while anchor loops silence.
-                    // Mode 1 pause: clean 1.0 rate avoids 0.00001f micro-speed leak that animates HyperOS Control Center.
-                    if (window.playbackMode === 'mode2') {
-                        rate = 0.00001;
-                    } else {
-                        rate = (isForcedRateValid && forcedRate > 0) ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
-                    }
-                } else if (isBuffering) {
-                    // Transient network/thaw blip during lock: keep 1.0 so wave survives.
-                    rate = isForcedRateValid ? forcedRate : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0);
-                    if (!(rate > 0)) rate = 1.0;
+                if (isBuffering) {
+                    // Buffer stall / track transition freeze: OS interpolates position
+                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
+                    rate = 0.00001;
+                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
+                    // Spoofed pause: OS advances the card seekbar by rate while
+                    // state reads 'playing', so freeze it with a near-zero rate
+                    // (0 is rejected by setPositionState; hence the micro-rate).
+                    // Scoped strictly to mode2-paused; all other paths below.
+                    rate = 0.00001;
+                } else if (!isPaused) {
+                    // While audio is actively playing, rate must strictly reflect
+                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
+                    // animation animates dynamically and never enters ghost freeze.
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
                 } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
+                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
+                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
+                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
+                    rate = 1.0;
                 } else {
                     rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                }
-
-                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    const elapsed = now - _lastSentTimestamp;
-                    // 1. Monotonic backwards guard: drop backwards position jumps (> 0.5s within 3000ms)
-                    if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
-                        return;
-                    }
-                    // 2. High-frequency same-position deduplication
-                    if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
-                        return;
-                    }
-                    const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
-                    if (elapsed < 1500 && pos > _lastSentPosition + maxAllowedFwd) {
-                        return;
-                    }
-                }
-
-                // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
-                //    Forced transitions (mode-switch) bypass this once via forceBypass above.
-                if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
-                    if (Math.abs(pos - _lastSentPosition) < 0.25) {
-                        return;
-                    }
                 }
 
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
@@ -1027,14 +1002,10 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
-    let _lastForegroundResyncTime = 0;
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
         if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
         if (window.isCallActive) return;
-        if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) return;
-        const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-        if (isRecentBtDisconnect) return;
         if (audioPlayer.switching) {
             setTimeout(() => {
                 if (!audioPlayer.switching) resyncMediaSessionOnForeground(reason + ':deferred');
@@ -1042,55 +1013,17 @@
             return;
         }
 
-        const now = Date.now();
-        if (now - _lastForegroundResyncTime < 1000) {
-            return;
-        }
-        _lastForegroundResyncTime = now;
-        window._lastForegroundResyncTime = now;
-        window._lastLockGapRepublish = now;
-
-        const isPaused = audioPlayer.paused || window.wasPausedByUser;
-        if (!isPaused) {
-            const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
-            // During active playback, NEVER unconditionally rebind metadata or
-            // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
-            // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
-            // height expansion) that freezes the wave animation for ~1s on unlock.
-            // Single requestAnimationFrame position update anchors updateTime cleanly post-thaw
-            // without recreating the native MediaControlPanel binding or triggering rapid resets.
-            try {
-                if (needsRebind && typeof republishMediaMetadata === 'function') {
-                    republishMediaMetadata();
-                }
-            } catch (e) {}
-            try {
-                navigator.mediaSession.playbackState = 'playing';
-            } catch (e) {}
-            requestAnimationFrame(() => {
-                try {
-                    if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
-                    if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
-                    window._forceNextPosition = true;
-                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-                } catch (e) {}
-            });
-            if (needsRebind) {
-                // Retained for diagnostics: token already rebound above unconditionally.
-            }
-            return;
-        }
-
-        const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-        window.lastTimeupdateFire = monoNow;
-
         if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
             republishMediaMetadata();
         }
 
-        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-            ? window.declaredPausedState() : 'paused';
+        const isPaused = audioPlayer.paused || window.wasPausedByUser;
+        if (!isPaused) {
+            navigator.mediaSession.playbackState = 'playing';
+        } else {
+            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
+        }
 
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
         updateMediaSessionPosition(audioPlayer.currentTime, dur);
@@ -1385,12 +1318,7 @@
             window.lastBtDisconnectTime = 0;
             if (typeof setPlayUI === 'function') setPlayUI(true);
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                if (window.playbackMode === 'mode2') {
-                    // Mode 2 transient honest dip: anchor is running and holds audio focus
-                    navigator.mediaSession.playbackState = 'paused';
-                } else {
-                    navigator.mediaSession.playbackState = 'playing';
-                }
+                navigator.mediaSession.playbackState = 'playing';
             }
             if (!audioPlayer.src) {
                 if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
@@ -1408,8 +1336,7 @@
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
             }
             if (typeof updateMediaSessionPosition === 'function') {
-                window._forceNextPosition = true;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
             }
             if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                 republishMediaMetadata();
@@ -1433,8 +1360,7 @@
                         }
                         if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                             const _rd = audioPlayer.duration || dur || 0;
-                            window._forceNextPosition = true;
-                            updateMediaSessionPosition(audioPlayer.currentTime, _rd, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                            updateMediaSessionPosition(audioPlayer.currentTime, _rd, 1.0);
                         }
                         if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                             republishMediaMetadata();
@@ -1476,7 +1402,7 @@
                     window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
+                        navigator.mediaSession.playbackState = 'playing';
                     }
                     const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
@@ -1485,8 +1411,7 @@
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
                     if (typeof updateMediaSessionPosition === 'function') {
-                        window._forceNextPosition = true;
-                        updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
                     if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
@@ -1505,8 +1430,7 @@
                                 }
                                 if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                                     const _pd = audioPlayer.duration || dur || 0;
-                                    window._forceNextPosition = true;
-                                    updateMediaSessionPosition(audioPlayer.currentTime, _pd, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                                    updateMediaSessionPosition(audioPlayer.currentTime, _pd, 1.0);
                                 }
                                 if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                                     republishMediaMetadata();
@@ -1559,8 +1483,7 @@
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
                     }
                     if (typeof updateMediaSessionPosition === 'function') {
-                        window._forceNextPosition = true;
-                        updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
                     audioPlayer.play().catch(e => {
                         console.warn("MediaSession play error:", e);
@@ -1603,11 +1526,7 @@
                     window.lastBtDisconnectTime = 0;
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        if (window.playbackMode === 'mode2') {
-                            navigator.mediaSession.playbackState = 'paused';
-                        } else {
-                            navigator.mediaSession.playbackState = 'playing';
-                        }
+                        navigator.mediaSession.playbackState = 'playing';
                     }
                     if (!audioPlayer.src) {
                         if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
@@ -1627,8 +1546,7 @@
                         }
                     }
                     if (typeof updateMediaSessionPosition === 'function') {
-                        window._forceNextPosition = true;
-                        updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                        updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                     }
                     if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
@@ -1652,8 +1570,7 @@
                                 }
                                 if (typeof updateMediaSessionPosition === 'function' && audioPlayer) {
                                     const _td = audioPlayer.duration || dur || 0;
-                                    window._forceNextPosition = true;
-                                    updateMediaSessionPosition(audioPlayer.currentTime, _td, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                                    updateMediaSessionPosition(audioPlayer.currentTime, _td, 1.0);
                                 }
                                 if (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
                                     republishMediaMetadata();

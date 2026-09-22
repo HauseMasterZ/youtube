@@ -67,8 +67,9 @@
 - Therefore, web background playback strictly maintains honest 1Hz unthrottled position state without artificial pulses or metadata churn.
 - Natural wave recovery occurs on Notification Shade pull-down, lock screen wake (Option B), In-App unlock, or next track transition.
 
-## 11. Manual Pause/Resume Wave Unfreeze Invariant
-- Universal Choke-point: `audioPlayer.addEventListener("playing")` dispatches `navigator.mediaSession.playbackState = 'playing'`, sets `window._forceNextPosition = true`, and calls `updateMediaSessionPosition(audioPlayer.currentTime, dur, rate, true)` to anchor a fresh position update timestamp in Android SystemUI whenever playback starts.
-- Resume Forced Position: All resume handlers (`handlePlayAction`, `setActionHandler('pause')`, `setActionHandler('playpause')`, `btnPlay`) must call `updateMediaSessionPosition(..., force=true)` on resume to bypass the high-frequency deduplication guard (`elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25`) during brief pauses (<1.5s).
-- Mode 2 Transient Honest Dip: When resuming from paused state in Mode 2, declare `navigator.mediaSession.playbackState = 'paused'` momentarily while `live-stream-anchor` holds audio focus, transitioning to `'playing'` with fresh forced position on the `playing` event. This delivers the necessary `false -> true` state edge to clear `SquigglyProgress.field = false` and restart `heightAnimator.start()`.
+## 11. Homescreen Wave Recovery & 1Hz Cadence Invariant
+- Clean 1Hz Position Cadence: Steady-state playback strictly dispatches `updateMediaSessionPosition` at the natural 1Hz `roundedSec !== lastRenderTime` boundary during playback.
+- Zero Artificial Deduplication: Never drop forward 1-second position updates with artificial deduplication guards (e.g. `elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25`) or drift gating (`Math.abs(pos - expectedPos) < 2.0`), which prevent Android SystemUI from receiving monotonic position ticks and break the natural <=1s wave recovery on homescreen unlock.
+- Monotonic Stability Guard: Only backward jumps (`pos < _lastSentPosition - 0.5 && elapsed < 3000`) are dropped during continuous forward playback.
+- No Artificial State Pulses or Dips: Resume handlers maintain honest declared state (`playing` when playing, `paused` when paused) without artificial Mode 2 paused dips or forced bypasses.
 
