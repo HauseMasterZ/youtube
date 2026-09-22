@@ -71,6 +71,8 @@
 - Clean 1Hz Position Cadence: Steady-state playback strictly dispatches `updateMediaSessionPosition` at the natural 1Hz `roundedSec !== lastRenderTime` boundary during playback.
 - Pure Unthrottled Position Dispatch: In the verified `c249fc6` baseline, `updateMediaSessionPosition` unconditionally sets position state without artificial deduplication, timestamp gating, or monotonic guards (`_lastSentPosition` / `_lastSentTimestamp`).
 - 600ms Follower on Foreground: Foreground resynchronization immediately re-syncs state and schedules an honest 600ms deferred position update to ensure SystemUI picks up the current playhead.
+- Unconditional Metadata Rebind on Foreground: Foreground resynchronization unconditionally calls `republishMediaMetadata()` when playing to rebind `MediaControlPanel` and restart `heightAnimator` in `SquigglyProgress.kt`.
+- Throttled Lock-Gap Metadata Rebind: Background `timeupdate` detects lock gaps (>2500ms) with a 3000ms cooldown to trigger `republishMediaMetadata()`, restarting `heightAnimator` on wake.
 - No Artificial State Pulses or Dips: Honest declared state (`playing` when playing, `paused` when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
 
 

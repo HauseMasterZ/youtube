@@ -654,15 +654,6 @@
                     window._forceNextPosition = false;
                 }
 
-                // Monotonic position guard: drop backwards position jumps (> 0.5s)
-                // during live uninterrupted playback caused by thawed UI-thread clock reads.
-                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    const elapsed = Date.now() - _lastSentTimestamp;
-                    if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
-                        return;
-                    }
-                }
-
                 let rate;
                 if (isBuffering) {
                     // Buffer stall / track transition freeze: OS interpolates position
@@ -773,11 +764,11 @@
         }
         _lastForegroundResyncTime = now;
 
-        if (shouldRepublishMetadata() && typeof republishMediaMetadata === 'function') {
+        const isPaused = audioPlayer.paused || window.wasPausedByUser;
+        if ((!isPaused || shouldRepublishMetadata()) && typeof republishMediaMetadata === 'function') {
             republishMediaMetadata();
         }
 
-        const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             navigator.mediaSession.playbackState = 'playing';
         } else {
@@ -787,7 +778,20 @@
 
         window._forceNextPosition = true;
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-        updateMediaSessionPosition(audioPlayer.currentTime, dur);
+        updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+
+        if (!isPaused) {
+            setTimeout(() => {
+                try {
+                    if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching
+                        && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        window._forceNextPosition = true;
+                        const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        updateMediaSessionPosition(audioPlayer.currentTime, d2, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                    }
+                } catch (e) {}
+            }, 600);
+        }
     }
     window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
 

@@ -885,5 +885,38 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
         self.assertIn("startAnchorHeartbeat(0)", main_src)
 
+    def test_resync_media_session_schedules_600ms_follower(self):
+        """resyncMediaSessionOnForeground schedules 600ms follower to lock in current playhead on unlock"""
+        self.assertRegex(
+            self.ms_content,
+            r'setTimeout\(\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d2[\s\S]*?\},\s*600\);'
+        )
+
+    def test_visibilitychange_and_pageshow_ordering(self):
+        """main.js visibilitychange and pageshow set lastRenderTime = -1 after updateTimeUI to ensure immediate 1Hz dispatch"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
+        )
+        self.assertRegex(
+            main_src,
+            r'updateTimeUI\(audioPlayer\.currentTime\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
+        )
+
+    def test_timeupdate_stale_gap_throttled_metadata_rebind(self):
+        """timeupdate triggers throttled republishMediaMetadata on staleGap (>2500ms) to unfreeze homescreen wave"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'staleGap\s*=\s*\(Date\.now\(\)\s*-\s*window\.getLastPositionTimestamp\(\)\s*>\s*2500\);'
+        )
+        self.assertRegex(
+            main_src,
+            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)[\s\S]*?republishMediaMetadata\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()

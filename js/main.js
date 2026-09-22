@@ -726,8 +726,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
-                lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
+                lastRenderTime = -1;
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
@@ -802,8 +802,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.addEventListener("pageshow", () => {
         if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
-            lastRenderTime = -1;
             updateTimeUI(audioPlayer.currentTime);
+            lastRenderTime = -1;
             if (typeof resyncMediaSessionOnForeground === 'function') {
                 resyncMediaSessionOnForeground('pageshow-playing');
             }
@@ -833,60 +833,67 @@ document.addEventListener("DOMContentLoaded", () => {
         }, {passive: true});
         
         nowPlaying.addEventListener("touchend", (e) => {
-            if (window.innerWidth > 750) return;
             const touchEndY = e.changedTouches[0].screenY;
             const deltaY = touchEndY - touchStartY;
-            const minimizeThreshold = Math.max(80, window.innerHeight * 0.12);
-
-            if (nowPlaying.classList.contains("expanded") && deltaY >= minimizeThreshold) {
+            if (deltaY > 50 && nowPlaying.classList.contains("expanded")) {
                 history.back();
-            } else if (!nowPlaying.classList.contains("expanded") && deltaY <= -20) {
-                nowPlaying.classList.add("expanded");
-                pushHistoryState('player');
             }
         }, {passive: true});
     }
-    // --------------------------------------------
-    let wasPlayingBeforeSeek = false;
-    seekBar.addEventListener("pointerdown", () => {
-        if (!isSeeking) {
-            wasPlayingBeforeSeek = !window.wasPausedByUser;
-            isSeeking = true;
-        }
-    });
 
-    seekBar.addEventListener("input", (e) => {
-        if (!isSeeking) {
-            wasPlayingBeforeSeek = !window.wasPausedByUser;
-            isSeeking = true;
+    // Dynamic Visual Sync for Mobile Mini-Player Track Meta
+    function syncMiniPlayerMeta() {
+        const miniTitle = document.getElementById("mini-player-title");
+        const miniArtist = document.getElementById("mini-player-artist");
+        const miniThumb = document.getElementById("mini-player-thumb");
+        
+        if (miniTitle && currentTrackTitle) {
+            miniTitle.textContent = currentTrackTitle.textContent;
         }
-        const val = Number(e.target.value);
-        currentTimeDisplay.textContent = formatTime(Math.floor(val));
+        if (miniArtist && currentTrackArtist) {
+            miniArtist.textContent = currentTrackArtist.textContent;
+        }
+        if (miniThumb && currentAlbumArt) {
+            miniThumb.src = currentAlbumArt.src;
+        }
+    }
+
+    if (typeof MutationObserver !== 'undefined' && currentTrackTitle && currentTrackArtist) {
+        const metaObserver = new MutationObserver(() => {
+            syncMiniPlayerMeta();
+        });
+        metaObserver.observe(currentTrackTitle, { childList: true, characterData: true, subtree: true });
+        metaObserver.observe(currentTrackArtist, { childList: true, characterData: true, subtree: true });
+        if (currentAlbumArt) {
+            metaObserver.observe(currentAlbumArt, { attributes: true, attributeFilter: ['src'] });
+        }
+    }
+
+    // --- Media Controls Event Wiring ---
+    let isSeeking = false;
+    seekBar.addEventListener("input", (e) => {
+        isSeeking = true;
+        updateTimeUI(e.target.value);
     });
 
     const endSeek = (e) => {
-        if (!isSeeking) return;
-        isSeeking = false;
-        const targetTime = Number(e.target.value);
-        
-        if (wasPlayingBeforeSeek) {
-            window.wasPausedByUser = false;
-        }
-
-        try {
-            audioPlayer.currentTime = targetTime;
-        } catch (err) {
-            console.warn("Seek error:", err);
-        }
-        updateTimeUI(targetTime);
-        if (window.lyricsActive) updateLyricsUI(targetTime);
-        
-        // Explicitly pass target time and total duration
-        const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-        updateMediaSessionPosition(targetTime, totalDur);
-        
-        if (wasPlayingBeforeSeek) {
-            audioPlayer.play().catch(console.warn);
+        if (isSeeking) {
+            isSeeking = false;
+            const targetTime = parseFloat(e.target.value);
+            if (typeof window.seekAudioPlayerDirect === 'function') {
+                window.seekAudioPlayerDirect(targetTime);
+            } else {
+                audioPlayer.currentTime = targetTime;
+            }
+            lastRenderTime = -1;
+            updateTimeUI(targetTime);
+            if (hasMediaSession) {
+                const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+                updateMediaSessionPosition(targetTime, dur);
+            }
+            if (audioPlayer.paused) {
+                audioPlayer.play().catch(err => console.warn("Seek play error:", err));
+            }
             setPlayUI(true);
         }
     };
@@ -902,12 +909,21 @@ document.addEventListener("DOMContentLoaded", () => {
             let staleGap = false;
             try {
                 if (typeof window.getLastPositionTimestamp === 'function') {
-                    staleGap = (Date.now() - window.getLastPositionTimestamp() > 3000);
+                    staleGap = (Date.now() - window.getLastPositionTimestamp() > 2500);
                 }
             } catch (e) {}
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
-                if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
+                if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
+                    try {
+                        const now = Date.now();
+                        if (!window._lastLockGapRepublish || now - window._lastLockGapRepublish > 3000) {
+                            window._lastLockGapRepublish = now;
+                            if (typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
+                            }
+                        }
+                    } catch (e) {}
                 }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0);
