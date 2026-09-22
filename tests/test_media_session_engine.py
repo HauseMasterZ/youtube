@@ -1316,6 +1316,48 @@ class TestMediaSessionEngine(unittest.TestCase):
             r"setActionHandler\('seekforward'[\s\S]*?togglePlaybackMode\(null,\s*\{\s*intentPlaying:\s*intentPlayingBefore,\s*seqBefore:\s*seqBefore\s*\}\);\s*return;"
         )
 
+    def test_main_playing_listener_forces_position_update(self):
+        """main.js playing event listener forces unthrottled position update to unfreeze SquigglyProgress on resume"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'audioPlayer\.addEventListener\([\'"]playing[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+
+    def test_mode2_resume_dips_paused_for_wave_restart(self):
+        """Mode 2 resume in handlePlayAction, pause, and playpause declares transient paused dip while anchor runs to clear SquigglyProgress backing field"""
+        # handlePlayAction Mode 2 dip
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+handlePlayAction\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+        # pause action Mode 2 dip
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+        # playpause action Mode 2 dip
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_resume_handlers_force_position(self):
+        """Resume paths in handlePlayAction, pause, and playpause pass force=true to bypass deduplication on brief pause"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+handlePlayAction\s*\(\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]pause[\'"][\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\([\'"]playpause[\'"][\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
 

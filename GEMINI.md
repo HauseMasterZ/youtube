@@ -67,3 +67,8 @@
 - Therefore, web background playback strictly maintains honest 1Hz unthrottled position state without artificial pulses or metadata churn.
 - Natural wave recovery occurs on Notification Shade pull-down, lock screen wake (Option B), In-App unlock, or next track transition.
 
+## 11. Manual Pause/Resume Wave Unfreeze Invariant
+- Universal Choke-point: `audioPlayer.addEventListener("playing")` dispatches `navigator.mediaSession.playbackState = 'playing'`, sets `window._forceNextPosition = true`, and calls `updateMediaSessionPosition(audioPlayer.currentTime, dur, rate, true)` to anchor a fresh position update timestamp in Android SystemUI whenever playback starts.
+- Resume Forced Position: All resume handlers (`handlePlayAction`, `setActionHandler('pause')`, `setActionHandler('playpause')`, `btnPlay`) must call `updateMediaSessionPosition(..., force=true)` on resume to bypass the high-frequency deduplication guard (`elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25`) during brief pauses (<1.5s).
+- Mode 2 Transient Honest Dip: When resuming from paused state in Mode 2, declare `navigator.mediaSession.playbackState = 'paused'` momentarily while `live-stream-anchor` holds audio focus, transitioning to `'playing'` with fresh forced position on the `playing` event. This delivers the necessary `false -> true` state edge to clear `SquigglyProgress.field = false` and restart `heightAnimator.start()`.
+

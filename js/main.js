@@ -532,12 +532,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Always-on anchor in Mode 2; stop only in Mode 1.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                if (hasMediaSession) navigator.mediaSession.playbackState = 'paused';
             } else if (typeof stopLiveAudioAnchor === 'function') {
                 stopLiveAudioAnchor();
             }
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
-            if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
+            if (hasMediaSession && window.playbackMode !== 'mode2') navigator.mediaSession.playbackState = 'playing';
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
             if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
                 audioPlayer.currentTime = 0;
@@ -545,6 +546,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (window.lyricsActive && typeof updateLyricsUI === 'function') {
                     updateLyricsUI(0);
                 }
+            }
+            if (hasMediaSession) {
+                window._forceNextPosition = true;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
             }
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
@@ -690,6 +695,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
+            if (!audioPlayer.switching && audioPlayer._pendingSeek === null && !window.isCallActive && !(typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) && !window.mediaSessionDestroyed) {
+                window._forceNextPosition = true;
+                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+            }
         }
     });
 
