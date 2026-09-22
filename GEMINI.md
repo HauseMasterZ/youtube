@@ -69,7 +69,8 @@
 
 ## 11. Homescreen Wave Recovery & 1Hz Cadence Invariant
 - Clean 1Hz Position Cadence: Steady-state playback strictly dispatches `updateMediaSessionPosition` at the natural 1Hz `roundedSec !== lastRenderTime` boundary during playback.
-- Zero Artificial Deduplication: Never drop forward 1-second position updates with artificial deduplication guards (e.g. `elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25`) or drift gating (`Math.abs(pos - expectedPos) < 2.0`), which prevent Android SystemUI from receiving monotonic position ticks and break the natural <=1s wave recovery on homescreen unlock.
-- Monotonic Stability Guard: Only backward jumps (`pos < _lastSentPosition - 0.5 && elapsed < 3000`) are dropped during continuous forward playback.
-- No Artificial State Pulses or Dips: Resume handlers maintain honest declared state (`playing` when playing, `paused` when paused) without artificial Mode 2 paused dips or forced bypasses.
+- Pure Unthrottled Position Dispatch: In the verified `c249fc6` baseline, `updateMediaSessionPosition` unconditionally sets position state without artificial deduplication, timestamp gating, or monotonic guards (`_lastSentPosition` / `_lastSentTimestamp`).
+- 600ms Follower on Foreground: Foreground resynchronization immediately re-syncs state and schedules an honest 600ms deferred position update to ensure SystemUI picks up the current playhead.
+- No Artificial State Pulses or Dips: Honest declared state (`playing` when playing, `paused` when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
+
 
