@@ -57,15 +57,13 @@
 ## 9. Strict Zero-Emoji Policy
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
 
-## 10. Android SystemUI & HyperOS Wave Animation Resilience
+## 10. Android SystemUI & HyperOS Wave Animation Invariant
 - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `field = true`.
-- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the media view without rebinding. Because `field` remains `true`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen.
-- To unfreeze the wave, SystemUI must receive a false edge (`STATE_PAUSED`) clearing `field = false`, followed by a true edge (`STATE_PLAYING`) restarting `heightAnimator`.
-- Transient Unlock Pulse Protocol:
-  - Trigger strictly while `document.hidden` and actively playing (`!audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect`).
-  - Detect unlock jank via `eventDelta > 380` (with 5000ms cooldown) or `staleGap > 2500` (with 3000ms cooldown).
-  - Leg 1: Declare `playbackState = 'paused'` (state only, no redundant `setPositionState` IPC).
-  - Leg 2: After 75ms `setTimeout`, declare `playbackState = 'playing'` and push fresh forced `setPositionState`.
-  - 75ms duration is strictly inside the 60-100ms window: passes Chromium Mojo as discrete IPCs to clear `field`, but coalesces under Android's 150ms icon fade and >200ms BlueDroid AVRCP debounce, producing zero visual glyph flicker and zero Bluetooth head-unit glitch.
-  - Omit `republishMediaMetadata()` to avoid album art reloads and view recreation.
+- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the media view without rebinding. Because `field` remains `true`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave frozen.
+- Architectural Finding: Any synthetic false-to-true pulse (`STATE_PAUSED` -> `STATE_PLAYING`) dispatched from the background (`document.hidden === true`) is fundamentally unviable:
+  1. On multi-core flagships (e.g. Snapdragon 8s Gen 3), audible background playback keeps `timeupdate` ticking at ~250ms with 5-60ms jitter; unlock contention does not reliably trigger threshold-based detectors without causing false positives during steady state.
+  2. Rapid pulses (<150ms) are coalesced/deduplicated by Android `system_server` (`MediaSessionRecord` using `Handler.removeMessages`), so SystemUI only sees `STATE_PLAYING` and `field` never sees `false`.
+  3. Longer pulses (>=280ms) survive Binder deduplication but visibly flicker the notification button icon and broadcast `PAUSED` over Bluetooth AVRCP to car head-units and headphones.
+- Therefore, web background playback strictly maintains honest 1Hz unthrottled position state without artificial pulses or metadata churn.
+- Natural wave recovery occurs on Notification Shade pull-down, lock screen wake (Option B), In-App unlock, or next track transition.
 

@@ -1148,25 +1148,14 @@ class TestMediaSessionEngine(unittest.TestCase):
             self.main_content,
             r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?\)\s*\{[\s\S]*?republishMediaMetadata\(\);'
         )
-        self.assertNotRegex(
-            self.main_content,
-            r'isHiddenPlaying\s*&&\s*\(isUnlockJank\s*\|\|\s*isStaleWake\)[\s\S]*?republishMediaMetadata'
-        )
 
-    def test_transient_unlock_pulse_resets_squiggly_wave(self):
-        """Hidden unlock jank (eventDelta > 380) or stale gap dispatches a 75ms false-to-true state pulse to reset SquigglyProgress"""
-        self.assertRegex(
-            self.main_content,
-            r'const\s+isUnlockJank\s*=\s*\(eventDelta\s*>\s*380\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*5000\)\);'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'const\s+isStaleWake\s*=\s*\(staleGap\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*3000\)\);'
-        )
-        self.assertRegex(
-            self.main_content,
-            r'if\s*\(\s*isHiddenPlaying\s*&&\s*\(isUnlockJank\s*\|\|\s*isStaleWake\)\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]playing[\'"];[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*75\);'
-        )
+    def test_lock_gap_does_not_pulse_or_republish_metadata(self):
+        """timeupdate preserves clean 1Hz position cadence and avoids artificial state pulses or metadata churn"""
+        stale_block_match = re.search(r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*!isCallOrQuarantine\)\s*\)\s*\{([\s\S]*?)\n\s*if\s*\(window\.lyricsActive', self.main_content)
+        self.assertIsNotNone(stale_block_match)
+        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
+        self.assertNotIn("playbackState = 'paused'", stale_block_match.group(1))
+        self.assertNotIn("playbackState = \"paused\"", stale_block_match.group(1))
 
     def test_update_media_session_position_stability_guards_preserved(self):
         """updateMediaSessionPosition preserves monotonic backward and jump stability guards without dropping 1Hz cadence"""

@@ -1049,7 +1049,6 @@
         _lastForegroundResyncTime = now;
         window._lastForegroundResyncTime = now;
         window._lastLockGapRepublish = now;
-        window._lastUnlockPulse = now;
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
