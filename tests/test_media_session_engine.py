@@ -864,11 +864,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;', self.ms_content)
         self.assertIn('window.shouldRepublishMetadata = shouldRepublishMetadata;', self.ms_content)
 
-    def test_resync_media_session_canonical_ordering(self):
-        """resyncMediaSessionOnForeground enforces metadata before position and position last"""
+    def test_resync_media_session_guards_republish_metadata_with_needs_rebind(self):
+        """resyncMediaSessionOnForeground only republishes metadata when needsRebind is true to avoid SquigglyProgress freeze"""
         self.assertRegex(
             self.ms_content,
-            r'shouldRepublishMetadata\(\)[\s\S]*?republishMediaMetadata\(\);[\s\S]*?navigator\.mediaSession\.playbackState[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
         )
 
     def test_publish_track_metadata_records_key(self):
@@ -885,11 +885,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("resyncMediaSessionOnForeground('unlock-mode2-paused')", main_src)
         self.assertIn("startAnchorHeartbeat(0)", main_src)
 
-    def test_resync_media_session_schedules_600ms_follower(self):
-        """resyncMediaSessionOnForeground schedules 600ms follower to lock in current playhead on unlock"""
+    def test_resync_media_session_reanchors_playing_on_foreground(self):
+        """resyncMediaSessionOnForeground re-anchors SystemUI on foreground playing with single requestAnimationFrame position update"""
         self.assertRegex(
             self.ms_content,
-            r'setTimeout\(\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d2[\s\S]*?\},\s*600\);'
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?requestAnimationFrame\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*dur,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
 
     def test_visibilitychange_and_pageshow_ordering(self):
@@ -898,24 +898,27 @@ class TestMediaSessionEngine(unittest.TestCase):
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
-        )
-        self.assertRegex(
-            main_src,
             r'updateTimeUI\(audioPlayer\.currentTime\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
         )
 
-    def test_timeupdate_stale_gap_throttled_metadata_rebind(self):
-        """timeupdate triggers throttled republishMediaMetadata on staleGap (>2500ms) to unfreeze homescreen wave"""
+    def test_timeupdate_avoids_metadata_rebind_for_wave_stability(self):
+        """timeupdate does not call republishMediaMetadata to avoid resetting SquigglyProgress"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
-        self.assertRegex(
+        self.assertNotRegex(
             main_src,
-            r'staleGap\s*=\s*\(Date\.now\(\)\s*-\s*window\.getLastPositionTimestamp\(\)\s*>\s*2500\);'
+            r'audioPlayer\.addEventListener\([\'"]timeupdate[\'"][\s\S]*?republishMediaMetadata\(\);'
+        )
+
+    def test_update_media_session_position_stability_guards_preserved(self):
+        """updateMediaSessionPosition preserves monotonic backward and jump stability guards"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*pos\s*<\s*_lastSentPosition\s*-\s*0\.5\s*&&\s*elapsed\s*<\s*3000\s*\)'
         )
         self.assertRegex(
-            main_src,
-            r'if\s*\(staleGap\s*&&\s*!audioPlayer\.paused\)[\s\S]*?republishMediaMetadata\(\);'
+            self.ms_content,
+            r'if\s*\(\s*elapsed\s*<\s*1500\s*&&\s*Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25\s*\)'
         )
 
 if __name__ == '__main__':

@@ -67,12 +67,12 @@
 - Therefore, web background playback strictly maintains honest 1Hz unthrottled position state without artificial pulses or metadata churn.
 - Natural wave recovery occurs on Notification Shade pull-down, lock screen wake (Option B), In-App unlock, or next track transition.
 
-## 11. Homescreen Wave Recovery & 1Hz Cadence Invariant
-- Clean 1Hz Position Cadence: Steady-state playback strictly dispatches `updateMediaSessionPosition` at the natural 1Hz `roundedSec !== lastRenderTime` boundary during playback.
-- Pure Unthrottled Position Dispatch: In the verified `c249fc6` baseline, `updateMediaSessionPosition` unconditionally sets position state without artificial deduplication, timestamp gating, or monotonic guards (`_lastSentPosition` / `_lastSentTimestamp`).
-- 600ms Follower on Foreground: Foreground resynchronization immediately re-syncs state and schedules an honest 600ms deferred position update to ensure SystemUI picks up the current playhead.
-- Unconditional Metadata Rebind on Foreground: Foreground resynchronization unconditionally calls `republishMediaMetadata()` when playing to rebind `MediaControlPanel` and restart `heightAnimator` in `SquigglyProgress.kt`.
-- Throttled Lock-Gap Metadata Rebind: Background `timeupdate` detects lock gaps (>2500ms) with a 3000ms cooldown to trigger `republishMediaMetadata()`, restarting `heightAnimator` on wake.
-- No Artificial State Pulses or Dips: Honest declared state (`playing` when playing, `paused` when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
+## 11. Zero Metadata Churn & Dual Unlock Recovery Invariant
+- Zero Metadata Churn Rule: Re-assigning navigator.mediaSession.metadata on foreground or in background timeupdate triggers Android MediaDataManager and MediaControlPanel.bindPlayer(). This tears down SquigglyProgress and runs an 860ms expansion that repeatedly cancels heightAnimator, causing an indefinite freeze across In-App, Option B, and Homescreen unlocks. Metadata MUST strictly be republished ONLY when shouldRepublishMetadata() is true (track ID change or destroyed session). Never on unlock. Never in timeupdate.
+- In-App Instant Wave Resume: Foreground resynchronization (resyncMediaSessionOnForeground) dispatches a single requestAnimationFrame forced position update with window._forceNextPosition = true. This delivers the playhead anchor before the first frame, resuming the squiggly wave instantly with 0ms delay.
+- Homescreen <=1s Wave Recovery: Background timeupdate dispatches clean 1Hz position updates at the natural roundedSec !== lastRenderTime boundary without metadata churn or requestAnimationFrame dependency. Android SystemUI picks up the fresh position on the next 1Hz tick (<=1s) and resumes animating dynamically.
+- Monotonic Stability Guards: Monotonic guards prevent backward jumps (>0.5s within 3000ms), deduplicate identical positions (<0.25s within 1500ms), and drop wild forward jumps (>3.0s within 1500ms). Bypassed exactly once when force === true or window._forceNextPosition === true for foreground resync or genuine resume.
+- No Artificial State Pulses or Dips: Honest declared state (playing when playing, paused when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
+
 
 

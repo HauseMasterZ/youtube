@@ -906,25 +906,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            let staleGap = false;
-            try {
-                if (typeof window.getLastPositionTimestamp === 'function') {
-                    staleGap = (Date.now() - window.getLastPositionTimestamp() > 2500);
-                }
-            } catch (e) {}
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
-                if (staleGap && !audioPlayer.paused) {
-                    window._forceNextPosition = true;
-                    try {
-                        const now = Date.now();
-                        if (!window._lastLockGapRepublish || now - window._lastLockGapRepublish > 3000) {
-                            window._lastLockGapRepublish = now;
-                            if (typeof republishMediaMetadata === 'function') {
-                                republishMediaMetadata();
-                            }
-                        }
-                    } catch (e) {}
-                }
+            if (roundedSec !== lastRenderTime) {
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0);
             }
