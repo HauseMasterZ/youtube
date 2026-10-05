@@ -901,36 +901,33 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'updateTimeUI\(audioPlayer\.currentTime\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
         )
 
-    def test_background_stale_forces_position_1000ms(self):
-        """main.js fires unthrottled position update on 1000ms cadence when hidden and playing"""
+    def test_hidden_playing_pulse_unstick_wave(self):
+        """mediaSession.js implements hiddenPlayingPulse with 10s cooldown and 220ms dwell to unstick SquigglyProgress"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+hiddenPlayingPulse\(pos,\s*dur\)\s*\{[\s\S]*?now\s*-\s*_lastPulseAt\s*<\s*10000[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\},\s*220\);'
+        )
+        self.assertIn("window.hiddenPlayingPulse = hiddenPlayingPulse;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'resyncMediaSessionOnForeground[\s\S]*?_lastPulseAt\s*=\s*now;'
+        )
+
+    def test_timeupdate_wires_hidden_pulse(self):
+        """main.js timeupdate wires hiddenPlayingPulse on lock gap (>1200ms) or 15s periodic background pulse"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'isBackgroundStale\s*=\s*isHiddenPlaying\s*&&\s*\(lastSent\s*>\s*0\)\s*&&\s*\(nowWall\s*-\s*lastSent\s*>\s*1000\);'
+            r'staleGap\s*=\s*\(eventDelta\s*>\s*1200\);'
         )
         self.assertRegex(
             main_src,
-            r'if\s*\([^)]*isBackgroundStale[^)]*\)\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+            r'shouldPulse\s*=\s*isHiddenPlaying\s*&&\s*isSafeToPulse\s*&&\s*\(staleGap\s*\|\|\s*isPulseDue\);'
         )
         self.assertRegex(
             main_src,
-            r'updateMediaSessionPosition\([\s\S]*?isBackgroundStale\);'
-        )
-
-    def test_background_ceiling_1000ms(self):
-        """mediaSession.js enforces 1000ms freshness ceiling while hidden and playing to self-heal SquigglyProgress"""
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+backgroundCeilingMs\s*=\s*1000;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'const\s+effectiveCeiling\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\)\s*\?\s*backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'if\s*\(!isPaused\s*&&\s*!isBuffering\s*&&\s*!isSeeking\s*&&\s*_lastSentPosition\s*>=\s*0\)\s*\{[\s\S]*?if\s*\(now\s*-\s*_lastSentTimestamp\s*>\s*effectiveCeiling\)\s*\{[\s\S]*?freshnessForce\s*=\s*true;'
+            r'if\s*\(shouldPulse\s*&&\s*typeof\s+window\.hiddenPlayingPulse\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?window\.hiddenPlayingPulse\(ct,\s*audioPlayer\.duration\);'
         )
 
     def test_lock_gap_avoids_republish_metadata_for_wave_stability(self):
@@ -941,18 +938,6 @@ class TestMediaSessionEngine(unittest.TestCase):
             main_src,
             r'audioPlayer\.addEventListener\([\'"]timeupdate[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
-
-    def test_no_hidden_pulse_doctrine(self):
-        """Eliminate synthetic playbackState pulses, unlock jank flags, and dead pulse variables"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
-            main_src = f.read()
-        self.assertNotIn("hiddenPlayingPulse", self.ms_content)
-        self.assertNotIn("hiddenPlayingPulse", main_src)
-        self.assertNotIn("_lastPulseAt", self.ms_content)
-        self.assertNotIn("_lastUnlockPulse", self.ms_content)
-        self.assertNotIn("_lastUnlockPulse", main_src)
-        self.assertNotIn("shouldPulseHidden", main_src)
-        self.assertNotIn("isUnlockJank", main_src)
 
     def test_update_media_session_position_stability_guards_preserved(self):
         """updateMediaSessionPosition preserves monotonic backward and jump stability guards"""

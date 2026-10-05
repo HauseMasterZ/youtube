@@ -629,9 +629,71 @@
 
     let _lastSentPosition = -1;
     let _lastSentTimestamp = 0;
+    let _lastPulseAt = 0;
     window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
     window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
     window._forceNextPosition = false;
+
+    // Pulse playbackState ('paused' -> 'playing') strictly in the background to unstick
+    // Android SystemUI / HyperOS SquigglyProgress backing field (field == value guard)
+    // after direct black-screen fingerprint unlock without interrupting audio.
+    function hiddenPlayingPulse(pos, dur) {
+        if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !('setPositionState' in navigator.mediaSession)) return;
+        const isHidden = (typeof document !== 'undefined' && document.hidden);
+        if (!isHidden) return;
+        const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+        const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
+        const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
+        if (isPaused || isBuffering || isSeeking) return;
+        if (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine())) return;
+        if (typeof window.mediaSessionDestroyed !== 'undefined' && window.mediaSessionDestroyed) return;
+        const isRecentCall = (typeof window.lastCallEndTime === 'number' && Date.now() - window.lastCallEndTime < 2500);
+        const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+        if (isRecentCall || isRecentBt) return;
+
+        const now = Date.now();
+        if (now - _lastPulseAt < 10000) return; // Strict 10s cooldown bounds glyph flash
+        _lastPulseAt = now;
+        if (typeof window !== 'undefined') window._lastPulseAt = now;
+
+        const validDur = (typeof dur === 'number' && !isNaN(dur) && dur > 0) ? dur : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0);
+        if (!(validDur > 0)) return;
+        const validPos = Math.max(0, Math.min((typeof pos === 'number' && !isNaN(pos)) ? pos : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0), validDur));
+
+        try {
+            // Leg 1: Temporarily declare paused state to force SquigglyProgress field = false
+            navigator.mediaSession.playbackState = 'paused';
+            navigator.mediaSession.setPositionState({
+                duration: validDur,
+                playbackRate: 1.0,
+                position: validPos
+            });
+            _lastSentPosition = validPos;
+            _lastSentTimestamp = Date.now();
+        } catch (e) {}
+
+        setTimeout(() => {
+            if (typeof audioPlayer === 'undefined' || !audioPlayer || audioPlayer.paused || window.wasPausedByUser) return;
+            if (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine())) return;
+            if (typeof window.mediaSessionDestroyed !== 'undefined' && window.mediaSessionDestroyed) return;
+
+            try {
+                // Leg 2: Re-declare playing state to trigger SquigglyProgress field = true (starts heightAnimator)
+                navigator.mediaSession.playbackState = 'playing';
+                const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer) ? audioPlayer.currentTime : validPos;
+                const p2 = Math.max(0, Math.min(curPos, validDur));
+                navigator.mediaSession.setPositionState({
+                    duration: validDur,
+                    playbackRate: 1.0,
+                    position: p2
+                });
+                _lastSentPosition = p2;
+                _lastSentTimestamp = Date.now();
+                window._forceNextPosition = false;
+            } catch (e) {}
+        }, 220);
+    }
+    window.hiddenPlayingPulse = hiddenPlayingPulse;
 
     // MediaSession Position State Management
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
@@ -807,9 +869,11 @@
             return;
         }
         _lastForegroundResyncTime = now;
+        _lastPulseAt = now;
         if (typeof window !== 'undefined') {
             window._lastForegroundResyncTime = now;
             window._lastLockGapRepublish = now;
+            window._lastPulseAt = now;
             const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
             window.lastTimeupdateFire = monoNow;
         }

@@ -913,15 +913,20 @@ document.addEventListener("DOMContentLoaded", () => {
             const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
             lastTimeupdateFire = nowMonotonic;
             if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
-            const staleGap = (eventDelta > 2500);
+            const staleGap = (eventDelta > 1200);
             const nowWall = Date.now();
-            const lastSent = (typeof window.getLastPositionTimestamp === 'function') ? window.getLastPositionTimestamp() : 0;
             const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
-            const isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 1000);
-
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
+            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && (nowWall - window.lastBtDisconnectTime < 2500));
+            const isSafeToPulse = !isCallOrQuarantine && !isRecentBt && !window.mediaSessionDestroyed && !audioPlayer.switching && audioPlayer._pendingSeek === null && !window.wasPausedByUser && !audioPlayer.paused;
+            const lastPulse = (typeof window !== 'undefined' && window._lastPulseAt) || 0;
+            const isPulseDue = isHiddenPlaying && isSafeToPulse && (nowWall - lastPulse > 15000);
+            const shouldPulse = isHiddenPlaying && isSafeToPulse && (staleGap || isPulseDue);
 
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine) || isBackgroundStale) {
+            if (shouldPulse && typeof window.hiddenPlayingPulse === 'function') {
+                window.hiddenPlayingPulse(ct, audioPlayer.duration);
+                updateTimeUI(ct);
+            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
                 if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
@@ -929,11 +934,9 @@ document.addEventListener("DOMContentLoaded", () => {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                     }
-                } else if (isBackgroundStale) {
-                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
