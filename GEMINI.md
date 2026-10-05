@@ -58,21 +58,25 @@
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
 
 ## 10. Android SystemUI & HyperOS Wave Animation Invariant
-- In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `field = true`.
-- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the media view without rebinding. Because `field` remains `true`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave frozen.
-- Architectural Finding: Any synthetic false-to-true pulse (`STATE_PAUSED` -> `STATE_PLAYING`) dispatched from the background (`document.hidden === true`) is fundamentally unviable:
-  1. On multi-core flagships (e.g. Snapdragon 8s Gen 3), audible background playback keeps `timeupdate` ticking at ~250ms with 5-60ms jitter; unlock contention does not reliably trigger threshold-based detectors without causing false positives during steady state.
-  2. Rapid pulses (<150ms) are coalesced/deduplicated by Android `system_server` (`MediaSessionRecord` using `Handler.removeMessages`), so SystemUI only sees `STATE_PLAYING` and `field` never sees `false`.
-  3. Longer pulses (>=280ms) survive Binder deduplication but visibly flicker the notification button icon and broadcast `PAUSED` over Bluetooth AVRCP to car head-units and headphones.
-- Therefore, web background playback strictly maintains honest 1Hz unthrottled position state without artificial pulses or metadata churn.
-- Natural wave recovery occurs on Notification Shade pull-down, lock screen wake (Option B), In-App unlock, or next track transition.
+- In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `heightFraction = 0.0`.
+- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the media view without rebinding. Because `field` remains `true` in `SquigglyProgress.animate`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen flat.
+- Re-publishing identical `MediaMetadata` fails to unstick the wave because Chromium C++ (`MediaSessionImpl::SetMetadata`) performs `if (metadata_ == metadata) return;`. Re-assigning identical metadata sends zero Mojo IPC to Android, so SystemUI never re-runs `bindPlayer()`.
+- The verified self-healing recovery mechanism is `hiddenPlayingPulse(pos, dur)`:
+  1. Leg 1 (0ms): `playbackState = 'paused'` sends Mojo IPC -> Android `STATE_PAUSED` -> `SquigglyProgress.animate = false`, resetting `field = false`.
+  2. Leg 2 (after 280ms): `playbackState = 'playing'` sends Mojo IPC -> Android `STATE_PLAYING` -> `SquigglyProgress.animate = true`. Because `field` (`false`) != `value` (`true`), `SquigglyProgress` launches `heightAnimator` (800ms expansion ramp from 0.0 to 1.0). Total recovery timeline: 280ms + 860ms = 1140ms (~1.1s).
+  3. Audio playback is completely uninterrupted: `<audio>` is never paused; only the Web MediaSession declared property is pulsed.
+  4. Cooldown gating (15s) via `_lastPulseAt` and `window._lastUnlockPulse` strictly prevents repeated pulses while staying on the homescreen.
+  5. Call quarantine and recent BT disconnect guards (<2500ms) prevent state pulses during audio routing transitions.
 
-## 11. Zero Metadata Churn & Dual Unlock Recovery Invariant
-- Zero Continuous Metadata Churn Rule: Unthrottled or periodic re-assignment of navigator.mediaSession.metadata triggers Android MediaDataManager and MediaControlPanel.bindPlayer() repeatedly. This tears down SquigglyProgress and loops an 860ms expansion that repeatedly cancels heightAnimator, causing an indefinite freeze. Metadata MUST NEVER be republished continuously in steady-state timeupdate or on in-app foreground when track metadata is already fresh.
-- Homescreen Single-Shot Unlock Kickstart (<=1s Recovery): Direct in-display fingerprint unlock to the launcher homescreen bypasses TaskStack change and reuses the existing view with heightFraction collapsed to 0.0. To re-bind the player and restart heightAnimator, background timeupdate dispatches a single-shot cooldown-gated (3500ms) republishMediaMetadata() kickstart strictly when isHiddenPlaying && (eventDelta > 600 || staleGap) && isCooldownPassed. The cooldown guarantees exactly ONE clean rebind per unlock sequence, cleanly restoring the squiggly wave within <=1s without continuous churn or avatar flicker.
+## 11. Zero Metadata Churn & Homescreen Unlock Recovery Invariant
+- Zero Continuous Metadata Churn Rule: Unthrottled re-assignment of navigator.mediaSession.metadata triggers Android MediaDataManager and MediaControlPanel.bindPlayer() repeatedly. Metadata MUST NEVER be republished in steady-state timeupdate or on in-app foreground when track metadata is already fresh.
+- Homescreen Self-Healing Baseline (~1.1s Wave Recovery): Direct in-display fingerprint unlock to launcher homescreen reuses the existing panel with heightFraction collapsed to 0.0. The baseline employs `shouldPulseHidden = isHiddenPlaying && isSafeToPulse && isForegroundQuiet && isPulseDue && isAgeDue` in `timeupdate`:
+  1. `isPulseDue` enforces a 15000ms cooldown (`nowWall - _lastUnlockPulse > 15000`), which is already satisfied whenever the device was locked for >= 15s.
+  2. `isAgeDue` (`nowWall - lastSent > 1000`) triggers on the first second tick after unlock.
+  3. `isForegroundQuiet` (`nowWall - _lastForegroundResyncTime > 1500`) prevents racing with in-app foreground resync.
+  4. Once triggered, `hiddenPlayingPulse(ct, audioPlayer.duration)` pulses `playbackState = 'paused' -> 'playing'` across a 280ms leg, resetting `field = false -> true` and restarting `SquigglyProgress.heightAnimator` (860ms expansion ramp), restoring the squiggly wave within ~1.1s.
 - In-App Instant Wave Resume: Foreground resynchronization (resyncMediaSessionOnForeground) dispatches a single requestAnimationFrame forced position update with window._forceNextPosition = true. This delivers the playhead anchor before the first frame, resuming the squiggly wave instantly with 0ms delay.
 - Monotonic Stability Guards: Monotonic guards prevent backward jumps (>0.5s within 3000ms), deduplicate identical positions (<0.25s within 1500ms), and drop wild forward jumps (>3.0s within 1500ms). Bypassed exactly once when force === true or window._forceNextPosition === true for foreground resync or genuine resume.
-- No Artificial State Pulses or Dips: Honest declared state (playing when playing, paused when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
 
 ## 12. Absolute Prohibition of Git Write Operations
 - Under NO circumstances may Antigravity execute any Git write operation (including git commit, git push, git checkout -b, git branch, git merge, git rebase, git tag, or git reset against remote).
