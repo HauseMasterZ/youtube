@@ -59,23 +59,24 @@
 
 ## 10. Android SystemUI & HyperOS Wave Animation Invariant
 - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `heightFraction = 0.0`.
-- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the existing media view without rebinding. Because `field` remains `true` in `SquigglyProgress.animate`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen flat if no position anchor is delivered.
+- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the existing media view without rebinding. Because `field` remains `true` in `SquigglyProgress.animate`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen flat if no state toggle is delivered.
 - Re-publishing identical `MediaMetadata` fails to unstick the wave because Chromium C++ (`MediaSessionImpl::SetMetadata`) performs `if (metadata_ == metadata) return;`. Re-assigning identical metadata sends zero Mojo IPC to Android, so SystemUI never re-runs `bindPlayer()`.
-- Synthetic `playbackState` pulses (`paused` -> `playing`) are strictly prohibited: they cause Bluetooth AVRCP `PAUSED` status flashes on car headunits, audio routing races, and tearing during calls or background transitions.
-- The verified self-healing recovery mechanism is the 1000ms background position cadence baseline (`ca28091` / `48630be`):
-  1. While the device is in the background (`document.hidden && !isPaused`), position updates are dispatched on an honest 1000ms cadence.
-  2. On direct fingerprint unlock to the homescreen, the first tick (within 1000ms) delivers an unthrottled `setPositionState` with fresh position and timestamp to Android SystemUI.
-  3. Android's `SeekBarViewModel` receives the fresh position state, causing `onProgress` / `SeekBarObserver` to set `animate = true`, launching `SquigglyProgress.heightAnimator` (800ms expansion ramp from 0.0 to 1.0).
-  4. The squiggly wave naturally self-heals after ~1s without audio hiccups, metadata churn, or playbackState spoofing.
+- Empirical verification has demonstrated that `setPositionState` alone cannot restart `heightAnimator` because position updates do not touch `SquigglyProgress.animate`.
+- The verified self-healing recovery mechanism is calibrated `hiddenPlayingPulse(pos, dur)`:
+  1. Leg 1 (0ms): `playbackState = 'paused'` dispatches Mojo `STATE_PAUSED` -> Android SystemUI `SquigglyProgress.animate = false`, resetting `field = false`.
+  2. Leg 2 (after 220ms): `playbackState = 'playing'` dispatches Mojo `STATE_PLAYING` -> Android SystemUI `SquigglyProgress.animate = true`. Because `field` (`false`) != `value` (`true`), `SquigglyProgress` launches `heightAnimator` (800ms expansion ramp from 0.0 to 1.0).
+  3. Total recovery timeline: 220ms dwell + 800ms expansion = 1020ms (~1.0s). The squiggly wave is flat for ~1s, then self-heals and animates properly.
+  4. 220ms dwell survives Android SystemUI's 150ms message queue debounce while remaining within Bluetooth AVRCP debounce thresholds to prevent car stereo audio interruptions.
+  5. Audio playback is completely uninterrupted: `<audio>` is never paused; only the Web MediaSession declared property is pulsed.
+  6. Safety guards: Strictly gated by call active, post-call quarantine, recent BT disconnect (<2500ms), and 10s pulse cooldown (`_lastPulseAt`).
 
 ## 11. Zero Metadata Churn & Homescreen Unlock Recovery Invariant
 - Zero Continuous Metadata Churn Rule: Unthrottled re-assignment of `navigator.mediaSession.metadata` triggers Android `MediaDataManager` and `MediaControlPanel.bindPlayer()` repeatedly. Metadata MUST NEVER be republished in steady-state `timeupdate` or on in-app foreground when track metadata is already fresh.
-- Homescreen Self-Healing Baseline (~1s Wave Recovery): Direct in-display fingerprint unlock to launcher homescreen reuses the existing panel with `heightFraction` collapsed to 0.0. The baseline employs `isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 1000)` in `main.js` `timeupdate`:
-  1. `isBackgroundStale` fires on the first 1-second tick after unlock (max 1000ms delay).
-  2. In `main.js`, `isBackgroundStale` sets `window._forceNextPosition = true` and passes `isBackgroundStale` as the `force` parameter to `updateMediaSessionPosition`.
-  3. In `mediaSession.js`, `backgroundCeilingMs = 1000` sets `effectiveCeiling = 1000` while `document.hidden && !isPaused`, guaranteeing `effectiveBypass = true`.
-  4. This dispatches an unthrottled `setPositionState({ duration, playbackRate: 1.0, position })` to Android SystemUI on the first tick after unlock, reviving `SeekBarViewModel` polling and restarting `heightAnimator`.
-- In-App Instant Wave Resume: Foreground resynchronization (`resyncMediaSessionOnForeground`) dispatches a single `requestAnimationFrame` forced position update with `window._forceNextPosition = true`. This delivers the playhead anchor before the first frame, resuming the squiggly wave instantly with 0ms delay.
+- Homescreen Self-Healing Baseline (~1s Wave Recovery): Direct in-display fingerprint unlock to launcher homescreen reuses the existing panel with `heightFraction` collapsed to 0.0. The baseline employs `staleGap = (eventDelta > 1200)` and 15s background cadence `isPulseDue` in `main.js` `timeupdate`:
+  1. Lock Gap Wake: When the screen turns off and is unlocked via fingerprint, the first `timeupdate` tick detects `staleGap = (eventDelta > 1200)` and triggers `hiddenPlayingPulse(ct, audioPlayer.duration)`.
+  2. Periodic Background Cadence: If locked for <1200ms, `isPulseDue` (15s cadence while `document.hidden`) guarantees the wave recovers automatically.
+  3. Routine Playback: When not pulsing, standard 1Hz `roundedSec !== lastRenderTime` dispatches `updateMediaSessionPosition` normally.
+- In-App Instant Wave Resume: Foreground resynchronization (`resyncMediaSessionOnForeground`) dispatches a single `requestAnimationFrame` forced position update with `window._forceNextPosition = true` and stamps `_lastPulseAt = now`, resuming the squiggly wave instantly with 0ms delay.
 - Monotonic Stability Guards: Monotonic guards prevent backward jumps (>0.5s within 3000ms), deduplicate identical positions (<0.25s within 1500ms), and drop wild forward jumps (>3.0s within 1500ms). Bypassed exactly once when `force === true` or `window._forceNextPosition === true` for foreground resync or genuine resume.
 
 ## 12. Absolute Prohibition of Git Write Operations
