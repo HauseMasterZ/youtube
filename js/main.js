@@ -1,6 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let remoteSearchAbortController = null;
+    let lastTimeupdateFire = 0;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -698,6 +699,9 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
+
         setPlayUI(false);
         if (hasMediaSession) {
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
@@ -867,6 +871,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -899,7 +905,54 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            if (roundedSec !== lastRenderTime) {
+            // Self-heal for lock/Doze gaps where the JS event loop was suspended.
+            // Inter-arrival delta between consecutive timeupdates measures true loop
+            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
+            const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
+            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
+            lastTimeupdateFire = nowMonotonic;
+            if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
+            const staleGap = (eventDelta > 2500);
+
+            const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && (Date.now() - window.lastBtDisconnectTime < 2500));
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect);
+
+            // Single-shot unlock kickstart: when waking/unlocking from screen-off directly to
+            // launcher homescreen, SystemUI reuses the MediaViewHolder where SquigglyProgress
+            // collapsed its heightFraction to 0.0. setPositionState alone cannot restart the
+            // canceled SquigglyProgress heightAnimator without an animate: false -> true edge.
+            // Main-thread wake jank (biometrics + Keyguard + Launcher composition) causes eventDelta > 600ms.
+            // A cooldown (3500ms) ensures exactly ONE clean kickstart fires per unlock sequence,
+            // avoiding any continuous shimmer or resets while the user stays on the homescreen.
+            const nowWall = Date.now();
+            const lastRebind = (typeof window !== 'undefined' && window._lastLockGapRepublish) || 0;
+            const isUnlockJank = (eventDelta > 600 || staleGap);
+            const isCooldownPassed = (nowWall - lastRebind > 3500);
+
+            if (isHiddenPlaying && isUnlockJank && isCooldownPassed) {
+                if (typeof window !== 'undefined') window._lastLockGapRepublish = nowWall;
+                window._forceNextPosition = true;
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    if (navigator.mediaSession.playbackState !== 'playing') {
+                        navigator.mediaSession.playbackState = 'playing';
+                    }
+                }
+                if (typeof republishMediaMetadata === 'function') {
+                    republishMediaMetadata();
+                }
+                updateTimeUI(ct);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
+                if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
+                    window._forceNextPosition = true;
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        if (navigator.mediaSession.playbackState !== 'playing') {
+                            navigator.mediaSession.playbackState = 'playing';
+                        }
+                    }
+                }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0);
             }
@@ -917,6 +970,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;

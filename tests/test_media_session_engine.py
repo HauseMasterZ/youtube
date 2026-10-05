@@ -901,13 +901,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'updateTimeUI\(audioPlayer\.currentTime\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
         )
 
-    def test_timeupdate_avoids_metadata_rebind_for_wave_stability(self):
-        """timeupdate does not call republishMediaMetadata to avoid resetting SquigglyProgress"""
+    def test_lock_gap_unlock_jank_kickstart_republishes_metadata(self):
+        """Hidden unlock jank (eventDelta > 600) kickstarts SquigglyProgress with throttled republishMediaMetadata"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
-        self.assertNotRegex(
+        self.assertRegex(
             main_src,
-            r'audioPlayer\.addEventListener\([\'"]timeupdate[\'"][\s\S]*?republishMediaMetadata\(\);'
+            r'if\s*\(\s*isHiddenPlaying\s*&&\s*isUnlockJank\s*&&\s*isCooldownPassed\s*\)\s*\{[\s\S]*?republishMediaMetadata\(\);[\s\S]*?updateMediaSessionPosition\(ct,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);'
         )
 
     def test_update_media_session_position_stability_guards_preserved(self):
