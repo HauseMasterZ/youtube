@@ -796,6 +796,12 @@
             return;
         }
         _lastForegroundResyncTime = now;
+        if (typeof window !== 'undefined') {
+            window._lastForegroundResyncTime = now;
+            window._lastLockGapRepublish = now;
+            const monoNow = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            window.lastTimeupdateFire = monoNow;
+        }
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
