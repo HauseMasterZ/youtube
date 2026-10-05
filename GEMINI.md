@@ -8,7 +8,7 @@
 ## 2. Mandatory Muse Consultation & Debate
 - On EVERY prompt involving architectural audits, bug investigations, design choices, root cause analysis, or verification, Antigravity MUST consult and debate with Muse first before proposing solutions or writing code.
 - Working Directory & Context Preservation:
-  - ALWAYS run Muse directly in the **project root directory** (e.g., `c:\Users\Hause\Documents\Code\youtube_frontend` or `c:\Users\Hause\Documents\Code\alwaysdata-pi-setup`).
+  - ALWAYS run Muse directly in the **project root directory** (e.g., `c:\Users\Hause\Documents\Code\youtube_frontend`).
   - ALWAYS pass the `-c` (`--continue`) flag so Muse retains and accumulates conversational context across every single invocation.
   - If Muse does not have or loses context, explicitly bootstrap it with existing architectural state, code references, and invariants.
 - Invocation command pattern:
@@ -27,7 +27,7 @@
 ## 4. Audio Quality & Download Integrity
 - Audio streams must be original Opus Format 251 (or 140 AAC if 251 is unavailable). Zero re-encoding.
 - Reject formats 18, 599, 600, or low-bitrate fallbacks (<90 kbps).
-- Strictly stream from downloaded assets stored in dataset storage (`magical-bear/main-model-llm`); never stream directly from YouTube or third-party web scrapers during playback.
+- Strictly stream from downloaded assets stored in remote asset storage; never stream directly from YouTube or third-party web scrapers during playback.
 
 ## 5. Development & Deployment Workflow
 - Always develop, commit, and test on the `dev` branch first.
@@ -46,7 +46,7 @@
 - Never hardcode API keys, tokens, or credentials in client-side code or public repositories.
 - Upstream storage details and backend infrastructure must remain unexposed to client-side HTML/JS.
 - Rule 7a (Playlist Membership Invariant): External write triggers for new track additions or membership mutations strictly require verified YouTube playlist changes.
-- Rule 7b (Catalogue Self-Healing Protocol): Autonomous daily downtime self-healing (02:00 to 09:00 IST / 22:00 UTC) on the Raspberry Pi is authorized to detect and repair broken audio, playlist order divergence, missing synchronized .lrc lyrics, missing square .webp thumbnails, and default dominant colors, preserving 1:1 catalogue fidelity without altering playlist membership.
+- Rule 7b (Catalogue Self-Healing Protocol): Autonomous daily downtime self-healing (02:00 to 09:00 IST / 22:00 UTC) by backend synchronization is authorized to detect and repair broken audio, playlist order divergence, missing synchronized .lrc lyrics, missing square .webp thumbnails, and default dominant colors, preserving 1:1 catalogue fidelity without altering playlist membership.
 
 ## 8. Empirical Verification Before Completion
 - Be empirical, tenacious, and verify actual changes before claiming fixes.
@@ -74,5 +74,10 @@
 - Monotonic Stability Guards: Monotonic guards prevent backward jumps (>0.5s within 3000ms), deduplicate identical positions (<0.25s within 1500ms), and drop wild forward jumps (>3.0s within 1500ms). Bypassed exactly once when force === true or window._forceNextPosition === true for foreground resync or genuine resume.
 - No Artificial State Pulses or Dips: Honest declared state (playing when playing, paused when paused) is maintained at all times without artificial Mode 2 paused dips or false-to-true pulses.
 
+## 12. Absolute Prohibition of Git Write Operations
+- Under NO circumstances may Antigravity execute any Git write operation (including git commit, git push, git checkout -b, git branch, git merge, git rebase, git tag, or git reset against remote).
+- Git operations are strictly read-only (status, diff, log).
 
-
+## 13. Frontend Codebase Architectural Decoupling Invariant
+- The entire codebase of the frontend repository must strictly NOT contain any architectural information, implementation details, credentials, or explicit naming regarding backend infrastructure, cloud servers, storage repositories, edge devices, or third-party backend instances anywhere.
+- All client-side communication must operate through generic API gateway and asset abstractions.
