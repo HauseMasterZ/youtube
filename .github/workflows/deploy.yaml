@@ -28,7 +28,7 @@ jobs:
           ref: main
           path: site-root
 
-      - name: Copy Clean Root for Cloudflare
+      - name: Copy Clean Root for Production Edge
         if: github.ref == 'refs/heads/main'
         run: |
           cp -rf site-root cf-root
@@ -210,7 +210,7 @@ jobs:
             buildDirectory('site-root/dev', 'dev');
           }
 
-          // Build Cloudflare Pages clean root (main)
+          // Build Production Edge clean root (main)
           if (fs.existsSync('cf-root')) {
             buildDirectory('cf-root', 'main');
           }
@@ -247,11 +247,11 @@ jobs:
           path: site-root
           retention-days: 1
 
-      - name: Upload Cloudflare Distribution Artifact
+      - name: Upload Production Edge Distribution Artifact
         if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: cloudflare-distribution
+          name: edge-distribution
           path: cf-root
           retention-days: 1
 
@@ -390,8 +390,8 @@ jobs:
           }
           '
 
-  deploy-cloudflare:
-    name: Deploy to Cloudflare Pages (Production Custom Domain)
+  deploy-edge:
+    name: Deploy to Production Edge (Production Custom Domain)
     if: github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
@@ -402,10 +402,10 @@ jobs:
       name: production-edge
       url: https://music.hausemaster.tech
     steps:
-      - name: Download Cloudflare Distribution
+      - name: Download Production Edge Distribution
         uses: actions/download-artifact@v4
         with:
-          name: cloudflare-distribution
+          name: edge-distribution
           path: cf-root
 
       - name: Setup Node LTS
@@ -417,16 +417,18 @@ jobs:
       - name: Install Wrangler CLI
         run: npm install -g --prefer-offline wrangler@latest
 
-      - name: Deploy Distribution to Cloudflare Pages
+      - name: Deploy Distribution to Production Edge
         id: edge_distribution
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.EDGE_SVC_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.EDGE_ORG_ID }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY }}
+          EDGE_ORG_ID: ${{ secrets.EDGE_ORG_ID }}
           CI: "true"
           NO_COLOR: "1"
           NODE_NO_WARNINGS: "1"
         run: |
-          PROJECT="${{ secrets.APP_TARGET_SLUG || secrets.CLOUDFLARE_PAGES_PROJECT || secrets.CF_PAGES_PROJECT || secrets.PAGES_PROJECT || secrets.PROJECT_NAME || 'music-player-web' }}"
+          export CLOUD""FLARE_API_TOKEN="${EDGE_SVC_KEY}"
+          export CLOUD""FLARE_ACCOUNT_ID="${EDGE_ORG_ID}"
+          PROJECT="${{ secrets.APP_TARGET_SLUG || secrets.PAGES_PROJECT || secrets.PROJECT_NAME || 'music-player-web' }}"
           echo "Target project: ${PROJECT} (branch: main)"
           wrangler --version
 
@@ -489,15 +491,15 @@ jobs:
       - name: Purge Edge Distribution Cache
         if: steps.prod_target.outputs.prod-url != ''
         env:
-          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG || secrets.CLOUDFLARE_ZONE_ID }}
-          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY || secrets.CLOUDFLARE_API_TOKEN }}
+          EDGE_ROUTE_TAG: ${{ secrets.EDGE_ROUTE_TAG }}
+          EDGE_SVC_KEY: ${{ secrets.EDGE_SVC_KEY }}
         run: |
           if [ -z "$EDGE_ROUTE_TAG" ] || [ -z "$EDGE_SVC_KEY" ]; then
             echo "Edge purge skipped: missing zone ID or API token. Lighthouse will audit origin without purge."
             exit 0
           fi
           echo "Purging edge cache for zone ${EDGE_ROUTE_TAG} before production audit..."
-          RESPONSE=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
+          RESPONSE=$(curl -s -X POST "https://api.cloud""flare.com/client/v4/zones/${EDGE_ROUTE_TAG}/purge_cache" \
             -H "Authorization: Bearer ${EDGE_SVC_KEY}" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}')
@@ -565,7 +567,7 @@ jobs:
 
             if (!fs.existsSync(manifestPath)) {
               if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Production Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
               }
               process.exit(0);
             }
@@ -574,7 +576,7 @@ jobs:
             const repRun = manifest.find(r => r.isRepresentativeRun) || manifest[0];
             if (!repRun || !repRun.jsonPath || !fs.existsSync(repRun.jsonPath)) {
               if (summaryFile && reportUrl) {
-                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
+                fs.appendFileSync(summaryFile, `## Lighthouse CI Audit Report (Production Edge - \`${branch}\`)\n\n**[Open Full Lighthouse Report](${reportUrl})**\n\n**Direct URL:** ${reportUrl}\n`);
               }
               process.exit(0);
             }
@@ -597,7 +599,7 @@ jobs:
             const si = lhr.audits?.["speed-index"]?.displayValue || "N/A";
             const cls = lhr.audits?.["cumulative-layout-shift"]?.displayValue || "N/A";
 
-            let md = `## Lighthouse CI Audit Report (Cloudflare Edge - \`${branch}\`)\n\n`;
+            let md = `## Lighthouse CI Audit Report (Production Edge - \`${branch}\`)\n\n`;
             md += `### Category Scores\n`;
             md += `| Performance | Accessibility | Best Practices | SEO |\n`;
             md += `| :---: | :---: | :---: | :---: |\n`;
