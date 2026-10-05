@@ -914,47 +914,39 @@ document.addEventListener("DOMContentLoaded", () => {
             lastTimeupdateFire = nowMonotonic;
             if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
             const staleGap = (eventDelta > 2500);
+            const nowWall = Date.now();
+            const lastSent = (typeof window.getLastPositionTimestamp === 'function') ? window.getLastPositionTimestamp() : 0;
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
+            const isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 1000);
 
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
-            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && (Date.now() - window.lastBtDisconnectTime < 2500));
-            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect);
+            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && (nowWall - window.lastBtDisconnectTime < 2500));
+            const isForegroundQuiet = (!window._lastForegroundResyncTime || (nowWall - window._lastForegroundResyncTime > 1500));
+            const isSafeToPulse = !isCallOrQuarantine && !isRecentBt && !window.mediaSessionDestroyed && !audioPlayer.switching && audioPlayer._pendingSeek === null && !window.wasPausedByUser && !audioPlayer.paused;
+            const isPulseDue = (!window._lastUnlockPulse || (nowWall - window._lastUnlockPulse > 15000));
+            const isAgeDue = (lastSent > 0) && (nowWall - lastSent > 1000);
+            const shouldPulseHidden = isHiddenPlaying && isSafeToPulse && isForegroundQuiet && isPulseDue && isAgeDue;
 
-            // Single-shot unlock kickstart: when waking/unlocking from screen-off directly to
-            // launcher homescreen, SystemUI reuses the MediaViewHolder where SquigglyProgress
-            // collapsed its heightFraction to 0.0. setPositionState alone cannot restart the
-            // canceled SquigglyProgress heightAnimator without an animate: false -> true edge.
-            // Main-thread wake jank (biometrics + Keyguard + Launcher composition) causes eventDelta > 600ms.
-            // A cooldown (3500ms) ensures exactly ONE clean kickstart fires per unlock sequence,
-            // avoiding any continuous shimmer or resets while the user stays on the homescreen.
-            const nowWall = Date.now();
-            const lastRebind = (typeof window !== 'undefined' && window._lastLockGapRepublish) || 0;
-            const isUnlockJank = (eventDelta > 600 || staleGap);
-            const isCooldownPassed = (nowWall - lastRebind > 3500);
-
-            if (isHiddenPlaying && isUnlockJank && isCooldownPassed) {
-                if (typeof window !== 'undefined') window._lastLockGapRepublish = nowWall;
-                window._forceNextPosition = true;
-                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    if (navigator.mediaSession.playbackState !== 'playing') {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
-                }
-                if (typeof republishMediaMetadata === 'function') {
-                    republishMediaMetadata();
-                }
-                updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine) || isBackgroundStale || shouldPulseHidden) {
                 if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        if (navigator.mediaSession.playbackState !== 'playing') {
+                        if (typeof document !== 'undefined' && document.hidden && typeof window.hiddenPlayingPulse === 'function') {
+                            window.hiddenPlayingPulse(ct, audioPlayer.duration);
+                        } else if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
                     }
+                } else if (shouldPulseHidden) {
+                    window._forceNextPosition = true;
+                    if (typeof window.hiddenPlayingPulse === 'function') {
+                        window.hiddenPlayingPulse(ct, audioPlayer.duration);
+                    }
+                } else if (isBackgroundStale) {
+                    window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale || shouldPulseHidden);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
