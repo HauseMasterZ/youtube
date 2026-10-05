@@ -901,26 +901,36 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'updateTimeUI\(audioPlayer\.currentTime\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
         )
 
-    def test_hidden_playing_pulse_unstick_wave(self):
-        """mediaSession.js implements hiddenPlayingPulse with 15s cooldown and 280ms duration to unstick SquigglyProgress"""
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+hiddenPlayingPulse\(pos,\s*dur\)\s*\{[\s\S]*?now\s*-\s*_lastPulseAt\s*<\s*15000[\s\S]*?playbackState\s*=\s*[\'"]paused[\'"][\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?playbackState\s*=\s*[\'"]playing[\'"][\s\S]*?\},\s*280\);'
-        )
-        self.assertIn("window.hiddenPlayingPulse = hiddenPlayingPulse;", self.ms_content)
-        self.assertRegex(
-            self.ms_content,
-            r'if\s*\(now\s*-\s*_lastSentTimestamp\s*>\s*freshnessCeilingMs\)\s*\{[\s\S]*?hiddenPlayingPulse\(pos,\s*dur\);'
-        )
+    def test_background_stale_forces_position_1000ms(self):
+        """main.js fires unthrottled position update on 1000ms cadence when hidden and playing"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
         self.assertRegex(
             main_src,
-            r'if\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*typeof\s+window\.hiddenPlayingPulse\s*===\s*[\'"]function[\'"]\)\s*\{[\s\S]*?window\.hiddenPlayingPulse\(ct,\s*audioPlayer\.duration\);'
+            r'isBackgroundStale\s*=\s*isHiddenPlaying\s*&&\s*\(lastSent\s*>\s*0\)\s*&&\s*\(nowWall\s*-\s*lastSent\s*>\s*1000\);'
         )
         self.assertRegex(
             main_src,
-            r'shouldPulseHidden[\s\S]*?window\.hiddenPlayingPulse\(ct,\s*audioPlayer\.duration\);'
+            r'if\s*\([^)]*isBackgroundStale[^)]*\)\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+        )
+        self.assertRegex(
+            main_src,
+            r'updateMediaSessionPosition\([\s\S]*?isBackgroundStale\);'
+        )
+
+    def test_background_ceiling_1000ms(self):
+        """mediaSession.js enforces 1000ms freshness ceiling while hidden and playing to self-heal SquigglyProgress"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+backgroundCeilingMs\s*=\s*1000;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+effectiveCeiling\s*=\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*&&\s*!isPaused\)\s*\?\s*backgroundCeilingMs\s*:\s*freshnessCeilingMs;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\s*&&\s*!isBuffering\s*&&\s*!isSeeking\s*&&\s*_lastSentPosition\s*>=\s*0\)\s*\{[\s\S]*?if\s*\(now\s*-\s*_lastSentTimestamp\s*>\s*effectiveCeiling\)\s*\{[\s\S]*?freshnessForce\s*=\s*true;'
         )
 
     def test_lock_gap_avoids_republish_metadata_for_wave_stability(self):
@@ -932,31 +942,17 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'audioPlayer\.addEventListener\([\'"]timeupdate[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_foreground_quiet_guards_background_pulse(self):
-        """timeupdate checks isForegroundQuiet to eliminate in-app double-pulse race condition"""
+    def test_no_hidden_pulse_doctrine(self):
+        """Eliminate synthetic playbackState pulses, unlock jank flags, and dead pulse variables"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
-        self.assertRegex(
-            main_src,
-            r'isForegroundQuiet\s*=\s*\(!window\._lastForegroundResyncTime\s*\|\|\s*\(nowWall\s*-\s*window\._lastForegroundResyncTime\s*>\s*1500\)\);'
-        )
-        self.assertRegex(
-            main_src,
-            r'shouldPulseHidden\s*=\s*isHiddenPlaying[\s\S]*?isForegroundQuiet'
-        )
-
-    def test_should_pulse_hidden_requires_position_age(self):
-        """main.js shouldPulseHidden requires isAgeDue to prevent torn-holder race on home press"""
-        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
-            main_src = f.read()
-        self.assertRegex(
-            main_src,
-            r'isAgeDue\s*=\s*\(lastSent\s*>\s*0\)\s*&&\s*\(nowWall\s*-\s*lastSent\s*>\s*1000\);'
-        )
-        self.assertRegex(
-            main_src,
-            r'shouldPulseHidden\s*=\s*isHiddenPlaying[\s\S]*?isAgeDue'
-        )
+        self.assertNotIn("hiddenPlayingPulse", self.ms_content)
+        self.assertNotIn("hiddenPlayingPulse", main_src)
+        self.assertNotIn("_lastPulseAt", self.ms_content)
+        self.assertNotIn("_lastUnlockPulse", self.ms_content)
+        self.assertNotIn("_lastUnlockPulse", main_src)
+        self.assertNotIn("shouldPulseHidden", main_src)
+        self.assertNotIn("isUnlockJank", main_src)
 
     def test_update_media_session_position_stability_guards_preserved(self):
         """updateMediaSessionPosition preserves monotonic backward and jump stability guards"""

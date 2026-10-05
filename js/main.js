@@ -920,33 +920,20 @@ document.addEventListener("DOMContentLoaded", () => {
             const isBackgroundStale = isHiddenPlaying && (lastSent > 0) && (nowWall - lastSent > 1000);
 
             const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
-            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && (nowWall - window.lastBtDisconnectTime < 2500));
-            const isForegroundQuiet = (!window._lastForegroundResyncTime || (nowWall - window._lastForegroundResyncTime > 1500));
-            const isSafeToPulse = !isCallOrQuarantine && !isRecentBt && !window.mediaSessionDestroyed && !audioPlayer.switching && audioPlayer._pendingSeek === null && !window.wasPausedByUser && !audioPlayer.paused;
-            const isPulseDue = (!window._lastUnlockPulse || (nowWall - window._lastUnlockPulse > 15000));
-            const isAgeDue = (lastSent > 0) && (nowWall - lastSent > 1000);
-            const shouldPulseHidden = isHiddenPlaying && isSafeToPulse && isForegroundQuiet && isPulseDue && isAgeDue;
 
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine) || isBackgroundStale || shouldPulseHidden) {
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine) || isBackgroundStale) {
                 if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
                     window._forceNextPosition = true;
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        if (typeof document !== 'undefined' && document.hidden && typeof window.hiddenPlayingPulse === 'function') {
-                            window.hiddenPlayingPulse(ct, audioPlayer.duration);
-                        } else if (navigator.mediaSession.playbackState !== 'playing') {
+                        if (navigator.mediaSession.playbackState !== 'playing') {
                             navigator.mediaSession.playbackState = 'playing';
                         }
-                    }
-                } else if (shouldPulseHidden) {
-                    window._forceNextPosition = true;
-                    if (typeof window.hiddenPlayingPulse === 'function') {
-                        window.hiddenPlayingPulse(ct, audioPlayer.duration);
                     }
                 } else if (isBackgroundStale) {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale || shouldPulseHidden);
+                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, (staleGap && !audioPlayer.paused) || isBackgroundStale);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
