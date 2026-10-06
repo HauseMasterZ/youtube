@@ -1,15 +1,12 @@
 
     function isPlaylistDataIdentical(a, b) {
+        if (a === b) return true;
         if (!a || !b || a.length !== b.length) return false;
         const len = a.length;
-        if (len === 0) return true;
-        if (a[0]?.id !== b[0]?.id) return false;
-        if (len > 1 && a[1]?.id !== b[1]?.id) return false;
-        if (a[len - 1]?.id !== b[len - 1]?.id) return false;
-        const mid = len >> 1;
-        if (a[mid]?.id !== b[mid]?.id) return false;
-        for (let i = 10; i < len; i += 50) {
-            if (a[i]?.id !== b[i]?.id) return false;
+        for (let i = 0; i < len; i++) {
+            const idA = Array.isArray(a[i]) ? a[i][0] : a[i]?.id;
+            const idB = Array.isArray(b[i]) ? b[i][0] : b[i]?.id;
+            if (idA !== idB) return false;
         }
         return true;
     }
@@ -89,30 +86,8 @@
         if (!Array.isArray(rawData)) return;
 
         const prevData = allDatabases[folderName];
-        if (isRevalidation && prevData && prevData.length === rawData.length) {
-            const getId = (item) => Array.isArray(item) ? item[0] : (item && item.id);
-            const len = rawData.length;
-            let sampleIdentical = true;
-            if (len > 0) {
-                if (prevData[0]?.id !== getId(rawData[0]) || prevData[len - 1]?.id !== getId(rawData[len - 1])) {
-                    sampleIdentical = false;
-                } else {
-                    const mid = len >> 1;
-                    if (prevData[mid]?.id !== getId(rawData[mid])) {
-                        sampleIdentical = false;
-                    } else {
-                        for (let i = 10; i < len; i += 50) {
-                            if (prevData[i]?.id !== getId(rawData[i])) {
-                                sampleIdentical = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-            if (sampleIdentical) {
-                return;
-            }
+        if (isRevalidation && prevData && isPlaylistDataIdentical(prevData, rawData)) {
+            return;
         }
 
         const loadId = ++currentPlaylistLoadId;
