@@ -63,11 +63,6 @@
             filteredIndices = indices;
         }
 
-        // View gate: data is already updated, do not touch DOM while ephemeral search is active.
-        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
-            return;
-        }
-
         const effectiveTotal = (totalCount > filteredIndices.length && !filterText) ? totalCount : filteredIndices.length;
         trackList.style.height = `${effectiveTotal * ITEM_HEIGHT}px`;
         if (!poolInitialized || trackList.querySelector('.track-skeleton')) {
@@ -92,19 +87,6 @@
 
     function applyNormalizedDataInChunks(rawData, folderName, isRevalidation = false) {
         if (!Array.isArray(rawData)) return;
-
-        const totalCount = rawData.length;
-        if (totalCount === 0) {
-            allDatabases[folderName] = [];
-            if (playlistSelect.value === folderName) {
-                currentPlaylistData = [];
-                trackList.style.display = 'none';
-                playlistMessage.style.display = 'block';
-                playlistMessage.textContent = 'Playlist is empty.';
-                playlistMessage.style.color = 'var(--text-secondary)';
-            }
-            return;
-        }
 
         const prevData = allDatabases[folderName];
         if (isRevalidation && prevData && prevData.length === rawData.length) {
@@ -134,6 +116,7 @@
         }
 
         const loadId = ++currentPlaylistLoadId;
+        const totalCount = rawData.length;
         const INITIAL_CHUNK = 60;
         const CHUNK_SIZE = 200;
 
@@ -171,12 +154,8 @@
                             indices[i] = { playlist: folderName, index: i };
                         }
                         filteredIndices = indices;
-                        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
-                            // Data update complete, view deferred to exitEphemeralSearch
-                        } else {
-                            trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                            renderVirtualTracks();
-                        }
+                        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                        renderVirtualTracks();
                     }
                 }
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
@@ -194,9 +173,6 @@
     }
 
     function loadPlaylist(folderName) {
-        if (typeof window !== 'undefined' && typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive() && typeof window.exitEphemeralSearch === 'function') {
-            window.exitEphemeralSearch(true);
-        }
         selectedSearchIndex = -1;
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);
@@ -244,16 +220,12 @@
         // 4. Direct Network Fetch with cache-busting timestamp and revalidation
         if (navigator.onLine !== false) {
             const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
-            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-            const fetchTimeout = controller ? setTimeout(() => controller.abort(), 8000) : null;
-
-            fetch(dbUrl, { cache: 'no-store', signal: controller ? controller.signal : undefined })
+            fetch(dbUrl, { cache: 'no-store' })
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
                 })
                 .then(rawData => {
-                    if (fetchTimeout) clearTimeout(fetchTimeout);
                     applyNormalizedDataInChunks(rawData, folderName, hasRendered);
                     hasRendered = true;
 
@@ -261,49 +233,13 @@
                         generateQueue(true, folderName);
                     }
                 })
-                .catch(async (err) => {
-                    if (fetchTimeout) clearTimeout(fetchTimeout);
+                .catch(err => {
                     if (!hasRendered) {
-                        if ('caches' in window) {
-                            try {
-                                const cleanUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
-                                const dbCache = await caches.open('yt-player-database').catch(() => null);
-                                const cached = (dbCache && await dbCache.match(cleanUrl)) || (await caches.match(cleanUrl));
-                                if (cached && !hasRendered) {
-                                    const rawData = await cached.json();
-                                    if (!hasRendered && Array.isArray(rawData) && rawData.length > 0) {
-                                        applyNormalizedDataInChunks(rawData, folderName, false);
-                                        hasRendered = true;
-                                        if (!globalActivePlaylist || queueIndex === -1) {
-                                            generateQueue(true, folderName);
-                                        }
-                                        return;
-                                    }
-                                }
-                            } catch (e) {}
-                        }
-
                         console.error("Failed to load playlist:", err);
                         trackList.style.display = 'none';
                         playlistMessage.style.display = 'block';
-                        playlistMessage.innerHTML = '';
-                        const msgText = document.createElement('div');
-                        msgText.textContent = 'Failed to load playlist database.';
-                        msgText.style.marginBottom = '12px';
-                        msgText.style.color = '#ff5555';
-
-                        const retryBtn = document.createElement('button');
-                        retryBtn.textContent = 'Retry';
-                        retryBtn.style.cssText = 'padding: 8px 18px; border-radius: 20px; border: 1px solid var(--accent-color, #ff4e4e); background: transparent; color: var(--text-primary, #fff); cursor: pointer; font-size: 14px;';
-                        retryBtn.onclick = () => {
-                            playlistMessage.innerHTML = '';
-                            playlistMessage.textContent = 'Loading...';
-                            playlistMessage.style.color = 'var(--text-secondary)';
-                            loadPlaylist(folderName);
-                        };
-
-                        playlistMessage.appendChild(msgText);
-                        playlistMessage.appendChild(retryBtn);
+                        playlistMessage.textContent = 'Failed to load playlist database.';
+                        playlistMessage.style.color = '#ff5555';
                     }
                 });
         }
@@ -726,7 +662,6 @@
         window.publishTrackMetadata = function(track, thumbUrl, originalIndex) {
             if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !track) return;
             window.lastPublishedTrackKey = track.id || track.title || null;
-            window._lastLockGapRepublish = Date.now();
             const fallbackIcon = typeof getPurpleNoteArtwork === 'function'
                 ? getPurpleNoteArtwork()
                 : "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%238c73ff'%3E%3Cpath d='M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z'/%3E%3C/svg%3E";
