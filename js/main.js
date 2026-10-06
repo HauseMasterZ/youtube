@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
+    let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
-    let lastTimeupdateFire = 0;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -26,13 +26,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 2800);
     }
 
-    function exitEphemeralSearch(silent = false) {
-        if (typeof window.isEphemeralSearchActive === 'function' && !window.isEphemeralSearchActive()) return;
-        if (typeof window.setSearchMode === 'function') {
-            window.setSearchMode('local');
-        } else {
-            window.searchMode = 'local';
-        }
+    function exitEphemeralSearch() {
+        if (searchMode !== 'ephemeral') return;
+        searchMode = 'local';
         if (remoteSearchAbortController) {
             remoteSearchAbortController.abort();
             remoteSearchAbortController = null;
@@ -54,12 +50,8 @@ document.addEventListener("DOMContentLoaded", () => {
             playlistMessage.style.color = 'var(--text-secondary)';
         }
         lastStartIndex = -1;
-        lastEndIndex = -1;
-        if (!silent) {
-            renderVirtualTracks();
-        }
+        renderVirtualTracks();
     }
-    window.exitEphemeralSearch = exitEphemeralSearch;
 
     function renderEphemeralError(query, message) {
         if (!ephemeralSearchContainer) return;
@@ -141,11 +133,6 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        if (typeof searchDebounceTimer !== 'undefined' && searchDebounceTimer) {
-            clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = null;
-        }
-
         if (remoteSearchAbortController) {
             remoteSearchAbortController.abort();
             remoteSearchAbortController = null;
@@ -153,11 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
         remoteSearchAbortController = new AbortController();
         const signal = remoteSearchAbortController.signal;
 
-        if (typeof window.setSearchMode === 'function') {
-            window.setSearchMode('ephemeral');
-        } else {
-            window.searchMode = 'ephemeral';
-        }
+        searchMode = 'ephemeral';
         trackList.style.display = 'none';
         playlistMessage.style.display = 'none';
         if (iconSearchGlass) iconSearchGlass.style.display = 'none';
@@ -230,13 +213,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     searchInput.addEventListener("input", (e) => {
-        if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) {
+        if (searchMode === 'ephemeral') {
             exitEphemeralSearch();
         }
         clearTimeout(searchDebounceTimer);
         searchDebounceTimer = setTimeout(() => {
-            searchDebounceTimer = null;
-            if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
             selectedSearchIndex = -1;
             const query = e.target.value.toLowerCase().trim();
             const currentPl = playlistSelect.value;
@@ -354,7 +335,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let scrollRafId = null;
     function scheduleVirtualRender() {
-        if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
         if (scrollRafId !== null) return;
         scrollRafId = window.requestAnimationFrame(() => {
             scrollRafId = null;
@@ -368,7 +348,6 @@ document.addEventListener("DOMContentLoaded", () => {
         clearTimeout(scrollSettleTimer);
         scrollSettleTimer = setTimeout(() => {
             isScrollingFast = false;
-            if (typeof window.isEphemeralSearchActive === 'function' && window.isEphemeralSearchActive()) return;
             lastStartIndex = -1;
             lastEndIndex = -1;
             renderVirtualTracks();
@@ -688,19 +667,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(true);
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
-            if (!audioPlayer.switching && audioPlayer._pendingSeek === null && !window.isCallActive && !(typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) && !window.mediaSessionDestroyed) {
-                window._forceNextPosition = true;
-                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
-            }
         }
     });
 
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
-
-        lastTimeupdateFire = 0;
-        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
 
         setPlayUI(false);
         if (hasMediaSession) {
@@ -731,6 +702,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
+                // Reset the 1Hz timeupdate gate after updateTimeUI so the first post-unlock
+                // timeupdate emits a fresh position immediately instead of
+                // being swallowed when it rounds to the pre-lock second.
                 lastRenderTime = -1;
 
                 // Re-sync MediaSession state when PWA is foregrounded
@@ -804,16 +778,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    window.addEventListener("pageshow", () => {
-        if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
-            updateTimeUI(audioPlayer.currentTime);
-            lastRenderTime = -1;
-            if (typeof resyncMediaSessionOnForeground === 'function') {
-                resyncMediaSessionOnForeground('pageshow-playing');
-            }
-        }
-    });
-
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
@@ -871,8 +835,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
-        lastTimeupdateFire = 0;
-        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -905,38 +867,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            // Self-heal for lock/Doze gaps where the JS event loop was suspended.
-            // Inter-arrival delta between consecutive timeupdates measures true loop
-            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
-            const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
-            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
-            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
-            lastTimeupdateFire = nowMonotonic;
-            if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
-            const staleGap = (eventDelta > 1200);
-            const nowWall = Date.now();
-            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && audioPlayer._pendingSeek === null);
-            const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
-            const isRecentBt = (typeof window.lastBtDisconnectTime === 'number' && (nowWall - window.lastBtDisconnectTime < 2500));
-            const isSafeToPulse = !isCallOrQuarantine && !isRecentBt && !window.mediaSessionDestroyed && !audioPlayer.switching && audioPlayer._pendingSeek === null && !window.wasPausedByUser && !audioPlayer.paused;
-            const lastPulse = (typeof window !== 'undefined' && window._lastPulseAt) || 0;
-            const isPulseDue = isHiddenPlaying && isSafeToPulse && (nowWall - lastPulse > 15000);
-            const shouldPulse = isHiddenPlaying && isSafeToPulse && (staleGap || isPulseDue);
-
-            if (shouldPulse && typeof window.hiddenPlayingPulse === 'function') {
-                window.hiddenPlayingPulse(ct, audioPlayer.duration);
+            if (roundedSec !== lastRenderTime) {
                 updateTimeUI(ct);
-            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused && !isCallOrQuarantine)) {
-                if (staleGap && !audioPlayer.paused && !isCallOrQuarantine) {
-                    window._forceNextPosition = true;
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        if (navigator.mediaSession.playbackState !== 'playing') {
-                            navigator.mediaSession.playbackState = 'playing';
-                        }
-                    }
-                }
-                updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, staleGap && !audioPlayer.paused);
+                updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
@@ -952,8 +885,6 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
-        lastTimeupdateFire = 0;
-        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;

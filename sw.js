@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v198';
+const CACHE_NAME = 'yt-player-cache-v144';
 
 const CORE_ASSETS = [
     './',
@@ -28,14 +28,13 @@ self.addEventListener('install', (event) => {
 });
 
 const THUMBS_CACHE = 'yt-player-thumbs';
-const DB_CACHE = 'yt-player-database';
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE && cacheName !== DB_CACHE) {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -164,7 +163,7 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. Database JSON: True Stale-While-Revalidate Strategy with persistent DB cache
+    // 3. Database JSON: True Stale-While-Revalidate Strategy
     if (event.request.url.includes('_Playlist_Database.json')) {
         const cleanUrl = event.request.url.split('?')[0];
         // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network and update cache
@@ -173,22 +172,21 @@ self.addEventListener('fetch', (event) => {
                 fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
-                        caches.open(DB_CACHE).then(cache => cache.put(cleanUrl, clone));
+                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
                     }
                     return response;
-                }).catch(() => caches.open(DB_CACHE).then(cache => cache.match(cleanUrl)).then(res => res || caches.match(cleanUrl)))
+                }).catch(() => caches.match(cleanUrl))
             );
             return;
         }
 
         // Standard request: Instant cached response with guaranteed background network revalidation (SWR)
         event.respondWith(
-            caches.open(DB_CACHE).then(async (dbCache) => {
-                const cached = (await dbCache.match(cleanUrl)) || (await caches.match(cleanUrl));
+            caches.match(cleanUrl).then(cached => {
                 const networkFetch = fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
-                        dbCache.put(cleanUrl, clone);
+                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
                     }
                     return response;
                 }).catch(() => null);
@@ -197,7 +195,7 @@ self.addEventListener('fetch', (event) => {
                     event.waitUntil(networkFetch);
                     return cached;
                 }
-                return networkFetch.then(res => res || dbCache.match(cleanUrl) || caches.match(cleanUrl));
+                return networkFetch.then(res => res || caches.match(cleanUrl));
             })
         );
         return;
