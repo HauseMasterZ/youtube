@@ -614,13 +614,8 @@
             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
             if (isPaused) {
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    // Canonical order: metadata first, declared state second,
-                    // position last. A fresh MediaMetadata object rebinds the
-                    // native session token, so a state write issued before the
-                    // rebind lands on the stale token and SystemUI falls back
-                    // to its default (playing), leaving the wave animating
-                    // after a Mode 2 to Mode 1 switch while paused.
-                    if (typeof republishMediaMetadata === 'function') {
+                    const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
+                    if (needsRebind && typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -648,7 +643,7 @@
                             if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
                             if (!audioPlayer.paused && !window.wasPausedByUser) return;
                             const anchorEl = document.getElementById("live-stream-anchor");
-                            if (anchorEl) {
+                            if (anchorEl && (anchorEl.srcObject || anchorEl.getAttribute('src') || !anchorEl.paused)) {
                                 try {
                                     const stream = anchorEl.srcObject;
                                     if (stream && typeof stream.getAudioTracks === 'function') {
@@ -878,15 +873,14 @@
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
-            // Definitive unlock anchor: ALWAYS re-anchor SystemUI interpolator after
-            // Keyguard rebind. The ecef5bd skip-healthy optimization is the freeze:
-            // SystemUI recreates MediaControlPanel on unlock with a 5s-stale
-            // PlaybackStateCompat updateTime, and same-state rewrites are no-ops to
-            // its observers. A fresh metadata token plus forced position with a new
-            // updateTime restarts SquigglyProgress. rAF is throttled across
-            // lock/unlock so write synchronously plus one deferred burst.
+            // Foreground re-anchor: When metadata is healthy and unchanged, do NOT
+            // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
+            // resets SquigglyProgress and triggers an 860ms ValueAnimator (0f->1f wave
+            // height expansion) that freezes the wave animation for ~1s on unlock.
+            // Synchronous forced position update anchors updateTime immediately without
+            // recreating the native MediaControlPanel binding.
             try {
-                if (typeof republishMediaMetadata === 'function') {
+                if (needsRebind && typeof republishMediaMetadata === 'function') {
                     republishMediaMetadata();
                 }
             } catch (e) {}
