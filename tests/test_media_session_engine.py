@@ -923,5 +923,37 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'lastRenderTime\s*=\s*-1;[\s\S]*?updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);'
         )
 
+    def test_stop_focus_probe_unloads_element(self):
+        """stopFocusProbe unbinds probe element and clears focusProbePrimed"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+stopFocusProbe\s*\(\s*\)\s*\{[\s\S]*?probeEl\.srcObject\s*=\s*null;[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);[\s\S]*?focusProbePrimed\s*=\s*false;'
+        )
+
+    def test_update_media_session_position_stability_guards(self):
+        """updateMediaSessionPosition guards against rapid same-position and mode1-paused redundant writes"""
+        self.assertRegex(
+            self.ms_content,
+            r'Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'window\.playbackMode\s*===\s*[\'"]mode1[\'"][\s\S]*?Math\.abs\(pos\s*-\s*_lastSentPosition\)\s*<\s*0\.25'
+        )
+
+    def test_resync_media_session_skips_healthy_playing_rewrites(self):
+        """resyncMediaSessionOnForeground skips state and position rewrites on uninterrupted playing sessions"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(!isPaused\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?return;\s*\}'
+        )
+
+    def test_settle_mode1_paused_unbinds_focus_probe(self):
+        """settleMode1Paused unbinds focus-probe element in settle passes"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+settleMode1Paused\s*=\s*\(\)\s*=>\s*\{[\s\S]*?focus-probe[\s\S]*?probeEl\.removeAttribute\([\'"]src[\'"]\);[\s\S]*?probeEl\.load\(\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()
