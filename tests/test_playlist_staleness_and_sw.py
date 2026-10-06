@@ -33,8 +33,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v144 to purge stale caches."""
-        self.assertIn("yt-player-cache-v144", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v145 to purge stale caches."""
+        self.assertIn("yt-player-cache-v145", self.sw_content)
 
     def test_sw_database_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate with waitUntil for database requests."""

@@ -701,11 +701,8 @@ document.addEventListener("DOMContentLoaded", () => {
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
             if (!audioPlayer.paused) {
-                updateTimeUI(Math.floor(audioPlayer.currentTime));
-                // Reset the 1Hz timeupdate gate after updateTimeUI so the first post-unlock
-                // timeupdate emits a fresh position immediately instead of
-                // being swallowed when it rounds to the pre-lock second.
                 lastRenderTime = -1;
+                updateTimeUI(Math.floor(audioPlayer.currentTime));
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
