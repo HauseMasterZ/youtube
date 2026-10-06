@@ -224,12 +224,19 @@
             stopAnchorHeartbeat();
         }
         const anchorEl = document.getElementById("live-stream-anchor");
+        try {
+            const stream = (anchorEl && anchorEl.srcObject) || (liveAudioDestination && liveAudioDestination.stream);
+            if (stream && typeof stream.getAudioTracks === 'function') {
+                stream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+            }
+        } catch (e) {}
         if (anchorEl) {
             try {
                 _isInternalAnchorStop = true;
                 anchorEl.pause();
                 anchorEl.srcObject = null;
                 anchorEl.removeAttribute('src');
+                anchorEl.load();
             } catch (e) {} finally {
                 _isInternalAnchorStop = false;
             }
@@ -624,12 +631,21 @@
                     // Post-settle re-assert: anchor teardown pauses the anchor
                     // element asynchronously after this tail runs. Re-pin the
                     // honest paused state plus a fresh position once those
-                    // in-flight pause events have settled, resilient to anchor teardown.
+                    // in-flight pause events have settled, resilient to native player teardown.
                     const settleMode1Paused = () => {
                         try {
                             if (window.playbackMode !== 'mode1') return;
                             if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
                             if (!audioPlayer.paused && !window.wasPausedByUser) return;
+                            const anchorEl = document.getElementById("live-stream-anchor");
+                            if (anchorEl) {
+                                try {
+                                    const stream = anchorEl.srcObject;
+                                    if (stream && typeof stream.getAudioTracks === 'function') {
+                                        stream.getAudioTracks().forEach(t => { try { t.stop(); } catch (e) {} });
+                                    }
+                                } catch (e) {}
+                            }
                             if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
                                 navigator.mediaSession.playbackState = 'paused';
                                 const d3 = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
@@ -638,9 +654,9 @@
                             }
                         } catch (e) {}
                     };
-                    setTimeout(settleMode1Paused, 50);
-                    setTimeout(settleMode1Paused, 150);
-                    setTimeout(settleMode1Paused, 300);
+                    setTimeout(settleMode1Paused, 200);
+                    setTimeout(settleMode1Paused, 700);
+                    setTimeout(settleMode1Paused, 1500);
                 }
                 if (newMode === 'mode2' && typeof reassertSpoofBurst === 'function') {
                     reassertSpoofBurst();
@@ -659,6 +675,9 @@
     window.togglePlaybackMode = togglePlaybackMode;
     window.detectPlaybackModeShortcut = togglePlaybackMode; // Backward compatibility alias
 
+    let _lastSentPosition = -1;
+    let _lastSentTimestamp = 0;
+
     // MediaSession Position State Management
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
@@ -673,6 +692,16 @@
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
+                const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
+
+                // Monotonic position guard: drop backwards position jumps (> 0.5s)
+                // during live uninterrupted playback caused by thawed UI-thread clock reads.
+                // Backwards position discontinuities cancel Android SystemUI's SquigglyProgress wave animator.
+                if (!isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                    if (pos < _lastSentPosition - 0.5 && (Date.now() - _lastSentTimestamp < 3000)) {
+                        return;
+                    }
+                }
 
                 let rate;
                 if (isBuffering) {
@@ -693,6 +722,8 @@
                 } else if (isForcedRateValid && forcedRate > 0) {
                     rate = forcedRate;
                 } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
+                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
+                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
                     rate = 1.0;
                 } else {
                     rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
@@ -706,6 +737,11 @@
                         playbackRate: validRate,
                         position: validPos
                     });
+                    _lastSentPosition = validPos;
+                    _lastSentTimestamp = Date.now();
+                } else if (isSeeking || isPaused) {
+                    _lastSentPosition = Math.max(0, pos);
+                    _lastSentTimestamp = Date.now();
                 }
             } catch (e) {
                 // Ignore transient errors
@@ -790,7 +826,6 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
-            if (audioPlayer) audioPlayer._isBufferStalled = false;
             navigator.mediaSession.playbackState = 'playing';
         } else {
             navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -799,29 +834,6 @@
 
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
         updateMediaSessionPosition(audioPlayer.currentTime, dur);
-
-        if (!isPaused) {
-            // Multi-phase follower: the immediate snapshot above may carry a stale
-            // currentTime (UI thread read before the media pipeline re-syncs
-            // after unlock) and a metadata rebind drops the position bound to
-            // the old token. Re-read fresh on followers with an explicit
-            // live rate so SystemUI restarts interpolation without a gap.
-            // Fast 80ms tick catches pipeline thaw; 250ms catches the first settled frame;
-            // 600ms bridges the 1Hz timeupdate gate until the next second boundary.
-            const syncFollower = () => {
-                try {
-                    if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching
-                        && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        const d = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                        const r = (audioPlayer && audioPlayer.playbackRate) || 1.0;
-                        updateMediaSessionPosition(audioPlayer.currentTime, d, r);
-                    }
-                } catch (e) {}
-            };
-            setTimeout(syncFollower, 80);
-            setTimeout(syncFollower, 250);
-            setTimeout(syncFollower, 600);
-        }
     }
     window.resyncMediaSessionOnForeground = resyncMediaSessionOnForeground;
 
