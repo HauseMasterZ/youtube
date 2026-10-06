@@ -776,6 +776,18 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    // pageshow covers bfcache restores and lock-screen foregrounds where
+    // visibilitychange ordering is unreliable. Timeupdate self-heal above
+    // covers unlock-to-home where hidden stays true.
+    window.addEventListener("pageshow", () => {
+        if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
+            lastRenderTime = -1;
+            if (typeof resyncMediaSessionOnForeground === 'function') {
+                resyncMediaSessionOnForeground('pageshow-playing');
+            }
+        }
+    });
+
     // --- Mobile Mini Player Expand/Collapse Logic ---
     nowPlaying.addEventListener("click", (e) => {
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains("expanded")) {
@@ -865,7 +877,20 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
-            if (roundedSec !== lastRenderTime) {
+            // Self-heal for lock gaps without visibilitychange (unlock to home
+            // screen leaves document.hidden true, so unlock-playing never runs).
+            // If SystemUI interpolator starved over 3s, force one anchor even
+            // when the second is unchanged.
+            let staleGap = false;
+            try {
+                if (typeof window.getLastPositionTimestamp === 'function') {
+                    staleGap = (Date.now() - window.getLastPositionTimestamp() > 3000);
+                }
+            } catch (e) {}
+            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+                if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
+                    window._forceNextPosition = true;
+                }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
             }
