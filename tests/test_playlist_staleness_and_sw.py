@@ -33,8 +33,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v148 to purge stale caches."""
-        self.assertIn("yt-player-cache-v148", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v149 to purge stale caches."""
+        self.assertIn("yt-player-cache-v149", self.sw_content)
 
     def test_sw_database_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate with waitUntil for database requests."""
@@ -51,9 +51,12 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertIn("fetch(dbUrl, { cache: 'no-store' })", self.playback_content)
 
     def test_playback_has_robust_change_detection(self):
-        """playback.js must define isPlaylistDataIdentical and use it in applyPlaylistData."""
+        """playback.js must define isPlaylistDataIdentical and use it in applyPlaylistData and applyNormalizedDataInChunks."""
         self.assertIn("isPlaylistDataIdentical", self.playback_content)
         self.assertIn("isPlaylistDataIdentical(prevData, normalizedData)", self.playback_content)
+        self.assertIn("isPlaylistDataIdentical(prevData, rawData)", self.playback_content)
+        # Ensure no sparse sampling skip (such as i += 50) is used
+        self.assertNotIn("i += 50", self.playback_content)
 
     def test_main_warm_remaining_playlists_busts_cache(self):
         """main.js warmRemainingPlaylists must append timestamp and no-store."""

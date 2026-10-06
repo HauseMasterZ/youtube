@@ -91,17 +91,17 @@ class TestSettingsUI(unittest.TestCase):
         self.assertEqual(matches, [], f"Found emojis in ui.js: {matches}")
 
     def test_playlist_select_options_configuration(self):
-        """updatePlaylistSelectOptions defines __settings__ and INSTALL_APP for desktop and __settings__ for mobile"""
+        """updatePlaylistSelectOptions defines HARD_RELOAD/INSTALL_APP for desktop and __settings__ for mobile"""
         self.assertRegex(self.main_content, r'function\s+updatePlaylistSelectOptions\s*\(\s*\)')
-        self.assertNotIn('HARD_RELOAD', self.main_content)
-        self.assertNotIn('Reload Playlists', self.main_content)
+        self.assertIn('HARD_RELOAD', self.main_content)
+        self.assertIn('Reload Playlists', self.main_content)
         self.assertIn('INSTALL_APP', self.main_content)
         self.assertIn('Install App', self.main_content)
         self.assertIn('Settings', self.main_content)
         self.assertIn('__settings__', self.main_content)
         self.assertRegex(
             self.main_content,
-            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?__settings__[\s\S]*?\}\s*else\s*\{[\s\S]*?__settings__[\s\S]*?INSTALL_APP[\s\S]*?\}'
+            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?__settings__[\s\S]*?\}\s*else\s*\{[\s\S]*?HARD_RELOAD[\s\S]*?INSTALL_APP[\s\S]*?\}'
         )
 
     def test_playlist_select_settings_interceptor(self):
@@ -207,22 +207,27 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_app_action_buttons_wired(self):
-        """btn-modal-install is wired to app actions and closes modal, btn-modal-reload is removed"""
-        self.assertNotIn('btn-modal-reload', self.main_content)
+        """btn-modal-reload and btn-modal-install are wired to app actions and close modal"""
+        self.assertIn('btn-modal-reload', self.main_content)
         self.assertIn('btn-modal-install', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'btn-modal-reload[\s\S]*?addEventListener\(\s*[\'"]click[\'"]'
+        )
         self.assertRegex(
             self.main_content,
             r'btn-modal-install[\s\S]*?addEventListener\(\s*[\'"]click[\'"]'
         )
 
-    def test_autonomous_silent_refresh_on_visibilitychange(self):
-        """visibilitychange event triggers reloadPlaylistDatabases when visible and interval passes"""
+    def test_playlist_select_hard_reload_interceptor(self):
+        """playlistSelect change event intercepts HARD_RELOAD and reloads databases"""
         self.assertRegex(
             self.main_content,
-            r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"]\s*,\s*\(\s*\)\s*=>\s*\{'
+            r'if\s*\(\s*e\.target\.value\s*===\s*[\'"]HARD_RELOAD[\'"][\s\S]*?reloadPlaylistDatabases\(\)'
         )
-        self.assertIn('document.visibilityState === "visible"', self.main_content)
-        self.assertIn('reloadPlaylistDatabases()', self.main_content)
+        vc_match = re.search(r'addEventListener\(\s*["\']visibilitychange["\']\s*,\s*\(\s*\)\s*=>\s*\{([\s\S]*?)\}\);', self.main_content)
+        if vc_match:
+            self.assertNotIn('reloadPlaylistDatabases', vc_match.group(1))
 
     def test_media_session_position_type_safety(self):
         """updateMediaSessionPosition in mediaSession.js guards forcedPosition and forcedDuration types"""

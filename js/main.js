@@ -1168,7 +1168,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
             playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option>`;
         } else {
-            playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option><option value="INSTALL_APP">Install App</option>`;
+            playlistSelect.innerHTML = `${playlistOptions}<option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option>`;
         }
         if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(currentVal)) {
             playlistSelect.value = currentVal;
@@ -1179,6 +1179,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
+        if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
+            playlistSelect.value = lastValidPlaylist;
+            await reloadPlaylistDatabases();
+            return;
+        }
+
         if (e.target.value === "INSTALL_APP") {
             playlistSelect.value = lastValidPlaylist;
             await installPwaApp();
@@ -1247,14 +1253,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }, { passive: true });
     }
 
-    // --- Autonomous Silent Playlist Refresh on App Foregrounding ---
-    let lastSilentDbRefresh = Date.now();
-    document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "visible" && (Date.now() - lastSilentDbRefresh > 60000)) {
-            lastSilentDbRefresh = Date.now();
-            reloadPlaylistDatabases();
-        }
-    });
 
     const btnDownloadPlaylist = document.getElementById("btn-download-playlist");
     if (btnDownloadPlaylist) {
@@ -1388,6 +1386,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btTimeoutContainer = document.getElementById("bt-timeout-container");
     const btTimeoutSelect = document.getElementById("bt-timeout-select");
     const btTimeoutCustom = document.getElementById("bt-timeout-custom");
+    const btnModalReload = document.getElementById("btn-modal-reload");
     const btnModalInstall = document.getElementById("btn-modal-install");
 
     function openSettingsModal() {
@@ -1510,6 +1509,13 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         btTimeoutCustom.addEventListener("input", handleCustomTimeoutInput);
         btTimeoutCustom.addEventListener("change", handleCustomTimeoutInput);
+    }
+
+    if (btnModalReload) {
+        btnModalReload.addEventListener("click", () => {
+            reloadPlaylistDatabases();
+            closeSettingsModal();
+        });
     }
 
     if (btnModalInstall) {
