@@ -7,6 +7,9 @@
             const idA = Array.isArray(a[i]) ? a[i][0] : a[i]?.id;
             const idB = Array.isArray(b[i]) ? b[i][0] : b[i]?.id;
             if (idA !== idB) return false;
+            const durA = Array.isArray(a[i]) ? a[i][3] : a[i]?.duration;
+            const durB = Array.isArray(b[i]) ? b[i][3] : b[i]?.duration;
+            if (durA !== durB) return false;
         }
         return true;
     }

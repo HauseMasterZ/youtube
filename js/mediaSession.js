@@ -807,6 +807,9 @@
     function republishMediaMetadata() {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && navigator.mediaSession) {
             try {
+                const forceBreakDedup = (arguments && arguments[0] === true) || (typeof window._forceNextMetadata !== 'undefined' && window._forceNextMetadata === true);
+                if (typeof window._forceNextMetadata !== 'undefined') window._forceNextMetadata = false;
+
                 const current = navigator.mediaSession.metadata;
                 if (current && current.title) {
                     lastValidMetadata = {
@@ -815,6 +818,30 @@
                         album: current.album,
                         artwork: current.artwork
                     };
+                }
+
+                if (forceBreakDedup) {
+                    try {
+                        navigator.mediaSession.metadata = null;
+                    } catch (e) {}
+                    if (typeof allDatabases !== 'undefined' && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && allDatabases[globalActivePlaylist][globalActiveOriginalIndex] && typeof window.publishTrackMetadata === 'function') {
+                        const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                        const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
+                        window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
+                        return;
+                    }
+                    if (lastValidMetadata && lastValidMetadata.title) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: lastValidMetadata.title,
+                            artist: lastValidMetadata.artist,
+                            album: lastValidMetadata.album,
+                            artwork: lastValidMetadata.artwork
+                        });
+                        return;
+                    }
+                }
+
+                if (current && current.title) {
                     navigator.mediaSession.metadata = new MediaMetadata({
                         title: current.title,
                         artist: current.artist,
@@ -978,6 +1005,19 @@
                             // Single deferred resume: let telecom -> media routing settle before opening the stream (no dual-fire pop)
                             setTimeout(() => {
                                 if (!window.isCallActive && window.wasPlayingBeforeCall && !window.wasPausedByUser && audioPlayer && audioPlayer.paused) {
+                                    if (typeof window.invalidatePositionCache === 'function') window.invalidatePositionCache();
+                                    window._forceNextPosition = true;
+                                    // Resurrect evicted MediaNotification card after long-call OS eviction.
+                                    // Passing true breaks Chromium C++ SetMetadata deduplication by setting metadata to null
+                                    // first, forcing OnMediaSessionMetadataChanged Mojo IPC to Android MediaNotificationManager.
+                                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata(true);
+                                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                                        navigator.mediaSession.playbackState = 'playing';
+                                    }
+                                    const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                    if (typeof updateMediaSessionPosition === 'function') {
+                                        updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                                    }
                                     audioPlayer.play().catch(() => {});
                                 }
                             }, 150);

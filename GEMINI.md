@@ -57,27 +57,45 @@
 ## 9. Strict Zero-Emoji Policy
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
 
-## 10. Android SystemUI & HyperOS Wave Animation Invariant
-- In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `heightFraction = 0.0`.
-- Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the existing media view without rebinding. Because `field` remains `true` in `SquigglyProgress.animate`, any subsequent update with `playbackState = 'playing'` hits `if (field == value) return`, leaving the squiggly wave permanently frozen flat if no state toggle is delivered.
-- Re-publishing identical `MediaMetadata` fails to unstick the wave because Chromium C++ (`MediaSessionImpl::SetMetadata`) performs `if (metadata_ == metadata) return;`. Re-assigning identical metadata sends zero Mojo IPC to Android, so SystemUI never re-runs `bindPlayer()`.
-- Empirical verification has demonstrated that `setPositionState` alone cannot restart `heightAnimator` because position updates do not touch `SquigglyProgress.animate`.
-- The verified self-healing recovery mechanism is calibrated `hiddenPlayingPulse(pos, dur)`:
-  1. Leg 1 (0ms): `playbackState = 'paused'` dispatches Mojo `STATE_PAUSED` -> Android SystemUI `SquigglyProgress.animate = false`, resetting `field = false`.
-  2. Leg 2 (after 220ms): `playbackState = 'playing'` dispatches Mojo `STATE_PLAYING` -> Android SystemUI `SquigglyProgress.animate = true`. Because `field` (`false`) != `value` (`true`), `SquigglyProgress` launches `heightAnimator` (800ms expansion ramp from 0.0 to 1.0).
-  3. Total recovery timeline: 220ms dwell + 800ms expansion = 1020ms (~1.0s). The squiggly wave is flat for ~1s, then self-heals and animates properly.
-  4. 220ms dwell survives Android SystemUI's 150ms message queue debounce while remaining within Bluetooth AVRCP debounce thresholds to prevent car stereo audio interruptions.
-  5. Audio playback is completely uninterrupted: `<audio>` is never paused; only the Web MediaSession declared property is pulsed.
-  6. Safety guards: Strictly gated by call active, post-call quarantine, recent BT disconnect (<2500ms), and 10s pulse cooldown (`_lastPulseAt`).
+## 10. Android SystemUI & HyperOS Media Session Stability Baseline (Commit 05eae74)
+- Permanent Baseline Lock: The media session engine is permanently locked to verified baseline commit `05eae74` (`fix(mediasession): guard metadata rebind on unlock and mode switch to prevent wave freeze and animation leaks`).
+- Root Cause of Permanent Wave Freeze:
+  - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), re-assigning `navigator.mediaSession.metadata` triggers `MediaDataManager` and `MediaControlPanel.bindPlayer()`.
+  - This completely destroys the `SquigglyProgress` view and launches an 860ms `heightAnimator` expansion (`0.0f -> 1.0f`).
+  - Re-triggering metadata rebinds on screen unlock or inside periodic timers cancels `heightAnimator` repeatedly, permanently locking `heightFraction = 0.0f` (flat frozen line).
+- The Zero Metadata Churn Invariant:
+  - `republishMediaMetadata()` MUST strictly be gated behind `shouldRepublishMetadata()`.
+  - When track metadata is already fresh and identical, `navigator.mediaSession.metadata` must NEVER be re-assigned on foreground, on screen wake, or inside `timeupdate`.
+  - Only genuine track ID changes or recovered destroyed sessions may set metadata.
+- Homescreen ~1.1s Self-Healing Latency:
+  - Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) leaves `document.hidden = true` (visibilitychange does not fire).
+  - The background `timeupdate` handler detects `staleGap` (`Date.now() - getLastPositionTimestamp() > 3000ms`).
+  - On the first post-wake tick (~1.0s to 1.1s), `main.js` sets `window._forceNextPosition = true` and dispatches `updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1)`.
+  - Android SystemUI receives the fresh anchor, updates its interpolator, and resumes wave animation cleanly within ~1.1s.
+- Prohibition of Synthetic State Flapping:
+  - Strictly FORBIDDEN to introduce artificial playbackState pulses (such as `hiddenPlayingPulse`), synthetic pause/play toggles, or fake lock-gap metadata rebinds.
+  - Previous churn cycles proved that synthetic pulsing risks audio pops, Bluetooth AVRCP hiccups, and state desync. The ~1.1s natural clock tick recovery is the intentional, verified, permanent design.
+- Documented Nuances of Baseline 05eae74:
+  1. ~1.1s Initial Homescreen Freeze: Normal, expected, self-healing behavior before first background clock tick.
+  2. Mode 1 Paused Settle Ripple: On specific aggressive OEM skins (e.g. OneUI/ColorOS), `settleMode1Paused` passes (200ms, 700ms, 1500ms) with `rate: 1.0` can cause a brief ~0.5s ripple before resting flat. Does not affect active playback.
+  3. Rapid Unlock Cycling: Rapid repeated power button pressing within <1000ms triggers resync passes without cooldown throttling.
 
-## 11. Zero Metadata Churn & Homescreen Unlock Recovery Invariant
-- Zero Continuous Metadata Churn Rule: Unthrottled re-assignment of `navigator.mediaSession.metadata` triggers Android `MediaDataManager` and `MediaControlPanel.bindPlayer()` repeatedly. Metadata MUST NEVER be republished in steady-state `timeupdate` or on in-app foreground when track metadata is already fresh.
-- Homescreen Self-Healing Baseline (~1s Wave Recovery): Direct in-display fingerprint unlock to launcher homescreen reuses the existing panel with `heightFraction` collapsed to 0.0. The baseline employs `staleGap = (eventDelta > 1200)` and 15s background cadence `isPulseDue` in `main.js` `timeupdate`:
-  1. Lock Gap Wake: When the screen turns off and is unlocked via fingerprint, the first `timeupdate` tick detects `staleGap = (eventDelta > 1200)` and triggers `hiddenPlayingPulse(ct, audioPlayer.duration)`.
-  2. Periodic Background Cadence: If locked for <1200ms, `isPulseDue` (15s cadence while `document.hidden`) guarantees the wave recovers automatically.
-  3. Routine Playback: When not pulsing, standard 1Hz `roundedSec !== lastRenderTime` dispatches `updateMediaSessionPosition` normally.
-- In-App Instant Wave Resume: Foreground resynchronization (`resyncMediaSessionOnForeground`) dispatches a single `requestAnimationFrame` forced position update with `window._forceNextPosition = true` and stamps `_lastPulseAt = now`, resuming the squiggly wave instantly with 0ms delay.
-- Monotonic Stability Guards: Monotonic guards prevent backward jumps (>0.5s within 3000ms), deduplicate identical positions (<0.25s within 1500ms), and drop wild forward jumps (>3.0s within 1500ms). Bypassed exactly once when `force === true` or `window._forceNextPosition === true` for foreground resync or genuine resume.
+## 11. Dual Unlock Recovery & Monotonic Position Guards
+- In-App Instant Wave Resume: When unlocked directly into the app, `visibilitychange` fires and `resyncMediaSessionOnForeground` executes immediately:
+  1. Synchronously dispatches `updateMediaSessionPosition(..., force=true)` with `window._forceNextPosition = true`.
+  2. Schedules a 250ms follower pass to guarantee SystemUI receives the position post wake-up jitter.
+  3. Resumes wave animation instantly.
+- Monotonic Position Guards:
+  1. Live playback drops backwards jumps (>0.5s within 3000ms), identical rewrites (<0.25s within 1500ms), and wild forward jumps (>3.0s within 1500ms).
+  2. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
+- Mode 2 Paused Micro-Rate Spoof:
+  1. Mode 2 paused strictly uses micro-rate `0.00001` with `playbackState = 'playing'` to freeze notification seekbar while keeping the card pinned on mobile.
+  2. Mode 1 paused strictly uses rate `1.0` with `playbackState = 'paused'`.
+- Post-Call Media Card Resurrection Invariant:
+  1. When an active call ends (in Mode 1 or Mode 2), Android SystemUI may have evicted or stripped the inactive notification card during the call.
+  2. Because Chromium C++ deduplicates identical metadata (`if (metadata_ == metadata) return;`), calling `republishMediaMetadata()` with identical fields sends zero Mojo IPC to Android.
+  3. The post-call resume branch explicitly calls `republishMediaMetadata(true)`, which resets `navigator.mediaSession.metadata = null` before re-publishing.
+  4. This busts Chromium's dedup cache, forces `OnMediaSessionMetadataChanged` Mojo IPC, and reliably resurrects the MediaNotification card in Android SystemUI without causing continuous churn during normal playback.
 
 ## 12. Absolute Prohibition of Git Write Operations
 - Under NO circumstances may Antigravity execute any Git write operation (including git commit, git push, git checkout -b, git branch, git merge, git rebase, git tag, or git reset against remote).
@@ -86,3 +104,8 @@
 ## 13. Frontend Codebase Architectural Decoupling Invariant
 - The entire codebase of the frontend repository must strictly NOT contain any architectural information, implementation details, credentials, or explicit naming regarding backend infrastructure, cloud servers, storage repositories, edge devices, or third-party backend instances anywhere.
 - All client-side communication must operate through generic API gateway and asset abstractions.
+
+## 14. Real-Time End-to-End Latency Contract (< 38s)
+- The overall ingestion pipeline from YouTube playlist track addition to frontend reflection is engineered and verified to complete in under 38.0 seconds (empirically achieved ~23.4s - 24.8s).
+- Frontend database loading supports atomic chunked streaming and cache-busted revalidation (`_Playlist_Database.json?t=...`), picking up new additions without requiring a hard PWA reload.
+
