@@ -35,7 +35,14 @@ The player supports two switchable audio engine modes persisted in `localStorage
 - **Media Controls Notification Resume**: When resuming playback via media controls (`play`, `pause`, `playpause`), handlers immediately re-assert 1.0x playback rate via `updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0)`.
 - **Call Hangup Auto-Resume**: On call termination (`devicechange`), playback automatically resumes if audio was actively playing before the call (`window.wasPlayingBeforeCall && !window.wasPausedByUser`). If playback was paused by the user prior to the call, it remains paused and ignores post-call automated AVRCP Bluetooth play events within 2500ms (`window.isPostCallQuarantine()`).
 
+### Media Session Stability Baseline (Commit 05eae74)
+- **Zero Metadata Churn Rule**: `republishMediaMetadata()` is strictly gated behind `shouldRepublishMetadata()`. Re-assigning identical metadata on unlock or inside `timeupdate` resets Android SystemUI's `MediaControlPanel` and permanently freezes `SquigglyProgress.kt` animation. Never re-assign metadata unless track ID changes.
+- **Homescreen ~1.1s Self-Healing Latency**: When unlocking directly to the launcher home screen (`document.hidden = true`), the squiggly wave naturally stays flat for ~1.0s until the first background `timeupdate` tick dispatches an anchor update with `window._forceNextPosition = true`. This resets the interpolator safely without audio dropouts.
+- **Prohibition of Synthetic State Flapping**: Do not re-introduce artificial playbackState pulses (e.g. `hiddenPlayingPulse`) or fake pause/play cycles. Natural clock tick recovery is the permanent verified design.
+- **Post-Call Card Resurrection**: When an active call ends, `devicechange` auto-resume calls `republishMediaMetadata(true)` which nulls metadata first to bust Chromium C++ SetMetadata deduplication, forcing `OnMediaSessionMetadataChanged` Mojo IPC to Android SystemUI to recreate the evicted card.
+
 ---
+
 
 ## 2. Offline Playlist Download Architecture
 

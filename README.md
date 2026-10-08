@@ -49,6 +49,7 @@
 ### Playback Engines (Settings)
 - **Standard (Battery Saver / Mode 1)**: Minimal battery consumption. When paused, media session is marked paused with rate `1.0`.
 - **Car & Bluetooth Mode (Mode 2)**: Prevents vehicle infotainment and Bluetooth headphone disconnects when paused by maintaining an active media session state and running a silent audio anchor loop on mobile.
+- **Media Session Stability (Baseline 05eae74)**: Strict Zero Metadata Churn invariant prevents Android SystemUI SquigglyProgress wave freezes. Direct homescreen unlock safely resumes wave animation via background 1Hz timeupdate anchors.
 - **Inactivity Auto-Kill Watchdog**: Configurable sleep timer (15m, 30m, 1h, 2h, custom 1-1440m, or never) that automatically disarms Mode 2 and pauses all playback after sustained pause inactivity.
 - **Hardware Button Combo**: Rapid double-tap of Next ↔ Prev within 1200ms on Bluetooth earbud/steering wheel controls toggles between Mode 1 and Mode 2.
 

@@ -577,11 +577,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*window\.wasPlayingBeforeCall\s*&&\s*!window\.wasPausedByUser[\s\S]*?audioPlayer\.play\(\)'
         )
         self.assertIn("window.isPostCallQuarantine = function()", self.state_content)
-        self.assertNotIn("isAutoResumeAfterCall", self.ms_content)
         self.assertRegex(
             self.ms_content,
             r'window\.isPostCallQuarantine\(\)'
         )
+        self.assertRegex(
+            self.ms_content,
+            r'republishMediaMetadata\(\s*true\s*\)'
+        )
+        self.assertIn("navigator.mediaSession.metadata = null;", self.ms_content)
 
     def test_action_handlers_guarded_against_active_call(self):
         """Action handlers return early when window.isCallActive is true"""
