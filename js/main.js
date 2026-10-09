@@ -1129,11 +1129,26 @@ document.addEventListener("DOMContentLoaded", () => {
             // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
             await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
                 const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
-                if (res.ok) {
-                    const rawData = await res.json();
-                    const freshData = normalizePlaylistData(rawData, pl);
-                    allDatabases[pl] = freshData;
+                try {
+                    const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
+                    if (res.ok) {
+                        const rawData = await res.json();
+                        if (Array.isArray(rawData) && rawData.length > 0) {
+                            const freshData = normalizePlaylistData(rawData, pl);
+                            allDatabases[pl] = freshData;
+                            if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                                storePlaylistDatabaseInAllCaches(pl, rawData);
+                            }
+                        }
+                    }
+                } catch (fetchErr) {
+                    // Offline fallback: keep existing in-memory database or load from persistent store
+                    if (!allDatabases[pl] && typeof getCachedPlaylistDatabase === 'function') {
+                        const cached = await getCachedPlaylistDatabase(pl);
+                        if (cached) {
+                            allDatabases[pl] = normalizePlaylistData(cached, pl);
+                        }
+                    }
                 }
             }));
 
@@ -1265,6 +1280,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
     const initialPl = playlistSelect.value;
+    if (typeof seedOfflineDatabases === 'function') {
+        seedOfflineDatabases();
+    }
     loadPlaylist(initialPl);
 
     // Desktop only: Background warm other playlists for instant tab switching & global search
@@ -1280,15 +1298,32 @@ document.addEventListener("DOMContentLoaded", () => {
         const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
         for (const pl of otherPlaylists) {
             if (allDatabases[pl]) continue;
-            fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
-                .then(r => r.ok ? r.json() : [])
-                .then(rawData => {
-                    allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                        window.rebuildCrossShuffleDeck();
+            if (typeof getCachedPlaylistDatabase === 'function') {
+                getCachedPlaylistDatabase(pl).then(cached => {
+                    if (cached && !allDatabases[pl]) {
+                        allDatabases[pl] = normalizePlaylistData(cached, pl);
+                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                            window.rebuildCrossShuffleDeck();
+                        }
                     }
-                })
-                .catch(() => {});
+                }).catch(() => {});
+            }
+            if (navigator.onLine !== false) {
+                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(rawData => {
+                        if (Array.isArray(rawData) && rawData.length > 0) {
+                            if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                                storePlaylistDatabaseInAllCaches(pl, rawData);
+                            }
+                            allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                                window.rebuildCrossShuffleDeck();
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
         }
     }
 
