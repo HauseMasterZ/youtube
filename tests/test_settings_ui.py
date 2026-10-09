@@ -36,6 +36,10 @@ class TestSettingsUI(unittest.TestCase):
         else:
             cls.headers_content = ''
 
+        index_path = os.path.join(base_dir, 'index.html')
+        with open(index_path, 'r', encoding='utf-8') as f:
+            cls.index_content = f.read()
+
     def test_no_emojis_in_dom_js(self):
         """Strictly zero emojis anywhere in js/dom.js"""
         emoji_pattern = re.compile(
@@ -300,12 +304,25 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_mobile_swipe_gesture_works_with_keyboard_open(self):
-        """playlistPanel touchend allows swipe even when searchInput is focused, clearing/blurring search on switch"""
+        """playlistSelectContainer touchend allows swipe even when searchInput is focused, clearing/blurring search on switch"""
         self.assertNotIn("if (document.activeElement === searchInput) return;", self.main_content)
         self.assertRegex(
             self.main_content,
-            r'playlistPanel\.addEventListener\(\s*[\'"]touchend[\'"][\s\S]*?searchInput\.blur\(\)[\s\S]*?playlistSelect\.dispatchEvent'
+            r'playlistSelectContainer\.addEventListener\(\s*[\'"]touchend[\'"][\s\S]*?searchInput\.blur\(\)[\s\S]*?playlistSelect\.dispatchEvent'
         )
+
+    def test_mobile_swipe_gesture_scoped_to_playlist_select_container_only(self):
+        """Mobile swipe to switch playlists is strictly scoped to playlist-select-container and never playlist-panel or playlist-container"""
+        self.assertIn('playlistSelectContainer.addEventListener("touchstart"', self.main_content)
+        self.assertIn('playlistSelectContainer.addEventListener("touchend"', self.main_content)
+        self.assertNotIn('playlistPanel.addEventListener("touchstart"', self.main_content)
+        self.assertNotIn('playlistPanel.addEventListener("touchend"', self.main_content)
+        self.assertNotIn('playlistContainer.addEventListener("touchstart"', self.main_content)
+        self.assertNotIn('playlistContainer.addEventListener("touchend"', self.main_content)
+        self.assertIn('id="playlist-select-container"', getattr(self, 'index_content', ''))
+        self.assertIn('const playlistSelectContainer = document.getElementById("playlist-select-container")', self.dom_content)
+        self.assertIn("#btn-download-playlist", self.main_content)
+        self.assertIn("#playlist-container", self.main_content)
 
     def test_playlist_switch_clears_and_unfocuses_search(self):
         """loadPlaylist, playFromPlaylist, and playlistSelect change listener clear and blur search"""

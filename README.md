@@ -8,7 +8,7 @@
 
 ## Features
 
-- **Playlist Management**: Load and switch between multiple playlists (`Gym`, `Driving`, `Songs`) seamlessly.
+- **Playlist Management**: Load and switch between multiple playlists (`Gym`, `Driving`, `Songs`) seamlessly, with horizontal swipe navigation scoped to the playlist selector on mobile.
 - **Playback Controls**: Play, pause, skip forward/backward, and seek within tracks.
 - **Dual Playback Engines**: Switch between Standard Battery Saver (Mode 1) and Car & Bluetooth Mode (Mode 2) with auto-kill inactivity watchdog.
 - **Full Offline Downloads**: One-click download of full playlists (audio tracks, thumbnails, and lyrics) with automated retry and verification.
@@ -61,13 +61,21 @@
 
 ---
 
-## Offline Download Architecture
+## Offline Architecture & Resilient Database Caching
 
+### One-Click Asset Downloads
 - **Bypass Service Worker (`?bypass=true`)**: Direct streaming to page memory and `CacheStorage` (`yt-player-media`), eliminating duplicate buffering and out-of-memory crashes in `sw.js`.
 - **Complete Asset Ingestion**: Downloads audio (`.webm`), album thumbnails (`.webp` into `yt-player-thumbs`), and lyrics (`.lrc` into `yt-player-media`) unconditionally.
 - **Exponential Backoff Retries**: Up to 3 retries per asset (300ms, 600ms, 1200ms) to resolve network glitches and CDN rate limits.
 - **Post-Download Verification**: Automatically verifies cache contents and performs a targeted recovery pass for missing tracks before finalizing status.
 - **Zero-GPU Progress Toast**: High-contrast, flat notification with `contain: layout paint` (0% GPU compositor cost, no `backdrop-filter`).
+
+### Resilient Database Offline Caching
+- **Dedicated Persistent Cache (`yt-player-databases`)**: Service worker activation cleanup preserves database caches, preventing cache version bumps (`v149` -> `v150`) from wiping offline catalogues.
+- **Dual-Tier Persistent Storage**: Combines Cache API with an IndexedDB mirror (`yt-player-offline-db`), maintaining offline catalogue availability even if browser cache quotas undergo eviction.
+- **Timeout Racing**: Network fetches race against a 6.0s - 6.5s timeout, guaranteeing immediate fallback to cached data in dead zones or flaky network conditions.
+- **Startup Pre-Seeding**: Background pre-seeding (`seedOfflineDatabases`) populates in-memory databases from IndexedDB on startup, enabling instantaneous offline tab switches and cross-shuffle queue generation.
+- **Actionable Offline Empty State**: Uncached playlists in offline conditions display an explicit offline indicator with a Retry action rather than an indefinite loading state.
 
 ---
 

@@ -1129,11 +1129,26 @@ document.addEventListener("DOMContentLoaded", () => {
             // 1. Fetch fresh JSON for all playlists concurrently with cache-busting timestamp
             await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
                 const dbUrl = `${baseUrl}/${pl}/_Playlist_Database.json`;
-                const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
-                if (res.ok) {
-                    const rawData = await res.json();
-                    const freshData = normalizePlaylistData(rawData, pl);
-                    allDatabases[pl] = freshData;
+                try {
+                    const res = await fetch(`${dbUrl}?t=${ts}`, { cache: 'no-store' });
+                    if (res.ok) {
+                        const rawData = await res.json();
+                        if (Array.isArray(rawData) && rawData.length > 0) {
+                            const freshData = normalizePlaylistData(rawData, pl);
+                            allDatabases[pl] = freshData;
+                            if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                                storePlaylistDatabaseInAllCaches(pl, rawData);
+                            }
+                        }
+                    }
+                } catch (fetchErr) {
+                    // Offline fallback: keep existing in-memory database or load from persistent store
+                    if (!allDatabases[pl] && typeof getCachedPlaylistDatabase === 'function') {
+                        const cached = await getCachedPlaylistDatabase(pl);
+                        if (cached) {
+                            allDatabases[pl] = normalizePlaylistData(cached, pl);
+                        }
+                    }
                 }
             }));
 
@@ -1210,23 +1225,23 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
-    // --- Mobile Horizontal Swipe on Playlist Panel to Switch Playlists ---
-    const playlistPanel = document.querySelector('.playlist-panel');
-    if (hasTouch && playlistPanel) {
+    // --- Mobile Horizontal Swipe on Playlist Select Container to Switch Playlists ---
+    if (hasTouch && playlistSelectContainer) {
         let plTouchStartX = 0;
         let plTouchStartY = 0;
         let plTouchStartTime = 0;
 
-        playlistPanel.addEventListener("touchstart", (e) => {
-            if (e.target.closest('input, #fast-scroller, #fast-scroll-thumb')) return;
+        playlistSelectContainer.addEventListener("touchstart", (e) => {
+            if (e.target.closest('#btn-download-playlist, input, #fast-scroller, #fast-scroll-thumb')) return;
             plTouchStartX = e.changedTouches[0].clientX;
             plTouchStartY = e.changedTouches[0].clientY;
             plTouchStartTime = Date.now();
         }, { passive: true });
 
-        playlistPanel.addEventListener("touchend", (e) => {
+        playlistSelectContainer.addEventListener("touchend", (e) => {
             if (window.innerWidth > 800) return;
             if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
+            if (e.target.closest('#btn-download-playlist, #playlist-container, #track-list, li')) return;
 
             const deltaX = e.changedTouches[0].clientX - plTouchStartX;
             const deltaY = e.changedTouches[0].clientY - plTouchStartY;
@@ -1265,6 +1280,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
     const initialPl = playlistSelect.value;
+    if (typeof seedOfflineDatabases === 'function') {
+        seedOfflineDatabases();
+    }
     loadPlaylist(initialPl);
 
     // Desktop only: Background warm other playlists for instant tab switching & global search
@@ -1280,15 +1298,32 @@ document.addEventListener("DOMContentLoaded", () => {
         const otherPlaylists = ALL_PLAYLISTS.filter(pl => pl !== activePl);
         for (const pl of otherPlaylists) {
             if (allDatabases[pl]) continue;
-            fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
-                .then(r => r.ok ? r.json() : [])
-                .then(rawData => {
-                    allDatabases[pl] = normalizePlaylistData(rawData, pl);
-                    if (typeof window.rebuildCrossShuffleDeck === 'function') {
-                        window.rebuildCrossShuffleDeck();
+            if (typeof getCachedPlaylistDatabase === 'function') {
+                getCachedPlaylistDatabase(pl).then(cached => {
+                    if (cached && !allDatabases[pl]) {
+                        allDatabases[pl] = normalizePlaylistData(cached, pl);
+                        if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                            window.rebuildCrossShuffleDeck();
+                        }
                     }
-                })
-                .catch(() => {});
+                }).catch(() => {});
+            }
+            if (navigator.onLine !== false) {
+                fetch(`${baseUrl}/${pl}/_Playlist_Database.json?t=${Date.now()}`, { cache: 'no-store' })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(rawData => {
+                        if (Array.isArray(rawData) && rawData.length > 0) {
+                            if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                                storePlaylistDatabaseInAllCaches(pl, rawData);
+                            }
+                            allDatabases[pl] = normalizePlaylistData(rawData, pl);
+                            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                                window.rebuildCrossShuffleDeck();
+                            }
+                        }
+                    })
+                    .catch(() => {});
+            }
         }
     }
 

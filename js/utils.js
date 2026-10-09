@@ -336,3 +336,202 @@
         }
         return result;
     }
+
+    // --- Resilient Offline Playlist Database Caching (IndexedDB & Cache API) ---
+    const IDB_DB_NAME = 'yt-player-offline-db';
+    const IDB_STORE_NAME = 'playlists';
+    const DB_CACHE_NAME = 'yt-player-databases';
+
+    function openPlaylistIDB() {
+        return new Promise((resolve, reject) => {
+            if (typeof window === 'undefined' || !('indexedDB' in window)) {
+                return reject(new Error('IndexedDB not supported'));
+            }
+            try {
+                const req = indexedDB.open(IDB_DB_NAME, 1);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(IDB_STORE_NAME)) {
+                        db.createObjectStore(IDB_STORE_NAME);
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error || new Error('Failed to open IDB'));
+            } catch (err) {
+                reject(err);
+            }
+        });
+    }
+
+    async function savePlaylistToIDB(folderName, rawData) {
+        if (!folderName || !Array.isArray(rawData) || rawData.length === 0) return false;
+        try {
+            const db = await openPlaylistIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+                const store = tx.objectStore(IDB_STORE_NAME);
+                store.put(rawData, folderName);
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.onabort = () => resolve(false);
+            });
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async function getPlaylistFromIDB(folderName) {
+        if (!folderName) return null;
+        try {
+            const db = await openPlaylistIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+                const store = tx.objectStore(IDB_STORE_NAME);
+                const req = store.get(folderName);
+                req.onsuccess = () => {
+                    const res = req.result;
+                    if (Array.isArray(res) && res.length > 0) resolve(res);
+                    else resolve(null);
+                };
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function getAllPlaylistsFromIDB() {
+        try {
+            const db = await openPlaylistIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+                const store = tx.objectStore(IDB_STORE_NAME);
+                const req = store.openCursor();
+                const result = {};
+                req.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        if (Array.isArray(cursor.value) && cursor.value.length > 0) {
+                            result[cursor.key] = cursor.value;
+                        }
+                        cursor.continue();
+                    } else {
+                        resolve(result);
+                    }
+                };
+                req.onerror = () => resolve(result);
+            });
+        } catch (e) {
+            return {};
+        }
+    }
+
+    async function getCachedPlaylistDatabase(folderName) {
+        if (!folderName) return null;
+        const cleanUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+
+        // 1. Check dedicated persistent DB_CACHE
+        if (typeof window !== 'undefined' && 'caches' in window) {
+            try {
+                const dbCache = await caches.open(DB_CACHE_NAME);
+                const match = await dbCache.match(cleanUrl);
+                if (match) {
+                    const data = await match.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        savePlaylistToIDB(folderName, data);
+                        return data;
+                    }
+                }
+            } catch (e) {}
+
+            // 2. Check global caches.match
+            try {
+                const globalMatch = await caches.match(cleanUrl);
+                if (globalMatch) {
+                    const data = await globalMatch.json();
+                    if (Array.isArray(data) && data.length > 0) {
+                        savePlaylistToIDB(folderName, data);
+                        return data;
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // 3. Check IndexedDB mirror
+        try {
+            const idbData = await getPlaylistFromIDB(folderName);
+            if (Array.isArray(idbData) && idbData.length > 0) {
+                return idbData;
+            }
+        } catch (e) {}
+
+        return null;
+    }
+
+    async function storePlaylistDatabaseInAllCaches(folderName, rawData) {
+        if (!folderName || !Array.isArray(rawData) || rawData.length === 0) return;
+        savePlaylistToIDB(folderName, rawData);
+        if (typeof window !== 'undefined' && 'caches' in window) {
+            try {
+                const cleanUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
+                const dbCache = await caches.open(DB_CACHE_NAME);
+                const resp = new Response(JSON.stringify(rawData), {
+                    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=31536000' }
+                });
+                await dbCache.put(cleanUrl, resp);
+            } catch (e) {}
+        }
+    }
+
+    async function seedOfflineDatabases() {
+        if (typeof ALL_PLAYLISTS === 'undefined' || typeof allDatabases === 'undefined') return;
+        try {
+            // 1. Read all playlists from IndexedDB in a single transaction
+            const idbMap = await getAllPlaylistsFromIDB();
+            let anySeeded = false;
+            for (const pl of ALL_PLAYLISTS) {
+                if (idbMap && idbMap[pl] && Array.isArray(idbMap[pl]) && idbMap[pl].length > 0) {
+                    if (!allDatabases[pl]) {
+                        allDatabases[pl] = normalizePlaylistData(idbMap[pl], pl);
+                        anySeeded = true;
+                    }
+                }
+            }
+
+            // 2. Check Cache API for any playlist not yet loaded
+            if (typeof window !== 'undefined' && 'caches' in window) {
+                await Promise.all(ALL_PLAYLISTS.map(async (pl) => {
+                    if (allDatabases[pl]) return;
+                    const cached = await getCachedPlaylistDatabase(pl);
+                    if (cached && !allDatabases[pl]) {
+                        allDatabases[pl] = normalizePlaylistData(cached, pl);
+                        anySeeded = true;
+                    }
+                }));
+            }
+
+            if (anySeeded && typeof window.rebuildCrossShuffleDeck === 'function') {
+                window.rebuildCrossShuffleDeck();
+            }
+
+            if (typeof playlistSelect !== 'undefined' && playlistSelect) {
+                const activePl = playlistSelect.value;
+                if (allDatabases[activePl] && (!currentPlaylistData || currentPlaylistData.length === 0)) {
+                    if (typeof applyPlaylistData === 'function') {
+                        applyPlaylistData(activePl, allDatabases[activePl], false);
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn("Offline database seeding warning:", e);
+        }
+    }
+
+    window.openPlaylistIDB = openPlaylistIDB;
+    window.savePlaylistToIDB = savePlaylistToIDB;
+    window.getPlaylistFromIDB = getPlaylistFromIDB;
+    window.getAllPlaylistsFromIDB = getAllPlaylistsFromIDB;
+    window.getCachedPlaylistDatabase = getCachedPlaylistDatabase;
+    window.storePlaylistDatabaseInAllCaches = storePlaylistDatabaseInAllCaches;
+    window.seedOfflineDatabases = seedOfflineDatabases;
+

@@ -150,6 +150,45 @@
         setTimeout(processNextChunk, 0);
     }
 
+    function showOfflinePlaylistEmptyState(folderName) {
+        trackList.style.display = 'none';
+        playlistMessage.style.display = 'block';
+        playlistMessage.innerHTML = '';
+
+        const wrap = document.createElement('div');
+        wrap.className = 'offline-playlist-state';
+        wrap.style.padding = '24px 16px';
+        wrap.style.textAlign = 'center';
+
+        const title = document.createElement('div');
+        title.style.fontSize = '15px';
+        title.style.fontWeight = '500';
+        title.style.marginBottom = '8px';
+        title.textContent = 'Offline - Playlist not cached';
+
+        const sub = document.createElement('div');
+        sub.style.fontSize = '13px';
+        sub.style.color = 'var(--text-secondary)';
+        sub.style.marginBottom = '16px';
+        sub.style.lineHeight = '1.4';
+        sub.textContent = 'Connect to the internet once to cache this playlist for offline playback.';
+
+        const btn = document.createElement('button');
+        btn.id = 'retry-playlist-btn';
+        btn.className = 'settings-btn';
+        btn.style.padding = '8px 22px';
+        btn.style.borderRadius = '20px';
+        btn.style.fontSize = '13px';
+        btn.style.cursor = 'pointer';
+        btn.textContent = 'Retry';
+        btn.onclick = () => loadPlaylist(folderName);
+
+        wrap.appendChild(title);
+        wrap.appendChild(sub);
+        wrap.appendChild(btn);
+        playlistMessage.appendChild(wrap);
+    }
+
     function loadPlaylist(folderName) {
         selectedSearchIndex = -1;
         if (searchDebounceTimer) {
@@ -165,7 +204,7 @@
         let hasRendered = false;
 
         // 1. In-Memory Instant Paint (0ms)
-        if (allDatabases[folderName]) {
+        if (allDatabases[folderName] && allDatabases[folderName].length > 0) {
             applyPlaylistData(folderName, allDatabases[folderName], false);
             hasRendered = true;
         }
@@ -178,51 +217,71 @@
             playlistMessage.style.color = 'var(--text-secondary)';
         }
 
-        // 3. Parallel Offline Cache API Lookup (0ms for repeat/offline PWA visits, non-blocking)
-        if ('caches' in window && !hasRendered) {
-            caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(cached => {
-                if (cached && !hasRendered) {
-                    cached.json().then(rawData => {
-                        if (!hasRendered) {
-                            applyNormalizedDataInChunks(rawData, folderName, false);
-                            hasRendered = true;
-                            if (!globalActivePlaylist || queueIndex === -1) {
-                                generateQueue(true, folderName);
-                            }
-                        }
-                    }).catch(() => {});
+        // 3. Parallel Offline Persistent Cache Lookup (Cache API & IndexedDB)
+        const cachePromise = (typeof getCachedPlaylistDatabase === 'function'
+            ? getCachedPlaylistDatabase(folderName)
+            : ('caches' in window ? caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(r => r ? r.json() : null) : Promise.resolve(null))
+        ).then(cachedData => {
+            if (cachedData && !hasRendered) {
+                applyNormalizedDataInChunks(cachedData, folderName, false);
+                hasRendered = true;
+                if (!globalActivePlaylist || queueIndex === -1) {
+                    generateQueue(true, folderName);
                 }
-            }).catch(() => {});
-        }
+            }
+            return cachedData;
+        }).catch(() => null);
 
-        // 4. Direct Network Fetch with cache-busting timestamp and revalidation
+        // 4. Direct Network Fetch with cache-busting timestamp, timeout race, and revalidation
         if (navigator.onLine !== false) {
             const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
-            fetch(dbUrl, { cache: 'no-store' })
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Network timeout')), 6500);
+            });
+            Promise.race([fetch(dbUrl, { cache: 'no-store' }), timeoutPromise])
                 .then(res => {
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     return res.json();
                 })
                 .then(rawData => {
-                    applyNormalizedDataInChunks(rawData, folderName, hasRendered);
-                    hasRendered = true;
+                    if (Array.isArray(rawData) && rawData.length > 0) {
+                        if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                            storePlaylistDatabaseInAllCaches(folderName, rawData);
+                        }
+                        applyNormalizedDataInChunks(rawData, folderName, hasRendered);
+                        hasRendered = true;
 
-                    if (!globalActivePlaylist || queueIndex === -1) {
-                        generateQueue(true, folderName);
+                        if (!globalActivePlaylist || queueIndex === -1) {
+                            generateQueue(true, folderName);
+                        }
                     }
                 })
-                .catch(err => {
+                .catch(async err => {
+                    await cachePromise;
                     if (!hasRendered) {
-                        console.error("Failed to load playlist:", err);
-                        trackList.style.display = 'none';
-                        playlistMessage.style.display = 'block';
-                        playlistMessage.textContent = 'Failed to load playlist database.';
-                        playlistMessage.style.color = '#ff5555';
+                        const fallbackData = typeof getCachedPlaylistDatabase === 'function' ? await getCachedPlaylistDatabase(folderName) : null;
+                        if (fallbackData && !hasRendered) {
+                            applyNormalizedDataInChunks(fallbackData, folderName, false);
+                            hasRendered = true;
+                            if (!globalActivePlaylist || queueIndex === -1) {
+                                generateQueue(true, folderName);
+                            }
+                        } else if (!hasRendered) {
+                            console.error("Failed to load playlist:", err);
+                            showOfflinePlaylistEmptyState(folderName);
+                        }
                     }
                 });
+        } else {
+            // When explicitly offline, resolve cache lookup and display actionable empty state if not cached
+            cachePromise.then(cachedData => {
+                if (!cachedData && !hasRendered) {
+                    showOfflinePlaylistEmptyState(folderName);
+                }
+            });
         }
 
-        // 4. Deferred Service Worker Registration (dedicates 100% network & CPU to LCP paint)
+        // 5. Deferred Service Worker Registration (dedicates 100% network & CPU to LCP paint)
         if (!window._swRegistered && 'serviceWorker' in navigator) {
             window._swRegistered = true;
             const registerSW = () => {

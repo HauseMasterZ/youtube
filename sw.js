@@ -28,13 +28,14 @@ self.addEventListener('install', (event) => {
 });
 
 const THUMBS_CACHE = 'yt-player-thumbs';
+const DB_CACHE = 'yt-player-databases';
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE) {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE && cacheName !== DB_CACHE) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -163,30 +164,45 @@ self.addEventListener('fetch', (event) => {
 
     if (event.request.url.startsWith('blob:')) return;
 
-    // 3. Database JSON: True Stale-While-Revalidate Strategy
+    // 3. Database JSON: True Stale-While-Revalidate Strategy with Dedicated DB_CACHE
     if (event.request.url.includes('_Playlist_Database.json')) {
         const cleanUrl = event.request.url.split('?')[0];
-        // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network and update cache
+        // If request explicitly includes timestamp/version bypass (?t= or ?v=), fetch fresh from network with timeout and update DB_CACHE
         if (event.request.url.includes('?t=') || event.request.url.includes('?v=')) {
             event.respondWith(
-                fetch(event.request, { cache: 'no-store' }).then(response => {
-                    if (response.ok) {
-                        const clone = response.clone();
-                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
+                caches.open(DB_CACHE).then(async (dbCache) => {
+                    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+                    const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
+                    const fetchOpts = { cache: 'no-store' };
+                    if (controller) fetchOpts.signal = controller.signal;
+
+                    try {
+                        const response = await fetch(event.request, fetchOpts);
+                        if (timeoutId) clearTimeout(timeoutId);
+                        if (response.ok) {
+                            const clone = response.clone();
+                            dbCache.put(cleanUrl, clone);
+                        }
+                        return response;
+                    } catch (err) {
+                        if (timeoutId) clearTimeout(timeoutId);
+                        const cached = await dbCache.match(cleanUrl) || await caches.match(cleanUrl);
+                        if (cached) return cached;
+                        throw err;
                     }
-                    return response;
-                }).catch(() => caches.match(cleanUrl))
+                })
             );
             return;
         }
 
         // Standard request: Instant cached response with guaranteed background network revalidation (SWR)
         event.respondWith(
-            caches.match(cleanUrl).then(cached => {
+            caches.open(DB_CACHE).then(async (dbCache) => {
+                const cached = await dbCache.match(cleanUrl) || await caches.match(cleanUrl);
                 const networkFetch = fetch(event.request, { cache: 'no-store' }).then(response => {
                     if (response.ok) {
                         const clone = response.clone();
-                        caches.open(CACHE_NAME).then(cache => cache.put(cleanUrl, clone));
+                        dbCache.put(cleanUrl, clone);
                     }
                     return response;
                 }).catch(() => null);
@@ -195,7 +211,8 @@ self.addEventListener('fetch', (event) => {
                     event.waitUntil(networkFetch);
                     return cached;
                 }
-                return networkFetch.then(res => res || caches.match(cleanUrl));
+                const netRes = await networkFetch;
+                return netRes || await dbCache.match(cleanUrl) || await caches.match(cleanUrl);
             })
         );
         return;

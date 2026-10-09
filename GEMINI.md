@@ -109,3 +109,29 @@
 - The overall ingestion pipeline from YouTube playlist track addition to frontend reflection is engineered and verified to complete in under 38.0 seconds (empirically achieved ~23.4s - 24.8s).
 - Frontend database loading supports atomic chunked streaming and cache-busted revalidation (`_Playlist_Database.json?t=...`), picking up new additions without requiring a hard PWA reload.
 
+## 15. Resilient Multi-Tier Database Offline Caching Architecture
+- Dedicated Persistent Cache Storage (`DB_CACHE = 'yt-player-databases'`):
+  - Service worker `activate` cache cleanup explicitly preserves `DB_CACHE` alongside `CACHE_NAME`, `yt-player-media`, and `THUMBS_CACHE`.
+  - Service worker cache version bumps (`CACHE_NAME = 'yt-player-cache-v...'`) must never purge or invalidate cached playlist databases.
+- Dual-Tier Persistent Client Storage:
+  - Client employs Cache API (`yt-player-databases`) coupled with an IndexedDB mirror (`yt-player-offline-db`, object store `playlists`).
+  - If Cache API is evicted or unavailable, IndexedDB serves as an independent persistent backstop.
+  - All database writes are committed to both storage layers in lockstep (`storePlaylistDatabaseInAllCaches`).
+- Strict Network Timeout Race (6.0s - 6.5s):
+  - Spotty cellular networks, dead zones, or captive portals can cause fetch requests to hang indefinitely.
+  - Network requests for `_Playlist_Database.json` in both `sw.js` and `playback.js` race against an `AbortController` / Promise timeout (6000ms - 6500ms).
+  - On timeout or network failure, playback and SW instantly fall back to cached data without user-facing hang or blank screen.
+- Startup Pre-Seeding (`seedOfflineDatabases`):
+  - During application boot, `seedOfflineDatabases()` queries IndexedDB and Cache API to pre-populate in-memory `allDatabases`.
+  - Ensures instant playlist switching, global search filtering, and cross-shuffle queue generation function immediately offline before any network interaction.
+- Actionable Offline Empty State:
+  - If an uncached playlist is loaded in offline conditions or upon network timeout, the UI displays an actionable empty state (`showOfflinePlaylistEmptyState`) with a retry button instead of hanging on an indefinite loading screen.
+
+## 16. Scoped Mobile Playlist Swipe Gesture Invariant
+- Scoped Touch Target: Mobile horizontal swipe gesture for switching playlists (`Gym` <-> `Driving` <-> `Songs`) is strictly scoped to `playlistSelectContainer` (`#playlist-select-container` / `#playlist-select`).
+- Track List Isolation: The track list container (`#playlist-container`, `#track-list`, `li`), fast-scroller, and search input must NEVER listen to or trigger playlist swipe switching. Diagonal or horizontal drift during vertical playlist track browsing must never switch playlists.
+- Defense-in-Depth Event Filtering: Listeners are bound directly to `playlistSelectContainer` with guards filtering out `#btn-download-playlist`, `input`, and track elements.
+- Interaction Invariants:
+  - Thresholds: $|\Delta x| \ge 40\text{px}$, $|\Delta x| > |\Delta y| \times 1.2$, elapsed time $< 600\text{ms}$, and viewport width $\le 800\text{px}$.
+  - Passive event listeners (`passive: true`) without `preventDefault` to preserve instant native `<select>` dropdown picker opening on tap.
+  - Clears and unfocuses search input (`searchInput.blur()`) on playlist switch.
