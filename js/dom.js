@@ -1,4 +1,5 @@
     const playlistSelect = document.getElementById("playlist-select");
+    const playlistSelectContainer = document.getElementById("playlist-select-container") || (playlistSelect && playlistSelect.parentElement);
     const searchInput = document.getElementById("search-input");
     const btnRemoteSearch = document.getElementById("btn-remote-search");
     const iconSearchGlass = document.getElementById("icon-search-glass");

@@ -1225,23 +1225,23 @@ document.addEventListener("DOMContentLoaded", () => {
         loadPlaylist(e.target.value);
     });
 
-    // --- Mobile Horizontal Swipe on Playlist Panel to Switch Playlists ---
-    const playlistPanel = document.querySelector('.playlist-panel');
-    if (hasTouch && playlistPanel) {
+    // --- Mobile Horizontal Swipe on Playlist Select Container to Switch Playlists ---
+    if (hasTouch && playlistSelectContainer) {
         let plTouchStartX = 0;
         let plTouchStartY = 0;
         let plTouchStartTime = 0;
 
-        playlistPanel.addEventListener("touchstart", (e) => {
-            if (e.target.closest('input, #fast-scroller, #fast-scroll-thumb')) return;
+        playlistSelectContainer.addEventListener("touchstart", (e) => {
+            if (e.target.closest('#btn-download-playlist, input, #fast-scroller, #fast-scroll-thumb')) return;
             plTouchStartX = e.changedTouches[0].clientX;
             plTouchStartY = e.changedTouches[0].clientY;
             plTouchStartTime = Date.now();
         }, { passive: true });
 
-        playlistPanel.addEventListener("touchend", (e) => {
+        playlistSelectContainer.addEventListener("touchend", (e) => {
             if (window.innerWidth > 800) return;
             if (!ALL_PLAYLISTS || ALL_PLAYLISTS.length <= 1) return;
+            if (e.target.closest('#btn-download-playlist, #playlist-container, #track-list, li')) return;
 
             const deltaX = e.changedTouches[0].clientX - plTouchStartX;
             const deltaY = e.changedTouches[0].clientY - plTouchStartY;

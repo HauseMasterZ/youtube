@@ -127,4 +127,11 @@
 - Actionable Offline Empty State:
   - If an uncached playlist is loaded in offline conditions or upon network timeout, the UI displays an actionable empty state (`showOfflinePlaylistEmptyState`) with a retry button instead of hanging on an indefinite loading screen.
 
-
+## 16. Scoped Mobile Playlist Swipe Gesture Invariant
+- Scoped Touch Target: Mobile horizontal swipe gesture for switching playlists (`Gym` <-> `Driving` <-> `Songs`) is strictly scoped to `playlistSelectContainer` (`#playlist-select-container` / `#playlist-select`).
+- Track List Isolation: The track list container (`#playlist-container`, `#track-list`, `li`), fast-scroller, and search input must NEVER listen to or trigger playlist swipe switching. Diagonal or horizontal drift during vertical playlist track browsing must never switch playlists.
+- Defense-in-Depth Event Filtering: Listeners are bound directly to `playlistSelectContainer` with guards filtering out `#btn-download-playlist`, `input`, and track elements.
+- Interaction Invariants:
+  - Thresholds: $|\Delta x| \ge 40\text{px}$, $|\Delta x| > |\Delta y| \times 1.2$, elapsed time $< 600\text{ms}$, and viewport width $\le 800\text{px}$.
+  - Passive event listeners (`passive: true`) without `preventDefault` to preserve instant native `<select>` dropdown picker opening on tap.
+  - Clears and unfocuses search input (`searchInput.blur()`) on playlist switch.

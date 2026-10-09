@@ -8,7 +8,7 @@
 
 ## Features
 
-- **Playlist Management**: Load and switch between multiple playlists (`Gym`, `Driving`, `Songs`) seamlessly.
+- **Playlist Management**: Load and switch between multiple playlists (`Gym`, `Driving`, `Songs`) seamlessly, with horizontal swipe navigation scoped to the playlist selector on mobile.
 - **Playback Controls**: Play, pause, skip forward/backward, and seek within tracks.
 - **Dual Playback Engines**: Switch between Standard Battery Saver (Mode 1) and Car & Bluetooth Mode (Mode 2) with auto-kill inactivity watchdog.
 - **Full Offline Downloads**: One-click download of full playlists (audio tracks, thumbnails, and lyrics) with automated retry and verification.
