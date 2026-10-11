@@ -1830,6 +1830,8 @@ button:focus { outline: none !important; }
 
 .settings-radio-card:has(input[type="radio"]:checked),
 .settings-radio-label:has(input[type="radio"]:checked),
+.settings-radio-card:has(input[type="checkbox"]:checked),
+.settings-radio-label:has(input[type="checkbox"]:checked),
 .settings-radio-card.active,
 .settings-radio-label.active {
     border-color: var(--primary-color, #8c73ff);
@@ -1837,7 +1839,9 @@ button:focus { outline: none !important; }
 }
 
 .settings-radio-card input[type="radio"],
-.settings-radio-label input[type="radio"] {
+.settings-radio-label input[type="radio"],
+.settings-radio-card input[type="checkbox"],
+.settings-radio-label input[type="checkbox"] {
     margin: 2px 0 0 0;
     cursor: pointer;
     accent-color: var(--primary-color, #8c73ff);

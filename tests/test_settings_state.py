@@ -81,5 +81,17 @@ class TestSettingsState(unittest.TestCase):
         self.assertIn('window.getStoredSetting = getStoredSetting;', self.state_content)
         self.assertIn('window.setStoredSetting = setStoredSetting;', self.state_content)
 
+    def test_shuffle_downloaded_only_state_definition(self):
+        """isShuffleDownloadedOnly is defined, scopes strictly to mobile, and initializes audio cache sets"""
+        self.assertIn('window.cachedAudioUrlSet = new Set();', self.state_content)
+        self.assertIn('window.cachedAudioFilePaths = new Set();', self.state_content)
+        self.assertRegex(self.state_content, r'function\s+isShuffleDownloadedOnly\s*\(\s*\)')
+        self.assertIn('window.isShuffleDownloadedOnly = isShuffleDownloadedOnly;', self.state_content)
+        self.assertIn('yt_shuffle_downloaded_only', self.state_content)
+        self.assertRegex(
+            self.state_content,
+            r'const\s+isMobile\s*=\s*\(typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\);\s*if\s*\(!isMobile\)\s*return\s*false;'
+        )
+
 if __name__ == '__main__':
     unittest.main()

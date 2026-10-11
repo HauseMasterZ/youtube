@@ -212,6 +212,28 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    function snapToSearch(char) {
+        if (!searchInput) return;
+        if (document.activeElement !== searchInput) {
+            if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                document.activeElement.blur();
+            }
+            searchInput.focus();
+        }
+        if (char && char.length === 1) {
+            const start = searchInput.selectionStart ?? searchInput.value.length;
+            const end = searchInput.selectionEnd ?? searchInput.value.length;
+            const val = searchInput.value || '';
+            searchInput.value = val.slice(0, start) + char + val.slice(end);
+            const newPos = start + char.length;
+            if (typeof searchInput.setSelectionRange === 'function') {
+                searchInput.setSelectionRange(newPos, newPos);
+            }
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+    window.snapToSearch = snapToSearch;
+
     searchInput.addEventListener("input", (e) => {
         if (searchMode === 'ephemeral') {
             exitEphemeralSearch();
@@ -1223,7 +1245,47 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof searchInput.blur === 'function') searchInput.blur();
         }
         loadPlaylist(e.target.value);
+        if (playlistSelect && typeof playlistSelect.blur === 'function') {
+            playlistSelect.blur();
+        }
     });
+
+    if (playlistSelect) {
+        playlistSelect.addEventListener("keydown", (e) => {
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (isMobile) return;
+
+            if (e.key === 'Escape') {
+                playlistSelect.blur();
+                return;
+            }
+
+            if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                playlistSelect.blur();
+                snapToSearch(e.key);
+            }
+        });
+    }
+
+    function blurPlaylistSelectIfActive() {
+        if (playlistSelect && document.activeElement === playlistSelect) {
+            playlistSelect.blur();
+        }
+    }
+
+    if (playlistContainer) {
+        playlistContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);
+    }
+    if (nowPlaying) {
+        nowPlaying.addEventListener("pointerdown", blurPlaylistSelectIfActive);
+    }
+    if (lyricsContainer) {
+        lyricsContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);
+    }
+    if (albumArtContainer) {
+        albumArtContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);
+    }
 
     // --- Mobile Horizontal Swipe on Playlist Select Container to Switch Playlists ---
     if (hasTouch && playlistSelectContainer) {
@@ -1282,6 +1344,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const initialPl = playlistSelect.value;
     if (typeof seedOfflineDatabases === 'function') {
         seedOfflineDatabases();
+    }
+    if (typeof refreshCachedAudioUrls === 'function') {
+        refreshCachedAudioUrls();
     }
     loadPlaylist(initialPl);
 
@@ -1381,6 +1446,20 @@ document.addEventListener("DOMContentLoaded", () => {
             closeSettingsModal();
             return;
         }
+        if (settingsModal && settingsModal.style.display !== 'none') {
+            return;
+        }
+
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+
+        if (e.target === playlistSelect) {
+            if (!isMobile && e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
+                e.preventDefault();
+                if (typeof playlistSelect.blur === 'function') playlistSelect.blur();
+                snapToSearch(e.key);
+            }
+            return;
+        }
 
         if (e.target.tagName === 'TEXTAREA' || (e.target.tagName === 'INPUT' && e.target.type !== 'range') || e.target.tagName === 'SELECT' || e.target.isContentEditable) return;
         
@@ -1399,6 +1478,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 e.preventDefault();
                 return;
             }
+            if (e.target && e.target.tagName === 'BUTTON') return;
             btnPlayPause.click();
             e.preventDefault();
         } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -1408,7 +1488,10 @@ document.addEventListener("DOMContentLoaded", () => {
             btnShuffle.click();
             e.preventDefault();
         } else if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-            searchInput.focus();
+            if (!isMobile) {
+                e.preventDefault();
+                snapToSearch(e.key);
+            }
         }
     });
 
@@ -1448,6 +1531,16 @@ document.addEventListener("DOMContentLoaded", () => {
                 btTimeoutCustom.style.display = 'block';
                 btTimeoutCustom.value = currentTimeout;
             }
+        }
+
+        const shuffleDownloadedContainer = document.getElementById("shuffle-downloaded-container");
+        const toggleShuffleDownloaded = document.getElementById("toggle-shuffle-downloaded");
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        if (shuffleDownloadedContainer) {
+            shuffleDownloadedContainer.style.display = isMobile ? 'block' : 'none';
+        }
+        if (toggleShuffleDownloaded) {
+            toggleShuffleDownloaded.checked = (typeof isShuffleDownloadedOnly === 'function') && isShuffleDownloadedOnly();
         }
 
         if (settingsModal) settingsModal.style.display = 'block';
@@ -1544,6 +1637,29 @@ document.addEventListener("DOMContentLoaded", () => {
         };
         btTimeoutCustom.addEventListener("input", handleCustomTimeoutInput);
         btTimeoutCustom.addEventListener("change", handleCustomTimeoutInput);
+    }
+
+    const toggleShuffleDownloaded = document.getElementById("toggle-shuffle-downloaded");
+    if (toggleShuffleDownloaded) {
+        toggleShuffleDownloaded.addEventListener("change", (e) => {
+            const isChecked = e.target.checked;
+            if (typeof window.setStoredSetting === 'function') {
+                window.setStoredSetting('yt_shuffle_downloaded_only', isChecked ? 'true' : 'false');
+            } else if (typeof setStoredSetting === 'function') {
+                setStoredSetting('yt_shuffle_downloaded_only', isChecked ? 'true' : 'false');
+            }
+            if (typeof refreshCachedAudioUrls === 'function') {
+                refreshCachedAudioUrls().then(() => {
+                    if (shuffleMode === 1 && typeof window.rebuildCrossShuffleDeck === 'function') {
+                        crossShuffleHistory = [];
+                        crossShufflePos = -1;
+                        window.rebuildCrossShuffleDeck();
+                    } else if (shuffleMode === 2 && typeof generateQueue === 'function') {
+                        generateQueue(false);
+                    }
+                });
+            }
+        });
     }
 
     if (btnModalReload) {

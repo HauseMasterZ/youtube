@@ -113,6 +113,18 @@
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '3');
     window.btSleepTimer = null;
     window.lastPlaybackModeTransitions = [];
+    window.cachedAudioUrlSet = new Set();
+    window.cachedAudioFilePaths = new Set();
+
+    function isShuffleDownloadedOnly() {
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        if (!isMobile) return false;
+        const stored = (typeof window.getStoredSetting === 'function')
+            ? window.getStoredSetting('yt_shuffle_downloaded_only', 'false')
+            : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_shuffle_downloaded_only')) || 'false');
+        return stored === 'true' || stored === true;
+    }
+    window.isShuffleDownloadedOnly = isShuffleDownloadedOnly;
 
     window.rebuildCrossShuffleDeck = function() {
         if (shuffleMode !== 1) return;
@@ -122,12 +134,16 @@
             existingMap.add(item.playlist + ":" + item.index);
         }
         
+        const downloadedOnly = isShuffleDownloadedOnly();
         const newTracks = [];
         for (const pl of ALL_PLAYLISTS) {
             if (allDatabases[pl]) {
                 for (let i = 0; i < allDatabases[pl].length; i++) {
+                    const track = allDatabases[pl][i];
                     if (!existingMap.has(pl + ":" + i)) {
-                        newTracks.push({ playlist: pl, index: i });
+                        if (!downloadedOnly || (typeof isTrackAudioCached === 'function' && isTrackAudioCached(track))) {
+                            newTracks.push({ playlist: pl, index: i });
+                        }
                     }
                 }
             }
