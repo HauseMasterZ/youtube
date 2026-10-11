@@ -413,5 +413,76 @@ class TestSettingsUI(unittest.TestCase):
         self.assertIn('X-Content-Type-Options: nosniff', self.headers_content)
         self.assertIn('Referrer-Policy: strict-origin-when-cross-origin', self.headers_content)
 
+    def test_shuffle_downloaded_markup_and_modal(self):
+        """index.html contains shuffle-downloaded-container and main.js synchronizes toggle on mobile"""
+        self.assertIn('id="shuffle-downloaded-container"', self.index_content)
+        self.assertIn('id="toggle-shuffle-downloaded"', self.index_content)
+        self.assertIn('Shuffle Only Downloaded', self.index_content)
+        self.assertIn('shuffleDownloadedContainer', self.main_content)
+        self.assertIn('toggleShuffleDownloaded', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'shuffleDownloadedContainer\.style\.display\s*=\s*isMobile\s*\?\s*[\'"]block[\'"]\s*:\s*[\'"]none[\'"]'
+        )
+
+    def test_shuffle_downloaded_audio_cache_check(self):
+        """utils.js defines isTrackAudioCached and refreshCachedAudioUrls checking yt-player-media only"""
+        self.assertRegex(self.utils_content, r'function\s+isTrackAudioCached\s*\(')
+        self.assertRegex(self.utils_content, r'async\s+function\s+refreshCachedAudioUrls\s*\(')
+        self.assertIn("caches.open('yt-player-media')", self.utils_content)
+        cache_block = self.utils_content[self.utils_content.find('async function refreshCachedAudioUrls'):]
+        self.assertNotIn("yt-player-thumbs", cache_block)
+
+    def test_shuffle_downloaded_playback_integration(self):
+        """playback.js generateQueue and playTrackSelection filter to downloaded songs when isShuffleDownloadedOnly is true"""
+        self.assertIn('isShuffleDownloadedOnly()', self.playback_content)
+        self.assertIn('isTrackAudioCached(data[i])', self.playback_content)
+        self.assertIn('isTrackAudioCached(currentPlaylistData[i])', self.playback_content)
+
+    def test_snap_to_search_definition_and_character_insertion(self):
+        """snapToSearch blurs active element, focuses searchInput, inserts character, and dispatches input event"""
+        self.assertRegex(self.main_content, r'function\s+snapToSearch\s*\(\s*char\s*\)')
+        self.assertIn('window.snapToSearch = snapToSearch;', self.main_content)
+        self.assertIn('searchInput.focus();', self.main_content)
+        self.assertIn('searchInput.setSelectionRange', self.main_content)
+        self.assertRegex(self.main_content, r"searchInput\.dispatchEvent\(\s*new\s+Event\(\s*['\"]input['\"]")
+
+    def test_playlist_select_keydown_snaps_to_search_on_desktop(self):
+        """playlistSelect keydown listener snaps to searchInput on printable characters when not on mobile"""
+        self.assertRegex(
+            self.main_content,
+            r'playlistSelect\.addEventListener\(\s*[\'"]keydown[\'"][\s\S]*?snapToSearch\(\s*e\.key\s*\)'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'playlistSelect\.blur\(\)[\s\S]*?snapToSearch\(\s*e\.key\s*\)'
+        )
+
+    def test_playlist_select_change_blurs_select(self):
+        """playlistSelect change listener blurs playlistSelect to prevent sticky focus"""
+        self.assertRegex(
+            self.main_content,
+            r'loadPlaylist\(\s*e\.target\.value\s*\);\s*if\s*\(\s*playlistSelect[\s\S]*?playlistSelect\.blur\(\)'
+        )
+
+    def test_container_divs_blur_playlist_select_on_pointerdown(self):
+        """Container divs blur playlistSelect on pointerdown to resolve focus traps"""
+        self.assertIn('blurPlaylistSelectIfActive', self.main_content)
+        self.assertIn('playlistContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);', self.main_content)
+        self.assertIn('nowPlaying.addEventListener("pointerdown", blurPlaylistSelectIfActive);', self.main_content)
+        self.assertIn('lyricsContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);', self.main_content)
+        self.assertIn('albumArtContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);', self.main_content)
+
+    def test_window_keydown_handles_playlist_select_and_desktop_snapping(self):
+        """window keydown checks e.target === playlistSelect and triggers snapToSearch on printable keys"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*e\.target\s*===\s*playlistSelect\s*\)[\s\S]*?snapToSearch\(\s*e\.key\s*\)'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'settingsModal[\s\S]*?display\s*!==\s*[\'"]none[\'"][\s\S]*?return;'
+        )
+
 if __name__ == '__main__':
     unittest.main()

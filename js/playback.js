@@ -305,6 +305,18 @@
         let indices = Array.from({length: data.length}, (_, i) => i);
         
         if (shuffleMode === 2) {
+            if (typeof isShuffleDownloadedOnly === 'function' && isShuffleDownloadedOnly()) {
+                const downloadedIndices = [];
+                for (let i = 0; i < data.length; i++) {
+                    if (typeof isTrackAudioCached === 'function' && isTrackAudioCached(data[i])) {
+                        downloadedIndices.push(i);
+                    }
+                }
+                if (downloadedIndices.length > 0) {
+                    indices = downloadedIndices;
+                }
+            }
+
             const randomBuffer = new Uint32Array(1);
             for (let i = indices.length - 1; i > 0; i--) {
                 window.crypto.getRandomValues(randomBuffer);
@@ -430,7 +442,19 @@
         const totalTracks = currentPlaylistData ? currentPlaylistData.length : 0;
 
         if (shuffleMode === 2 && totalTracks > 0) {
-            let rest = Array.from({length: totalTracks}, (_, i) => i).filter(i => i !== targetOriginalIndex);
+            let pool = Array.from({length: totalTracks}, (_, i) => i);
+            if (typeof isShuffleDownloadedOnly === 'function' && isShuffleDownloadedOnly()) {
+                const downloadedIndices = [];
+                for (let i = 0; i < totalTracks; i++) {
+                    if (i === targetOriginalIndex || (typeof isTrackAudioCached === 'function' && isTrackAudioCached(currentPlaylistData[i]))) {
+                        downloadedIndices.push(i);
+                    }
+                }
+                if (downloadedIndices.length > 0) {
+                    pool = downloadedIndices;
+                }
+            }
+            let rest = pool.filter(i => i !== targetOriginalIndex);
             const randomBuffer = new Uint32Array(1);
             for (let i = rest.length - 1; i > 0; i--) {
                 window.crypto.getRandomValues(randomBuffer);
@@ -457,6 +481,13 @@
                 crossShufflePos++;
             } else {
                 // Reached the end of the global deck, reshuffle!
+                const downloadedOnly = typeof isShuffleDownloadedOnly === 'function' && isShuffleDownloadedOnly();
+                if (downloadedOnly) {
+                    crossShuffleHistory = crossShuffleHistory.filter(item => {
+                        const tr = allDatabases[item.playlist] && allDatabases[item.playlist][item.index];
+                        return tr && typeof isTrackAudioCached === 'function' && isTrackAudioCached(tr);
+                    });
+                }
                 for (let i = crossShuffleHistory.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
@@ -1084,6 +1115,9 @@
                 if (btn) btn.title = "Playlist fully downloaded for offline playback!";
 
                 showDownloadToast(`[OK] ${currentPl} verified (${verifiedCount}/${total} saved offline)`, true);
+                if (typeof refreshCachedAudioUrls === 'function') {
+                    refreshCachedAudioUrls();
+                }
 
                 setTimeout(() => {
                     if (iconDone) iconDone.style.display = "none";

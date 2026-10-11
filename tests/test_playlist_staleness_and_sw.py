@@ -25,8 +25,15 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         with open(os.path.abspath(__file__), 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
+        worker_path = os.path.join(os.path.dirname(base_dir), 'alwaysdata-pi-setup', 'cloudflare_worker', 'worker.js')
+        if os.path.exists(worker_path):
+            with open(worker_path, 'r', encoding='utf-8') as f:
+                cls.worker_content = f.read()
+        else:
+            cls.worker_content = ""
+
     def test_zero_emojis(self):
-        """Strictly zero emojis in sw.js, playback.js, main.js, utils.js, and this test."""
+        """Strictly zero emojis in sw.js, playback.js, main.js, utils.js, worker.js, and this test."""
         emoji_pattern = re.compile(
             r'[\U00010000-\U0010ffff]|[\u2600-\u27bf]|[\u2300-\u23ff]|[\u2b50-\u2b55]|[\u200d\ufe0f]',
             flags=re.UNICODE
@@ -35,11 +42,31 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.playback_content), [], "Found emojis in playback.js")
         self.assertEqual(emoji_pattern.findall(self.main_content), [], "Found emojis in main.js")
         self.assertEqual(emoji_pattern.findall(self.utils_content), [], "Found emojis in utils.js")
+        if self.worker_content:
+            self.assertEqual(emoji_pattern.findall(self.worker_content), [], "Found emojis in worker.js")
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v149 to purge stale caches."""
-        self.assertIn("yt-player-cache-v149", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v150 to purge stale caches."""
+        self.assertIn("yt-player-cache-v150", self.sw_content)
+
+    def test_sw_thumbnail_swr_strategy(self):
+        """sw.js must implement Stale-While-Revalidate for thumbnails."""
+        self.assertIn("event.waitUntil(revalidatePromise)", self.sw_content)
+        self.assertIn("cache.put(event.request.url, response.clone())", self.sw_content)
+
+    def test_utils_thumbnail_cache_busting(self):
+        """utils.js getThumbUrl must append color-derived cache-busting query parameter."""
+        self.assertIn("const colorKey = track.color ? String(track.color).replace('#', '').trim() : '';", self.utils_content)
+        self.assertIn("?v=${encodeURIComponent(colorKey)}", self.utils_content)
+
+    def test_worker_thumbnail_revalidation_headers(self):
+        """worker.js must serve webp thumbnails with revalidation headers and exclude from immutable extensions."""
+        if not self.worker_content:
+            return
+        self.assertIn("const IMMUTABLE_MEDIA_EXTENSIONS = /\\.(webm|opus|m4a|aac)$/i;", self.worker_content)
+        self.assertIn("const isThumbnail = /\\.webp$/i.test(cleanPath);", self.worker_content)
+        self.assertIn('"public, max-age=86400, stale-while-revalidate=604800"', self.worker_content)
 
     def test_sw_database_persistent_cache_whitelist(self):
         """sw.js must define dedicated DB_CACHE and preserve it during cache activation purge."""

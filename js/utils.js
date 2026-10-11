@@ -123,7 +123,16 @@
 
         return 2000 + totalTokenScore;
     }
-    function getThumbUrl(track) { return track.thumbnail_path ? `${baseUrl}/${track.thumbnail_path.split('/').map(encodeURIComponent).join('/')}` : null; }
+
+    function getThumbUrl(track) {
+        if (!track || !track.thumbnail_path) return null;
+        const rawPath = String(track.thumbnail_path).split('?')[0];
+        const cleanPath = rawPath.split('/').map(encodeURIComponent).join('/');
+        const colorKey = track.color ? String(track.color).replace('#', '').trim() : '';
+        const query = colorKey ? `?v=${encodeURIComponent(colorKey)}` : '';
+        return `${baseUrl}/${cleanPath}${query}`;
+    }
+
     async function getSquareArtwork(url, trackId, callback) {
         if (!url) return;
         if (artworkSquareCache.has(trackId)) {
@@ -534,4 +543,55 @@
     window.getCachedPlaylistDatabase = getCachedPlaylistDatabase;
     window.storePlaylistDatabaseInAllCaches = storePlaylistDatabaseInAllCaches;
     window.seedOfflineDatabases = seedOfflineDatabases;
+
+    async function refreshCachedAudioUrls() {
+        if (typeof window === 'undefined' || !('caches' in window)) return new Set();
+        try {
+            const mediaCache = await caches.open('yt-player-media');
+            const keys = await mediaCache.keys();
+            const urlSet = new Set();
+            const filePaths = new Set();
+            for (let i = 0; i < keys.length; i++) {
+                const rawUrl = keys[i].url;
+                urlSet.add(rawUrl);
+                const clean = rawUrl.split('?')[0];
+                urlSet.add(clean);
+                try {
+                    const u = new URL(rawUrl);
+                    const path = decodeURIComponent(u.pathname.replace(/^\/+/, ''));
+                    filePaths.add(path);
+                    const segments = path.split('/');
+                    if (segments.length >= 2) {
+                        filePaths.add(segments.slice(-2).join('/'));
+                    }
+                } catch (e) {}
+            }
+            window.cachedAudioUrlSet = urlSet;
+            window.cachedAudioFilePaths = filePaths;
+            return urlSet;
+        } catch (e) {
+            return window.cachedAudioUrlSet || new Set();
+        }
+    }
+    window.refreshCachedAudioUrls = refreshCachedAudioUrls;
+
+    function isTrackAudioCached(track, cacheSet = window.cachedAudioUrlSet) {
+        if (!track || !cacheSet) return false;
+        if (typeof getAudioUrl !== 'function') return false;
+        const url = getAudioUrl(track);
+        if (!url) return false;
+        if (cacheSet.has(url)) return true;
+
+        const cleanUrl = url.split('?')[0];
+        if (cacheSet.has(cleanUrl)) return true;
+
+        const filePath = track.file_path;
+        if (filePath) {
+            if (cacheSet.has(filePath)) return true;
+            if (window.cachedAudioFilePaths && window.cachedAudioFilePaths.has(filePath)) return true;
+        }
+
+        return false;
+    }
+    window.isTrackAudioCached = isTrackAudioCached;
 

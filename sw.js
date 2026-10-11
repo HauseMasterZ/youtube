@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v149';
+const CACHE_NAME = 'yt-player-cache-v150';
 
 const CORE_ASSETS = [
     './',
@@ -130,33 +130,38 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // 2. Persistent Thumbnail Caching (URL-normalized)
+    // 2. Persistent Thumbnail Caching (URL-normalized with Stale-While-Revalidate)
     if (event.request.url.includes('/thumbnails/') || event.request.url.includes('.webp')) {
         event.respondWith(
             caches.open(THUMBS_CACHE).then(async (cache) => {
                 const cached = await cache.match(event.request.url);
-                if (cached) {
-                    if (cached.type === 'opaque') {
-                        // Opaque response cannot be returned to a cors request - purge it immediately
-                        cache.delete(event.request.url);
-                    } else {
-                        return cached;
-                    }
+                if (cached && cached.type === 'opaque') {
+                    // Opaque response cannot be returned to a cors request - purge it immediately
+                    await cache.delete(event.request.url);
                 }
-                try {
-                    const response = await fetch(event.request);
+
+                const validCached = cached && cached.type !== 'opaque' ? cached : null;
+
+                const revalidatePromise = fetch(event.request).then((response) => {
                     // Never cache opaque responses in THUMBS_CACHE
                     if (response.ok && response.type !== 'opaque') {
                         cache.put(event.request.url, response.clone());
                         limitCacheSize(THUMBS_CACHE, 1000);
                     }
                     return response;
-                } catch (err) {
-                    if (cached && cached.type !== 'opaque') {
-                        return cached;
+                }).catch((err) => {
+                    if (validCached) {
+                        return validCached;
                     }
                     return new Response('', { status: 408, statusText: 'Thumbnail request failed' });
+                });
+
+                if (validCached) {
+                    event.waitUntil(revalidatePromise);
+                    return validCached;
                 }
+
+                return revalidatePromise;
             })
         );
         return;
