@@ -1508,13 +1508,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnModalInstall = document.getElementById("btn-modal-install");
 
     function openSettingsModal() {
-        const currentMode = window.playbackMode || 'mode1';
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        const currentMode = isMobile ? (window.playbackMode || 'mode1') : 'mode1';
         if (currentMode === 'mode2') {
             if (mode2Radio) mode2Radio.checked = true;
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'block';
         } else {
             if (mode1Radio) mode1Radio.checked = true;
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'none';
+        }
+
+        if (!isMobile) {
+            if (mode2Radio) {
+                mode2Radio.disabled = true;
+                mode2Radio.checked = false;
+                const mode2Label = mode2Radio.closest('.settings-radio-label');
+                if (mode2Label) {
+                    mode2Label.style.opacity = '0.5';
+                    mode2Label.style.cursor = 'not-allowed';
+                    const subtext = mode2Label.querySelector('.settings-radio-subtext');
+                    if (subtext && !subtext.dataset.origText) {
+                        subtext.dataset.origText = subtext.textContent;
+                        subtext.textContent = 'Optimized for mobile devices only (unavailable on desktop)';
+                    }
+                }
+            }
         }
 
         const standardTimeouts = ['3'];
@@ -1535,7 +1553,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const shuffleDownloadedContainer = document.getElementById("shuffle-downloaded-container");
         const toggleShuffleDownloaded = document.getElementById("toggle-shuffle-downloaded");
-        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
         if (shuffleDownloadedContainer) {
             shuffleDownloadedContainer.style.display = isMobile ? 'block' : 'none';
         }
@@ -1566,8 +1583,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const modeRadios = document.querySelectorAll('input[name="playback-mode"]');
     modeRadios.forEach(radio => {
         radio.addEventListener("change", () => {
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
-            const newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            let newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            if (!isMobile) {
+                newMode = 'mode1';
+                if (mode1Radio) mode1Radio.checked = true;
+                if (mode2Radio) mode2Radio.checked = false;
+            }
             if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
                 initLiveAudioAnchor();
             }
@@ -1577,9 +1600,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    const storedPlaybackMode = (typeof window.getStoredSetting === 'function')
-        ? window.getStoredSetting('yt_playback_mode', 'mode1')
-        : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
+    const isMobileInit = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+    const storedPlaybackMode = isMobileInit
+        ? ((typeof window.getStoredSetting === 'function')
+            ? window.getStoredSetting('yt_playback_mode', 'mode1')
+            : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1'))
+        : 'mode1';
     if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
         togglePlaybackMode('mode2');
     } else if (typeof togglePlaybackMode === 'function') {

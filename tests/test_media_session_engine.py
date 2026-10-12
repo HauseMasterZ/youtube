@@ -1013,5 +1013,13 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*isPaused\s*\)\s*\{[\s\S]*?const\s+needsRebind\s*=\s*\(typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\)\s*&&\s*shouldRepublishMetadata\(\);[\s\S]*?if\s*\(\s*needsRebind\s*&&\s*typeof\s+republishMediaMetadata\s*===\s*[\'"]function[\'"]\s*\)\s*\{'
         )
 
+    def test_desktop_scope_rejects_mode2_in_toggle_playback_mode(self):
+        """togglePlaybackMode clamps newMode to mode1 when not on mobile"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+togglePlaybackMode[\s\S]*?const\s+isMobile\s*=\s*\(typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\);[\s\S]*?if\s*\(\s*!isMobile\s*\)\s*\{\s*newMode\s*=\s*[\'"]mode1[\'"];\s*\}'
+        )
+
+
 if __name__ == '__main__':
     unittest.main()
