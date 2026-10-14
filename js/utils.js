@@ -506,6 +506,14 @@
         try {
             const idbData = await getPlaylistFromIDB(folderName);
             if (Array.isArray(idbData) && idbData.length > 0) {
+                if (typeof window !== 'undefined' && 'caches' in window) {
+                    caches.open(DB_CACHE_NAME).then(dbCache => {
+                        const resp = new Response(JSON.stringify(idbData), {
+                            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=31536000' }
+                        });
+                        dbCache.put(cleanUrl, resp);
+                    }).catch(() => {});
+                }
                 return idbData;
             }
         } catch (e) {}
@@ -567,8 +575,10 @@
                     }
                 }
             }
+            return allDatabases;
         } catch (e) {
             console.warn("Offline database seeding warning:", e);
+            return allDatabases;
         }
     }
 

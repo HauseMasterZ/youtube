@@ -701,6 +701,8 @@
                         const INITIAL_TARGET_BYTES = 196608;
                         let fetchBackoff = 300;
 
+                        let fetchAttempts = 0;
+
                         while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
                             if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                 if (this._streamId === activeStreamId) this.switching = false;
@@ -737,6 +739,11 @@
                             } catch (initErr) {
                                 if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
                                     await saveProgress(false);
+                                    if (this._streamId === activeStreamId) this.switching = false;
+                                    return Promise.resolve();
+                                }
+                                fetchAttempts++;
+                                if (fetchAttempts >= 3 && typeof navigator !== 'undefined' && navigator.onLine === false) {
                                     if (this._streamId === activeStreamId) this.switching = false;
                                     return Promise.resolve();
                                 }

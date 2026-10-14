@@ -136,5 +136,28 @@ class TestLastPlayedRetention(unittest.TestCase):
         self.assertIn('window.addEventListener("beforeunload", flushLastPlayedState);', self.main_content)
         self.assertIn('document.addEventListener("freeze", flushLastPlayedState);', self.main_content)
 
+    def test_offline_reconciliation_on_chunked_load_completion(self):
+        """applyNormalizedDataInChunks reconciles staged track by ID against full database on completion"""
+        self.assertIn('const newIndex = normalizedAccum.findIndex(t => t.id === targetTrackId);', self.playback_content)
+        self.assertIn('if (newIndex !== -1) {', self.playback_content)
+        self.assertIn('globalActiveOriginalIndex = newIndex;', self.playback_content)
+
+    def test_generate_queue_bounds_safe_with_staged_track_fallback(self):
+        """generateQueue safely bounds-checks playQueue and falls back to staged track ID or globalActiveOriginalIndex"""
+        self.assertIn('if (playQueue && queueIndex >= 0 && queueIndex < playQueue.length)', self.playback_content)
+        self.assertIn('window._stagedLastPlayedTrack.trackId && Array.isArray(data)', self.playback_content)
+        self.assertIn('data.findIndex(t => t.id === window._stagedLastPlayedTrack.trackId)', self.playback_content)
+
+    def test_load_playlist_cache_offline_guarantees(self):
+        """loadPlaylist handles staged track queue generation, alreadyRendered checks, and offline empty state"""
+        self.assertIn('const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);', self.playback_content)
+        self.assertIn('if (cachedData && !alreadyRendered)', self.playback_content)
+        self.assertIn('else if (globalActivePlaylist === folderName)', self.playback_content)
+
+    def test_utils_idb_sync_and_dom_offline_retry_guard(self):
+        """utils.js mirrors IDB to DB_CACHE and dom.js caps audio fetch retries when offline"""
+        self.assertIn('caches.open(DB_CACHE_NAME).then(dbCache => {', self.utils_content)
+        self.assertIn('fetchAttempts >= 3 && typeof navigator !== \'undefined\' && navigator.onLine === false', self.dom_content)
+
 if __name__ == '__main__':
     unittest.main()

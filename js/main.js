@@ -1412,6 +1412,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (typeof restoreLastPlayedTrack === 'function') {
                     restoreLastPlayedTrack(idbState);
                 }
+                if (idbState.playlist && idbState.playlist !== initialPl) {
+                    loadPlaylist(idbState.playlist);
+                } else if (allDatabases[idbState.playlist]) {
+                    applyPlaylistData(idbState.playlist, allDatabases[idbState.playlist], false);
+                }
             }
         }).catch(() => {});
     }

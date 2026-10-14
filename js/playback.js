@@ -173,6 +173,22 @@
                         renderVirtualTracks();
                     }
                 }
+                // Reconcile staged last played track or active track against full database
+                let targetTrackId = null;
+                if (globalActivePlaylist === folderName) {
+                    if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId) {
+                        targetTrackId = window._stagedLastPlayedTrack.trackId;
+                    } else if (globalActiveOriginalIndex >= 0 && currentPlaylistData && currentPlaylistData[globalActiveOriginalIndex]) {
+                        targetTrackId = currentPlaylistData[globalActiveOriginalIndex].id;
+                    }
+                }
+                if (targetTrackId && globalActivePlaylist === folderName) {
+                    const newIndex = normalizedAccum.findIndex(t => t.id === targetTrackId);
+                    if (newIndex !== -1) {
+                        globalActiveOriginalIndex = newIndex;
+                    }
+                }
+
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
                     window.rebuildCrossShuffleDeck();
                 }
@@ -259,11 +275,14 @@
             ? getCachedPlaylistDatabase(folderName)
             : ('caches' in window ? caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(r => r ? r.json() : null) : Promise.resolve(null))
         ).then(cachedData => {
-            if (cachedData && !hasRendered) {
+            const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);
+            if (cachedData && !alreadyRendered) {
                 applyNormalizedDataInChunks(cachedData, folderName, false);
                 hasRendered = true;
                 if (!globalActivePlaylist || queueIndex === -1) {
                     generateQueue(true, folderName);
+                } else if (globalActivePlaylist === folderName) {
+                    generateQueue(false, folderName);
                 }
             }
             return cachedData;
@@ -290,6 +309,8 @@
 
                         if (!globalActivePlaylist || queueIndex === -1) {
                             generateQueue(true, folderName);
+                        } else if (globalActivePlaylist === folderName) {
+                            generateQueue(false, folderName);
                         }
                     }
                 })
@@ -302,6 +323,8 @@
                             hasRendered = true;
                             if (!globalActivePlaylist || queueIndex === -1) {
                                 generateQueue(true, folderName);
+                            } else if (globalActivePlaylist === folderName) {
+                                generateQueue(false, folderName);
                             }
                         } else if (!hasRendered) {
                             console.error("Failed to load playlist:", err);
@@ -312,7 +335,8 @@
         } else {
             // When explicitly offline, resolve cache lookup and display actionable empty state if not cached
             cachePromise.then(cachedData => {
-                if (!cachedData && !hasRendered) {
+                const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);
+                if (!cachedData && !alreadyRendered) {
                     showOfflinePlaylistEmptyState(folderName);
                 }
             });
@@ -361,7 +385,20 @@
                 [indices[i], indices[j]] = [indices[j], indices[i]];
             }
             if (!resetPlayback && (queueIndex !== -1 || globalActiveOriginalIndex >= 0)) {
-                const currentOriginalIndex = (playQueue && playQueue.length > 0 && queueIndex >= 0 && typeof playQueue[queueIndex] === 'object') ? playQueue[queueIndex].index : ((playQueue && playQueue.length > 0 && queueIndex >= 0) ? playQueue[queueIndex] : globalActiveOriginalIndex);
+                let currentOriginalIndex = -1;
+                if (playQueue && queueIndex >= 0 && queueIndex < playQueue.length) {
+                    const item = playQueue[queueIndex];
+                    currentOriginalIndex = (typeof item === 'object' && item !== null) ? item.index : item;
+                } else if (globalActiveOriginalIndex >= 0) {
+                    currentOriginalIndex = globalActiveOriginalIndex;
+                }
+                if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId && Array.isArray(data)) {
+                    const matchedIdx = data.findIndex(t => t.id === window._stagedLastPlayedTrack.trackId);
+                    if (matchedIdx !== -1) {
+                        currentOriginalIndex = matchedIdx;
+                    }
+                }
+
                 const foundIdx = indices.indexOf(currentOriginalIndex);
                 if (foundIdx !== -1) {
                     queueIndex = foundIdx;
@@ -373,7 +410,20 @@
                 }
             }
         } else if (!resetPlayback && (queueIndex !== -1 || globalActiveOriginalIndex >= 0)) {
-            const currentOriginalIndex = (playQueue && playQueue.length > 0 && queueIndex >= 0 && typeof playQueue[queueIndex] === 'object') ? playQueue[queueIndex].index : ((playQueue && playQueue.length > 0 && queueIndex >= 0) ? playQueue[queueIndex] : globalActiveOriginalIndex);
+            let currentOriginalIndex = -1;
+            if (playQueue && queueIndex >= 0 && queueIndex < playQueue.length) {
+                const item = playQueue[queueIndex];
+                currentOriginalIndex = (typeof item === 'object' && item !== null) ? item.index : item;
+            } else if (globalActiveOriginalIndex >= 0) {
+                currentOriginalIndex = globalActiveOriginalIndex;
+            }
+            if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId && Array.isArray(data)) {
+                const matchedIdx = data.findIndex(t => t.id === window._stagedLastPlayedTrack.trackId);
+                if (matchedIdx !== -1) {
+                    currentOriginalIndex = matchedIdx;
+                }
+            }
+
             if (typeof currentOriginalIndex === 'number' && currentOriginalIndex >= 0 && currentOriginalIndex < indices.length) {
                 queueIndex = currentOriginalIndex;
             } else {
