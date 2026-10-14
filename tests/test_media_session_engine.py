@@ -10,6 +10,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         dom_path = os.path.join(base_dir, 'js', 'dom.js')
         main_path = os.path.join(base_dir, 'js', 'main.js')
         state_path = os.path.join(base_dir, 'js', 'state.js')
+        playback_path = os.path.join(base_dir, 'js', 'playback.js')
         test_path = os.path.join(base_dir, 'tests', 'test_media_session_engine.py')
 
         with open(media_session_path, 'r', encoding='utf-8') as f:
@@ -20,6 +21,8 @@ class TestMediaSessionEngine(unittest.TestCase):
             cls.main_content = f.read()
         with open(state_path, 'r', encoding='utf-8') as f:
             cls.state_content = f.read()
+        with open(playback_path, 'r', encoding='utf-8') as f:
+            cls.playback_content = f.read()
         with open(test_path, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -1020,6 +1023,33 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'function\s+togglePlaybackMode[\s\S]*?const\s+isMobile\s*=\s*\(typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\);[\s\S]*?if\s*\(\s*!isMobile\s*\)\s*\{\s*newMode\s*=\s*[\'"]mode1[\'"];\s*\}'
         )
 
+    def test_dom_switch_track_stream_id_guards_switching_flag(self):
+        """DualAudioPingPong.switchTrack guards clearing of this.switching to only active stream ID"""
+        self.assertIn("if (this._streamId === activeStreamId) this.switching = false;", self.dom_content)
+
+    def test_dom_switch_track_safe_play_abort_error_recovery(self):
+        """DualAudioPingPong.switchTrack defines safePlay with AbortError recovery retry for rapid skips"""
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+safePlay\s*=\s*\(\s*\)\s*=>\s*\{[\s\S]*?e\.name\s*===\s*[\'"]AbortError[\'"][\s\S]*?this\.active\.play\(\)\.catch'
+        )
+
+    def test_media_session_pause_listener_guarded_by_switching(self):
+        """mediaSession.js native pause listener guards against audioPlayer.switching"""
+        self.assertRegex(
+            self.ms_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,\s*\(\s*\)\s*=>\s*\{[\s\S]*?audioPlayer\.switching'
+        )
+
+    def test_playback_queue_index_boundary_guards(self):
+        """playback.js generateQueue clamps queueIndex and executePlayback prevents early silent drop"""
+        self.assertIn("indices.unshift(currentOriginalIndex);", self.playback_content)
+        self.assertRegex(
+            self.playback_content,
+            r'if\s*\(\s*queueIndex\s*<\s*0\s*\|\|\s*queueIndex\s*>=\s*playQueue\.length\s*\)\s*\{\s*queueIndex\s*=\s*Math\.max'
+        )
+
 
 if __name__ == '__main__':
     unittest.main()
+

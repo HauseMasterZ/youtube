@@ -10,6 +10,14 @@ class TestDownloadEngine(unittest.TestCase):
         with open(playback_path, 'r', encoding='utf-8') as f:
             cls.playback_content = f.read()
 
+        dom_path = os.path.join(base_dir, 'js', 'dom.js')
+        with open(dom_path, 'r', encoding='utf-8') as f:
+            cls.dom_content = f.read()
+
+        sw_path = os.path.join(base_dir, 'sw.js')
+        with open(sw_path, 'r', encoding='utf-8') as f:
+            cls.sw_content = f.read()
+
         utils_path = os.path.join(base_dir, 'js', 'utils.js')
         with open(utils_path, 'r', encoding='utf-8') as f:
             cls.utils_content = f.read()
@@ -29,6 +37,8 @@ class TestDownloadEngine(unittest.TestCase):
             flags=re.UNICODE
         )
         self.assertEqual(emoji_pattern.findall(self.playback_content), [], "Found emojis in playback.js")
+        self.assertEqual(emoji_pattern.findall(self.dom_content), [], "Found emojis in dom.js")
+        self.assertEqual(emoji_pattern.findall(self.sw_content), [], "Found emojis in sw.js")
         self.assertEqual(emoji_pattern.findall(self.css_content), [], "Found emojis in style.css")
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_download_engine.py")
 
@@ -97,6 +107,74 @@ class TestDownloadEngine(unittest.TestCase):
         self.assertRegex(
             self.playback_content,
             r'getSquareArtwork\(\s*thumbUrl\s*,\s*track\.id'
+        )
+
+    def test_fast_path_cache_duration_incomplete_guard(self):
+        """Fast-path verifies demuxed duration against expected duration and treats incomplete files as partial"""
+        self.assertIn("buffEnd < (this._expectedDuration - 3.5)", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+isDurationIncomplete\s*=\s*this\._expectedDuration\s*>\s*0\s*&&\s*buffEnd\s*<\s*\(this\._expectedDuration\s*-\s*3\.5\);'
+        )
+        self.assertIn("if (isDurationIncomplete || isSizeIncomplete || isLengthIncomplete)", self.dom_content)
+
+    def test_fast_path_cache_size_incomplete_guard(self):
+        """Fast-path verifies cached bytes against minimum expected audio bitrate"""
+        self.assertIn("cachedPartialBytes < (this._expectedDuration * 4000)", self.dom_content)
+
+    def test_fast_path_cache_header_self_healing(self):
+        """Fast-path self-heals CacheStorage with X-Partial-Cached: true when truncated audio is detected"""
+        self.assertRegex(
+            self.dom_content,
+            r'cachedRes\.headers\.get\([\'"]X-Partial-Cached[\'"]\)\s*!==\s*[\'"]true[\'"][\s\S]*?\'X-Partial-Cached\':\s*\'true\''
+        )
+
+    def test_read_stream_completion_verification(self):
+        """readStream verifies full song duration and Content-Length before marking stream done"""
+        self.assertIn("isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5)", self.dom_content)
+        self.assertIn("totalBytesAppended < totalExpected", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*!isDurationComplete\s*\|\|\s*!isLengthComplete\s*\)\s*\{[\s\S]*?await\s+saveProgress\(false\);[\s\S]*?attemptRecovery\(\);'
+        )
+
+    def test_waiting_event_mid_song_stall_recovery(self):
+        """DualAudioPingPong waiting event resets streamDone and triggers recovery when stalled mid-song"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*e\.type\s*===\s*[\'"]waiting[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*dur\s*>\s*0\s*&&\s*ct\s*<\s*dur\s*-\s*1\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;[\s\S]*?this\._triggerBufferRecovery\(\)'
+        )
+
+    def test_premature_buffer_end_recovery_guard(self):
+        """timeupdate event suppresses premature ended firing and triggers recovery if effectiveEnd is short"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*this\._expectedDuration\s*>\s*0\s*&&\s*effectiveEnd\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;[\s\S]*?this\._triggerBufferRecovery\(\)'
+        )
+
+    def test_premature_ended_event_recovery_guard(self):
+        """ended event listener suppresses premature ended and triggers recovery when currentTime is short"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*e\.type\s*===\s*[\'"]ended[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*this\._expectedDuration\s*>\s*0\s*&&\s*this\.active\.currentTime\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;'
+        )
+
+    def test_attempt_recovery_416_handling(self):
+        """attemptRecovery explicitly handles HTTP 416 Range Not Satisfiable"""
+        self.assertIn("if (resumeRes.status === 416)", self.dom_content)
+
+    def test_preload_next_track_buffers_array_buffer(self):
+        """preloadNextTrack buffers entire arrayBuffer before writing to cache with X-Partial-Cached: false"""
+        self.assertRegex(
+            self.playback_content,
+            r'const\s+buf\s*=\s*await\s+response\.arrayBuffer\(\);[\s\S]*?\'X-Partial-Cached\':\s*\'false\'[\s\S]*?cache\.put\(audioUrl,\s*fullRes\)'
+        )
+
+    def test_sw_audio_buffers_array_buffer(self):
+        """sw.js audio media handler buffers arrayBuffer before caching with X-Partial-Cached: false"""
+        self.assertRegex(
+            self.sw_content,
+            r'cloned\.arrayBuffer\(\)\.then\(\s*buf\s*=>\s*\{[\s\S]*?\'X-Partial-Cached\':\s*\'false\'[\s\S]*?cache\.put\(cacheKeyUrl\.href,\s*fullRes\)'
         )
 
 if __name__ == '__main__':

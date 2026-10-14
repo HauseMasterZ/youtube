@@ -120,8 +120,20 @@ self.addEventListener('fetch', (event) => {
                     });
                     return fetch(fullRequest).then(response => {
                         if (!response.ok) return response;
-                        cache.put(cacheKeyUrl.href, response.clone());
-                        limitCacheSize('yt-player-media', 1000);
+                        const cloned = response.clone();
+                        cloned.arrayBuffer().then(buf => {
+                            const contentType = cloned.headers.get('Content-Type') || (cacheKeyUrl.href.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                            const fullRes = new Response(buf, {
+                                status: 200,
+                                headers: {
+                                    'Content-Type': contentType,
+                                    'Content-Length': buf.byteLength.toString(),
+                                    'X-Partial-Cached': 'false'
+                                }
+                            });
+                            cache.put(cacheKeyUrl.href, fullRes);
+                            limitCacheSize('yt-player-media', 1000);
+                        }).catch(() => {});
                         return response;
                     });
                 });

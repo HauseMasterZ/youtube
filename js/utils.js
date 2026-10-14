@@ -409,6 +409,42 @@
         }
     }
 
+    async function saveLastPlayedToIDB(payload) {
+        if (!payload || typeof payload !== 'object') return false;
+        try {
+            const db = await openPlaylistIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE_NAME, 'readwrite');
+                const store = tx.objectStore(IDB_STORE_NAME);
+                store.put(payload, '__last_played__');
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => resolve(false);
+                tx.onabort = () => resolve(false);
+            });
+        } catch (e) {
+            return false;
+        }
+    }
+
+    async function getLastPlayedFromIDB() {
+        try {
+            const db = await openPlaylistIDB();
+            return new Promise((resolve) => {
+                const tx = db.transaction(IDB_STORE_NAME, 'readonly');
+                const store = tx.objectStore(IDB_STORE_NAME);
+                const req = store.get('__last_played__');
+                req.onsuccess = () => {
+                    const res = req.result;
+                    if (res && typeof res === 'object' && res.trackId && res.trackSnapshot) resolve(res);
+                    else resolve(null);
+                };
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) {
+            return null;
+        }
+    }
+
     async function getAllPlaylistsFromIDB() {
         try {
             const db = await openPlaylistIDB();
@@ -594,4 +630,6 @@
         return false;
     }
     window.isTrackAudioCached = isTrackAudioCached;
+    window.saveLastPlayedToIDB = saveLastPlayedToIDB;
+    window.getLastPlayedFromIDB = getLastPlayedFromIDB;
 

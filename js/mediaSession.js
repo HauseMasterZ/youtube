@@ -1174,6 +1174,7 @@
             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         audioPlayer.addEventListener('pause', () => {
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser))) return;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
