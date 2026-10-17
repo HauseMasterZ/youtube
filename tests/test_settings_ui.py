@@ -495,6 +495,40 @@ class TestSettingsUI(unittest.TestCase):
             r'if\s*\(\s*!isMobile\s*\)\s*\{[\s\S]*?newMode\s*=\s*[\'"]mode1[\'"];[\s\S]*?mode1Radio\.checked\s*=\s*true;[\s\S]*?mode2Radio\.checked\s*=\s*false;'
         )
 
+    def test_update_site_button_wired_and_defined(self):
+        """btnModalUpdate is wired to updateSiteApp which defines executeSitePurgeAndReload"""
+        self.assertIn('btnModalUpdate', self.main_content)
+        self.assertIn('window.updateSiteApp = updateSiteApp;', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'btnModalUpdate\.addEventListener\(\s*[\'"]click[\'"]\s*,\s*\(\s*\)\s*=>\s*\{[\s\S]*?updateSiteApp\(\);'
+        )
+
+    def test_update_site_offline_guard_and_resilience(self):
+        """updateSiteApp guards against offline state and flushes playback position"""
+        self.assertRegex(
+            self.main_content,
+            r'typeof\s+navigator\s*!==\s*[\'"]undefined[\'"]\s*&&\s*navigator\.onLine\s*===\s*false'
+        )
+        self.assertIn('Offline - cannot update', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'flushLastPlayedState\(\)|saveLastPlayedState\(\)'
+        )
+
+    def test_update_site_desktop_select_interceptor(self):
+        """playlistSelect on desktop defines and intercepts UPDATE_SITE"""
+        self.assertIn('UPDATE_SITE', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*e\.target\.value\s*===\s*[\'"]UPDATE_SITE[\'"]\s*\)\s*\{[\s\S]*?updateSiteApp\(\)'
+        )
+
+    def test_update_site_static_cache_purge_and_sw_message(self):
+        """executeSitePurgeAndReload deletes yt-player-cache and messages controller PURGE_STATIC_CACHE"""
+        self.assertIn("key.startsWith('yt-player-cache')", self.main_content)
+        self.assertIn("postMessage({ type: 'PURGE_STATIC_CACHE' })", self.main_content)
+        self.assertIn("postMessage({ type: 'SKIP_WAITING' })", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

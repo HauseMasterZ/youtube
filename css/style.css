@@ -1936,6 +1936,7 @@ button:focus { outline: none !important; }
 }
 
 .settings-action-btn,
+#btn-modal-update,
 #btn-modal-reload,
 #btn-modal-install {
     width: 100%;
@@ -1955,10 +1956,31 @@ button:focus { outline: none !important; }
     align-items: center;
     justify-content: center;
     text-align: center;
+    gap: 8px;
+}
+
+#btn-modal-update svg {
+    flex-shrink: 0;
+}
+
+#btn-modal-update.updating {
+    border-color: rgba(140, 115, 255, 0.6);
+    background: rgba(140, 115, 255, 0.12);
+}
+
+#btn-modal-update.success {
+    border-color: #00ff88;
+    color: #00ff88;
+}
+
+#btn-modal-update.error {
+    border-color: #ff5555;
+    color: #ff8888;
 }
 
 @media (hover: hover) {
     .settings-action-btn:hover,
+    #btn-modal-update:hover,
     #btn-modal-reload:hover,
     #btn-modal-install:hover {
         background: rgba(255, 255, 255, 0.12);
@@ -1967,6 +1989,7 @@ button:focus { outline: none !important; }
 }
 
 .settings-action-btn:active,
+#btn-modal-update:active,
 #btn-modal-reload:active,
 #btn-modal-install:active {
     background: rgba(255, 255, 255, 0.16);
@@ -2053,6 +2076,7 @@ button:focus { outline: none !important; }
     }
 
     .settings-action-btn,
+    #btn-modal-update,
     #btn-modal-reload,
     #btn-modal-install {
         min-height: 44px;

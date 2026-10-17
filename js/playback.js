@@ -346,7 +346,7 @@
         if (!window._swRegistered && 'serviceWorker' in navigator) {
             window._swRegistered = true;
             const registerSW = () => {
-                navigator.serviceWorker.register('sw.js').catch((error) => {
+                navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch((error) => {
                     console.error('ServiceWorker registration failed: ', error);
                 });
             };
