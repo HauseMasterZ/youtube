@@ -33,12 +33,49 @@
         const isCurrentlyViewing = (playlistSelect.value === folderName);
         if (!isCurrentlyViewing) return;
 
-        // Active playing track ID preservation across background playlist updates
-        if (globalActivePlaylist === folderName && globalActiveOriginalIndex >= 0 && prevData && prevData[globalActiveOriginalIndex]) {
-            const currentTrackId = prevData[globalActiveOriginalIndex].id;
-            const newIndex = normalizedData.findIndex(t => t.id === currentTrackId);
+        // Active playing track ID preservation or staged track reconciliation across background playlist updates
+        let targetTrackId = null;
+        if (globalActivePlaylist === folderName) {
+            if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId) {
+                targetTrackId = window._stagedLastPlayedTrack.trackId;
+            } else if (globalActiveOriginalIndex >= 0 && prevData && prevData[globalActiveOriginalIndex]) {
+                targetTrackId = prevData[globalActiveOriginalIndex].id;
+            }
+        }
+
+        if (targetTrackId && globalActivePlaylist === folderName) {
+            const newIndex = normalizedData.findIndex(t => t.id === targetTrackId);
             if (newIndex !== -1) {
                 globalActiveOriginalIndex = newIndex;
+                if (queueIndex === -1 || (window._stagedLastPlayedTrack && queueIndex === window._stagedLastPlayedTrack.queueIndex)) {
+                    queueIndex = newIndex;
+                }
+            }
+        }
+
+        // Reconstruct playQueue if it was staged or empty
+        if (globalActivePlaylist === folderName) {
+            if (shuffleMode === 2) {
+                if (!playQueue || playQueue.length <= 1 || playQueue.length < normalizedData.length) {
+                    generateQueue(false, folderName);
+                }
+            } else if (shuffleMode !== 1) {
+                if (!playQueue || playQueue.length <= 1 || playQueue.length < normalizedData.length) {
+                    playQueue = Array.from({length: normalizedData.length}, (_, i) => i);
+                    if (globalActiveOriginalIndex >= 0) {
+                        queueIndex = globalActiveOriginalIndex;
+                    }
+                }
+            }
+        }
+
+        if (shuffleMode === 1 && crossShuffleHistory.length === 0 && typeof window.rebuildCrossShuffleDeck === 'function') {
+            window.rebuildCrossShuffleDeck();
+            if (globalActivePlaylist && globalActiveOriginalIndex >= 0) {
+                const foundPos = crossShuffleHistory.findIndex(t => t.playlist === globalActivePlaylist && t.index === globalActiveOriginalIndex);
+                if (foundPos !== -1) {
+                    crossShufflePos = foundPos;
+                }
             }
         }
 
@@ -136,6 +173,22 @@
                         renderVirtualTracks();
                     }
                 }
+                // Reconcile staged last played track or active track against full database
+                let targetTrackId = null;
+                if (globalActivePlaylist === folderName) {
+                    if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId) {
+                        targetTrackId = window._stagedLastPlayedTrack.trackId;
+                    } else if (globalActiveOriginalIndex >= 0 && currentPlaylistData && currentPlaylistData[globalActiveOriginalIndex]) {
+                        targetTrackId = currentPlaylistData[globalActiveOriginalIndex].id;
+                    }
+                }
+                if (targetTrackId && globalActivePlaylist === folderName) {
+                    const newIndex = normalizedAccum.findIndex(t => t.id === targetTrackId);
+                    if (newIndex !== -1) {
+                        globalActiveOriginalIndex = newIndex;
+                    }
+                }
+
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
                     window.rebuildCrossShuffleDeck();
                 }
@@ -222,11 +275,14 @@
             ? getCachedPlaylistDatabase(folderName)
             : ('caches' in window ? caches.match(`${baseUrl}/${folderName}/_Playlist_Database.json`).then(r => r ? r.json() : null) : Promise.resolve(null))
         ).then(cachedData => {
-            if (cachedData && !hasRendered) {
+            const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);
+            if (cachedData && !alreadyRendered) {
                 applyNormalizedDataInChunks(cachedData, folderName, false);
                 hasRendered = true;
                 if (!globalActivePlaylist || queueIndex === -1) {
                     generateQueue(true, folderName);
+                } else if (globalActivePlaylist === folderName) {
+                    generateQueue(false, folderName);
                 }
             }
             return cachedData;
@@ -253,6 +309,8 @@
 
                         if (!globalActivePlaylist || queueIndex === -1) {
                             generateQueue(true, folderName);
+                        } else if (globalActivePlaylist === folderName) {
+                            generateQueue(false, folderName);
                         }
                     }
                 })
@@ -265,6 +323,8 @@
                             hasRendered = true;
                             if (!globalActivePlaylist || queueIndex === -1) {
                                 generateQueue(true, folderName);
+                            } else if (globalActivePlaylist === folderName) {
+                                generateQueue(false, folderName);
                             }
                         } else if (!hasRendered) {
                             console.error("Failed to load playlist:", err);
@@ -275,7 +335,8 @@
         } else {
             // When explicitly offline, resolve cache lookup and display actionable empty state if not cached
             cachePromise.then(cachedData => {
-                if (!cachedData && !hasRendered) {
+                const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);
+                if (!cachedData && !alreadyRendered) {
                     showOfflinePlaylistEmptyState(folderName);
                 }
             });
@@ -323,13 +384,51 @@
                 const j = randomBuffer[0] % (i + 1);
                 [indices[i], indices[j]] = [indices[j], indices[i]];
             }
-            if (!resetPlayback && queueIndex !== -1) {
-                const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
-                queueIndex = indices.indexOf(currentOriginalIndex);
+            if (!resetPlayback && (queueIndex !== -1 || globalActiveOriginalIndex >= 0)) {
+                let currentOriginalIndex = -1;
+                if (playQueue && queueIndex >= 0 && queueIndex < playQueue.length) {
+                    const item = playQueue[queueIndex];
+                    currentOriginalIndex = (typeof item === 'object' && item !== null) ? item.index : item;
+                } else if (globalActiveOriginalIndex >= 0) {
+                    currentOriginalIndex = globalActiveOriginalIndex;
+                }
+                if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId && Array.isArray(data)) {
+                    const matchedIdx = data.findIndex(t => t.id === window._stagedLastPlayedTrack.trackId);
+                    if (matchedIdx !== -1) {
+                        currentOriginalIndex = matchedIdx;
+                    }
+                }
+
+                const foundIdx = indices.indexOf(currentOriginalIndex);
+                if (foundIdx !== -1) {
+                    queueIndex = foundIdx;
+                } else if (typeof currentOriginalIndex === 'number' && currentOriginalIndex >= 0) {
+                    indices.unshift(currentOriginalIndex);
+                    queueIndex = 0;
+                } else {
+                    queueIndex = 0;
+                }
             }
-        } else if (!resetPlayback && queueIndex !== -1) {
-            const currentOriginalIndex = typeof playQueue[queueIndex] === 'object' ? playQueue[queueIndex].index : playQueue[queueIndex];
-            queueIndex = currentOriginalIndex;
+        } else if (!resetPlayback && (queueIndex !== -1 || globalActiveOriginalIndex >= 0)) {
+            let currentOriginalIndex = -1;
+            if (playQueue && queueIndex >= 0 && queueIndex < playQueue.length) {
+                const item = playQueue[queueIndex];
+                currentOriginalIndex = (typeof item === 'object' && item !== null) ? item.index : item;
+            } else if (globalActiveOriginalIndex >= 0) {
+                currentOriginalIndex = globalActiveOriginalIndex;
+            }
+            if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId && Array.isArray(data)) {
+                const matchedIdx = data.findIndex(t => t.id === window._stagedLastPlayedTrack.trackId);
+                if (matchedIdx !== -1) {
+                    currentOriginalIndex = matchedIdx;
+                }
+            }
+
+            if (typeof currentOriginalIndex === 'number' && currentOriginalIndex >= 0 && currentOriginalIndex < indices.length) {
+                queueIndex = currentOriginalIndex;
+            } else {
+                queueIndex = 0;
+            }
         }
         
         playQueue = indices;
@@ -488,6 +587,9 @@
                         return tr && typeof isTrackAudioCached === 'function' && isTrackAudioCached(tr);
                     });
                 }
+                if (crossShuffleHistory.length === 0 && typeof window.rebuildCrossShuffleDeck === 'function') {
+                    window.rebuildCrossShuffleDeck();
+                }
                 for (let i = crossShuffleHistory.length - 1; i > 0; i--) {
                     const j = Math.floor(Math.random() * (i + 1));
                     [crossShuffleHistory[i], crossShuffleHistory[j]] = [crossShuffleHistory[j], crossShuffleHistory[i]];
@@ -495,8 +597,11 @@
                 crossShufflePos = 0;
             }
 
+            if (crossShuffleHistory.length === 0) return;
             const target = crossShuffleHistory[crossShufflePos];
-            playFromPlaylist(target.playlist, target.index, true);
+            if (target && target.playlist) {
+                playFromPlaylist(target.playlist, target.index, true);
+            }
             return;
         }    
         
@@ -557,7 +662,7 @@
             audioPlayer.play();
         }
     }
-    function executePlayback(preventAutoplay = false, isHistoryNav = false, forceScroll = false) {
+    function executePlayback(preventAutoplay = false, isHistoryNav = false, forceScroll = false, resumePosition = null) {
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
@@ -584,7 +689,10 @@
             clearTimeout(errorSkipTimer);
             errorSkipTimer = null;
         }
-        if (queueIndex < 0 || queueIndex >= playQueue.length) return;
+        if (playQueue.length === 0) return;
+        if (queueIndex < 0 || queueIndex >= playQueue.length) {
+            queueIndex = Math.max(0, Math.min(queueIndex, playQueue.length - 1));
+        }
         
         currentPlaybackSequence++;
         const sequenceId = currentPlaybackSequence;
@@ -603,7 +711,24 @@
                  || (currentPlaylistData ? currentPlaylistData[originalIndex] : null);
         }
 
-        if (!track) return;
+        if (!track) {
+            const fallbackItem = playQueue[0];
+            const fallbackIdx = (typeof fallbackItem === 'object' && fallbackItem !== null) ? fallbackItem.index : fallbackItem;
+            const fallbackPl = (typeof fallbackItem === 'object' && fallbackItem !== null) ? fallbackItem.playlist : (queueBasePlaylist || globalActivePlaylist || playlistSelect.value);
+            track = (allDatabases[fallbackPl] && allDatabases[fallbackPl][fallbackIdx]) || (currentPlaylistData ? currentPlaylistData[fallbackIdx] : null);
+            if (track) {
+                queueIndex = 0;
+                originalIndex = fallbackIdx;
+                targetPlaylist = fallbackPl;
+            } else if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackSnapshot) {
+                track = window._stagedLastPlayedTrack.trackSnapshot;
+                originalIndex = (typeof window._stagedLastPlayedTrack.originalIndex === 'number' && window._stagedLastPlayedTrack.originalIndex >= 0) ? window._stagedLastPlayedTrack.originalIndex : 0;
+                targetPlaylist = window._stagedLastPlayedTrack.playlist || targetPlaylist;
+                queueIndex = (typeof window._stagedLastPlayedTrack.queueIndex === 'number' && window._stagedLastPlayedTrack.queueIndex >= 0) ? window._stagedLastPlayedTrack.queueIndex : originalIndex;
+            } else {
+                return;
+            }
+        }
 
         globalActiveOriginalIndex = originalIndex;
         globalActivePlaylist = targetPlaylist;
@@ -694,7 +819,6 @@
 
         scrollToTrack(originalIndex, forceScroll);
 
-        updateTimeUI(0);
         let parsedDuration = 0;
         if (track.duration) {
             parsedDuration = parseISODuration(track.duration);
@@ -709,7 +833,12 @@
             seekBar.max = 0; // Reset seekbar to prevent seeking before load
             totalTimeDisplay.textContent = "0:00";
         }
-        seekBar.value = 0;
+
+        const initialPosition = (resumePosition !== null && resumePosition > 0 && (parsedDuration === 0 || resumePosition <= parsedDuration))
+            ? resumePosition
+            : 0;
+        seekBar.value = initialPosition;
+        updateTimeUI(initialPosition);
 
         let audioUrl = getAudioUrl(track);
         const thumbUrl = getThumbUrl(track);
@@ -784,13 +913,13 @@
                 ? ((typeof window.declaredPausedState === 'function') ? window.declaredPausedState() : 'paused')
                 : "playing";
 
-            // Initialize lock-screen seekbar with known metadata duration at 0:00 (frozen during buffering)
+            // Initialize lock-screen seekbar with known metadata duration at initialPosition (frozen during buffering)
             if ('setPositionState' in navigator.mediaSession && parsedDuration > 0) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: parsedDuration,
                         playbackRate: 0.00001,
-                        position: 0
+                        position: initialPosition
                     });
                 } catch(e) {}
             }
@@ -818,7 +947,11 @@
             }
         }
 
-        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly, parsedDuration);
+        audioPlayer.switchTrack(audioUrl, preventAutoplay || uiOnly, parsedDuration, resumePosition);
+
+        if (!uiOnly && typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState(0);
+        }
 
         if (window.lyricsActive) {
             loadLyrics(track);
@@ -870,17 +1003,23 @@
             const audioUrl = getAudioUrl(nextTrack);
             if (!preloadedFetches.has(audioUrl)) {
                 const controller = new AbortController();
-                const fetchPromise = caches.open('yt-player-media').then(cache => {
-                    return cache.match(audioUrl).then(match => {
-                        if (match) return; // Already in media cache
-                        return fetch(audioUrl, { signal: controller.signal, priority: 'low' });
-                    }).then(response => {
-                        if (!response) return;
-                        if (!response.ok) throw new Error();
-                        const cloned = response.clone();
-                        caches.open('yt-player-media').then(cache => cache.put(audioUrl, cloned)).catch(e => {});
-                        return response.blob();
+                const fetchPromise = caches.open('yt-player-media').then(async cache => {
+                    const match = await cache.match(audioUrl);
+                    if (match && match.headers.get('X-Partial-Cached') !== 'true') return;
+                    const response = await fetch(audioUrl, { signal: controller.signal, priority: 'low' });
+                    if (!response || !response.ok) return;
+                    const buf = await response.arrayBuffer();
+                    if (controller.signal.aborted) return;
+                    const contentType = response.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                    const fullRes = new Response(buf, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': contentType,
+                            'Content-Length': buf.byteLength.toString(),
+                            'X-Partial-Cached': 'false'
+                        }
                     });
+                    await cache.put(audioUrl, fullRes);
                 });
                 fetchPromise.catch(e => {});
                 preloadedFetches.set(audioUrl, controller);
@@ -994,7 +1133,14 @@
                     try {
                         // 1. Audio Cache (Store full response with status 200, bypassing SW double buffering)
                         const existingAudio = await mediaCache.match(audioUrl);
-                        const isPartial = existingAudio && (existingAudio.headers.get('X-Partial-Cached') === 'true');
+                        let isPartial = existingAudio && (existingAudio.headers.get('X-Partial-Cached') === 'true' || existingAudio.status === 206);
+                        if (existingAudio && !isPartial && track.duration) {
+                            const durSec = (typeof parseISODuration === 'function') ? parseISODuration(track.duration) : 0;
+                            const len = existingAudio.headers.get('Content-Length') ? parseInt(existingAudio.headers.get('Content-Length'), 10) : 0;
+                            if (durSec > 0 && len > 0 && len < durSec * 4000) {
+                                isPartial = true;
+                            }
+                        }
                         if (!existingAudio || isPartial) {
                             const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
                             const res = await fetchWithRetry(fetchUrl, { signal }, 3);
@@ -1059,7 +1205,13 @@
                 for (const t of tracks) {
                     const aUrl = getAudioUrl(t);
                     const hasA = await mediaCache.match(aUrl);
-                    if (hasA && hasA.headers.get('X-Partial-Cached') !== 'true') {
+                    let isAPartial = hasA && (hasA.headers.get('X-Partial-Cached') === 'true' || hasA.status === 206);
+                    if (hasA && !isAPartial && t.duration) {
+                        const dSec = (typeof parseISODuration === 'function') ? parseISODuration(t.duration) : 0;
+                        const l = hasA.headers.get('Content-Length') ? parseInt(hasA.headers.get('Content-Length'), 10) : 0;
+                        if (dSec > 0 && l > 0 && l < dSec * 4000) isAPartial = true;
+                    }
+                    if (hasA && !isAPartial) {
                         verifiedCount++;
                     } else {
                         missingTracks.push(t);
@@ -1132,3 +1284,105 @@
             isDownloadingPlaylist = false;
         }
     }
+
+    function saveLastPlayedState(forcedPosition = null) {
+        try {
+            const targetPlaylist = queueBasePlaylist || globalActivePlaylist || (typeof playlistSelect !== 'undefined' ? playlistSelect.value : null);
+            if (!targetPlaylist) return;
+
+            let track = null;
+            if (allDatabases[targetPlaylist] && globalActiveOriginalIndex >= 0 && allDatabases[targetPlaylist][globalActiveOriginalIndex]) {
+                track = allDatabases[targetPlaylist][globalActiveOriginalIndex];
+            } else if (currentPlaylistData && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                track = currentPlaylistData[globalActiveOriginalIndex];
+            } else if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackSnapshot) {
+                track = window._stagedLastPlayedTrack.trackSnapshot;
+            }
+
+            if (!track || !track.id) return;
+
+            let pos = (forcedPosition !== null && typeof forcedPosition === 'number') 
+                ? forcedPosition 
+                : (typeof audioPlayer !== 'undefined' && audioPlayer ? (audioPlayer.currentTime || 0) : 0);
+            
+            let totalDur = 0;
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration > 0) {
+                totalDur = audioPlayer.duration;
+            } else if (track.duration) {
+                totalDur = typeof parseISODuration === 'function' ? parseISODuration(track.duration) : 0;
+            }
+
+            // If track played to completion or near completion (within 1.5s), reset playhead to 0
+            if (totalDur > 0 && pos >= totalDur - 1.5) {
+                pos = 0;
+            } else {
+                pos = Math.max(0, Math.round(pos * 10) / 10);
+            }
+
+            const payload = {
+                playlist: targetPlaylist,
+                trackId: track.id,
+                originalIndex: globalActiveOriginalIndex >= 0 ? globalActiveOriginalIndex : 0,
+                queueIndex: queueIndex >= 0 ? queueIndex : (globalActiveOriginalIndex >= 0 ? globalActiveOriginalIndex : 0),
+                currentTime: pos,
+                duration: totalDur,
+                trackSnapshot: {
+                    id: track.id,
+                    title: track.title || '',
+                    channel: track.channel || '',
+                    file_path: track.file_path || '',
+                    thumbnail_path: track.thumbnail_path || (track.id && targetPlaylist ? `${targetPlaylist}/thumbnails/${track.id}.webp` : ''),
+                    duration: track.duration || '',
+                    color: track.color || ''
+                },
+                shuffleMode: typeof shuffleMode === 'number' ? shuffleMode : 0,
+                repeatMode: typeof repeatMode === 'number' ? repeatMode : 0,
+                timestamp: Date.now()
+            };
+
+            if (typeof localStorage !== 'undefined' && localStorage) {
+                localStorage.setItem('yt_last_played', JSON.stringify(payload));
+            }
+            if (typeof saveLastPlayedToIDB === 'function') {
+                saveLastPlayedToIDB(payload).catch(() => {});
+            }
+            window._stagedLastPlayedTrack = payload;
+        } catch (e) {
+            // Silently tolerate storage errors
+        }
+    }
+
+    function loadLastPlayedState() {
+        try {
+            if (typeof localStorage !== 'undefined' && localStorage) {
+                const val = localStorage.getItem('yt_last_played');
+                if (val) {
+                    const parsed = JSON.parse(val);
+                    if (parsed && parsed.trackId && parsed.trackSnapshot && parsed.playlist) {
+                        return parsed;
+                    }
+                }
+            }
+        } catch (e) {}
+        return null;
+    }
+
+    function restoreLastPlayedTrack(lastPlayed) {
+        if (!lastPlayed || !lastPlayed.trackId || !lastPlayed.trackSnapshot || !lastPlayed.playlist) return;
+        window._stagedLastPlayedTrack = lastPlayed;
+        globalActivePlaylist = lastPlayed.playlist;
+        globalActiveOriginalIndex = (typeof lastPlayed.originalIndex === 'number' && lastPlayed.originalIndex >= 0) ? lastPlayed.originalIndex : 0;
+        queueIndex = (typeof lastPlayed.queueIndex === 'number' && lastPlayed.queueIndex >= 0) ? lastPlayed.queueIndex : globalActiveOriginalIndex;
+        queueBasePlaylist = lastPlayed.playlist;
+        playQueue = [globalActiveOriginalIndex];
+        window.wasPausedByUser = true;
+        const resumePos = (typeof lastPlayed.currentTime === 'number' && lastPlayed.currentTime > 0) ? lastPlayed.currentTime : 0;
+        if (typeof setPlayUI === 'function') {
+            setPlayUI(false);
+        }
+        executePlayback(true, false, false, resumePos);
+    }
+
+    window.saveLastPlayedState = saveLastPlayedState;
+    window.loadLastPlayedState = loadLastPlayedState;
+    window.restoreLastPlayedTrack = restoreLastPlayedTrack;

@@ -93,5 +93,21 @@ class TestSettingsState(unittest.TestCase):
             r'const\s+isMobile\s*=\s*\(typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\);\s*if\s*\(!isMobile\)\s*return\s*false;'
         )
 
+    def test_desktop_mode1_immutability_in_state(self):
+        """state.js defines property descriptor on window.playbackMode enforcing immutable mode1 on desktop"""
+        self.assertRegex(
+            self.state_content,
+            r'Object\.defineProperty\(\s*window\s*,\s*[\'"]playbackMode[\'"]'
+        )
+        self.assertRegex(
+            self.state_content,
+            r'return\s+isMobile\s*\?\s*_playbackModeVal\s*:\s*[\'"]mode1[\'"];'
+        )
+        self.assertRegex(
+            self.state_content,
+            r'_playbackModeVal\s*=\s*\(isMobile\s*&&\s*val\s*===\s*[\'"]mode2[\'"]\)\s*\?\s*[\'"]mode2[\'"]\s*:\s*[\'"]mode1[\'"];'
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

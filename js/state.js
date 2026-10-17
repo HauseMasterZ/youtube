@@ -104,11 +104,30 @@
     };
 
     window.playbackMode = 'mode1';
+    var _playbackModeVal = 'mode1';
     try {
-        const _storedPlaybackMode = getStoredSetting('yt_playback_mode', 'mode1');
-        if (_storedPlaybackMode === 'mode2') {
-            window.playbackMode = 'mode2';
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        if (isMobile) {
+            const _storedPlaybackMode = getStoredSetting('yt_playback_mode', 'mode1');
+            if (_storedPlaybackMode === 'mode2') {
+                _playbackModeVal = 'mode2';
+            }
         }
+    } catch (e) {}
+
+    try {
+        Object.defineProperty(window, 'playbackMode', {
+            get: function() {
+                const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+                return isMobile ? _playbackModeVal : 'mode1';
+            },
+            set: function(val) {
+                const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+                _playbackModeVal = (isMobile && val === 'mode2') ? 'mode2' : 'mode1';
+            },
+            configurable: true,
+            enumerable: true
+        });
     } catch (e) {}
     window.btTimeoutMins = getStoredSetting('yt_bt_timeout_mins', '3');
     window.btSleepTimer = null;

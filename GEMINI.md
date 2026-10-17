@@ -126,6 +126,14 @@
   - Ensures instant playlist switching, global search filtering, and cross-shuffle queue generation function immediately offline before any network interaction.
 - Actionable Offline Empty State:
   - If an uncached playlist is loaded in offline conditions or upon network timeout, the UI displays an actionable empty state (`showOfflinePlaylistEmptyState`) with a retry button instead of hanging on an indefinite loading screen.
+- Staged Last Played Track Offline Invariant:
+  - Cold-booting or restarting in full offline state cleanly restores the last played track in paused standby via dual-tier storage (localStorage + IndexedDB mirror) and reconciles against offline cached databases without reset.
+- Safe Queue Bounds & Chunked Reconciliation:
+  - `generateQueue` bounds-checks `playQueue[queueIndex]` and resolves against `window._stagedLastPlayedTrack.trackId` or `globalActiveOriginalIndex`, guaranteeing staged tracks beyond chunk boundaries (e.g. index > 60) do not reset `queueIndex` to 0.
+  - `applyNormalizedDataInChunks` re-reconciles by track ID upon full normalization completion.
+- Eager Local Paint & Cache/IDB Mirror Sync:
+  - `loadPlaylist` renders local cached data immediately while network fetch revalidates in the background without blocking UI.
+  - If Cache API experiences a miss or eviction, IndexedDB hits asynchronously re-seed `DB_CACHE` (`yt-player-databases`) to maintain multi-tier cache coherence.
 
 ## 16. Scoped Mobile Playlist Swipe Gesture Invariant
 - Scoped Touch Target: Mobile horizontal swipe gesture for switching playlists (`Gym` <-> `Driving` <-> `Songs`) is strictly scoped to `playlistSelectContainer` (`#playlist-select-container` / `#playlist-select`).

@@ -484,5 +484,17 @@ class TestSettingsUI(unittest.TestCase):
             r'settingsModal[\s\S]*?display\s*!==\s*[\'"]none[\'"][\s\S]*?return;'
         )
 
+    def test_desktop_mode2_radio_disabled_and_guarded(self):
+        """openSettingsModal disables mode2Radio on desktop and change listener rejects mode2"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*!isMobile\s*\)\s*\{[\s\S]*?mode2Radio\.disabled\s*=\s*true;[\s\S]*?mode2Radio\.checked\s*=\s*false;'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*!isMobile\s*\)\s*\{[\s\S]*?newMode\s*=\s*[\'"]mode1[\'"];[\s\S]*?mode1Radio\.checked\s*=\s*true;[\s\S]*?mode2Radio\.checked\s*=\s*false;'
+        )
+
+
 if __name__ == '__main__':
     unittest.main()

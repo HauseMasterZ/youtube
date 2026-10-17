@@ -563,6 +563,9 @@ document.addEventListener("DOMContentLoaded", () => {
     btnShuffle.addEventListener("click", () => {
         shuffleMode = (shuffleMode + 1) % 3;
         applyShuffleUI();
+        if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState();
+        }
 
         if (shuffleMode === 1) {
             // Shuffle all: cross-playlist random
@@ -604,6 +607,9 @@ document.addEventListener("DOMContentLoaded", () => {
     btnRepeat.addEventListener("click", () => {
         repeatMode = (repeatMode + 1) % 3;
         applyRepeatUI();
+        if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState();
+        }
     });
 
     const currentChannelEl = document.getElementById("current-channel");
@@ -694,6 +700,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+
+        if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState();
+        }
 
         setPlayUI(false);
         if (hasMediaSession) {
@@ -789,6 +799,9 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         } else {
             // Going hidden while paused in Mode 2: declare state via helper (unattended pin).
+            if (typeof saveLastPlayedState === 'function') {
+                saveLastPlayedState();
+            }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -797,6 +810,15 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
     });
+
+    const flushLastPlayedState = () => {
+        if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState();
+        }
+    };
+    window.addEventListener("pagehide", flushLastPlayedState);
+    window.addEventListener("beforeunload", flushLastPlayedState);
+    document.addEventListener("freeze", flushLastPlayedState);
 
     // pageshow covers bfcache restores and lock-screen foregrounds where
     // visibilitychange ordering is unreliable. Timeupdate self-heal above
@@ -884,6 +906,9 @@ document.addEventListener("DOMContentLoaded", () => {
         // Explicitly pass target time and total duration
         const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
         updateMediaSessionPosition(targetTime, totalDur);
+        if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState(targetTime);
+        }
         
         if (wasPlayingBeforeSeek) {
             audioPlayer.play().catch(console.warn);
@@ -895,6 +920,7 @@ document.addEventListener("DOMContentLoaded", () => {
     seekBar.addEventListener("pointerup", endSeek);
     seekBar.addEventListener("pointercancel", endSeek);
 
+    let lastSaveStateTime = 0;
     audioPlayer.addEventListener("timeupdate", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
@@ -915,6 +941,13 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 updateTimeUI(ct);
                 updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
+            }
+        }
+        if (!audioPlayer.paused && typeof saveLastPlayedState === 'function') {
+            const now = Date.now();
+            if (now - lastSaveStateTime > 2000) {
+                lastSaveStateTime = now;
+                saveLastPlayedState();
             }
         }
         if (window.lyricsActive && typeof updateLyricsUI === 'function') {
@@ -1340,8 +1373,54 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
-    // --- Startup Strategy: Direct Unblocked Initial Fetch + Background Warming ---
-    const initialPl = playlistSelect.value;
+    // --- Startup Strategy: Restore Last Played State (0ms Pre-Paint) + Background Fetch ---
+    const lastPlayed = (typeof loadLastPlayedState === 'function') ? loadLastPlayedState() : null;
+    let initialPl = playlistSelect.value;
+
+    if (lastPlayed && lastPlayed.playlist) {
+        if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(lastPlayed.playlist)) {
+            playlistSelect.value = lastPlayed.playlist;
+            if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = lastPlayed.playlist;
+            initialPl = lastPlayed.playlist;
+        }
+        if (typeof lastPlayed.shuffleMode === 'number') {
+            shuffleMode = lastPlayed.shuffleMode;
+            if (typeof applyShuffleUI === 'function') applyShuffleUI();
+        }
+        if (typeof lastPlayed.repeatMode === 'number') {
+            repeatMode = lastPlayed.repeatMode;
+            if (typeof applyRepeatUI === 'function') applyRepeatUI();
+        }
+        if (typeof restoreLastPlayedTrack === 'function') {
+            restoreLastPlayedTrack(lastPlayed);
+        }
+    } else if (typeof getLastPlayedFromIDB === 'function') {
+        getLastPlayedFromIDB().then(idbState => {
+            if (idbState && idbState.playlist && !window._stagedLastPlayedTrack && globalActiveOriginalIndex === -1) {
+                if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(idbState.playlist)) {
+                    playlistSelect.value = idbState.playlist;
+                    if (typeof lastValidPlaylist !== 'undefined') lastValidPlaylist = idbState.playlist;
+                }
+                if (typeof idbState.shuffleMode === 'number') {
+                    shuffleMode = idbState.shuffleMode;
+                    if (typeof applyShuffleUI === 'function') applyShuffleUI();
+                }
+                if (typeof idbState.repeatMode === 'number') {
+                    repeatMode = idbState.repeatMode;
+                    if (typeof applyRepeatUI === 'function') applyRepeatUI();
+                }
+                if (typeof restoreLastPlayedTrack === 'function') {
+                    restoreLastPlayedTrack(idbState);
+                }
+                if (idbState.playlist && idbState.playlist !== initialPl) {
+                    loadPlaylist(idbState.playlist);
+                } else if (allDatabases[idbState.playlist]) {
+                    applyPlaylistData(idbState.playlist, allDatabases[idbState.playlist], false);
+                }
+            }
+        }).catch(() => {});
+    }
+
     if (typeof seedOfflineDatabases === 'function') {
         seedOfflineDatabases();
     }
@@ -1508,13 +1587,31 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnModalInstall = document.getElementById("btn-modal-install");
 
     function openSettingsModal() {
-        const currentMode = window.playbackMode || 'mode1';
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        const currentMode = isMobile ? (window.playbackMode || 'mode1') : 'mode1';
         if (currentMode === 'mode2') {
             if (mode2Radio) mode2Radio.checked = true;
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'block';
         } else {
             if (mode1Radio) mode1Radio.checked = true;
             if (btTimeoutContainer) btTimeoutContainer.style.display = 'none';
+        }
+
+        if (!isMobile) {
+            if (mode2Radio) {
+                mode2Radio.disabled = true;
+                mode2Radio.checked = false;
+                const mode2Label = mode2Radio.closest('.settings-radio-label');
+                if (mode2Label) {
+                    mode2Label.style.opacity = '0.5';
+                    mode2Label.style.cursor = 'not-allowed';
+                    const subtext = mode2Label.querySelector('.settings-radio-subtext');
+                    if (subtext && !subtext.dataset.origText) {
+                        subtext.dataset.origText = subtext.textContent;
+                        subtext.textContent = 'Optimized for mobile devices only (unavailable on desktop)';
+                    }
+                }
+            }
         }
 
         const standardTimeouts = ['3'];
@@ -1535,7 +1632,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const shuffleDownloadedContainer = document.getElementById("shuffle-downloaded-container");
         const toggleShuffleDownloaded = document.getElementById("toggle-shuffle-downloaded");
-        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
         if (shuffleDownloadedContainer) {
             shuffleDownloadedContainer.style.display = isMobile ? 'block' : 'none';
         }
@@ -1566,8 +1662,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const modeRadios = document.querySelectorAll('input[name="playback-mode"]');
     modeRadios.forEach(radio => {
         radio.addEventListener("change", () => {
+            const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             const checkedRadio = document.querySelector('input[name="playback-mode"]:checked');
-            const newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            let newMode = checkedRadio ? checkedRadio.value : 'mode1';
+            if (!isMobile) {
+                newMode = 'mode1';
+                if (mode1Radio) mode1Radio.checked = true;
+                if (mode2Radio) mode2Radio.checked = false;
+            }
             if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
                 initLiveAudioAnchor();
             }
@@ -1577,9 +1679,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    const storedPlaybackMode = (typeof window.getStoredSetting === 'function')
-        ? window.getStoredSetting('yt_playback_mode', 'mode1')
-        : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1');
+    const isMobileInit = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+    const storedPlaybackMode = isMobileInit
+        ? ((typeof window.getStoredSetting === 'function')
+            ? window.getStoredSetting('yt_playback_mode', 'mode1')
+            : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1'))
+        : 'mode1';
     if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
         togglePlaybackMode('mode2');
     } else if (typeof togglePlaybackMode === 'function') {

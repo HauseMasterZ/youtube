@@ -27,6 +27,8 @@
             this._streamId = 0;
             this._streamDone = false;
             this._isBufferStalled = false;
+            this._triggerBufferRecovery = null;
+            this._preventAutoplay = false;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -34,9 +36,24 @@
 
             this.forwardEvent = (e) => {
                 if (!this.switching) {
+                    if (this._preventAutoplay && (e.type === 'play' || e.type === 'playing')) {
+                        return;
+                    }
                     if (e.type === 'waiting') {
                         if (!this.active.paused) {
                             this._isBufferStalled = true;
+                        }
+                        const ct = this.active.currentTime;
+                        const dur = this.active.duration || this._expectedDuration || 0;
+                        if (dur > 0 && ct < dur - 1.5) {
+                            if (this._streamDone) {
+                                this._streamDone = false;
+                            }
+                            if (typeof this._triggerBufferRecovery === 'function') {
+                                this._triggerBufferRecovery();
+                            } else if (this._currentUrl) {
+                                this.recoverTrack(this._currentUrl);
+                            }
                         }
                     }
 
@@ -63,6 +80,16 @@
                         // Fire 'ended' ONLY when playback reaches the end of the song
                         if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= effectiveEnd - 0.6) {
+                                if (this._expectedDuration > 0 && effectiveEnd < this._expectedDuration - 3.5) {
+                                    this._streamDone = false;
+                                    this._isBufferStalled = true;
+                                    if (typeof this._triggerBufferRecovery === 'function') {
+                                        this._triggerBufferRecovery();
+                                    } else if (this._currentUrl) {
+                                        this.recoverTrack(this._currentUrl);
+                                    }
+                                    return;
+                                }
                                 this._endedFired = true;
                                 this.dispatchEvent(new Event('ended'));
                                 return;
@@ -76,6 +103,16 @@
                     }
 
                     if (e.type === 'ended') {
+                        if (this._expectedDuration > 0 && this.active.currentTime < this._expectedDuration - 3.5) {
+                            this._streamDone = false;
+                            this._isBufferStalled = true;
+                            if (typeof this._triggerBufferRecovery === 'function') {
+                                this._triggerBufferRecovery();
+                            } else if (this._currentUrl) {
+                                this.recoverTrack(this._currentUrl);
+                            }
+                            return;
+                        }
                         if (!this._endedFired) {
                             this._endedFired = true;
                             this.dispatchEvent(new Event('ended'));
@@ -244,6 +281,7 @@
             return this.active.duration || this._expectedDuration || 0;
         }
         get paused() {
+            if (window.wasPausedByUser) return true;
             if (this._pendingSeek !== null) return false;
             return this.active.paused;
         }
@@ -266,6 +304,7 @@
             if (window.wasPausedByUser) {
                 return Promise.resolve();
             }
+            this._preventAutoplay = false;
             this._initMSE();
             window.wasPlayingBeforeCall = true;
             if (this.active.currentTime < (this.active.duration || Infinity) - 0.5) {
@@ -303,10 +342,12 @@
         }
 
         recoverTrack(url) {
-            this.switchTrack(url, false, this._expectedDuration);
+            const ct = this.active.currentTime;
+            this.switchTrack(url, false, this._expectedDuration, ct);
         }
 
         pause() {
+            this._preventAutoplay = true;
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
@@ -349,6 +390,7 @@
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
         instantPause() {
+            this._preventAutoplay = true;
             this._pendingSeek = null;
             this._isBufferStalled = false;
             window.wasPausedByUser = true;
@@ -367,7 +409,7 @@
             this.active.volume = 1.0;
         }
 
-        async switchTrack(url, preventAutoplay, expectedDuration = 0) {
+        async switchTrack(url, preventAutoplay, expectedDuration = 0, resumePosition = null) {
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
@@ -376,15 +418,25 @@
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
+            this._preventAutoplay = !!preventAutoplay;
+            if (resumePosition !== null && resumePosition > 0) {
+                this._pendingSeek = resumePosition;
+            }
 
             // Stop old playhead immediately before clearing buffer
             this.active.pause();
             try {
-                this.active.currentTime = 0;
+                if (resumePosition === null) {
+                    this.active.currentTime = 0;
+                }
             } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
-                updateMediaSessionPosition(0, expectedDuration || 0, 0.00001);
+                if (resumePosition !== null && resumePosition > 0) {
+                    updateMediaSessionPosition(resumePosition, expectedDuration || 0, 0.00001);
+                } else {
+                    updateMediaSessionPosition(0, expectedDuration || 0, 0.00001);
+                }
             }
 
             const bc = document.getElementById("buffer-container");
@@ -414,7 +466,7 @@
                     try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
                 }
 
-                if (!preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                if (!this._preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
 
@@ -426,12 +478,35 @@
 
                 this._streamId = (this._streamId || 0) + 1;
                 const activeStreamId = this._streamId;
-                this._pendingSeek = null;
+                if (resumePosition !== null && resumePosition > 0) {
+                    this._pendingSeek = resumePosition;
+                } else if (this._seekingTo === null) {
+                    this._pendingSeek = null;
+                }
+
+                const safePlay = () => {
+                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                        const p = this.active.play();
+                        if (p && p.catch) {
+                            p.catch(e => {
+                                if (e && e.name === 'AbortError' && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                    setTimeout(() => {
+                                        if (!window.wasPausedByUser && this._streamId === activeStreamId && this.active.paused) {
+                                            this.active.play().catch(() => {});
+                                        }
+                                    }, 60);
+                                } else {
+                                    console.warn("MSE play error:", e);
+                                }
+                            });
+                        }
+                    }
+                };
 
                 if (this._mseEnabled && this._sourceBuffer) {
                     await this._clearSourceBuffer();
                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                        this.switching = false;
+                        if (this._streamId === activeStreamId) this.switching = false;
                         return Promise.resolve();
                     }
                 }
@@ -445,7 +520,7 @@
                         const mediaCache = await caches.open('yt-player-media');
                         const cachedRes = await mediaCache.match(url);
                         if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
-                            const isPartial = cachedRes.status === 206 || cachedRes.headers.get('X-Partial-Cached') === 'true';
+                            let isPartial = cachedRes.status === 206 || cachedRes.headers.get('X-Partial-Cached') === 'true';
                             cachedArrayBuffer = await cachedRes.arrayBuffer();
                             cachedPartialBytes = cachedArrayBuffer ? cachedArrayBuffer.byteLength : 0;
 
@@ -466,17 +541,45 @@
                                     console.warn("Cached audio buffer MSE append error, falling back to HTML5 Audio:", appendErr);
                                     this._isDirectAudio = true;
                                     this._streamDone = true;
-                                    this.switching = false;
+                                    if (this._streamId === activeStreamId) this.switching = false;
                                     this.active.src = url;
-                                    if (!preventAutoplay && !window.wasPausedByUser) {
-                                        this.active.play().catch(e => console.warn("Fallback HTML5 play error:", e));
-                                    }
+                                    safePlay();
                                     return Promise.resolve();
                                 }
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
 
+                                const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                    ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                    : 0;
+
+                                const reportedLength = cachedRes.headers.get('Content-Length') ? parseInt(cachedRes.headers.get('Content-Length'), 10) : 0;
+                                const isDurationIncomplete = this._expectedDuration > 0 && buffEnd < (this._expectedDuration - 3.5);
+                                const isSizeIncomplete = this._expectedDuration > 0 && cachedPartialBytes < (this._expectedDuration * 4000);
+                                const isLengthIncomplete = reportedLength > 0 && cachedPartialBytes < reportedLength;
+
+                                if (isDurationIncomplete || isSizeIncomplete || isLengthIncomplete) {
+                                    isPartial = true;
+                                    if (cachedRes.headers.get('X-Partial-Cached') !== 'true') {
+                                        (async () => {
+                                            try {
+                                                const mediaCache = await caches.open('yt-player-media');
+                                                const contentType = cachedRes.headers.get('Content-Type') || (url.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                                                const partialRes = new Response(cachedArrayBuffer, {
+                                                    status: 200,
+                                                    headers: {
+                                                        'Content-Type': contentType,
+                                                        'Content-Length': cachedPartialBytes.toString(),
+                                                        'X-Partial-Cached': 'true'
+                                                    }
+                                                });
+                                                await mediaCache.put(url, partialRes);
+                                            } catch (e) {}
+                                        })();
+                                    }
+                                }
+
                                 // Unlock switching flag immediately so the buffer bar can render the cached portion in 0ms
-                                this.switching = false;
+                                if (this._streamId === activeStreamId) this.switching = false;
                                 this.dispatchEvent(new Event('loadedmetadata'));
                                 this.dispatchEvent(new Event('canplay'));
                                 this.dispatchEvent(new Event('progress'));
@@ -495,8 +598,8 @@
                                         this.active.currentTime = 0;
                                     }
 
-                                    if (!preventAutoplay && !window.wasPausedByUser) {
-                                        this.active.play().catch(e => console.warn("Cached play error:", e));
+                                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                        safePlay();
                                         this.dispatchEvent(new Event('play'));
                                         this.dispatchEvent(new Event('playing'));
                                     }
@@ -504,8 +607,8 @@
                                 }
 
                                 // If partial, start playing cached portion in 0ms while resuming background download
-                                if (!preventAutoplay && !window.wasPausedByUser) {
-                                    this.active.play().catch(e => console.warn("Partial play error:", e));
+                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                    safePlay();
                                     this.dispatchEvent(new Event('play'));
                                     this.dispatchEvent(new Event('playing'));
                                 }
@@ -559,20 +662,19 @@
                                 this._pendingSeek = null;
                                 this._seekingTo = seekTarget;
                                 this.active.currentTime = seekTarget;
-                                if (!preventAutoplay && !window.wasPausedByUser) {
-                                    this.active.play().catch(e => console.warn("MSE play error:", e));
+                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                    safePlay();
                                 }
                             } else {
                                 this.active.pause();
                             }
-                        } else {
-                            this.active.currentTime = 0;
-                            if (!preventAutoplay && !window.wasPausedByUser) {
-                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                        } else if (this.active.currentTime === 0) {
+                            if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                safePlay();
                             }
                         }
 
-                        this.switching = false;
+                        if (this._streamId === activeStreamId) this.switching = false;
                         this.dispatchEvent(new Event('loadedmetadata'));
                         this.dispatchEvent(new Event('canplay'));
                         if (this._pendingSeek === null) {
@@ -583,19 +685,27 @@
 
                         const fetchUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
                         const fetchHeaders = { 'Range': `bytes=${cachedPartialBytes}-` };
-                        response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
-                        if (!response.ok && response.status !== 206) throw new Error(`Fetch status: ${response.status}`);
-                        if (!response.body) throw new Error("ReadableStream not supported");
-                        reader = response.body.getReader();
+                        try {
+                            response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
+                            if (response && (response.ok || response.status === 206) && response.body) {
+                                reader = response.body.getReader();
+                            } else {
+                                reader = null;
+                            }
+                        } catch (fetchErr) {
+                            reader = null;
+                        }
                     } else {
                         const initialChunks = [];
                         let initialBytes = 0;
                         const INITIAL_TARGET_BYTES = 196608;
                         let fetchBackoff = 300;
 
+                        let fetchAttempts = 0;
+
                         while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
                             if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                                this.switching = false;
+                                if (this._streamId === activeStreamId) this.switching = false;
                                 return Promise.resolve();
                             }
 
@@ -614,7 +724,7 @@
                                 if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
                                     try { reader.cancel(); } catch (e) {}
                                     await saveProgress(false);
-                                    this.switching = false;
+                                    if (this._streamId === activeStreamId) this.switching = false;
                                     return Promise.resolve();
                                 }
                                 if (done) {
@@ -629,7 +739,12 @@
                             } catch (initErr) {
                                 if (currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) {
                                     await saveProgress(false);
-                                    this.switching = false;
+                                    if (this._streamId === activeStreamId) this.switching = false;
+                                    return Promise.resolve();
+                                }
+                                fetchAttempts++;
+                                if (fetchAttempts >= 3 && typeof navigator !== 'undefined' && navigator.onLine === false) {
+                                    if (this._streamId === activeStreamId) this.switching = false;
                                     return Promise.resolve();
                                 }
                                 reader = null;
@@ -652,7 +767,7 @@
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                             try { reader.cancel(); } catch (e) {}
                             await saveProgress(false);
-                            this.switching = false;
+                            if (this._streamId === activeStreamId) this.switching = false;
                             return Promise.resolve();
                         }
 
@@ -666,7 +781,7 @@
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                             try { reader.cancel(); } catch (e) {}
                             await saveProgress(false);
-                            this.switching = false;
+                            if (this._streamId === activeStreamId) this.switching = false;
                             return Promise.resolve();
                         }
 
@@ -679,23 +794,23 @@
                                 this._pendingSeek = null;
                                 this._seekingTo = seekTarget;
                                 this.active.currentTime = seekTarget;
-                                if (!preventAutoplay && !window.wasPausedByUser) {
-                                    this.active.play().catch(e => console.warn("MSE play error:", e));
+                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                    safePlay();
                                 }
                             } else {
                                 this.active.pause();
                             }
                         } else {
                             this.active.currentTime = 0;
-                            if (!preventAutoplay && !window.wasPausedByUser) {
-                                this.active.play().catch(e => console.warn("MSE play error:", e));
+                            if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                safePlay();
                             }
                         }
 
-                        this.switching = false;
+                        if (this._streamId === activeStreamId) this.switching = false;
                         this.dispatchEvent(new Event('loadedmetadata'));
                         this.dispatchEvent(new Event('canplay'));
-                        if (this._pendingSeek === null) {
+                        if (this._pendingSeek === null && !this._preventAutoplay) {
                             this.dispatchEvent(new Event('play'));
                             this.dispatchEvent(new Event('playing'));
                         }
@@ -704,7 +819,7 @@
 
                     // Resilient background ingestion stream with network-switch / Range auto-recovery
                     (async () => {
-                        const readStream = async (activeReader) => {
+                        const readStream = async (activeReader, activeRes = null) => {
                             try {
                                 while (true) {
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
@@ -722,6 +837,37 @@
                                     }
 
                                     if (done) {
+                                        const demuxedBuffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                            : 0;
+
+                                        const isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5);
+
+                                        let isLengthComplete = true;
+                                        if (activeRes && activeRes.headers) {
+                                            const cr = activeRes.headers.get('Content-Range');
+                                            if (cr) {
+                                                const m = cr.match(/\/(\d+)$/);
+                                                if (m && m[1]) {
+                                                    const totalExpected = parseInt(m[1], 10);
+                                                    if (totalBytesAppended < totalExpected) isLengthComplete = false;
+                                                }
+                                            } else {
+                                                const cl = activeRes.headers.get('Content-Length');
+                                                if (cl && cachedPartialBytes === 0) {
+                                                    const totalExpected = parseInt(cl, 10);
+                                                    if (totalBytesAppended < totalExpected) isLengthComplete = false;
+                                                }
+                                            }
+                                        }
+
+                                        if (!isDurationComplete || !isLengthComplete) {
+                                            console.warn("MSE audio stream terminated prematurely. Bytes:", totalBytesAppended, "Demuxed:", demuxedBuffEnd, "Expected:", this._expectedDuration);
+                                            await saveProgress(false);
+                                            attemptRecovery();
+                                            break;
+                                        }
+
                                         streamDone = true;
                                         this._streamDone = true;
                                         if (this._mediaSource && this._mediaSource.readyState === 'open') {
@@ -790,7 +936,7 @@
                                                     const totalDur = this.duration || parseFloat(seekBar.max) || 0;
                                                     updateMediaSessionPosition(seekTarget, totalDur, 1.0);
                                                 }
-                                                if (!preventAutoplay && !window.wasPausedByUser) {
+                                                if (!this._preventAutoplay && !window.wasPausedByUser) {
                                                     this.active.play().catch(e => console.warn("Catch-up seek play:", e));
                                                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                                                         navigator.mediaSession.playbackState = 'playing';
@@ -831,13 +977,40 @@
 
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
 
+                                    if (resumeRes.status === 416) {
+                                        const demuxedBuffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                            : 0;
+                                        if (this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5)) {
+                                            streamDone = true;
+                                            this._streamDone = true;
+                                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                                            }
+                                            await saveProgress(true);
+                                            isRecovering = false;
+                                            return;
+                                        } else {
+                                            if (window.caches) {
+                                                try {
+                                                    const mediaCache = await caches.open('yt-player-media');
+                                                    await mediaCache.delete(url);
+                                                } catch (e) {}
+                                            }
+                                            totalBytesAppended = 0;
+                                            accumulatedChunks.length = 0;
+                                            await this._clearSourceBuffer();
+                                            continue;
+                                        }
+                                    }
+
                                     if (resumeRes.ok || resumeRes.status === 206) {
                                         const isPartial = resumeRes.status === 206;
                                         const newReader = resumeRes.body.getReader();
 
                                         if (isPartial) {
                                             isRecovering = false;
-                                            await readStream(newReader);
+                                            await readStream(newReader, resumeRes);
                                             return;
                                         } else {
                                             // Fallback if CDN/server ignored Range header: discard leading totalBytesAppended bytes
@@ -854,7 +1027,7 @@
                                             }
                                             if (!skipFailed) {
                                                 isRecovering = false;
-                                                await readStream(newReader);
+                                                await readStream(newReader, resumeRes);
                                                 return;
                                             }
                                         }
@@ -869,6 +1042,12 @@
                             isRecovering = false;
                         };
 
+                        this._triggerBufferRecovery = () => {
+                            if (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
+                                attemptRecovery();
+                            }
+                        };
+
                         const onOnlineResume = () => {
                             if (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
                                 attemptRecovery();
@@ -878,26 +1057,39 @@
                         window.addEventListener('online', onOnlineResume);
                         currentAbortSignal.addEventListener('abort', () => {
                             window.removeEventListener('online', onOnlineResume);
+                            if (this._triggerBufferRecovery) this._triggerBufferRecovery = null;
                         });
 
                         if (streamDone) {
                             if (this._mediaSource && this._mediaSource.readyState === 'open') {
                                 try { this._mediaSource.endOfStream(); } catch (e) {}
                             }
+                        } else if (reader) {
+                            readStream(reader, response);
                         } else {
-                            readStream(reader);
+                            attemptRecovery();
                         }
                     })();
                 } catch (e) {
                     if (!currentAbortSignal.aborted && this._streamId === activeStreamId) {
-                        console.warn("MSE streaming error, falling back to standard HTML5 Audio:", e);
-                        this._isDirectAudio = true;
-                        this._clearSourceBuffer().catch(() => {});
-                        this._streamDone = true;
-                        this.switching = false;
-                        this.active.src = url;
-                        if (!preventAutoplay && !window.wasPausedByUser) {
-                            this.active.play().catch(err => console.warn("Standard audio fallback play error:", err));
+                        if (cachedPartialBytes > 0 && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                            console.warn("MSE network fetch error with partial buffer already playing; retaining MSE and attempting recovery:", e);
+                            if (typeof this._triggerBufferRecovery === 'function') {
+                                this._triggerBufferRecovery();
+                            }
+                        } else {
+                            console.warn("MSE streaming error, falling back to standard HTML5 Audio:", e);
+                            this._isDirectAudio = true;
+                            this._clearSourceBuffer().catch(() => {});
+                            this._streamDone = true;
+                            if (this._streamId === activeStreamId) this.switching = false;
+                            this.active.src = url;
+                            if (resumePosition !== null && resumePosition > 0) {
+                                try { this.active.currentTime = resumePosition; } catch (e) {}
+                            }
+                            if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                safePlay();
+                            }
                         }
                     }
                 }
@@ -911,17 +1103,23 @@
                     this._streamAbortController = null;
                 }
                 this._streamDone = true;
-                if (!preventAutoplay && !window.wasPausedByUser) {
+                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = "playing";
                     }
                     this.active.src = url;
-                    this.active.play().catch(e => console.warn("switchTrack play:", e));
+                    if (resumePosition !== null && resumePosition > 0) {
+                        try { this.active.currentTime = resumePosition; } catch (e) {}
+                    }
+                    safePlay();
                 } else {
                     this.active.src = url;
+                    if (resumePosition !== null && resumePosition > 0) {
+                        try { this.active.currentTime = resumePosition; } catch (e) {}
+                    }
                     this.active.load();
                 }
-                this.switching = false;
+                if (this._streamId === activeStreamId) this.switching = false;
             }
 
             return Promise.resolve();

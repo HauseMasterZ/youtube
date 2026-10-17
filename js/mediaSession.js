@@ -524,7 +524,11 @@
 
     // Unified Playback Mode Toggle Engine
     function togglePlaybackMode(targetMode = null) {
-        const newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
+        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+        let newMode = targetMode || (window.playbackMode === 'mode1' ? 'mode2' : 'mode1');
+        if (!isMobile) {
+            newMode = 'mode1';
+        }
         window.playbackMode = newMode;
         window.mediaSessionDestroyed = false;
         _anchorGeneration++;
@@ -1170,6 +1174,7 @@
             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         audioPlayer.addEventListener('pause', () => {
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser))) return;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
