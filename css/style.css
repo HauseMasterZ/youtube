@@ -765,6 +765,7 @@
         .playlist-container {
             flex-grow: 1;
             overflow-y: auto;
+            overflow-x: hidden;
             position: relative;
             background-color: #000000;
             height: 100%;
@@ -871,6 +872,12 @@
             user-select: none;
             -webkit-user-select: none;
             cursor: pointer;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .fast-scroller {
+                pointer-events: none;
+            }
         }
 
         .fast-scroll-thumb {

@@ -143,3 +143,24 @@
   - Thresholds: $|\Delta x| \ge 40\text{px}$, $|\Delta x| > |\Delta y| \times 1.2$, elapsed time $< 600\text{ms}$, and viewport width $\le 800\text{px}$.
   - Passive event listeners (`passive: true`) without `preventDefault` to preserve instant native `<select>` dropdown picker opening on tap.
   - Clears and unfocuses search input (`searchInput.blur()`) on playlist switch.
+
+## 17. Mobile Mode 1 Bluetooth AVRCP Pause Invariant
+- Honest State Separation: Unlike Mode 2 which deliberately spoofs `playbackState = 'playing'` to pin notification cards, Mode 1 declares honest `playbackState = 'paused'` (rate 1.0) when paused.
+- Unconditional Pause on `pause` Action: In `navigator.mediaSession.setActionHandler('pause')`, the Mode 1 branch must strictly and unconditionally pause (`window.wasPausedByUser = true`, `setPlayUI(false)`, `playbackState = 'paused'`, `instantPause()`).
+- Prohibition of Toggle Play in Pause Handler: It is strictly forbidden to evaluate `isActuallyPaused` and call `audioPlayer.play()` within the Mode 1 `pause` action handler. When mobile Chromium or Android AudioManager pre-pauses the `<audio>` element on receiving AVRCP PAUSE, treating `audio.paused === true` as a signal to resume defeats the pause action.
+- Idempotent Bounce Safety: Duplicate AVRCP pause events (press/release bounces) safely remain paused. Resuming from Bluetooth in Mode 1 is handled exclusively by `setActionHandler('play', handlePlayAction)`.
+- Playpause Debounce: `setActionHandler('playpause')` enforces a 300ms cooldown timestamp to eliminate single-button headset toggle flutters.
+
+## 18. Hold-to-Queue Selection Suppression Invariant (Zero CSS Changes)
+- Zero CSS Selection Tampering: Text selection must never be disabled via CSS stylesheets (`user-select: none` / `-webkit-user-select: none` on `#track-list` or `li` is strictly forbidden). Desktop users must retain full native mouse selection and clipboard copying of song titles and artists.
+- Dynamic `selectstart` Interception: While a pointer hold is active (`holdTimer` or `suppressNextClick`), `trackList.addEventListener("selectstart")` cancels the event via `e.preventDefault()`, stopping mobile browser selection handles and floating copy toolbars before they can spawn.
+- Selection Range Purging: When `holdTimer` fires (450ms) and on `pointerup`, `window.getSelection()?.removeAllRanges()` purges any residual selection ranges.
+- Event Deduplication: `contextmenu` only enqueues if `!suppressNextClick`, preventing double-queuing when long-press fires both the timer and native `contextmenu`. Non-primary mouse buttons (`e.button !== 0`) are ignored on `pointerdown` so desktop right-click passes directly to `contextmenu`.
+
+## 19. Desktop Playlist Middle-Click Autoscroll Invariant
+- Native Autoscroll Integrity: On desktop operating systems and browsers (Windows Chromium, Firefox, Edge), middle-clicking (`e.button === 1` / mouse wheel click) within the playlist container (`#playlist-container`) must reliably initiate the browser's native vertical autoscroll engine without being intercepted or canceled.
+- Non-Primary Button Filtering on Fast Scroller: `fastScroller.addEventListener("pointerdown")` must strictly ignore non-primary mouse buttons (`if (e.button !== 0) return;`). Middle-clicks and right-clicks must NEVER trigger `preventDefault()`, pointer capture, or fast-scrolling activation.
+- Desktop Pointer Pass-Through for Fast Scroller: Under desktop media queries (`@media (hover: hover) and (pointer: fine)`), `.fast-scroller` must be assigned `pointer-events: none;` so that mouse clicks near the right boundary pass directly to `#playlist-container`, while mobile touch devices retain touch edge scrolling.
+- Focus Shift Quarantine during PointerDown: Event handlers listening for `pointerdown` on `#playlist-container` (such as `blurPlaylistSelectIfActive`) must ignore non-primary mouse buttons (`if (e && e.button !== 0) return;`) to prevent focus shifting during middle-click, which cancels Chromium's pending autoscroll gesture.
+- Strict Vertical Axis Lock: `#playlist-container` must specify `overflow-x: hidden;` alongside `overflow-y: auto;` to lock browser autoscroll strictly to the vertical axis, preventing 4-way omnidirectional autoscroll drift.
+
