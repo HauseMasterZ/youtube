@@ -110,13 +110,13 @@ class TestDownloadEngine(unittest.TestCase):
         )
 
     def test_fast_path_cache_duration_incomplete_guard(self):
-        """Fast-path verifies demuxed duration against expected duration and treats incomplete files as partial"""
-        self.assertIn("buffEnd < (this._expectedDuration - 3.5)", self.dom_content)
+        """Fast-path verifies demuxed duration against expected duration and treats incomplete files as partial without misclassifying complete tracks"""
+        self.assertIn("buffEnd < (this._expectedDuration - 15)", self.dom_content)
         self.assertRegex(
             self.dom_content,
-            r'const\s+isDurationIncomplete\s*=\s*this\._expectedDuration\s*>\s*0\s*&&\s*buffEnd\s*<\s*\(this\._expectedDuration\s*-\s*3\.5\);'
+            r'const\s+isDurationIncomplete\s*=\s*!isExplicitlyComplete\s*&&\s*this\._expectedDuration\s*>\s*0\s*&&\s*buffEnd\s*<\s*\(this\._expectedDuration\s*-\s*15\);'
         )
-        self.assertIn("if (isDurationIncomplete || isSizeIncomplete || isLengthIncomplete)", self.dom_content)
+        self.assertIn("if (isExplicitlyPartial || isDurationIncomplete || isSizeIncomplete || isLengthIncomplete)", self.dom_content)
 
     def test_fast_path_cache_size_incomplete_guard(self):
         """Fast-path verifies cached bytes against minimum expected audio bitrate"""
@@ -131,37 +131,38 @@ class TestDownloadEngine(unittest.TestCase):
 
     def test_read_stream_completion_verification(self):
         """readStream verifies full song duration and Content-Length before marking stream done"""
-        self.assertIn("isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5)", self.dom_content)
+        self.assertIn("isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 15)", self.dom_content)
         self.assertIn("totalBytesAppended < totalExpected", self.dom_content)
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*!isDurationComplete\s*\|\|\s*!isLengthComplete\s*\)\s*\{[\s\S]*?await\s+saveProgress\(false\);[\s\S]*?attemptRecovery\(\);'
+            r'if\s*\(\s*isPremature\s*\)\s*\{[\s\S]*?await\s+saveProgress\(false\);[\s\S]*?attemptRecovery\(\);'
         )
 
     def test_waiting_event_mid_song_stall_recovery(self):
         """DualAudioPingPong waiting event resets streamDone and triggers recovery when stalled mid-song"""
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*e\.type\s*===\s*[\'"]waiting[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*dur\s*>\s*0\s*&&\s*ct\s*<\s*dur\s*-\s*1\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;[\s\S]*?this\._triggerBufferRecovery\(\)'
+            r'if\s*\(\s*e\.type\s*===\s*[\'"]waiting[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*dur\s*>\s*0\s*&&\s*ct\s*<\s*dur\s*-\s*1\.5\s*\)\s*\{[\s\S]*?if\s*\(\s*!this\._streamDone\s*\)\s*\{[\s\S]*?this\._triggerBufferRecovery\(\)'
         )
 
     def test_premature_buffer_end_recovery_guard(self):
-        """timeupdate event suppresses premature ended firing and triggers recovery if effectiveEnd is short"""
+        """timeupdate event suppresses premature ended firing and triggers recovery if effectiveEnd is short and stream not done"""
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*this\._expectedDuration\s*>\s*0\s*&&\s*effectiveEnd\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;[\s\S]*?this\._triggerBufferRecovery\(\)'
+            r'if\s*\(\s*!this\._streamDone\s*&&\s*this\._expectedDuration\s*>\s*0\s*&&\s*effectiveEnd\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._isBufferStalled\s*=\s*true;[\s\S]*?this\._triggerBufferRecovery\(\)'
         )
 
     def test_premature_ended_event_recovery_guard(self):
-        """ended event listener suppresses premature ended and triggers recovery when currentTime is short"""
+        """ended event listener suppresses premature ended and triggers recovery when currentTime is short and stream not done"""
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*e\.type\s*===\s*[\'"]ended[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*this\._expectedDuration\s*>\s*0\s*&&\s*this\.active\.currentTime\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;'
+            r'if\s*\(\s*e\.type\s*===\s*[\'"]ended[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*!this\._streamDone\s*&&\s*this\._expectedDuration\s*>\s*0\s*&&\s*this\.active\.currentTime\s*<\s*this\._expectedDuration\s*-\s*3\.5\s*\)\s*\{[\s\S]*?this\._isBufferStalled\s*=\s*true;'
         )
 
     def test_attempt_recovery_416_handling(self):
-        """attemptRecovery explicitly handles HTTP 416 Range Not Satisfiable"""
+        """attemptRecovery explicitly handles HTTP 416 Range Not Satisfiable by concluding stream without wiping buffer"""
         self.assertIn("if (resumeRes.status === 416)", self.dom_content)
+        self.assertNotIn("mediaCache.delete(url);", self.dom_content)
 
     def test_preload_next_track_buffers_array_buffer(self):
         """preloadNextTrack buffers entire arrayBuffer before writing to cache with X-Partial-Cached: false"""
