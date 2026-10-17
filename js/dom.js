@@ -46,13 +46,12 @@
                         const ct = this.active.currentTime;
                         const dur = this.active.duration || this._expectedDuration || 0;
                         if (dur > 0 && ct < dur - 1.5) {
-                            if (this._streamDone) {
-                                this._streamDone = false;
-                            }
-                            if (typeof this._triggerBufferRecovery === 'function') {
-                                this._triggerBufferRecovery();
-                            } else if (this._currentUrl) {
-                                this.recoverTrack(this._currentUrl);
+                            if (!this._streamDone) {
+                                if (typeof this._triggerBufferRecovery === 'function') {
+                                    this._triggerBufferRecovery();
+                                } else if (this._currentUrl) {
+                                    this.recoverTrack(this._currentUrl);
+                                }
                             }
                         }
                     }
@@ -80,8 +79,7 @@
                         // Fire 'ended' ONLY when playback reaches the end of the song
                         if (effectiveEnd > 0 && this.lastKnownTime > 0 && !this.active.seeking) {
                             if (!this._endedFired && ct >= effectiveEnd - 0.6) {
-                                if (this._expectedDuration > 0 && effectiveEnd < this._expectedDuration - 3.5) {
-                                    this._streamDone = false;
+                                if (!this._streamDone && this._expectedDuration > 0 && effectiveEnd < this._expectedDuration - 3.5) {
                                     this._isBufferStalled = true;
                                     if (typeof this._triggerBufferRecovery === 'function') {
                                         this._triggerBufferRecovery();
@@ -103,8 +101,7 @@
                     }
 
                     if (e.type === 'ended') {
-                        if (this._expectedDuration > 0 && this.active.currentTime < this._expectedDuration - 3.5) {
-                            this._streamDone = false;
+                        if (!this._streamDone && this._expectedDuration > 0 && this.active.currentTime < this._expectedDuration - 3.5) {
                             this._isBufferStalled = true;
                             if (typeof this._triggerBufferRecovery === 'function') {
                                 this._triggerBufferRecovery();
@@ -553,11 +550,14 @@
                                     : 0;
 
                                 const reportedLength = cachedRes.headers.get('Content-Length') ? parseInt(cachedRes.headers.get('Content-Length'), 10) : 0;
-                                const isDurationIncomplete = this._expectedDuration > 0 && buffEnd < (this._expectedDuration - 3.5);
-                                const isSizeIncomplete = this._expectedDuration > 0 && cachedPartialBytes < (this._expectedDuration * 4000);
-                                const isLengthIncomplete = reportedLength > 0 && cachedPartialBytes < reportedLength;
+                                const isExplicitlyComplete = cachedRes.headers.get('X-Partial-Cached') === 'false';
+                                const isExplicitlyPartial = cachedRes.headers.get('X-Partial-Cached') === 'true';
 
-                                if (isDurationIncomplete || isSizeIncomplete || isLengthIncomplete) {
+                                const isDurationIncomplete = !isExplicitlyComplete && this._expectedDuration > 0 && buffEnd < (this._expectedDuration - 15);
+                                const isSizeIncomplete = !isExplicitlyComplete && this._expectedDuration > 0 && cachedPartialBytes < (this._expectedDuration * 4000);
+                                const isLengthIncomplete = !isExplicitlyComplete && reportedLength > 0 && cachedPartialBytes < reportedLength;
+
+                                if (isExplicitlyPartial || isDurationIncomplete || isSizeIncomplete || isLengthIncomplete) {
                                     isPartial = true;
                                     if (cachedRes.headers.get('X-Partial-Cached') !== 'true') {
                                         (async () => {
@@ -687,7 +687,15 @@
                         const fetchHeaders = { 'Range': `bytes=${cachedPartialBytes}-` };
                         try {
                             response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
-                            if (response && (response.ok || response.status === 206) && response.body) {
+                            if (response && response.status === 416) {
+                                streamDone = true;
+                                this._streamDone = true;
+                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                }
+                                await saveProgress(true);
+                                reader = null;
+                            } else if (response && (response.ok || response.status === 206) && response.body) {
                                 reader = response.body.getReader();
                             } else {
                                 reader = null;
@@ -841,27 +849,31 @@
                                             ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
                                             : 0;
 
-                                        const isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5);
-
                                         let isLengthComplete = true;
+                                        let hasExplicitLength = false;
                                         if (activeRes && activeRes.headers) {
                                             const cr = activeRes.headers.get('Content-Range');
                                             if (cr) {
                                                 const m = cr.match(/\/(\d+)$/);
                                                 if (m && m[1]) {
+                                                    hasExplicitLength = true;
                                                     const totalExpected = parseInt(m[1], 10);
                                                     if (totalBytesAppended < totalExpected) isLengthComplete = false;
                                                 }
                                             } else {
                                                 const cl = activeRes.headers.get('Content-Length');
                                                 if (cl && cachedPartialBytes === 0) {
+                                                    hasExplicitLength = true;
                                                     const totalExpected = parseInt(cl, 10);
                                                     if (totalBytesAppended < totalExpected) isLengthComplete = false;
                                                 }
                                             }
                                         }
 
-                                        if (!isDurationComplete || !isLengthComplete) {
+                                        const isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 15);
+                                        const isPremature = !isLengthComplete || (!hasExplicitLength && !isDurationComplete);
+
+                                        if (isPremature) {
                                             console.warn("MSE audio stream terminated prematurely. Bytes:", totalBytesAppended, "Demuxed:", demuxedBuffEnd, "Expected:", this._expectedDuration);
                                             await saveProgress(false);
                                             attemptRecovery();
@@ -978,30 +990,15 @@
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
 
                                     if (resumeRes.status === 416) {
-                                        const demuxedBuffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
-                                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
-                                            : 0;
-                                        if (this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 3.5)) {
-                                            streamDone = true;
-                                            this._streamDone = true;
-                                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                                try { this._mediaSource.endOfStream(); } catch (e) {}
-                                            }
-                                            await saveProgress(true);
-                                            isRecovering = false;
-                                            return;
-                                        } else {
-                                            if (window.caches) {
-                                                try {
-                                                    const mediaCache = await caches.open('yt-player-media');
-                                                    await mediaCache.delete(url);
-                                                } catch (e) {}
-                                            }
-                                            totalBytesAppended = 0;
-                                            accumulatedChunks.length = 0;
-                                            await this._clearSourceBuffer();
-                                            continue;
+                                        streamDone = true;
+                                        this._streamDone = true;
+                                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                            try { this._mediaSource.endOfStream(); } catch (e) {}
                                         }
+                                        await saveProgress(true);
+                                        isRecovering = false;
+                                        this.dispatchEvent(new Event('progress'));
+                                        return;
                                     }
 
                                     if (resumeRes.ok || resumeRes.status === 206) {
