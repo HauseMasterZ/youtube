@@ -1049,6 +1049,25 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'if\s*\(\s*queueIndex\s*<\s*0\s*\|\|\s*queueIndex\s*>=\s*playQueue\.length\s*\)\s*\{\s*queueIndex\s*=\s*Math\.max'
         )
 
+    def test_mode1_pause_action_handler_unconditionally_pauses(self):
+        """Mode 1 pause action handler unconditionally pauses and never triggers play"""
+        pause_match = re.search(
+            r"setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n        \}\);",
+            self.ms_content
+        )
+        self.assertIsNotNone(pause_match, "Could not find pause action handler")
+        pause_body = pause_match.group(1)
+        # Ensure Mode 1 branch does NOT call audioPlayer.play()
+        mode1_branch = re.search(r"\}\s*else\s*\{([\s\S]*)$", pause_body)
+        self.assertIsNotNone(mode1_branch, "Could not find Mode 1 branch in pause handler")
+        self.assertNotIn("audioPlayer.play()", mode1_branch.group(1))
+        self.assertIn("window.wasPausedByUser = true;", mode1_branch.group(1))
+        self.assertIn("navigator.mediaSession.playbackState = 'paused';", mode1_branch.group(1))
+
+    def test_playpause_action_handler_debounced(self):
+        """playpause action handler includes debounce guard against AVRCP key bounce"""
+        self.assertIn("lastPlayPauseToggleTime", self.ms_content)
+        self.assertIn("now - lastPlayPauseToggleTime < 300", self.ms_content)
 
 if __name__ == '__main__':
     unittest.main()

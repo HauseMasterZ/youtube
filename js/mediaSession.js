@@ -1385,53 +1385,34 @@
                     armAutoKillWatchdog();
                 }
             } else {
-                // Mode 1: If audio is paused (or was paused by user), play; if playing, pause
-                const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
-                if (isActuallyPaused) {
-                    if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
-                        return;
+                // Mode 1: Always pause honestly; never toggle play from a pause action
+                window.wasPausedByUser = true;
+                window.wasPlayingBeforeCall = false;
+                if (typeof setPlayUI === 'function') setPlayUI(false);
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 1.0);
                     }
-                    window.wasPausedByUser = false;
-                    window.wasPlayingBeforeCall = true;
-                    window.lastBtDisconnectTime = 0;
-                    if (typeof setPlayUI === 'function') setPlayUI(true);
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'playing';
-                    }
-                    const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
-                        audioPlayer.currentTime = 0;
-                        if (typeof updateTimeUI === 'function') updateTimeUI(0);
-                        if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
-                    }
-                    audioPlayer.play().catch(e => {
-                        console.warn("MediaSession play error:", e);
-                        Promise.resolve().then(() => {
-                            if (audioPlayer && audioPlayer.paused && !window.wasPausedByUser) {
-                                audioPlayer.play().catch(() => {});
-                            }
-                        });
-                    });
-                } else {
-                    window.wasPausedByUser = true;
-                    window.wasPlayingBeforeCall = false;
-                    if (typeof setPlayUI === 'function') setPlayUI(false);
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                    }
-                    if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
-                        audioPlayer.instantPause();
-                    } else if (audioPlayer) {
-                        audioPlayer.pause();
-                    }
-                    stopLiveAudioAnchor();
-                    cancelAutoKillWatchdog();
                 }
+                if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
+                    audioPlayer.instantPause();
+                } else if (audioPlayer) {
+                    audioPlayer.pause();
+                }
+                stopLiveAudioAnchor();
+                cancelAutoKillWatchdog();
             }
         });
 
+        let lastPlayPauseToggleTime = 0;
         try {
             navigator.mediaSession.setActionHandler('playpause', () => {
+                const now = Date.now();
+                if (now - lastPlayPauseToggleTime < 300) return;
+                lastPlayPauseToggleTime = now;
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (window.isCallActive) return;
                 window.mediaSessionDestroyed = false;

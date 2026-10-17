@@ -404,6 +404,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let suppressNextClick = false;
 
     trackList.addEventListener("pointerdown", (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         if (e.target.closest(".yt-link-icon")) return;
@@ -415,10 +416,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         holdTimer = setTimeout(() => {
             suppressNextClick = true;
+            if (window.getSelection) {
+                const sel = window.getSelection();
+                if (sel) {
+                    if (typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
+                    else if (typeof sel.empty === 'function') sel.empty();
+                }
+            }
             queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
             if (navigator.vibrate) navigator.vibrate(40);
             triggerEnqueuedFlash(li);
-        }, 500);
+        }, 450);
     });
 
     trackList.addEventListener("pointermove", (e) => {
@@ -432,6 +440,18 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     trackList.addEventListener("pointerup", () => {
+        if (suppressNextClick) {
+            if (window.getSelection) {
+                const sel = window.getSelection();
+                if (sel) {
+                    if (typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
+                    else if (typeof sel.empty === 'function') sel.empty();
+                }
+            }
+            setTimeout(() => {
+                suppressNextClick = false;
+            }, 300);
+        }
         clearTimeout(holdTimer);
         holdTimer = null;
     });
@@ -439,6 +459,13 @@ document.addEventListener("DOMContentLoaded", () => {
     trackList.addEventListener("pointercancel", () => {
         clearTimeout(holdTimer);
         holdTimer = null;
+    });
+
+    // Elegant workaround: intercept selection start during touch-hold without disabling select in CSS
+    trackList.addEventListener("selectstart", (e) => {
+        if (holdTimer || suppressNextClick) {
+            e.preventDefault();
+        }
     });
 
     trackList.addEventListener("click", (e) => {
@@ -459,8 +486,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
         e.preventDefault();
-        queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-        triggerEnqueuedFlash(li);
+        if (window.getSelection) {
+            const sel = window.getSelection();
+            if (sel) {
+                if (typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
+                else if (typeof sel.empty === 'function') sel.empty();
+            }
+        }
+        if (!suppressNextClick) {
+            queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
+            triggerEnqueuedFlash(li);
+        }
     });
 
     window.addEventListener("popstate", (e) => {
@@ -1301,7 +1337,8 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    function blurPlaylistSelectIfActive() {
+    function blurPlaylistSelectIfActive(e) {
+        if (e && e.button !== 0) return;
         if (playlistSelect && document.activeElement === playlistSelect) {
             playlistSelect.blur();
         }
@@ -1833,6 +1870,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (fastScroller) {
         fastScroller.addEventListener("pointerdown", (e) => {
+            if (e.button !== 0) return;
             const rect = playlistContainer.getBoundingClientRect();
             // Strict 20px edge hit-test gate
             if (e.clientX >= rect.right - 20 && e.clientX <= rect.right + 2) {
