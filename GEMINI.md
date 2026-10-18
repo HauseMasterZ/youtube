@@ -165,7 +165,8 @@
 - Strict Vertical Axis Lock: `#playlist-container` must specify `overflow-x: hidden;` alongside `overflow-y: auto;` to lock browser autoscroll strictly to the vertical axis, preventing 4-way omnidirectional autoscroll drift.
 
 ## 20. Resilient Update Site Engine & Cloudflare Invalidation Invariant
-- Universal Availability: An "Update Site" button (`#btn-modal-update`) is accessible in both desktop and mobile settings under "App Actions", as well as via desktop playlist dropdown (`UPDATE_SITE`).
+- Universal Availability & Unified Refresh: An "Update Site" button (`#btn-modal-update`) is accessible in the mobile settings modal under "App Actions", as well as via desktop playlist dropdown (`UPDATE_SITE`). This action unifies both site updates and playlist database revalidation: it concurrently refreshes all playlist databases and checks/applies Cloudflare origin updates, retiring the redundant separate "Reload Playlists" button.
+- Clean Text Presentation: `#btn-modal-update` uses clean text presentation (`#text-modal-update`) without circular sync icons, maintaining visual parity with other action buttons while utilizing CSS state classes (`.updating`, `.success`, `.error`) for user feedback.
 - Standalone PWA Resiliency: In installed mobile PWAs (where browser URL bars and reload controls are absent), clicking "Update Site" reliably pulls the latest Cloudflare release and refreshes the application shell without requiring app uninstallation or device restart.
 - Cloudflare Origin Cache Busting: Probes the remote origin using cache-busting timestamps (`./index.html?probe=${Date.now()}`) and strict cache headers (`cache: 'no-store'`, `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`) to bypass Cloudflare edge cache and browser HTTP cache.
 - Service Worker & Cache Purge Hierarchy:
@@ -176,7 +177,7 @@
 - Playback & State Integrity: Synchronously flushes `flushLastPlayedState()` / `saveLastPlayedState()` to IndexedDB and localStorage before triggering reload, guaranteeing current song playback position and active queue survive reload seamlessly.
 - Offline Defense & State Feedback:
   - If triggered while offline (`navigator.onLine === false`), gracefully halts and displays "Offline - cannot update" without crashing, clearing caches, or reloading.
-  - Button transitions through explicit visual states: "Checking for updates..." (with spin animation) -> "Applying update..." / "Site is up to date" (success badge) -> "Reloading...".
+  - Button transitions through explicit visual states: "Checking for updates..." -> "Applying update..." / "Site is up to date" (success badge) -> "Reloading...".
   - Double-click debounce and 8-second safety fallback timer guarantee the UI never deadlocks or hangs.
 
 ## 21. Ultra-Resilient Last Played Track Restoration Invariant
@@ -191,4 +192,13 @@
 - Anti-Blink Transient Guard: During MSE `mediaSource.endOfStream()` settlement, demuxer re-evaluation, or `durationchange` / `canplay` events, transient empty buffer ranges (`buffered.length === 0`) or transport switching flags (`audioPlayer.switching === true`) must NEVER wipe previously rendered buffer segments for the active track.
 - URL-Scoped Reset Invariant: `updateBufferProgress()` tracks `lastBufferUrl`. Container clearing only occurs when `currentUrl !== lastBufferUrl` (a genuine track change). In `js/dom.js`, `switchTrack()` must strictly guard clearing `buffer-container` and resetting `_streamDone` behind `isDifferentUrl = (this._currentUrl !== (url || ''))` so that same-track recovery or re-entry preserves the rendered buffer bar seamlessly.
 - Instant Fast-Path Progress Dispatch: In `js/dom.js`, upon resolving a complete cached track via fast-path (`!isPartial`), `this.dispatchEvent(new Event('progress'))` must be fired immediately when `this._streamDone = true` so the buffer bar latches to 100% in 0ms without waiting for downstream playback events.
+
+## 23. Desktop vs. Mobile Settings & Action Surfaces Invariant
+- Settings Modal is Strictly Mobile-Only: The Settings modal (`#settings-modal`, accessed via `<option value="__settings__">Settings</option>`) is strictly mobile-only. Mobile devices require this modal to toggle Playback Engine modes (Mode 1 / Mode 2 Car & Bluetooth mode), Bluetooth inactivity auto-kill timeouts, and offline download shuffling.
+- Desktop Strictly Excludes Settings Option: Desktop operating systems and browsers use native HTML5 Audio (0.0% GPU load) and do not use mobile background keep-alive anchors or auto-kill timeouts. `#playlist-select` on desktop must NEVER include `<option value="__settings__">Settings</option>`.
+- Desktop Dropdown Direct Actions: On desktop, app actions must be exposed directly as top-level options within `#playlist-select`: `<option value="UPDATE_SITE">Update Site</option>` and `<option value="INSTALL_APP">Install App</option>`. The redundant separate `HARD_RELOAD` option is unified into `UPDATE_SITE` (with `HARD_RELOAD` supported as an alias for backward compatibility).
+- Strict Device Branching in updatePlaylistSelectOptions: In `js/main.js`, `updatePlaylistSelectOptions()` must enforce:
+  - Mobile: `${playlistOptions}<option value="__settings__">Settings</option>`
+  - Desktop: `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="INSTALL_APP">Install App</option>`
+  Any modification attempting to inject `__settings__` or `HARD_RELOAD` into the desktop branch is a strict regression.
 
