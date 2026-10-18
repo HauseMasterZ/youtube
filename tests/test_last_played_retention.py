@@ -186,5 +186,31 @@ class TestLastPlayedRetention(unittest.TestCase):
         self.assertIn('const isComplete = (audioPlayer && audioPlayer._streamDone) || false;', self.ui_content)
         self.assertIn('html = `<div class="buffer-segment" style="left:0%;width:100%;"></div>`;', self.ui_content)
 
+    def test_ui_buffer_progress_evaluates_complete_prior_to_empty_check(self):
+        """updateBufferProgress evaluates isComplete before empty-buffer or switching checks to prevent flicker"""
+        is_complete_idx = self.ui_content.find('const isComplete = (audioPlayer && audioPlayer._streamDone) || false;')
+        empty_check_idx = self.ui_content.find('if (!buffered || buffered.length === 0)')
+        self.assertGreater(is_complete_idx, -1)
+        self.assertGreater(empty_check_idx, -1)
+        self.assertLess(is_complete_idx, empty_check_idx, "isComplete must be evaluated before empty buffered check to prevent 1s disappearance")
+
+    def test_ui_buffer_progress_latches_and_skips_clear_on_transient_empty(self):
+        """updateBufferProgress preserves rendered segments during transient empty buffer or switching"""
+        self.assertIn("if (lastBufferSignature === 'complete') return;", self.ui_content)
+        self.assertIn("if (lastBufferSignature === '' || lastBufferSignature === 'empty')", self.ui_content)
+        self.assertIn("if (currentUrl && currentUrl !== lastBufferUrl)", self.ui_content)
+
+    def test_dom_switch_track_preserves_buffer_container_on_same_url(self):
+        """DualAudioPingPong switchTrack avoids clearing buffer container and streamDone on same-song recovery"""
+        self.assertIn("const isDifferentUrl = (this._currentUrl !== (url || ''));", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*isDifferentUrl\s*\)\s*\{[\s\S]*?this\._streamDone\s*=\s*false;'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*isDifferentUrl\s*\)\s*\{[\s\S]*?const\s+bc\s*=\s*document\.getElementById\([\'"]buffer-container[\'"]\);'
+        )
+
 if __name__ == '__main__':
     unittest.main()

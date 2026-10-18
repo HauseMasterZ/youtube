@@ -416,7 +416,10 @@
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
-            this._streamDone = false;
+            const isDifferentUrl = (this._currentUrl !== (url || ''));
+            if (isDifferentUrl) {
+                this._streamDone = false;
+            }
             this._isBufferStalled = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
@@ -444,10 +447,12 @@
                 }
             }
 
-            const bc = document.getElementById("buffer-container");
-            if (bc) bc.innerHTML = '';
-            if (typeof lastBufferSignature !== 'undefined') lastBufferSignature = 'empty';
-            if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            if (isDifferentUrl) {
+                const bc = document.getElementById("buffer-container");
+                if (bc) bc.innerHTML = '';
+                if (typeof lastBufferSignature !== 'undefined') lastBufferSignature = 'empty';
+                if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            }
 
             if (!url) {
                 this.switching = false;
@@ -597,6 +602,7 @@
                                         try { this._mediaSource.endOfStream(); } catch (e) {}
                                     }
                                     this._streamDone = true;
+                                    this.dispatchEvent(new Event('progress'));
 
                                     if (this._pendingSeek !== null) {
                                         const target = this._pendingSeek;
