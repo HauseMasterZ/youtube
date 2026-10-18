@@ -95,18 +95,36 @@ class TestSettingsUI(unittest.TestCase):
         self.assertEqual(matches, [], f"Found emojis in ui.js: {matches}")
 
     def test_playlist_select_options_configuration(self):
-        """updatePlaylistSelectOptions defines HARD_RELOAD/INSTALL_APP for desktop and __settings__ for mobile"""
+        """updatePlaylistSelectOptions defines unified UPDATE_SITE and INSTALL_APP for desktop and __settings__ for mobile"""
         self.assertRegex(self.main_content, r'function\s+updatePlaylistSelectOptions\s*\(\s*\)')
-        self.assertIn('HARD_RELOAD', self.main_content)
-        self.assertIn('Reload Playlists', self.main_content)
         self.assertIn('INSTALL_APP', self.main_content)
         self.assertIn('Install App', self.main_content)
+        self.assertIn('UPDATE_SITE', self.main_content)
+        self.assertIn('Update Site', self.main_content)
         self.assertIn('Settings', self.main_content)
         self.assertIn('__settings__', self.main_content)
         self.assertRegex(
             self.main_content,
-            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?__settings__[\s\S]*?\}\s*else\s*\{[\s\S]*?HARD_RELOAD[\s\S]*?INSTALL_APP[\s\S]*?\}'
+            r'if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?__settings__[\s\S]*?\}\s*else\s*\{[\s\S]*?UPDATE_SITE[\s\S]*?INSTALL_APP[\s\S]*?\}'
         )
+
+    def test_desktop_dropdown_strictly_excludes_settings_option(self):
+        """Desktop branch of updatePlaylistSelectOptions strictly excludes __settings__ and includes unified UPDATE_SITE"""
+        func_match = re.search(
+            r'function\s+updatePlaylistSelectOptions\s*\(\s*\)\s*\{([\s\S]*?)\}\s*updatePlaylistSelectOptions\(\);',
+            self.main_content
+        )
+        self.assertIsNotNone(func_match, "Could not match updatePlaylistSelectOptions function body")
+        parts = func_match.group(1).split('else')
+        self.assertEqual(len(parts), 2, "Expected updatePlaylistSelectOptions to contain an if-else branch")
+        mobile_branch = parts[0]
+        desktop_branch = parts[1]
+        self.assertIn('__settings__', mobile_branch, "Mobile branch must include __settings__")
+        self.assertNotIn('__settings__', desktop_branch, "Desktop branch must strictly exclude __settings__")
+        self.assertNotIn('Settings', desktop_branch, "Desktop branch must strictly exclude 'Settings' text")
+        self.assertIn('UPDATE_SITE', desktop_branch, "Desktop branch must include UPDATE_SITE")
+        self.assertNotIn('HARD_RELOAD', desktop_branch, "Desktop branch unifies reload into UPDATE_SITE and excludes HARD_RELOAD")
+        self.assertIn('INSTALL_APP', desktop_branch, "Desktop branch must include INSTALL_APP")
 
     def test_playlist_select_settings_interceptor(self):
         """playlistSelect change event intercepts __settings__, reverts select value, opens modal, and returns early"""
@@ -524,11 +542,12 @@ class TestSettingsUI(unittest.TestCase):
             r'if\s*\(\s*e\.target\.value\s*===\s*[\'"]UPDATE_SITE[\'"]\s*\)\s*\{[\s\S]*?updateSiteApp\(\)'
         )
 
-    def test_update_site_static_cache_purge_and_sw_message(self):
-        """executeSitePurgeAndReload deletes yt-player-cache and messages controller PURGE_STATIC_CACHE"""
-        self.assertIn("key.startsWith('yt-player-cache')", self.main_content)
-        self.assertIn("postMessage({ type: 'PURGE_STATIC_CACHE' })", self.main_content)
-        self.assertIn("postMessage({ type: 'SKIP_WAITING' })", self.main_content)
+    def test_update_site_unifies_playlist_reload(self):
+        """updateSiteApp concurrently triggers reloadPlaylistDatabases to unify site update and playlist reload"""
+        self.assertRegex(
+            self.main_content,
+            r'async\s+function\s+updateSiteApp\s*\(\s*\)\s*\{[\s\S]*?reloadPlaylistDatabases[\s\S]*?\}'
+        )
 
 if __name__ == '__main__':
     unittest.main()

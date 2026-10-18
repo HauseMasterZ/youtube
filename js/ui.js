@@ -308,25 +308,47 @@
         }
     }
 
+    let lastBufferUrl = '';
     let lastBufferSignature = '';
     function updateBufferProgress() {
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
-        if (audioPlayer && audioPlayer.switching) {
-            container.innerHTML = '';
+
+        const currentUrl = (audioPlayer && (audioPlayer._currentUrl || audioPlayer.src)) || '';
+        if (currentUrl && currentUrl !== lastBufferUrl) {
+            lastBufferUrl = currentUrl;
             lastBufferSignature = 'empty';
+            container.innerHTML = '';
+        }
+
+        const isComplete = (audioPlayer && audioPlayer._streamDone) || false;
+        if (isComplete) {
+            if (lastBufferSignature === 'complete') return;
+            lastBufferSignature = 'complete';
+            let html = `<div class="buffer-segment" style="left:0%;width:100%;"></div>`;
+            container.innerHTML = html;
             return;
         }
+
+        if (audioPlayer && audioPlayer.switching) {
+            return;
+        }
+
         const max = parseFloat(seekBar.max) || 0;
         if (max <= 0) {
-            container.innerHTML = '';
-            lastBufferSignature = 'empty';
+            if (lastBufferSignature !== 'empty') {
+                container.innerHTML = '';
+                lastBufferSignature = 'empty';
+            }
             return;
         }
+
         const buffered = audioPlayer ? audioPlayer.buffered : null;
         if (!buffered || buffered.length === 0) {
-            container.innerHTML = '';
-            lastBufferSignature = 'empty';
+            if (lastBufferSignature === '' || lastBufferSignature === 'empty') {
+                container.innerHTML = '';
+                lastBufferSignature = 'empty';
+            }
             return;
         }
 
@@ -338,25 +360,22 @@
         lastBufferSignature = sig;
 
         let html = '';
-        const isComplete = (audioPlayer && audioPlayer._streamDone) || false;
-        if (isComplete) {
-            html = `<div class="buffer-segment" style="left:0%;width:100%;"></div>`;
-        } else {
-            for (let i = 0; i < buffered.length; i++) {
-                const start = buffered.start(i);
-                const end = buffered.end(i);
-                if (end <= start) continue;
-                const leftPct = Math.min(100, Math.max(0, (start / max) * 100));
-                let widthPct = Math.min(100 - leftPct, Math.max(0, ((end - start) / max) * 100));
-                if (max > 0 && end >= max - 2) {
-                    widthPct = 100 - leftPct;
-                }
-                if (widthPct > 0) {
-                    html += `<div class="buffer-segment" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>`;
-                }
+        for (let i = 0; i < buffered.length; i++) {
+            const start = buffered.start(i);
+            const end = buffered.end(i);
+            if (end <= start) continue;
+            const leftPct = Math.min(100, Math.max(0, (start / max) * 100));
+            let widthPct = Math.min(100 - leftPct, Math.max(0, ((end - start) / max) * 100));
+            if (max > 0 && end >= max - 2) {
+                widthPct = 100 - leftPct;
+            }
+            if (widthPct > 0) {
+                html += `<div class="buffer-segment" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>`;
             }
         }
-        container.innerHTML = html;
+        if (html) {
+            container.innerHTML = html;
+        }
     }
     window.updateBufferProgress = updateBufferProgress;
 

@@ -149,9 +149,11 @@ class TestSettingsMarkup(unittest.TestCase):
         modal_content = modal_match.group(1)
 
         reload_match = re.search(r'<button[^>]*id=["\']btn-modal-reload["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
-        self.assertIsNotNone(reload_match, "Could not find #btn-modal-reload inside #settings-modal")
-        self.assertIn('class="settings-action-btn"', reload_match.group(0))
-        self.assertIn('Reload Playlists', reload_match.group(1))
+        self.assertIsNone(reload_match, "#btn-modal-reload should be removed as it is unified into #btn-modal-update")
+
+        update_match = re.search(r'<button[^>]*id=["\']btn-modal-update["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
+        self.assertIsNotNone(update_match, "Could not find #btn-modal-update inside #settings-modal")
+        self.assertIn('class="settings-action-btn"', update_match.group(0))
 
         install_match = re.search(r'<button[^>]*id=["\']btn-modal-install["\'][^>]*>(.*?)</button>', modal_content, re.DOTALL)
         self.assertIsNotNone(install_match, "Could not find #btn-modal-install inside #settings-modal")
@@ -184,7 +186,7 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIn('display:none', probe_tag.replace(' ', ''))
 
     def test_app_action_update_site_button(self):
-        """Update Site button exists inside settings modal with SVGs and text span"""
+        """Update Site button exists inside settings modal with clean text and no idle circular icon"""
         modal_match = re.search(r'<div[^>]*id=["\']settings-modal["\'][^>]*>([\s\S]*?)</div>\s*<div[^>]*id=["\']mode-toast["\']', self.html_content)
         self.assertIsNotNone(modal_match, "Could not find #settings-modal")
         modal_content = modal_match.group(1)
@@ -193,9 +195,7 @@ class TestSettingsMarkup(unittest.TestCase):
         self.assertIsNotNone(update_match, "Could not find #btn-modal-update inside #settings-modal")
         self.assertIn('class="settings-action-btn"', update_match.group(0))
         self.assertIn('aria-label="Update Site"', update_match.group(0))
-        self.assertIn('id="icon-update-idle"', update_match.group(1))
-        self.assertIn('id="icon-update-spinning"', update_match.group(1))
-        self.assertIn('id="icon-update-done"', update_match.group(1))
+        self.assertNotIn('id="icon-update-idle"', update_match.group(1), "Circular icon beside update site must be removed")
         self.assertIn('id="text-modal-update"', update_match.group(1))
         self.assertIn('Update Site', update_match.group(1))
 

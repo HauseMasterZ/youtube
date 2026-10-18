@@ -1277,7 +1277,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
             playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option>`;
         } else {
-            playlistSelect.innerHTML = `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option><option value="__settings__">Settings</option>`;
+            playlistSelect.innerHTML = `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="INSTALL_APP">Install App</option>`;
         }
         if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(currentVal)) {
             playlistSelect.value = currentVal;
@@ -1898,42 +1898,32 @@ document.addEventListener("DOMContentLoaded", () => {
         if (isUpdatingSite) return;
 
         const btnUpdate = document.getElementById("btn-modal-update");
-        const iconIdle = document.getElementById("icon-update-idle");
-        const iconSpinning = document.getElementById("icon-update-spinning");
-        const iconDone = document.getElementById("icon-update-done");
         const textUpdate = document.getElementById("text-modal-update");
 
         const setButtonState = (state, message = "") => {
             if (!btnUpdate) return;
             btnUpdate.classList.remove("updating", "success", "error");
-            if (iconIdle) iconIdle.style.display = 'none';
-            if (iconSpinning) iconSpinning.style.display = 'none';
-            if (iconDone) iconDone.style.display = 'none';
 
             if (state === 'idle') {
                 btnUpdate.disabled = false;
                 btnUpdate.style.opacity = '1';
                 btnUpdate.style.cursor = 'pointer';
-                if (iconIdle) iconIdle.style.display = 'inline-block';
                 if (textUpdate) textUpdate.textContent = message || "Update Site";
             } else if (state === 'checking' || state === 'updating') {
                 btnUpdate.disabled = true;
                 btnUpdate.style.opacity = '0.8';
                 btnUpdate.style.cursor = 'wait';
                 btnUpdate.classList.add("updating");
-                if (iconSpinning) iconSpinning.style.display = 'inline-block';
                 if (textUpdate) textUpdate.textContent = message;
             } else if (state === 'success') {
                 btnUpdate.disabled = false;
                 btnUpdate.style.opacity = '1';
                 btnUpdate.classList.add("success");
-                if (iconDone) iconDone.style.display = 'inline-block';
                 if (textUpdate) textUpdate.textContent = message;
             } else if (state === 'error') {
                 btnUpdate.disabled = false;
                 btnUpdate.style.opacity = '1';
                 btnUpdate.classList.add("error");
-                if (iconIdle) iconIdle.style.display = 'inline-block';
                 if (textUpdate) textUpdate.textContent = message;
             }
         };
@@ -1956,6 +1946,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         isUpdatingSite = true;
         setButtonState('checking', "Checking for updates...");
+
+        // Unify playlist reload: trigger background refresh of playlist databases concurrently
+        const dbRefresh = (typeof reloadPlaylistDatabases === 'function')
+            ? reloadPlaylistDatabases().catch(e => console.warn("Playlist refresh error during update:", e))
+            : null;
 
         // Safety timeout to prevent infinite hang
         const safetyTimer = setTimeout(() => {
@@ -2041,6 +2036,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 setButtonState('updating', "Applying update...");
                 await executeSitePurgeAndReload(swRegistration);
             } else {
+                if (dbRefresh) {
+                    try { await dbRefresh; } catch (e) {}
+                }
                 isUpdatingSite = false;
                 forceUpdateNextClick = true;
                 setButtonState('success', "Site is up to date");
