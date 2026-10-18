@@ -566,6 +566,9 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
+            if (audioPlayer._pendingSeek !== null) {
+                audioPlayer._pendingSeek = null;
+            }
             // Always-on anchor in Mode 2; stop only in Mode 1.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();

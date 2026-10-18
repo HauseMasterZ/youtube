@@ -279,7 +279,6 @@
         }
         get paused() {
             if (window.wasPausedByUser) return true;
-            if (this._pendingSeek !== null) return false;
             return this.active.paused;
         }
         get playbackRate() { return this.active.playbackRate; }
@@ -333,7 +332,14 @@
             this.active.muted = false;
 
             if (this._pendingSeek !== null) {
-                return Promise.resolve();
+                const target = this._pendingSeek;
+                this._pendingSeek = null;
+                if (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                    const bEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                    this.active.currentTime = Math.min(target, Math.max(0, bEnd - 0.1));
+                } else {
+                    this.active.currentTime = target;
+                }
             }
             return this.active.play();
         }
@@ -416,20 +422,22 @@
             this._currentUrl = url || '';
             this._expectedDuration = expectedDuration || 0;
             this._preventAutoplay = !!preventAutoplay;
-            if (resumePosition !== null && resumePosition > 0) {
+            if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
                 this._pendingSeek = resumePosition;
+            } else {
+                this._pendingSeek = null;
             }
 
             // Stop old playhead immediately before clearing buffer
             this.active.pause();
             try {
-                if (resumePosition === null) {
+                if (this._preventAutoplay || resumePosition === null) {
                     this.active.currentTime = 0;
                 }
             } catch (e) {}
 
             if (typeof updateMediaSessionPosition === 'function') {
-                if (resumePosition !== null && resumePosition > 0) {
+                if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
                     updateMediaSessionPosition(resumePosition, expectedDuration || 0, 0.00001);
                 } else {
                     updateMediaSessionPosition(0, expectedDuration || 0, 0.00001);
@@ -475,7 +483,7 @@
 
                 this._streamId = (this._streamId || 0) + 1;
                 const activeStreamId = this._streamId;
-                if (resumePosition !== null && resumePosition > 0) {
+                if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
                     this._pendingSeek = resumePosition;
                 } else if (this._seekingTo === null) {
                     this._pendingSeek = null;
@@ -611,6 +619,9 @@
                                     safePlay();
                                     this.dispatchEvent(new Event('play'));
                                     this.dispatchEvent(new Event('playing'));
+                                } else if (this._preventAutoplay) {
+                                    this._pendingSeek = null;
+                                    this.active.currentTime = 0;
                                 }
                             }
                         }

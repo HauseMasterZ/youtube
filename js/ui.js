@@ -338,14 +338,22 @@
         lastBufferSignature = sig;
 
         let html = '';
-        for (let i = 0; i < buffered.length; i++) {
-            const start = buffered.start(i);
-            const end = buffered.end(i);
-            if (end <= start) continue;
-            const leftPct = Math.min(100, Math.max(0, (start / max) * 100));
-            const widthPct = Math.min(100 - leftPct, Math.max(0, ((end - start) / max) * 100));
-            if (widthPct > 0) {
-                html += `<div class="buffer-segment" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>`;
+        const isComplete = (audioPlayer && audioPlayer._streamDone) || false;
+        if (isComplete) {
+            html = `<div class="buffer-segment" style="left:0%;width:100%;"></div>`;
+        } else {
+            for (let i = 0; i < buffered.length; i++) {
+                const start = buffered.start(i);
+                const end = buffered.end(i);
+                if (end <= start) continue;
+                const leftPct = Math.min(100, Math.max(0, (start / max) * 100));
+                let widthPct = Math.min(100 - leftPct, Math.max(0, ((end - start) / max) * 100));
+                if (max > 0 && end >= max - 2) {
+                    widthPct = 100 - leftPct;
+                }
+                if (widthPct > 0) {
+                    html += `<div class="buffer-segment" style="left:${leftPct.toFixed(2)}%;width:${widthPct.toFixed(2)}%;"></div>`;
+                }
             }
         }
         container.innerHTML = html;

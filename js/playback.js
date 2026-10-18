@@ -834,6 +834,10 @@
             totalTimeDisplay.textContent = "0:00";
         }
 
+        if (uiOnly) {
+            resumePosition = 0;
+        }
+
         const initialPosition = (resumePosition !== null && resumePosition > 0 && (parsedDuration === 0 || resumePosition <= parsedDuration))
             ? resumePosition
             : 0;
@@ -1316,7 +1320,7 @@
             if (totalDur > 0 && pos >= totalDur - 1.5) {
                 pos = 0;
             } else {
-                pos = Math.max(0, Math.round(pos * 10) / 10);
+                pos = 0;
             }
 
             const payload = {
@@ -1324,7 +1328,7 @@
                 trackId: track.id,
                 originalIndex: globalActiveOriginalIndex >= 0 ? globalActiveOriginalIndex : 0,
                 queueIndex: queueIndex >= 0 ? queueIndex : (globalActiveOriginalIndex >= 0 ? globalActiveOriginalIndex : 0),
-                currentTime: pos,
+                currentTime: 0,
                 duration: totalDur,
                 trackSnapshot: {
                     id: track.id,
@@ -1376,7 +1380,7 @@
         queueBasePlaylist = lastPlayed.playlist;
         playQueue = [globalActiveOriginalIndex];
         window.wasPausedByUser = true;
-        const resumePos = (typeof lastPlayed.currentTime === 'number' && lastPlayed.currentTime > 0) ? lastPlayed.currentTime : 0;
+        const resumePos = 0;
         if (typeof setPlayUI === 'function') {
             setPlayUI(false);
         }

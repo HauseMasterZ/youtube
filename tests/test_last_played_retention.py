@@ -16,6 +16,8 @@ class TestLastPlayedRetention(unittest.TestCase):
             cls.dom_content = f.read()
         with open(os.path.join(js_dir, 'main.js'), 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
+        with open(os.path.join(js_dir, 'ui.js'), 'r', encoding='utf-8') as f:
+            cls.ui_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -30,6 +32,7 @@ class TestLastPlayedRetention(unittest.TestCase):
             ('utils.js', self.utils_content),
             ('dom.js', self.dom_content),
             ('main.js', self.main_content),
+            ('ui.js', self.ui_content),
             ('test_last_played_retention.py', self.test_content)
         ]:
             matches = emoji_pattern.findall(content)
@@ -158,6 +161,30 @@ class TestLastPlayedRetention(unittest.TestCase):
         """utils.js mirrors IDB to DB_CACHE and dom.js caps audio fetch retries when offline"""
         self.assertIn('caches.open(DB_CACHE_NAME).then(dbCache => {', self.utils_content)
         self.assertIn('fetchAttempts >= 3 && typeof navigator !== \'undefined\' && navigator.onLine === false', self.dom_content)
+
+    def test_last_played_strictly_resets_to_zero_position(self):
+        """saveLastPlayedState and restoreLastPlayedTrack strictly clamp position to 0:00 without remembering seekbar position"""
+        self.assertIn('currentTime: 0,', self.playback_content)
+        self.assertIn('const resumePos = 0;', self.playback_content)
+        self.assertIn('if (uiOnly) {\n            resumePosition = 0;\n        }', self.playback_content)
+
+    def test_dom_pending_seek_never_blocks_play(self):
+        """DualAudioPingPong play resolves pending seek and paused getter honestly reflects active state"""
+        self.assertNotIn('if (this._pendingSeek !== null) return false;', self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'play\(\)\s*\{[\s\S]*?if\s*\(\s*this\._pendingSeek\s*!==\s*null\s*\)\s*\{[\s\S]*?this\._pendingSeek\s*=\s*null;[\s\S]*?this\.active\.currentTime\s*='
+        )
+
+    def test_dom_switch_track_never_arms_pending_seek_on_prevent_autoplay(self):
+        """DualAudioPingPong switchTrack only arms pendingSeek when not preventAutoplay"""
+        self.assertIn('if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0)', self.dom_content)
+        self.assertIn('if (this._preventAutoplay || resumePosition === null)', self.dom_content)
+
+    def test_ui_buffer_progress_renders_full_width_when_complete(self):
+        """updateBufferProgress fills 100% width buffer segment when stream is complete"""
+        self.assertIn('const isComplete = (audioPlayer && audioPlayer._streamDone) || false;', self.ui_content)
+        self.assertIn('html = `<div class="buffer-segment" style="left:0%;width:100%;"></div>`;', self.ui_content)
 
 if __name__ == '__main__':
     unittest.main()
