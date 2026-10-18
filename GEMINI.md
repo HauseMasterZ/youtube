@@ -164,3 +164,19 @@
 - Focus Shift Quarantine during PointerDown: Event handlers listening for `pointerdown` on `#playlist-container` (such as `blurPlaylistSelectIfActive`) must ignore non-primary mouse buttons (`if (e && e.button !== 0) return;`) to prevent focus shifting during middle-click, which cancels Chromium's pending autoscroll gesture.
 - Strict Vertical Axis Lock: `#playlist-container` must specify `overflow-x: hidden;` alongside `overflow-y: auto;` to lock browser autoscroll strictly to the vertical axis, preventing 4-way omnidirectional autoscroll drift.
 
+## 20. Resilient Update Site Engine & Cloudflare Invalidation Invariant
+- Universal Availability: An "Update Site" button (`#btn-modal-update`) is accessible in both desktop and mobile settings under "App Actions", as well as via desktop playlist dropdown (`UPDATE_SITE`).
+- Standalone PWA Resiliency: In installed mobile PWAs (where browser URL bars and reload controls are absent), clicking "Update Site" reliably pulls the latest Cloudflare release and refreshes the application shell without requiring app uninstallation or device restart.
+- Cloudflare Origin Cache Busting: Probes the remote origin using cache-busting timestamps (`./index.html?probe=${Date.now()}`) and strict cache headers (`cache: 'no-store'`, `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`) to bypass Cloudflare edge cache and browser HTTP cache.
+- Service Worker & Cache Purge Hierarchy:
+  - Updates Service Worker via `swRegistration.update()` with `{ updateViaCache: 'none' }`.
+  - Sends `{ type: 'SKIP_WAITING' }` to waiting/installing workers.
+  - Purges static app shell caches (`key.startsWith('yt-player-cache')`) while strictly preserving user assets: `yt-player-media` (downloaded audio), `yt-player-thumbs` (cached album art), and `yt-player-databases` (playlist databases).
+  - Posts `{ type: 'PURGE_STATIC_CACHE' }` to the active Service Worker controller to re-fetch `CORE_ASSETS` with `cache: 'reload'`.
+- Playback & State Integrity: Synchronously flushes `flushLastPlayedState()` / `saveLastPlayedState()` to IndexedDB and localStorage before triggering reload, guaranteeing current song playback position and active queue survive reload seamlessly.
+- Offline Defense & State Feedback:
+  - If triggered while offline (`navigator.onLine === false`), gracefully halts and displays "Offline - cannot update" without crashing, clearing caches, or reloading.
+  - Button transitions through explicit visual states: "Checking for updates..." (with spin animation) -> "Applying update..." / "Site is up to date" (success badge) -> "Reloading...".
+  - Double-click debounce and 8-second safety fallback timer guarantee the UI never deadlocks or hangs.
+
+

@@ -1274,7 +1274,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
             playlistSelect.innerHTML = `${playlistOptions}<option value="__settings__">Settings</option>`;
         } else {
-            playlistSelect.innerHTML = `${playlistOptions}<option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option>`;
+            playlistSelect.innerHTML = `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="HARD_RELOAD">Reload Playlists</option><option value="INSTALL_APP">Install App</option><option value="__settings__">Settings</option>`;
         }
         if (typeof ALL_PLAYLISTS !== 'undefined' && ALL_PLAYLISTS.includes(currentVal)) {
             playlistSelect.value = currentVal;
@@ -1285,6 +1285,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let lastValidPlaylist = playlistSelect.value;
     playlistSelect.addEventListener("change", async (e) => {
+        if (e.target.value === "UPDATE_SITE") {
+            playlistSelect.value = lastValidPlaylist;
+            if (typeof updateSiteApp === 'function') {
+                await updateSiteApp();
+            }
+            return;
+        }
+
         if (e.target.value === "HARD_RELOAD" || e.target.value === "RELOAD_DATABASES") {
             playlistSelect.value = lastValidPlaylist;
             await reloadPlaylistDatabases();
@@ -1622,6 +1630,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btTimeoutCustom = document.getElementById("bt-timeout-custom");
     const btnModalReload = document.getElementById("btn-modal-reload");
     const btnModalInstall = document.getElementById("btn-modal-install");
+    const btnModalUpdate = document.getElementById("btn-modal-update");
 
     function openSettingsModal() {
         const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
@@ -1815,6 +1824,242 @@ document.addEventListener("DOMContentLoaded", () => {
         btnModalInstall.addEventListener("click", () => {
             installPwaApp();
             closeSettingsModal();
+        });
+    }
+
+    let isUpdatingSite = false;
+    let forceUpdateNextClick = false;
+    let forceUpdateResetTimer = null;
+
+    async function executeSitePurgeAndReload(swRegistration = null) {
+        const textUpdate = document.getElementById("text-modal-update");
+        if (textUpdate) textUpdate.textContent = "Reloading...";
+
+        // 1. Flush playback and session state to IDB & localStorage
+        if (typeof flushLastPlayedState === 'function') {
+            flushLastPlayedState();
+        } else if (typeof saveLastPlayedState === 'function') {
+            saveLastPlayedState();
+        }
+
+        // 2. Activate waiting/installing service worker if present
+        if (swRegistration) {
+            if (swRegistration.waiting) {
+                swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            } else if (swRegistration.installing) {
+                swRegistration.installing.postMessage({ type: 'SKIP_WAITING' });
+            }
+        }
+
+        // 3. Purge static application caches while strictly preserving media, artwork, and databases
+        if (window.caches) {
+            try {
+                const keys = await caches.keys();
+                for (const key of keys) {
+                    if (key.startsWith('yt-player-cache')) {
+                        await caches.delete(key);
+                    }
+                }
+            } catch (cacheErr) {
+                console.warn("Static cache purge error:", cacheErr);
+            }
+        }
+
+        // 4. Message active controller to purge its in-memory core asset cache
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            try {
+                navigator.serviceWorker.controller.postMessage({ type: 'PURGE_STATIC_CACHE' });
+            } catch (e) {}
+        }
+
+        // 5. Clean reload with controllerchange listener and safety fallback
+        let reloaded = false;
+        const doReload = () => {
+            if (reloaded) return;
+            reloaded = true;
+            try {
+                window.location.reload();
+            } catch (e) {
+                window.location.href = window.location.origin + window.location.pathname;
+            }
+        };
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('controllerchange', doReload, { once: true });
+        }
+
+        setTimeout(doReload, 600);
+    }
+
+    async function updateSiteApp() {
+        if (isUpdatingSite) return;
+
+        const btnUpdate = document.getElementById("btn-modal-update");
+        const iconIdle = document.getElementById("icon-update-idle");
+        const iconSpinning = document.getElementById("icon-update-spinning");
+        const iconDone = document.getElementById("icon-update-done");
+        const textUpdate = document.getElementById("text-modal-update");
+
+        const setButtonState = (state, message = "") => {
+            if (!btnUpdate) return;
+            btnUpdate.classList.remove("updating", "success", "error");
+            if (iconIdle) iconIdle.style.display = 'none';
+            if (iconSpinning) iconSpinning.style.display = 'none';
+            if (iconDone) iconDone.style.display = 'none';
+
+            if (state === 'idle') {
+                btnUpdate.disabled = false;
+                btnUpdate.style.opacity = '1';
+                btnUpdate.style.cursor = 'pointer';
+                if (iconIdle) iconIdle.style.display = 'inline-block';
+                if (textUpdate) textUpdate.textContent = message || "Update Site";
+            } else if (state === 'checking' || state === 'updating') {
+                btnUpdate.disabled = true;
+                btnUpdate.style.opacity = '0.8';
+                btnUpdate.style.cursor = 'wait';
+                btnUpdate.classList.add("updating");
+                if (iconSpinning) iconSpinning.style.display = 'inline-block';
+                if (textUpdate) textUpdate.textContent = message;
+            } else if (state === 'success') {
+                btnUpdate.disabled = false;
+                btnUpdate.style.opacity = '1';
+                btnUpdate.classList.add("success");
+                if (iconDone) iconDone.style.display = 'inline-block';
+                if (textUpdate) textUpdate.textContent = message;
+            } else if (state === 'error') {
+                btnUpdate.disabled = false;
+                btnUpdate.style.opacity = '1';
+                btnUpdate.classList.add("error");
+                if (iconIdle) iconIdle.style.display = 'inline-block';
+                if (textUpdate) textUpdate.textContent = message;
+            }
+        };
+
+        // Guard against offline state
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+            setButtonState('error', "Offline - cannot update");
+            setTimeout(() => setButtonState('idle', "Update Site"), 3000);
+            return;
+        }
+
+        // If user clicks while "Site is up to date" is displayed, treat as manual force-reload
+        if (forceUpdateNextClick) {
+            if (forceUpdateResetTimer) clearTimeout(forceUpdateResetTimer);
+            forceUpdateNextClick = false;
+            setButtonState('updating', "Force refreshing...");
+            await executeSitePurgeAndReload();
+            return;
+        }
+
+        isUpdatingSite = true;
+        setButtonState('checking', "Checking for updates...");
+
+        // Safety timeout to prevent infinite hang
+        const safetyTimer = setTimeout(() => {
+            if (isUpdatingSite) {
+                console.warn("Update check timed out; falling back to forced refresh");
+                executeSitePurgeAndReload();
+            }
+        }, 8000);
+
+        try {
+            // Save state immediately
+            if (typeof flushLastPlayedState === 'function') {
+                flushLastPlayedState();
+            } else if (typeof saveLastPlayedState === 'function') {
+                saveLastPlayedState();
+            }
+
+            let updateFound = false;
+            let swRegistration = null;
+
+            // 1. Service Worker update check
+            if ('serviceWorker' in navigator) {
+                try {
+                    swRegistration = await navigator.serviceWorker.getRegistration();
+                    if (swRegistration) {
+                        if (swRegistration.waiting) {
+                            updateFound = true;
+                        } else {
+                            await swRegistration.update();
+                            if (swRegistration.waiting || swRegistration.installing) {
+                                updateFound = true;
+                            }
+                        }
+                    }
+                } catch (swErr) {
+                    console.warn("ServiceWorker update inspection error:", swErr);
+                }
+            }
+
+            // 2. Direct origin probe to Cloudflare bypassing all intermediate caches
+            const cacheBuster = Date.now();
+            try {
+                const probeRes = await fetch(`./index.html?probe=${cacheBuster}`, {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    }
+                });
+
+                if (probeRes.ok) {
+                    const probeText = await probeRes.text();
+                    let isCachedIdentical = false;
+                    if (window.caches) {
+                        try {
+                            const cachedIndex = await caches.match('./index.html') || await caches.match('./');
+                            if (cachedIndex) {
+                                const cachedText = await cachedIndex.text();
+                                if (cachedText === probeText) {
+                                    isCachedIdentical = true;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+
+                    if (!isCachedIdentical && probeText.length > 0) {
+                        updateFound = true;
+                    }
+                }
+            } catch (probeErr) {
+                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    clearTimeout(safetyTimer);
+                    isUpdatingSite = false;
+                    setButtonState('error', "Offline - cannot update");
+                    setTimeout(() => setButtonState('idle', "Update Site"), 3000);
+                    return;
+                }
+            }
+
+            clearTimeout(safetyTimer);
+
+            if (updateFound) {
+                setButtonState('updating', "Applying update...");
+                await executeSitePurgeAndReload(swRegistration);
+            } else {
+                isUpdatingSite = false;
+                forceUpdateNextClick = true;
+                setButtonState('success', "Site is up to date");
+                forceUpdateResetTimer = setTimeout(() => {
+                    forceUpdateNextClick = false;
+                    setButtonState('idle', "Update Site");
+                }, 3000);
+            }
+        } catch (err) {
+            clearTimeout(safetyTimer);
+            isUpdatingSite = false;
+            console.error("Site update error:", err);
+            setButtonState('error', "Update failed - retry");
+            setTimeout(() => setButtonState('idle', "Update Site"), 3000);
+        }
+    }
+
+    window.updateSiteApp = updateSiteApp;
+
+    if (btnModalUpdate) {
+        btnModalUpdate.addEventListener("click", () => {
+            updateSiteApp();
         });
     }
 

@@ -55,6 +55,36 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('message', (event) => {
+    if (!event.data) return;
+    if (event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+    if (event.data.type === 'PURGE_STATIC_CACHE') {
+        event.waitUntil(
+            caches.keys().then((keys) => {
+                return Promise.all(
+                    keys.map((k) => {
+                        if (k.startsWith('yt-player-cache') && k !== CACHE_NAME) {
+                            return caches.delete(k);
+                        }
+                    })
+                );
+            }).then(() => {
+                return caches.open(CACHE_NAME).then((cache) => {
+                    return Promise.all(
+                        CORE_ASSETS.map((asset) => {
+                            return fetch(asset, { cache: 'reload' }).then((res) => {
+                                if (res.ok) return cache.put(asset, res);
+                            }).catch(() => {});
+                        })
+                    );
+                });
+            })
+        );
+    }
+});
+
 // LRU Cache Size Limiter to protect browser storage quotas
 async function limitCacheSize(cacheName, maxItems) {
     try {

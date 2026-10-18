@@ -129,5 +129,13 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertIn("seedOfflineDatabases()", self.main_content)
         self.assertIn("storePlaylistDatabaseInAllCaches", self.main_content)
 
+    def test_sw_message_listener_skip_waiting_and_purge(self):
+        """sw.js must listen for message events and handle SKIP_WAITING and PURGE_STATIC_CACHE."""
+        self.assertIn("self.addEventListener('message'", self.sw_content)
+        self.assertIn("event.data.type === 'SKIP_WAITING'", self.sw_content)
+        self.assertIn("self.skipWaiting()", self.sw_content)
+        self.assertIn("event.data.type === 'PURGE_STATIC_CACHE'", self.sw_content)
+        self.assertIn("k.startsWith('yt-player-cache')", self.sw_content)
+
 if __name__ == '__main__':
     unittest.main()

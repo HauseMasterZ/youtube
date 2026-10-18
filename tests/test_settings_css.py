@@ -202,6 +202,12 @@ class TestSettingsCSS(unittest.TestCase):
         self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*max-width:\s*700px;')
         self.assertRegex(desktop_section, r'#album-art-container\s*\{[^}]*height:\s*clamp\(\s*260px,\s*60vh,\s*680px\s*\);')
 
+    def test_btn_modal_update_styles(self):
+        """#btn-modal-update has dynamic updating, success, and error styling"""
+        self.assertRegex(self.css_content, r'#btn-modal-update\.updating\s*\{[^}]*border-color:')
+        self.assertRegex(self.css_content, r'#btn-modal-update\.success\s*\{[^}]*border-color:\s*#00ff88;')
+        self.assertRegex(self.css_content, r'#btn-modal-update\.error\s*\{[^}]*border-color:\s*#ff5555;')
+
 if __name__ == '__main__':
     unittest.main()
 
