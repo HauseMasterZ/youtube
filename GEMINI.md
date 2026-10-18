@@ -5,19 +5,19 @@
 - Antigravity must never rely solely on ephemeral conversation memory, which is subject to context truncation and compression.
 - Before executing any task, Antigravity must read, respect, and enforce all rules in `GEMINI.md` unconditionally.
 
-## 2. Mandatory Muse Consultation & Debate
-- On EVERY prompt involving architectural audits, bug investigations, design choices, root cause analysis, or verification, Antigravity MUST consult and debate with Muse first before proposing solutions or writing code.
+## 2. Mandatory DeepSeek Consultation & Debate (opencode/deepseek-v4.1-flash-free)
+- On EVERY prompt involving architectural audits, bug investigations, design choices, root cause analysis, or verification, Antigravity MUST consult and debate with DeepSeek Flash 4.1 Free in opencode first before proposing solutions or writing code.
 - Working Directory & Context Preservation:
-  - ALWAYS run Muse directly in the **project root directory** (e.g., `c:\Users\Hause\Documents\Code\youtube_frontend`).
-  - ALWAYS pass the `-c` (`--continue`) flag so Muse retains and accumulates conversational context across every single invocation.
-  - If Muse does not have or loses context, explicitly bootstrap it with existing architectural state, code references, and invariants.
+  - ALWAYS run opencode directly in the project root directory (`C:\Users\HauseMaster\Documents\Code\PiYT\youtube`).
+  - ALWAYS pass the `-c` (`--continue`) flag so opencode retains and accumulates conversational context across every single invocation.
+  - Model identifier: `opencode/deepseek-v4.1-flash-free`.
 - Invocation command pattern:
   ```bash
-  python -c "import subprocess; cmd = [r'C:\Users\Hause\AppData\Local\Microsoft\WinGet\Packages\SST.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe\opencode.exe', 'run', '-c', '-m', 'opencode/muse-spark-1.3-contributor-free', '--variant', 'xhigh', '<prompt>']; p = subprocess.Popen(cmd, cwd=r'<project_root>', stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8'); out, err = p.communicate(timeout=180); print(out)"
+  python -c "import sys, subprocess; sys.stdout.reconfigure(encoding='utf-8'); cmd = [r'C:\Users\HauseMaster\AppData\Local\Microsoft\WinGet\Packages\SST.opencode_Microsoft.Winget.Source_8wekyb3d8bbwe\opencode.exe', 'run', '-c', '-m', 'opencode/deepseek-v4.1-flash-free', '<prompt>']; p = subprocess.Popen(cmd, cwd=r'C:\Users\HauseMaster\Documents\Code\PiYT\youtube', stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8'); out, err = p.communicate(timeout=180); print(out)"
   ```
-  *(Note: Passing `stdin=subprocess.DEVNULL` ensures non-blocking automated execution on Windows).*
-- Antigravity must apply critical thinking to Muse's responses and debate back and forth if necessary, combining the cognitive throughput of both agents.
-- Antigravity must NEVER substitute its own unverified assumptions for a rigorous architectural debate with Muse.
+  *(Note: Passing `stdin=subprocess.DEVNULL` and `sys.stdout.reconfigure(encoding='utf-8')` ensures non-blocking automated execution and UTF-8 output handling on Windows).*
+- Antigravity must apply critical thinking to DeepSeek's responses and debate back and forth if necessary, combining the cognitive throughput of both agents.
+- Antigravity must NEVER substitute its own unverified assumptions for a rigorous architectural consultation with DeepSeek.
 
 ## 3. 1:1 Exact YouTube Playlist Ordering Invariant
 - The track order in `_Playlist_Database.json` and `_Playlist_Order.m3u8` MUST be 1:1 identical to the YouTube playlist order at all times.
@@ -179,4 +179,9 @@
   - Button transitions through explicit visual states: "Checking for updates..." (with spin animation) -> "Applying update..." / "Site is up to date" (success badge) -> "Reloading...".
   - Double-click debounce and 8-second safety fallback timer guarantee the UI never deadlocks or hangs.
 
-
+## 21. Ultra-Resilient Last Played Track Restoration Invariant
+- Song ID Only: Last played state strictly persists only the track identifier (`trackId`), playlist (`playlist`), and mode configuration (`shuffleMode`, `repeatMode`). It must NEVER persist or restore seekbar position (`currentTime` is unconditionally clamped/saved as `0`).
+- Always Reset to 0:00: Upon restoring the last played track during startup or reload, the playhead, seekbar, time display, and audio element must always reset to `0:00`.
+- Zero-PendingSeek Startup Invariant: Restoring the last played track in standby (`uiOnly === true` / `preventAutoplay === true`) must NEVER arm `_pendingSeek` with a non-zero position. `_pendingSeek` must remain `null`, and `audioPlayer.currentTime` must be `0`.
+- Authoritative Cache & Anti-Downgrade Invariant: Cached audio in `yt-player-media` with HTTP 200 or `X-Partial-Cached: 'false'` must be treated as complete. Never downgrade a complete cache entry to partial based on bitrate heuristics or duration drift.
+- Unswallowed Play Invariant: `audioPlayer.play()` must never silently swallow play intent when `_pendingSeek` exists. If `_pendingSeek` is set, `play()` must resolve or clamp the seek to available buffered bounds and execute `this.active.play()` immediately. `audioPlayer.paused` must honestly reflect `active.paused` and `wasPausedByUser`, never returning false simply because a seek is pending.
