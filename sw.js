@@ -281,6 +281,20 @@ self.addEventListener('fetch', (event) => {
 
     // 5. Navigation Fallback: Always return cached App Shell for HTML document navigations
     if (event.request.mode === 'navigate') {
+        const navUrl = new URL(event.request.url);
+        if (navUrl.searchParams.has('v')) {
+            event.respondWith(
+                fetch(event.request).then(response => {
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    }
+                    return response;
+                }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./') || caches.match('./index.html')))
+            );
+            return;
+        }
+
         event.respondWith(
             caches.match(event.request).then(cached => {
                 if (cached) return cached;

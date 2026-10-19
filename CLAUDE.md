@@ -98,7 +98,7 @@ The player supports two switchable audio engine modes persisted in `localStorage
 ### Desktop Scoped Logic
 - **3-Column Grid**: `@media (min-width: 1111px) and (orientation: landscape)` renders permanent lyrics on left, player in center, playlist on right. Shifting by $1/3$ from center if lyrics are closed.
 - **Keyboard Shortcuts**: `Space` (Play/Pause), `←`/`→` ($\pm 5\text{s}$), `:`/`;` (prev), `"`/`'` (next), `r`/`R` (repeat mode), `s`/`S` (shuffle mode), `Escape` (close modals), and alpha key auto-focusing search.
-- **Dropdown Actions**: On desktop, `#playlist-select` exposes `<option value="UPDATE_SITE">Update Site</option>`, `<option value="HARD_RELOAD">Reload Playlists</option>`, and `<option value="INSTALL_APP">Install App</option>`. Desktop strictly excludes `<option value="__settings__">Settings</option>`.
+- **Dropdown Actions**: On desktop, `#playlist-select` exposes `<option value="UPDATE_SITE">Update Site</option>` and `<option value="INSTALL_APP">Install App</option>`. Desktop strictly excludes `<option value="__settings__">Settings</option>`.
 
 ---
 

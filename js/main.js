@@ -1,4 +1,14 @@
 document.addEventListener("DOMContentLoaded", () => {
+    // Strip the cache-busting update marker from the address bar after a forced site update
+    try {
+        const updateParams = new URLSearchParams(window.location.search);
+        if (updateParams.has('v') && /^\d+$/.test(updateParams.get('v') || '')) {
+            updateParams.delete('v');
+            const cleanQuery = updateParams.toString();
+            window.history.replaceState(null, '', window.location.pathname + (cleanQuery ? '?' + cleanQuery : '') + window.location.hash);
+        }
+    } catch (e) {}
+
     // Build version: window.APP_BUILD
     let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
@@ -1831,8 +1841,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     let isUpdatingSite = false;
-    let forceUpdateNextClick = false;
-    let forceUpdateResetTimer = null;
 
     async function executeSitePurgeAndReload(swRegistration = null) {
         const textUpdate = document.getElementById("text-modal-update");
@@ -1875,13 +1883,15 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (e) {}
         }
 
-        // 5. Clean reload with controllerchange listener and safety fallback
+        // 5. Cache-busted reload with controllerchange listener and safety fallback
         let reloaded = false;
         const doReload = () => {
             if (reloaded) return;
             reloaded = true;
             try {
-                window.location.reload();
+                const updateUrl = new URL(window.location.href);
+                updateUrl.searchParams.set('v', Date.now());
+                window.location.replace(updateUrl.toString());
             } catch (e) {
                 window.location.href = window.location.origin + window.location.pathname;
             }
@@ -1909,7 +1919,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 btnUpdate.style.opacity = '1';
                 btnUpdate.style.cursor = 'pointer';
                 if (textUpdate) textUpdate.textContent = message || "Update Site";
-            } else if (state === 'checking' || state === 'updating') {
+            } else if (state === 'updating') {
                 btnUpdate.disabled = true;
                 btnUpdate.style.opacity = '0.8';
                 btnUpdate.style.cursor = 'wait';
@@ -1935,30 +1945,21 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // If user clicks while "Site is up to date" is displayed, treat as manual force-reload
-        if (forceUpdateNextClick) {
-            if (forceUpdateResetTimer) clearTimeout(forceUpdateResetTimer);
-            forceUpdateNextClick = false;
-            setButtonState('updating', "Force refreshing...");
-            await executeSitePurgeAndReload();
-            return;
-        }
-
         isUpdatingSite = true;
-        setButtonState('checking', "Checking for updates...");
+        setButtonState('updating', "Updating site...");
 
         // Unify playlist reload: trigger background refresh of playlist databases concurrently
-        const dbRefresh = (typeof reloadPlaylistDatabases === 'function')
-            ? reloadPlaylistDatabases().catch(e => console.warn("Playlist refresh error during update:", e))
-            : null;
+        if (typeof reloadPlaylistDatabases === 'function') {
+            reloadPlaylistDatabases().catch(e => console.warn("Playlist refresh error during update:", e));
+        }
 
         // Safety timeout to prevent infinite hang
         const safetyTimer = setTimeout(() => {
             if (isUpdatingSite) {
-                console.warn("Update check timed out; falling back to forced refresh");
+                console.warn("Update timed out; forcing refresh");
                 executeSitePurgeAndReload();
             }
-        }, 8000);
+        }, 10000);
 
         try {
             // Save state immediately
@@ -1968,85 +1969,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveLastPlayedState();
             }
 
-            let updateFound = false;
+            // Always refresh the service worker from the network, regardless of the current version
             let swRegistration = null;
-
-            // 1. Service Worker update check
             if ('serviceWorker' in navigator) {
                 try {
                     swRegistration = await navigator.serviceWorker.getRegistration();
                     if (swRegistration) {
-                        if (swRegistration.waiting) {
-                            updateFound = true;
-                        } else {
-                            await swRegistration.update();
-                            if (swRegistration.waiting || swRegistration.installing) {
-                                updateFound = true;
-                            }
-                        }
+                        await swRegistration.update();
                     }
                 } catch (swErr) {
-                    console.warn("ServiceWorker update inspection error:", swErr);
-                }
-            }
-
-            // 2. Direct origin probe to Cloudflare bypassing all intermediate caches
-            const cacheBuster = Date.now();
-            try {
-                const probeRes = await fetch(`./index.html?probe=${cacheBuster}`, {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
-                    }
-                });
-
-                if (probeRes.ok) {
-                    const probeText = await probeRes.text();
-                    let isCachedIdentical = false;
-                    if (window.caches) {
-                        try {
-                            const cachedIndex = await caches.match('./index.html') || await caches.match('./');
-                            if (cachedIndex) {
-                                const cachedText = await cachedIndex.text();
-                                if (cachedText === probeText) {
-                                    isCachedIdentical = true;
-                                }
-                            }
-                        } catch (e) {}
-                    }
-
-                    if (!isCachedIdentical && probeText.length > 0) {
-                        updateFound = true;
-                    }
-                }
-            } catch (probeErr) {
-                if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-                    clearTimeout(safetyTimer);
-                    isUpdatingSite = false;
-                    setButtonState('error', "Offline - cannot update");
-                    setTimeout(() => setButtonState('idle', "Update Site"), 3000);
-                    return;
+                    console.warn("ServiceWorker update refresh error:", swErr);
                 }
             }
 
             clearTimeout(safetyTimer);
 
-            if (updateFound) {
-                setButtonState('updating', "Applying update...");
-                await executeSitePurgeAndReload(swRegistration);
-            } else {
-                if (dbRefresh) {
-                    try { await dbRefresh; } catch (e) {}
-                }
-                isUpdatingSite = false;
-                forceUpdateNextClick = true;
-                setButtonState('success', "Site is up to date");
-                forceUpdateResetTimer = setTimeout(() => {
-                    forceUpdateNextClick = false;
-                    setButtonState('idle', "Update Site");
-                }, 3000);
-            }
+            setButtonState('updating', "Applying update...");
+            await executeSitePurgeAndReload(swRegistration);
         } catch (err) {
             clearTimeout(safetyTimer);
             isUpdatingSite = false;

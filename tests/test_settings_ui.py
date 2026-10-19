@@ -549,5 +549,22 @@ class TestSettingsUI(unittest.TestCase):
             r'async\s+function\s+updateSiteApp\s*\(\s*\)\s*\{[\s\S]*?reloadPlaylistDatabases[\s\S]*?\}'
         )
 
+    def test_update_site_always_fetches_without_version_checking(self):
+        """updateSiteApp strictly avoids version diffing or 'Site is up to date' checks and always executes update"""
+        self.assertNotIn('?probe=', self.main_content, "Origin probe diffing must be removed")
+        self.assertNotIn('updateFound', self.main_content, "updateFound conditional must be removed")
+        self.assertNotIn('forceUpdateNextClick', self.main_content, "Two-step forceUpdateNextClick must be removed")
+        self.assertNotIn('Site is up to date', self.main_content, "Passive up-to-date message must be removed")
+        self.assertNotIn('Checking for updates', self.main_content, "Checking state must be replaced with direct Updating site")
+        self.assertIn('Updating site...', self.main_content)
+        self.assertIn('Applying update...', self.main_content)
+
+    def test_update_site_executes_cache_busted_reload_and_strips_marker(self):
+        """executeSitePurgeAndReload reloads with cache-busting timestamp and DOMContentLoaded cleanses address bar"""
+        self.assertIn("updateUrl.searchParams.set('v', Date.now());", self.main_content)
+        self.assertIn("window.location.replace(updateUrl.toString());", self.main_content)
+        self.assertIn("updateParams.delete('v');", self.main_content)
+        self.assertIn("window.history.replaceState", self.main_content)
+
 if __name__ == '__main__':
     unittest.main()

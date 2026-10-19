@@ -165,20 +165,23 @@
 - Strict Vertical Axis Lock: `#playlist-container` must specify `overflow-x: hidden;` alongside `overflow-y: auto;` to lock browser autoscroll strictly to the vertical axis, preventing 4-way omnidirectional autoscroll drift.
 
 ## 20. Resilient Update Site Engine & Cloudflare Invalidation Invariant
-- Universal Availability & Unified Refresh: An "Update Site" button (`#btn-modal-update`) is accessible in the mobile settings modal under "App Actions", as well as via desktop playlist dropdown (`UPDATE_SITE`). This action unifies both site updates and playlist database revalidation: it concurrently refreshes all playlist databases and checks/applies Cloudflare origin updates, retiring the redundant separate "Reload Playlists" button.
+- Universal Availability & Unified Refresh: An "Update Site" button (`#btn-modal-update`) is accessible in the mobile settings modal under "App Actions", as well as via desktop playlist dropdown (`UPDATE_SITE`). This action unifies both site updates and playlist database revalidation: it concurrently refreshes all playlist databases and fetches the latest Cloudflare origin updates, retiring the redundant separate "Reload Playlists" button.
 - Clean Text Presentation: `#btn-modal-update` uses clean text presentation (`#text-modal-update`) without circular sync icons, maintaining visual parity with other action buttons while utilizing CSS state classes (`.updating`, `.success`, `.error`) for user feedback.
 - Standalone PWA Resiliency: In installed mobile PWAs (where browser URL bars and reload controls are absent), clicking "Update Site" reliably pulls the latest Cloudflare release and refreshes the application shell without requiring app uninstallation or device restart.
-- Cloudflare Origin Cache Busting: Probes the remote origin using cache-busting timestamps (`./index.html?probe=${Date.now()}`) and strict cache headers (`cache: 'no-store'`, `Cache-Control: no-cache, no-store, must-revalidate`, `Pragma: no-cache`) to bypass Cloudflare edge cache and browser HTTP cache.
-- Service Worker & Cache Purge Hierarchy:
-  - Updates Service Worker via `swRegistration.update()` with `{ updateViaCache: 'none' }`.
+- Unconditional Latest Version Fetch: The update site logic strictly avoids checking or diffing current version tags or HTML probes. It unconditionally fetches and applies the latest version from Cloudflare irrespective of whether the current client is latest or not.
+- Cache-Busted Navigation & Origin Invalidation:
+  - Updates Service Worker via `swRegistration.update()`.
   - Sends `{ type: 'SKIP_WAITING' }` to waiting/installing workers.
   - Purges static app shell caches (`key.startsWith('yt-player-cache')`) while strictly preserving user assets: `yt-player-media` (downloaded audio), `yt-player-thumbs` (cached album art), and `yt-player-databases` (playlist databases).
   - Posts `{ type: 'PURGE_STATIC_CACHE' }` to the active Service Worker controller to re-fetch `CORE_ASSETS` with `cache: 'reload'`.
+  - Triggers cache-busted reload with URL parameter `?v=${Date.now()}` via `window.location.replace()`.
+  - Service Worker navigation fallback detects `?v=` to bypass cache and execute network-first document fetch from Cloudflare.
+  - `DOMContentLoaded` automatically cleanses the `v` parameter from the address bar via `window.history.replaceState`.
 - Playback & State Integrity: Synchronously flushes `flushLastPlayedState()` / `saveLastPlayedState()` to IndexedDB and localStorage before triggering reload, guaranteeing current song playback position and active queue survive reload seamlessly.
 - Offline Defense & State Feedback:
   - If triggered while offline (`navigator.onLine === false`), gracefully halts and displays "Offline - cannot update" without crashing, clearing caches, or reloading.
-  - Button transitions through explicit visual states: "Checking for updates..." -> "Applying update..." / "Site is up to date" (success badge) -> "Reloading...".
-  - Double-click debounce and 8-second safety fallback timer guarantee the UI never deadlocks or hangs.
+  - Button transitions through explicit visual states: "Updating site..." -> "Applying update..." -> "Reloading...".
+  - Debounce guards and 10-second safety fallback timer guarantee the UI never deadlocks or hangs.
 
 ## 21. Ultra-Resilient Last Played Track Restoration Invariant
 - Song ID Only: Last played state strictly persists only the track identifier (`trackId`), playlist (`playlist`), and mode configuration (`shuffleMode`, `repeatMode`). It must NEVER persist or restore seekbar position (`currentTime` is unconditionally clamped/saved as `0`).

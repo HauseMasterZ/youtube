@@ -137,5 +137,13 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertIn("event.data.type === 'PURGE_STATIC_CACHE'", self.sw_content)
         self.assertIn("k.startsWith('yt-player-cache')", self.sw_content)
 
+    def test_sw_navigation_bypasses_cache_on_forced_update(self):
+        """sw.js navigation fallback must bypass cache when cache-busting v parameter is present."""
+        self.assertIn("navUrl.searchParams.has('v')", self.sw_content)
+        self.assertRegex(
+            self.sw_content,
+            r'if\s*\(\s*navUrl\.searchParams\.has\([\'"]v[\'"]\)\s*\)\s*\{[\s\S]*?fetch\(event\.request\)'
+        )
+
 if __name__ == '__main__':
     unittest.main()
