@@ -145,6 +145,28 @@ class TestDownloadEngine(unittest.TestCase):
             r'if\s*\(\s*e\.type\s*===\s*[\'"]waiting[\'"]\s*\)\s*\{[\s\S]*?if\s*\(\s*dur\s*>\s*0\s*&&\s*ct\s*<\s*dur\s*-\s*1\.5\s*\)\s*\{[\s\S]*?if\s*\(\s*!this\._streamDone\s*\)\s*\{[\s\S]*?this\._triggerBufferRecovery\(\)'
         )
 
+    def test_waiting_event_underrun_guard(self):
+        """DualAudioPingPong waiting event checks buffer underrun before setting isBufferStalled or triggering recovery"""
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+isUnderrun\s*=\s*\(currentRangeEnd\s*<=\s*ct\s*\+\s*0\.5\);'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*!this\.active\.paused\s*&&\s*isUnderrun\s*\)\s*\{[\s\S]*?this\._isBufferStalled\s*=\s*true;'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*!this\._streamDone\s*\)\s*\{[\s\S]*?if\s*\(\s*isUnderrun\s*\)\s*\{[\s\S]*?this\._triggerBufferRecovery\(\)'
+        )
+
+    def test_attempt_recovery_cancels_active_reader(self):
+        """attemptRecovery cancels existing active reader to prevent concurrent stream collisions"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*currentActiveReader\s*\)\s*\{[\s\S]*?currentActiveReader\.cancel\(\);[\s\S]*?currentActiveReader\s*=\s*null;'
+        )
+
     def test_premature_buffer_end_recovery_guard(self):
         """timeupdate event suppresses premature ended firing and triggers recovery if effectiveEnd is short and stream not done"""
         self.assertRegex(
