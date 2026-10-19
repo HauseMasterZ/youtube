@@ -181,6 +181,17 @@ class TestLastPlayedRetention(unittest.TestCase):
         self.assertIn('if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0)', self.dom_content)
         self.assertIn('if (this._preventAutoplay || resumePosition === null)', self.dom_content)
 
+    def test_dom_pending_seek_preserved_ahead_of_buffer(self):
+        """DualAudioPingPong play retains pendingSeek when seeking ahead of buffered range"""
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*bEnd\s*>=\s*target\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\._pendingSeek\s*=\s*null;'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'\}\s*else\s*\{[\s\S]*?this\.active\.currentTime\s*=\s*Math\.max\(0,\s*bEnd\s*-\s*0\.1\);'
+        )
+
     def test_ui_buffer_progress_renders_full_width_when_complete(self):
         """updateBufferProgress fills 100% width buffer segment when stream is complete"""
         self.assertIn('const isComplete = (audioPlayer && audioPlayer._streamDone) || false;', self.ui_content)

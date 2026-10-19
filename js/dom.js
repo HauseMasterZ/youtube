@@ -352,11 +352,16 @@
 
             if (this._pendingSeek !== null) {
                 const target = this._pendingSeek;
-                this._pendingSeek = null;
                 if (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                     const bEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                    this.active.currentTime = Math.min(target, Math.max(0, bEnd - 0.1));
+                    if (bEnd >= target - 0.5) {
+                        this._pendingSeek = null;
+                        this.active.currentTime = Math.min(target, Math.max(0, bEnd - 0.1));
+                    } else {
+                        this.active.currentTime = Math.max(0, bEnd - 0.1);
+                    }
                 } else {
+                    this._pendingSeek = null;
                     this.active.currentTime = target;
                 }
             }
@@ -509,8 +514,6 @@
                 const activeStreamId = this._streamId;
                 if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
                     this._pendingSeek = resumePosition;
-                } else if (this._seekingTo === null) {
-                    this._pendingSeek = null;
                 }
 
                 const safePlay = () => {

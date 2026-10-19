@@ -566,5 +566,13 @@ class TestSettingsUI(unittest.TestCase):
         self.assertIn("updateParams.delete('v');", self.main_content)
         self.assertIn("window.history.replaceState", self.main_content)
 
+    def test_update_site_waits_for_installing_worker_before_skip_waiting(self):
+        """executeSitePurgeAndReload waits for installing service worker state change to installed/activated before SKIP_WAITING"""
+        self.assertRegex(
+            self.main_content,
+            r'installingWorker\.addEventListener\(\s*[\'"]statechange[\'"]'
+        )
+        self.assertIn("installingWorker.postMessage({ type: 'SKIP_WAITING' })", self.main_content)
+
 if __name__ == '__main__':
     unittest.main()
