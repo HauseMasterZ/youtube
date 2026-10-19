@@ -760,11 +760,16 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                // Mode 2 doctrine: ALWAYS 'playing' (spoof pins the card; the
-                // live anchor + honest element state carry the truth)
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                    ? window.declaredPausedState() : 'playing';
+                if (!window.wasPausedByUser) {
+                    window.wasPlayingBeforeCall = true;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    navigator.mediaSession.playbackState = 'paused';
+                } else {
+                    // Mode 2 in-app user pause: keep 'playing' spoof to pin the wave animation
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 if (isRecentBtDisconnect) {
@@ -1856,9 +1861,20 @@ document.addEventListener("DOMContentLoaded", () => {
         // 2. Activate waiting/installing service worker if present
         if (swRegistration) {
             if (swRegistration.waiting) {
-                swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                try { swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
             } else if (swRegistration.installing) {
-                swRegistration.installing.postMessage({ type: 'SKIP_WAITING' });
+                const installingWorker = swRegistration.installing;
+                await new Promise((resolve) => {
+                    const onState = () => {
+                        if (installingWorker.state === 'installed' || installingWorker.state === 'activated') {
+                            installingWorker.removeEventListener('statechange', onState);
+                            resolve();
+                        }
+                    };
+                    installingWorker.addEventListener('statechange', onState);
+                    setTimeout(resolve, 3500);
+                });
+                try { installingWorker.postMessage({ type: 'SKIP_WAITING' }); } catch (e) {}
             }
         }
 
@@ -1901,7 +1917,7 @@ document.addEventListener("DOMContentLoaded", () => {
             navigator.serviceWorker.addEventListener('controllerchange', doReload, { once: true });
         }
 
-        setTimeout(doReload, 600);
+        setTimeout(doReload, 2000);
     }
 
     async function updateSiteApp() {
@@ -1976,6 +1992,16 @@ document.addEventListener("DOMContentLoaded", () => {
                     swRegistration = await navigator.serviceWorker.getRegistration();
                     if (swRegistration) {
                         await swRegistration.update();
+                        if (!swRegistration.waiting && !swRegistration.installing) {
+                            await new Promise((resolve) => {
+                                const onUpdateFound = () => {
+                                    swRegistration.removeEventListener('updatefound', onUpdateFound);
+                                    resolve();
+                                };
+                                swRegistration.addEventListener('updatefound', onUpdateFound, { once: true });
+                                setTimeout(resolve, 1500);
+                            });
+                        }
                     }
                 } catch (swErr) {
                     console.warn("ServiceWorker update refresh error:", swErr);

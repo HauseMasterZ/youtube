@@ -1183,18 +1183,15 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    // External interruption (video steal while playing): state
-                    // STAYS spoofed per doctrine (the pin and sound wave animation
-                    // must survive the steal). Anchor is recycled and kept running
-                    // ducked so Chromium's IsActive() remains true, enabling
-                    // ACTION_PAUSE routing to resume playback on external video end.
+                    // External interruption (video/audio steal while playing): set
+                    // state to 'paused' so Android MediaSession does not evict
+                    // the notification card for conflicting with the focused app.
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                            ? window.declaredPausedState() : 'playing';
+                        navigator.mediaSession.playbackState = 'paused';
                         const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                        updateMediaSessionPosition(pos, dur);
+                        updateMediaSessionPosition(pos, dur, 1.0);
                         if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
                     if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();

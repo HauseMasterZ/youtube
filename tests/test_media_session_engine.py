@@ -729,8 +729,8 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_external_interruption_preserves_playing_state_and_recycles_anchor(self):
-        """External focus loss in Mode 2 maintains declared playing state and starts anchor so IsActive remains true"""
+    def test_external_interruption_sets_paused_state_and_recycles_anchor(self):
+        """External focus loss in Mode 2 sets declared state to paused so Android does not evict the card while retaining anchor"""
         self.assertNotIn("_isExternalInterrupted", self.state_content)
         self.assertNotIn("_isExternalInterrupted", self.ms_content)
         self.assertNotIn("_isExternalInterrupted", self.main_content)
@@ -740,7 +740,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?return;'
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"]'
         )
 
     def test_anchor_heartbeat_lifecycle_functions_defined(self):
