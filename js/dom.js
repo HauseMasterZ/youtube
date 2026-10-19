@@ -40,17 +40,36 @@
                         return;
                     }
                     if (e.type === 'waiting') {
-                        if (!this.active.paused) {
-                            this._isBufferStalled = true;
-                        }
                         const ct = this.active.currentTime;
                         const dur = this.active.duration || this._expectedDuration || 0;
+                        const buff = (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer)
+                            ? this._sourceBuffer.buffered
+                            : this.active.buffered;
+                        let currentRangeEnd = 0;
+                        if (buff && buff.length > 0) {
+                            for (let i = 0; i < buff.length; i++) {
+                                if (ct >= buff.start(i) - 0.5 && ct <= buff.end(i) + 0.5) {
+                                    currentRangeEnd = buff.end(i);
+                                    break;
+                                }
+                            }
+                            if (currentRangeEnd === 0) {
+                                currentRangeEnd = buff.end(buff.length - 1);
+                            }
+                        }
+                        const isUnderrun = (currentRangeEnd <= ct + 0.5);
+
+                        if (!this.active.paused && isUnderrun) {
+                            this._isBufferStalled = true;
+                        }
                         if (dur > 0 && ct < dur - 1.5) {
                             if (!this._streamDone) {
-                                if (typeof this._triggerBufferRecovery === 'function') {
-                                    this._triggerBufferRecovery();
-                                } else if (this._currentUrl) {
-                                    this.recoverTrack(this._currentUrl);
+                                if (isUnderrun) {
+                                    if (typeof this._triggerBufferRecovery === 'function') {
+                                        this._triggerBufferRecovery();
+                                    } else if (this._currentUrl) {
+                                        this.recoverTrack(this._currentUrl);
+                                    }
                                 }
                             }
                         }
@@ -844,7 +863,9 @@
 
                     // Resilient background ingestion stream with network-switch / Range auto-recovery
                     (async () => {
+                        let currentActiveReader = null;
                         const readStream = async (activeReader, activeRes = null) => {
+                            currentActiveReader = activeReader;
                             try {
                                 while (true) {
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
@@ -993,6 +1014,10 @@
                         const attemptRecovery = async () => {
                             if (isRecovering || streamDone || currentAbortSignal.aborted || this._currentUrl !== url || this._streamId !== activeStreamId) return;
                             isRecovering = true;
+                            if (currentActiveReader) {
+                                try { currentActiveReader.cancel(); } catch (e) {}
+                                currentActiveReader = null;
+                            }
 
                             let backoff = 300;
                             while (!streamDone && !currentAbortSignal.aborted && this._currentUrl === url && this._streamId === activeStreamId) {
