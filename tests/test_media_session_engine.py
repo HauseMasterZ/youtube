@@ -1069,6 +1069,35 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("lastPlayPauseToggleTime", self.ms_content)
         self.assertIn("now - lastPlayPauseToggleTime < 300", self.ms_content)
 
+    def test_transient_unlock_pulse_resets_squiggly_wave(self):
+        """Hidden unlock jank (eventDelta > 380) or stale gap dispatches a 75ms false-to-true state pulse to reset SquigglyProgress"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertRegex(
+            main_src,
+            r'const\s+isUnlockJank\s*=\s*\(eventDelta\s*>\s*380\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*5000\)\);'
+        )
+        self.assertRegex(
+            main_src,
+            r'const\s+isStaleWake\s*=\s*\(staleGap\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*3000\)\);'
+        )
+        self.assertRegex(
+            main_src,
+            r'if\s*\(\s*isHiddenPlaying\s*&&\s*\(isUnlockJank\s*\|\|\s*isStaleWake\)\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\x27\x22]paused[\x27\x22];[\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\x27\x22]playing[\x27\x22];[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*75\);'
+        )
+
+    def test_external_interruption_does_not_reassert_spoof_burst(self):
+        """External steal branch sets paused, stops heartbeat, clears spoof burst, and does not schedule reassertSpoofBurst"""
+        steal_match = re.search(
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
+            self.ms_content
+        )
+        self.assertIsNotNone(steal_match, "Could not find external steal branch")
+        steal_code = steal_match.group(1)
+        self.assertNotIn("reassertSpoofBurst()", steal_code)
+        self.assertNotIn("startAnchorHeartbeat()", steal_code)
+        self.assertIn("clearSpoofBurst()", steal_code)
+        self.assertIn("stopAnchorHeartbeat()", steal_code)
+
 if __name__ == '__main__':
     unittest.main()
-

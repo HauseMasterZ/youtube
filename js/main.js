@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
+    let lastTimeupdateFire = 0;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -750,6 +751,9 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
+
         if (typeof saveLastPlayedState === 'function') {
             saveLastPlayedState();
         }
@@ -943,6 +947,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -979,6 +985,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
+
+            // Self-heal for lock/Doze gaps where the JS event loop was suspended.
+            // Inter-arrival delta between consecutive timeupdates measures true loop
+            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
+            const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
+            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
+            lastTimeupdateFire = nowMonotonic;
+            if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
+
             // Self-heal for lock gaps without visibilitychange (unlock to home
             // screen leaves document.hidden true, so unlock-playing never runs).
             // If SystemUI interpolator starved over 3s, force one anchor even
@@ -989,7 +1005,53 @@ document.addEventListener("DOMContentLoaded", () => {
                     staleGap = (Date.now() - window.getLastPositionTimestamp() > 3000);
                 }
             } catch (e) {}
-            if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
+
+            const isCallOrQuarantine = (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()));
+            const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && (Date.now() - window.lastBtDisconnectTime < 2500));
+            const isHiddenPlaying = (typeof document !== 'undefined' && document.hidden && !audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect);
+
+            // Transient unlock pulse: when unlocking from black screen directly to launcher
+            // homescreen (com.miui.home), SystemUI reuses the MediaControlPanel without rebinding.
+            // Screen-off canceled heightAnimator without clearing SquigglyProgress.field = true.
+            // Any update with playbackState = 'playing' hits 'if (field == value) return' in SystemUI.
+            // To unfreeze the wave, SystemUI must receive a false edge (STATE_PAUSED) clearing field = false,
+            // followed by a true edge (STATE_PLAYING) restarting heightAnimator.
+            // Main-thread wake jank (biometrics + Keyguard exit + Launcher composition) causes eventDelta > 380ms.
+            // Cooldowns (5000ms for jank, 3000ms for staleGap) prevent any periodic re-triggering on homescreen.
+            const nowWall = Date.now();
+            const lastPulse = (typeof window !== 'undefined' && (window._lastUnlockPulse || window._lastLockGapRepublish)) || 0;
+            const isUnlockJank = (eventDelta > 380 && (nowWall - lastPulse > 5000));
+            const isStaleWake = (staleGap && (nowWall - lastPulse > 3000));
+
+            if (isHiddenPlaying && (isUnlockJank || isStaleWake)) {
+                if (typeof window !== 'undefined') {
+                    window._lastUnlockPulse = nowWall;
+                    window._lastLockGapRepublish = nowWall;
+                }
+                // Leg 1: Declare paused state to force SquigglyProgress field = false.
+                // State only without setPositionState avoids Mojo batching and redundant seekbar redraw.
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    try {
+                        navigator.mediaSession.playbackState = 'paused';
+                    } catch (e) {}
+                }
+                updateTimeUI(ct);
+                // Leg 2: After 75ms (within 60-100ms sweet spot), restore playing state and push fresh position.
+                // 75ms passes Mojo as discrete IPCs to clear field, but coalesces under Android 150ms icon fade
+                // and >200ms BlueDroid AVRCP debounce, producing zero visual glyph flicker and zero audio glitch.
+                setTimeout(() => {
+                    if (typeof audioPlayer === 'undefined' || !audioPlayer || audioPlayer.paused || window.wasPausedByUser) return;
+                    if (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine())) return;
+                    if (typeof window.mediaSessionDestroyed !== 'undefined' && window.mediaSessionDestroyed) return;
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                        try {
+                            navigator.mediaSession.playbackState = 'playing';
+                        } catch (e) {}
+                    }
+                    window._forceNextPosition = true;
+                    updateMediaSessionPosition(audioPlayer.currentTime, audioPlayer.duration, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
+                }, 75);
+            } else if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
                     window._forceNextPosition = true;
                 }
@@ -1017,6 +1079,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;

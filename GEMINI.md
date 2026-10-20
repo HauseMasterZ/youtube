@@ -57,28 +57,27 @@
 ## 9. Strict Zero-Emoji Policy
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
 
-## 10. Android SystemUI & HyperOS Media Session Stability Baseline (Commit 05eae74)
-- Permanent Baseline Lock: The media session engine is permanently locked to verified baseline commit `05eae74` (`fix(mediasession): guard metadata rebind on unlock and mode switch to prevent wave freeze and animation leaks`).
-- Root Cause of Permanent Wave Freeze:
-  - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), re-assigning `navigator.mediaSession.metadata` triggers `MediaDataManager` and `MediaControlPanel.bindPlayer()`.
-  - This completely destroys the `SquigglyProgress` view and launches an 860ms `heightAnimator` expansion (`0.0f -> 1.0f`).
-  - Re-triggering metadata rebinds on screen unlock or inside periodic timers cancels `heightAnimator` repeatedly, permanently locking `heightFraction = 0.0f` (flat frozen line).
-- The Zero Metadata Churn Invariant:
+## 10. Android SystemUI & HyperOS Media Session & Wave Resilience Protocol (Commits 9a084a6 & Live Fix)
+- Permanent Baseline Lock: The media session engine is anchored to verified commits `9a084a6` and live fix.
+- Root Cause of Squiggly Wave Freeze on Direct Homescreen Unlock:
+  - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), `heightAnimator` is canceled when the screen turns off, leaving `heightFraction = 0.0f` while retaining backing field `field = true`.
+  - Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) reuses the view without rebinding and without firing `visibilitychange` (`document.hidden` remains `true`).
+  - Any subsequent position updates with `STATE_PLAYING` hit `if (field == value) return`, leaving `heightAnimator` permanently canceled and the wave flat.
+  - To unfreeze the wave, SystemUI must receive a discrete false edge (`STATE_PAUSED`) clearing `field = false`, followed by a true edge (`STATE_PLAYING`) restarting `heightAnimator`.
+- Transient 75ms Unlock Pulse Protocol:
+  - Trigger strictly while `document.hidden` and actively playing (`!audioPlayer.paused && !window.wasPausedByUser && !audioPlayer.switching && !isCallOrQuarantine && !isRecentBtDisconnect`).
+  - Detect unlock jank via `eventDelta > 380` (cooldown 5000ms) or `staleGap > 2500` (cooldown 3000ms).
+  - Leg 1: Declare `playbackState = 'paused'` (state only, no redundant `setPositionState` IPC).
+  - Leg 2: After 75ms `setTimeout`, declare `playbackState = 'playing'` and push fresh forced `setPositionState`.
+  - 75ms duration is strictly inside the 60-100ms window: passes Chromium Mojo as discrete IPCs to clear `field`, but coalesces under Android's 150ms icon fade and >200ms BlueDroid AVRCP debounce, producing zero visual glyph flicker and zero audio pops.
+  - Omit `republishMediaMetadata()` during unlock pulse to prevent album art reloads and view recreation.
+- Zero Metadata Churn Invariant:
   - `republishMediaMetadata()` MUST strictly be gated behind `shouldRepublishMetadata()`.
   - When track metadata is already fresh and identical, `navigator.mediaSession.metadata` must NEVER be re-assigned on foreground, on screen wake, or inside `timeupdate`.
-  - Only genuine track ID changes or recovered destroyed sessions may set metadata.
-- Homescreen ~1.1s Self-Healing Latency:
-  - Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) leaves `document.hidden = true` (visibilitychange does not fire).
-  - The background `timeupdate` handler detects `staleGap` (`Date.now() - getLastPositionTimestamp() > 3000ms`).
-  - On the first post-wake tick (~1.0s to 1.1s), `main.js` sets `window._forceNextPosition = true` and dispatches `updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1)`.
-  - Android SystemUI receives the fresh anchor, updates its interpolator, and resumes wave animation cleanly within ~1.1s.
-- Prohibition of Synthetic State Flapping:
-  - Strictly FORBIDDEN to introduce artificial playbackState pulses (such as `hiddenPlayingPulse`), synthetic pause/play toggles, or fake lock-gap metadata rebinds.
-  - Previous churn cycles proved that synthetic pulsing risks audio pops, Bluetooth AVRCP hiccups, and state desync. The ~1.1s natural clock tick recovery is the intentional, verified, permanent design.
-- Documented Nuances of Baseline 05eae74:
-  1. ~1.1s Initial Homescreen Freeze: Normal, expected, self-healing behavior before first background clock tick.
-  2. Mode 1 Paused Settle Ripple: On specific aggressive OEM skins (e.g. OneUI/ColorOS), `settleMode1Paused` passes (200ms, 700ms, 1500ms) with `rate: 1.0` can cause a brief ~0.5s ripple before resting flat. Does not affect active playback.
-  3. Rapid Unlock Cycling: Rapid repeated power button pressing within <1000ms triggers resync passes without cooldown throttling.
+- External Media Interruption Non-Stripping Protocol:
+  - When external media plays (audio focus loss with `!window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`.
+  - Strictly FORBIDDEN to schedule `reassertSpoofBurst()` or `startAnchorHeartbeat()` during external media loss.
+  - Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
 
 ## 11. Dual Unlock Recovery & Monotonic Position Guards
 - In-App Instant Wave Resume: When unlocked directly into the app, `visibilitychange` fires and `resyncMediaSessionOnForeground` executes immediately:
@@ -205,3 +204,18 @@
   - Desktop: `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="INSTALL_APP">Install App</option>`
   Any modification attempting to inject `__settings__` or `HARD_RELOAD` into the desktop branch is a strict regression.
 
+## 24. Self-Learning Deterministic Protocol: Zero-Regression Anti-Churn Doctrine
+- Rule 24a (Mandatory Pre-Fix Git Forensic Archaeology):
+  - On EVERY bug report, regression investigation, or RCA request, Antigravity MUST execute git forensic tracing (`git log -S`, `git log -L`, `git show`) to pinpoint the EXACT commit hash, commit message, commit author, commit timestamp, and exact diff lines that introduced the defect.
+  - Antigravity must explicitly present these commit IDs in the RCA before proposing or writing code. Hand-wavy, unanchored, or speculative RCAs are strictly prohibited.
+- Rule 24b (Downstream Asynchronous Event Cascade & Timer Audit):
+  - When modifying any audio engine or MediaSession state variable (`playbackState`, `_pendingSeek`, `wasPausedByUser`, `switching`, `isSeeking`), Antigravity MUST grep and audit ALL asynchronous timers (`setTimeout`, `setInterval`), event listeners (`pause`, `playing`, `ended`, `devicechange`, `statechange`), and helper routines that read or write that variable.
+  - Setting a state variable synchronously without auditing and neutralizing conflicting delayed timers (e.g. `reassertSpoofBurst`, `startAnchorHeartbeat`, `settleMode1Paused`) is a catastrophic protocol violation.
+- Rule 24c (Invariant Anchor Test Immunity):
+  - Every architectural fix, platform quirk workaround, and state-machine transition MUST be permanently locked by an automated unit test with strict regex or structural assertions in `tests/test_*.py`.
+  - Strictly FORBIDDEN to delete, weaken, comment out, or relax any existing test in `tests/test_*.py` during refactoring or churn. If code changes break a test, the code is wrong, not the test.
+- Rule 24d (Amnesia Gutting Prevention & Non-Destructive Scoped Surgery):
+  - Antigravity must NEVER perform wholesale function rewrites, blind simplification, or mass deletions of complex logic when resolving a bug.
+  - Edits must be surgical, minimally invasive, and preserve all surrounding invariants, docstrings, and edge-case guards.
+- Rule 24e (Immediate GEMINI.md Rule Synchronization):
+  - When user directives, discovered failure modes, or verified platform baselines evolve, Antigravity MUST immediately synchronize `GEMINI.md` to reconcile any obsolete or conflicting rules, preserving an authoritative single source of truth across all sessions.
