@@ -185,7 +185,7 @@ class TestLastPlayedRetention(unittest.TestCase):
         """DualAudioPingPong play retains pendingSeek when seeking ahead of buffered range"""
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*bEnd\s*>=\s*effectiveTarget\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\._pendingSeek\s*=\s*null;'
+            r'if\s*\(\s*bEnd\s*>=\s*effectiveTarget\s*\+\s*reqLead'
         )
         self.assertRegex(
             self.dom_content,
@@ -196,7 +196,21 @@ class TestLastPlayedRetention(unittest.TestCase):
         """DualAudioPingPong safePlay stays paused when pending seek is unbuffered"""
         self.assertRegex(
             self.dom_content,
-            r'safePlay\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*this\._pendingSeek\s*!==\s*null\s*\)\s*\{[\s\S]*?if\s*\(\s*bEnd\s*<\s*this\._pendingSeek\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\.active\.pause\(\);[\s\S]*?return;'
+            r'safePlay\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*this\._pendingSeek\s*!==\s*null\s*\)\s*\{[\s\S]*?if\s*\(\s*bEnd\s*<\s*this\._pendingSeek\s*\+\s*reqLead'
+        )
+
+    def test_dom_waiting_event_preserves_active_streaming(self):
+        """DualAudioPingPong waiting event does not abort actively ingesting stream"""
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+isActivelyStreaming\s*=\s*\(this\._lastChunkAt\s*>\s*0\s*&&\s*Date\.now\(\)\s*-\s*this\._lastChunkAt\s*<\s*2500\);'
+        )
+
+    def test_playback_switch_track_updates_duration_immediately(self):
+        """playback.js parses track.duration or track.duration_seconds and sets max/total synchronously"""
+        self.assertRegex(
+            self.playback_content,
+            r'if\s*\(\s*track\.duration\s*\)\s*\{[\s\S]*?parsedDuration\s*=\s*parseISODuration\(track\.duration\);[\s\S]*?\}\s*else\s+if\s*\(\s*track\.duration_seconds[\s\S]*?parsedDuration\s*=\s*parseInt\(track\.duration_seconds,\s*10\);[\s\S]*?\}\s*if\s*\(\s*parsedDuration\s*>\s*0\s*\)\s*\{[\s\S]*?seekBar\.max\s*=\s*parsedDuration;'
         )
 
     def test_dom_fast_seek_routes_through_current_time_on_mse(self):

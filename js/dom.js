@@ -29,6 +29,7 @@
             this._isBufferStalled = false;
             this._triggerBufferRecovery = null;
             this._preventAutoplay = false;
+            this._lastChunkAt = 0;
 
             this.events = ['play', 'playing', 'pause', 'error', 'loadedmetadata',
                            'timeupdate', 'seeked', 'ratechange', 'progress',
@@ -66,10 +67,13 @@
                             if (!this._streamDone) {
                                 if (isUnderrun) {
                                     if (this._pendingSeek === null) {
-                                        if (typeof this._triggerBufferRecovery === 'function') {
-                                            this._triggerBufferRecovery();
-                                        } else if (this._currentUrl) {
-                                            this.recoverTrack(this._currentUrl);
+                                        const isActivelyStreaming = (this._lastChunkAt > 0 && Date.now() - this._lastChunkAt < 2500);
+                                        if (!isActivelyStreaming) {
+                                            if (typeof this._triggerBufferRecovery === 'function') {
+                                                this._triggerBufferRecovery();
+                                            } else if (this._currentUrl) {
+                                                this.recoverTrack(this._currentUrl);
+                                            }
                                         }
                                     }
                                 }
@@ -363,7 +367,8 @@
                 if (!this._isDirectAudio && this._mseEnabled) {
                     if (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                         const bEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                        if (bEnd >= effectiveTarget - 0.5) {
+                        const reqLead = (this._streamDone || (dur > 0 && effectiveTarget >= dur - 2.0)) ? 0 : 2.0;
+                        if (bEnd >= effectiveTarget + reqLead || (this._streamDone && bEnd >= effectiveTarget - 0.5)) {
                             this._pendingSeek = null;
                             const seekTarget = Math.min(effectiveTarget, Math.max(0, bEnd - 0.1));
                             this._seekingTo = seekTarget;
@@ -496,6 +501,7 @@
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
+            this._lastChunkAt = 0;
             const isDifferentUrl = (this._currentUrl !== (url || ''));
             if (isDifferentUrl) {
                 this._streamDone = false;
@@ -576,7 +582,9 @@
                     if (this._pendingSeek !== null) {
                         const buff = (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) ? this._sourceBuffer.buffered : null;
                         const bEnd = (buff && buff.length > 0) ? buff.end(buff.length - 1) : 0;
-                        if (bEnd < this._pendingSeek - 0.5) {
+                        const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                        const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
+                        if (bEnd < this._pendingSeek + reqLead && !this._streamDone) {
                             this.active.pause();
                             return;
                         }
@@ -633,6 +641,7 @@
 
                                 try {
                                     await this._appendToSourceBuffer(cachedArrayBuffer);
+                                    this._lastChunkAt = Date.now();
                                 } catch (appendErr) {
                                     console.warn("Cached audio buffer MSE append error, falling back to HTML5 Audio:", appendErr);
                                     this._isDirectAudio = true;
@@ -762,7 +771,9 @@
                             const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
                                 ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
                                 : 0;
-                            if (buffEnd >= this._pendingSeek - 0.5) {
+                            const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                            const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
+                            if (buffEnd >= this._pendingSeek + reqLead || this._streamDone) {
                                 const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                 this._pendingSeek = null;
                                 this._seekingTo = seekTarget;
@@ -889,6 +900,7 @@
                             this._sourceBuffer.timestampOffset = 0;
                         } catch (e) {}
                         await this._appendToSourceBuffer(initialCombined.buffer);
+                        this._lastChunkAt = Date.now();
                         totalBytesAppended += initialCombined.byteLength;
 
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
@@ -902,7 +914,9 @@
                             const buffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
                                 ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
                                 : 0;
-                            if (buffEnd >= this._pendingSeek - 0.5) {
+                            const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                            const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
+                            if (buffEnd >= this._pendingSeek + reqLead || this._streamDone) {
                                 const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                 this._pendingSeek = null;
                                 this._seekingTo = seekTarget;
@@ -1025,6 +1039,7 @@
                                         accumulatedChunks.push(nextChunk);
                                         totalBytesAppended += nextChunk.length;
                                         await this._appendToSourceBuffer(nextChunk);
+                                        this._lastChunkAt = Date.now();
                                         this.dispatchEvent(new Event('progress'));
 
                                         // Re-anchor lock-screen seekbar on each incoming chunk to keep button as Playing and prevent timer drift
@@ -1042,10 +1057,12 @@
                                             this._isBufferStalled = false;
                                         }
 
-                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached
+                                        // Catch-up seek check: If user requested a seek beyond buffer, fulfill it as soon as target is reached with lead buffer
                                         if (this._pendingSeek !== null && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                                            if (buffEnd >= this._pendingSeek - 0.5) {
+                                            const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                                            const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
+                                            if (buffEnd >= this._pendingSeek + reqLead || this._streamDone) {
                                                 const seekTarget = Math.min(this._pendingSeek, Math.max(0, buffEnd - 0.1));
                                                 this._pendingSeek = null;
                                                 this._seekingTo = seekTarget;
