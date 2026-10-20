@@ -824,13 +824,11 @@
             parsedDuration = parseISODuration(track.duration);
         } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
             parsedDuration = parseInt(track.duration_seconds, 10);
-            if (parsedDuration > 0) {
-                seekBar.max = parsedDuration;
-                totalTimeDisplay.textContent = formatTime(parsedDuration);
-            } else {
-                seekBar.max = 0;
-                totalTimeDisplay.textContent = "0:00";
-            }
+        }
+
+        if (parsedDuration > 0) {
+            seekBar.max = parsedDuration;
+            totalTimeDisplay.textContent = formatTime(parsedDuration);
         } else {
             seekBar.max = 0; // Reset seekbar to prevent seeking before load
             totalTimeDisplay.textContent = "0:00";
