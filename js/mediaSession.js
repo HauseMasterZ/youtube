@@ -1263,7 +1263,10 @@
                 return;
             }
             const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+            const actualTime = (audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                ? audioPlayer.active.currentTime
+                : (audioPlayer ? audioPlayer.currentTime : 0);
+            if (dur > 0 && actualTime >= dur - 0.5 && (!audioPlayer || audioPlayer._pendingSeek === null)) {
                 audioPlayer.currentTime = 0;
                 if (typeof updateTimeUI === 'function') updateTimeUI(0);
                 if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
@@ -1331,7 +1334,10 @@
                         navigator.mediaSession.playbackState = 'playing';
                     }
                     const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                    const actualTime = (audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                        ? audioPlayer.active.currentTime
+                        : (audioPlayer ? audioPlayer.currentTime : 0);
+                    if (dur > 0 && actualTime >= dur - 0.5 && (!audioPlayer || audioPlayer._pendingSeek === null)) {
                         audioPlayer.currentTime = 0;
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(0);
@@ -1435,7 +1441,10 @@
                         return;
                     }
                     const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                    if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+                    const actualTime = (audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                        ? audioPlayer.active.currentTime
+                        : (audioPlayer ? audioPlayer.currentTime : 0);
+                    if (dur > 0 && actualTime >= dur - 0.5 && (!audioPlayer || audioPlayer._pendingSeek === null)) {
                         audioPlayer.currentTime = 0;
                         if (typeof updateTimeUI === 'function') updateTimeUI(0);
                         if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') {

@@ -65,10 +65,12 @@
                         if (dur > 0 && ct < dur - 1.5) {
                             if (!this._streamDone) {
                                 if (isUnderrun) {
-                                    if (typeof this._triggerBufferRecovery === 'function') {
-                                        this._triggerBufferRecovery();
-                                    } else if (this._currentUrl) {
-                                        this.recoverTrack(this._currentUrl);
+                                    if (this._pendingSeek === null) {
+                                        if (typeof this._triggerBufferRecovery === 'function') {
+                                            this._triggerBufferRecovery();
+                                        } else if (this._currentUrl) {
+                                            this.recoverTrack(this._currentUrl);
+                                        }
                                     }
                                 }
                             }
@@ -352,25 +354,71 @@
 
             if (this._pendingSeek !== null) {
                 const target = this._pendingSeek;
-                if (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
-                    const bEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                    if (bEnd >= target - 0.5) {
-                        this._pendingSeek = null;
-                        this.active.currentTime = Math.min(target, Math.max(0, bEnd - 0.1));
+                const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                if (dur > 0 && target > dur) {
+                    this._pendingSeek = Math.max(0, dur - 1.0);
+                }
+                const effectiveTarget = this._pendingSeek !== null ? this._pendingSeek : target;
+
+                if (!this._isDirectAudio && this._mseEnabled) {
+                    if (this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
+                        const bEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
+                        if (bEnd >= effectiveTarget - 0.5) {
+                            this._pendingSeek = null;
+                            const seekTarget = Math.min(effectiveTarget, Math.max(0, bEnd - 0.1));
+                            this._seekingTo = seekTarget;
+                            this.active.currentTime = seekTarget;
+                        } else if (this._streamDone) {
+                            this._pendingSeek = null;
+                            const seekTarget = Math.max(0, bEnd - 0.1);
+                            this._seekingTo = seekTarget;
+                            this.active.currentTime = seekTarget;
+                        } else {
+                            this.active.pause();
+                            return Promise.resolve();
+                        }
                     } else {
-                        this.active.currentTime = Math.max(0, bEnd - 0.1);
+                        this.active.pause();
+                        return Promise.resolve();
+                    }
+                } else if (this._isDirectAudio) {
+                    if (this.active.readyState >= 1) {
+                        this._pendingSeek = null;
+                        this._seekingTo = effectiveTarget;
+                        this.active.currentTime = effectiveTarget;
+                    } else {
+                        const onReady = () => {
+                            this.active.removeEventListener('loadedmetadata', onReady);
+                            this.active.removeEventListener('canplay', onReady);
+                            if (this._pendingSeek !== null) {
+                                const t = this._pendingSeek;
+                                this._pendingSeek = null;
+                                this._seekingTo = t;
+                                this.active.currentTime = t;
+                                if (!window.wasPausedByUser) {
+                                    this.active.play().catch(() => {});
+                                }
+                            }
+                        };
+                        this.active.addEventListener('loadedmetadata', onReady, { once: true });
+                        this.active.addEventListener('canplay', onReady, { once: true });
+                        this.active.pause();
+                        return Promise.resolve();
                     }
                 } else {
                     this._pendingSeek = null;
-                    this.active.currentTime = target;
+                    this._seekingTo = effectiveTarget;
+                    this.active.currentTime = effectiveTarget;
                 }
             }
             return this.active.play();
         }
 
         recoverTrack(url) {
-            const ct = this.active.currentTime;
-            this.switchTrack(url, false, this._expectedDuration, ct);
+            const ct = (this._pendingSeek !== null) ? this._pendingSeek : this.active.currentTime;
+            const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+            const safeCt = dur > 0 ? Math.min(ct, Math.max(0, dur - 1.0)) : ct;
+            this.switchTrack(url, false, this._expectedDuration, safeCt);
         }
 
         pause() {
@@ -412,7 +460,15 @@
         load() { return this.active.load(); }
         removeAttribute(attr) { if (attr === 'src') { this._currentUrl = ''; } }
         getAttribute(attr) { if (attr === 'src') { return this._currentUrl || null; } return null; }
-        fastSeek(t) { if ('fastSeek' in this.active) this.active.fastSeek(t); else this.currentTime = t; }
+        fastSeek(t) {
+            if (!this._isDirectAudio && this._mseEnabled) {
+                this.currentTime = t;
+            } else if ('fastSeek' in this.active) {
+                this.active.fastSeek(t);
+            } else {
+                this.currentTime = t;
+            }
+        }
         addEventListener(type, listener) { super.addEventListener(type, listener); }
         removeEventListener(type, listener) { super.removeEventListener(type, listener); }
 
@@ -517,6 +573,14 @@
                 }
 
                 const safePlay = () => {
+                    if (this._pendingSeek !== null) {
+                        const buff = (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) ? this._sourceBuffer.buffered : null;
+                        const bEnd = (buff && buff.length > 0) ? buff.end(buff.length - 1) : 0;
+                        if (bEnd < this._pendingSeek - 0.5) {
+                            this.active.pause();
+                            return;
+                        }
+                    }
                     if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
                         const p = this.active.play();
                         if (p && p.catch) {
@@ -643,13 +707,15 @@
                                 }
 
                                 // If partial, start playing cached portion in 0ms while resuming background download
-                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                const canPlayPartial = (this._pendingSeek === null) || (buffEnd >= this._pendingSeek - 0.5);
+                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId && canPlayPartial) {
                                     safePlay();
                                     this.dispatchEvent(new Event('play'));
                                     this.dispatchEvent(new Event('playing'));
                                 } else if (this._preventAutoplay) {
-                                    this._pendingSeek = null;
-                                    this.active.currentTime = 0;
+                                    if (this._pendingSeek === null) {
+                                        this.active.currentTime = 0;
+                                    }
                                 }
                             }
                         }
