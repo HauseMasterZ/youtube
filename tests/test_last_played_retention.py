@@ -185,12 +185,31 @@ class TestLastPlayedRetention(unittest.TestCase):
         """DualAudioPingPong play retains pendingSeek when seeking ahead of buffered range"""
         self.assertRegex(
             self.dom_content,
-            r'if\s*\(\s*bEnd\s*>=\s*target\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\._pendingSeek\s*=\s*null;'
+            r'if\s*\(\s*bEnd\s*>=\s*effectiveTarget\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\._pendingSeek\s*=\s*null;'
         )
         self.assertRegex(
             self.dom_content,
-            r'\}\s*else\s*\{[\s\S]*?this\.active\.currentTime\s*=\s*Math\.max\(0,\s*bEnd\s*-\s*0\.1\);'
+            r'\}\s*else\s*\{[\s\S]*?this\.active\.pause\(\);[\s\S]*?return\s+Promise\.resolve\(\);'
         )
+
+    def test_dom_safe_play_guards_pending_seek(self):
+        """DualAudioPingPong safePlay stays paused when pending seek is unbuffered"""
+        self.assertRegex(
+            self.dom_content,
+            r'safePlay\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*this\._pendingSeek\s*!==\s*null\s*\)\s*\{[\s\S]*?if\s*\(\s*bEnd\s*<\s*this\._pendingSeek\s*-\s*0\.5\s*\)\s*\{[\s\S]*?this\.active\.pause\(\);[\s\S]*?return;'
+        )
+
+    def test_dom_fast_seek_routes_through_current_time_on_mse(self):
+        """DualAudioPingPong fastSeek routes through currentTime setter on MSE to preserve pendingSeek"""
+        self.assertRegex(
+            self.dom_content,
+            r'fastSeek\(t\)\s*\{[\s\S]*?if\s*\(\s*!this\._isDirectAudio\s*&&\s*this\._mseEnabled\s*\)\s*\{[\s\S]*?this\.currentTime\s*=\s*t;'
+        )
+
+    def test_btn_play_pause_preserves_pending_seek(self):
+        """btnPlayPause resume preserves pending seek and checks actual element time for end of track"""
+        self.assertNotIn('audioPlayer._pendingSeek = null;', self.main_content)
+        self.assertIn('actualTime >= dur - 0.5 && audioPlayer._pendingSeek === null', self.main_content)
 
     def test_ui_buffer_progress_renders_full_width_when_complete(self):
         """updateBufferProgress fills 100% width buffer segment when stream is complete"""

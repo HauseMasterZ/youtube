@@ -822,6 +822,8 @@
         let parsedDuration = 0;
         if (track.duration) {
             parsedDuration = parseISODuration(track.duration);
+        } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+            parsedDuration = parseInt(track.duration_seconds, 10);
             if (parsedDuration > 0) {
                 seekBar.max = parsedDuration;
                 totalTimeDisplay.textContent = formatTime(parsedDuration);

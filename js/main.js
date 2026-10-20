@@ -576,9 +576,6 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
-            if (audioPlayer._pendingSeek !== null) {
-                audioPlayer._pendingSeek = null;
-            }
             // Always-on anchor in Mode 2; stop only in Mode 1.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
@@ -589,7 +586,10 @@ document.addEventListener("DOMContentLoaded", () => {
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
             const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            if (dur > 0 && audioPlayer.currentTime >= dur - 0.5) {
+            const actualTime = (audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                ? audioPlayer.active.currentTime
+                : audioPlayer.currentTime;
+            if (dur > 0 && actualTime >= dur - 0.5 && audioPlayer._pendingSeek === null) {
                 audioPlayer.currentTime = 0;
                 updateTimeUI(0);
                 if (window.lyricsActive && typeof updateLyricsUI === 'function') {
