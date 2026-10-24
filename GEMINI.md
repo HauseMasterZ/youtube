@@ -116,9 +116,10 @@
   - Client employs Cache API (`yt-player-databases`) coupled with an IndexedDB mirror (`yt-player-offline-db`, object store `playlists`).
   - If Cache API is evicted or unavailable, IndexedDB serves as an independent persistent backstop.
   - All database writes are committed to both storage layers in lockstep (`storePlaylistDatabaseInAllCaches`).
-- Strict Network Timeout Race (6.0s - 6.5s):
-  - Spotty cellular networks, dead zones, or captive portals can cause fetch requests to hang indefinitely.
-  - Network requests for `_Playlist_Database.json` in both `sw.js` and `playback.js` race against an `AbortController` / Promise timeout (6000ms - 6500ms).
+- Resilient Network Timeout Race (12000ms):
+  - Spotty cellular networks, dead zones, captive portals, or smartwatch Bluetooth companion proxies can cause fetch requests to hang or experience high latency.
+  - Network requests for `_Playlist_Database.json` in both `sw.js` and `playback.js` race against an `AbortController` / Promise timeout with 12000ms headroom for wearable/high-latency proxies.
+  - Network retrieval in `playback.js` is never gated on `navigator.onLine !== false`, ensuring devices reporting false-negative connectivity flags still attempt network fetch before fallback.
   - On timeout or network failure, playback and SW instantly fall back to cached data without user-facing hang or blank screen.
 - Startup Pre-Seeding (`seedOfflineDatabases`):
   - During application boot, `seedOfflineDatabases()` queries IndexedDB and Cache API to pre-populate in-memory `allDatabases`.
@@ -174,7 +175,7 @@
   - Purges static app shell caches (`key.startsWith('yt-player-cache')`) while strictly preserving user assets: `yt-player-media` (downloaded audio), `yt-player-thumbs` (cached album art), and `yt-player-databases` (playlist databases).
   - Posts `{ type: 'PURGE_STATIC_CACHE' }` to the active Service Worker controller to re-fetch `CORE_ASSETS` with `cache: 'reload'`.
   - Triggers cache-busted reload with URL parameter `?v=${Date.now()}` via `window.location.replace()`.
-  - Service Worker navigation fallback detects `?v=` to bypass cache and execute network-first document fetch from Cloudflare.
+  - Service Worker navigation fallback detects `?v=` to bypass cache and execute network-first document fetch, falling back to cached App Shell on non-200 / Cloudflare Error 1015 (rate-limit) responses to guarantee zero error screen exposure.
   - `DOMContentLoaded` automatically cleanses the `v` parameter from the address bar via `window.history.replaceState`.
 - Playback & State Integrity: Synchronously flushes `flushLastPlayedState()` / `saveLastPlayedState()` to IndexedDB and localStorage before triggering reload, guaranteeing current song playback position and active queue survive reload seamlessly.
 - Offline Defense & State Feedback:

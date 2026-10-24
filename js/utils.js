@@ -1,4 +1,4 @@
-    const baseUrl = ("__API_GATEWAY_URL__" || "").replace(/\/+$/, "");
+    const baseUrl = ("__API_GATEWAY_URL__" || "").trim().replace(/\/+$/, "");
     const artworkSquareCache = new Map();
     const MAX_SQUARE_CACHE = 30;
 

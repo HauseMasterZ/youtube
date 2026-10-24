@@ -1897,12 +1897,13 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         }
 
-        // 3. Purge static application caches while strictly preserving media, artwork, and databases
+        // 3. Purge stale application caches while strictly preserving active cache, media, artwork, and databases
         if (window.caches) {
             try {
                 const keys = await caches.keys();
                 for (const key of keys) {
-                    if (key.startsWith('yt-player-cache')) {
+                    // Only purge older cache versions; preserve active cache until new version takes over
+                    if (key.startsWith('yt-player-cache') && key !== 'yt-player-cache-v150') {
                         await caches.delete(key);
                     }
                 }
