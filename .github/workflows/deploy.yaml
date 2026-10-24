@@ -93,6 +93,7 @@ jobs:
             TARGET_FILES="$TARGET_FILES cf-root/index.html cf-root/js/utils.js"
           fi
 
+          GATEWAY_URL="$(echo "$GATEWAY_URL" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
           GATEWAY_URL="${GATEWAY_URL%/}"
 
           if [ -n "$GATEWAY_URL" ]; then

@@ -289,58 +289,48 @@
         }).catch(() => null);
 
         // 4. Direct Network Fetch with cache-busting timestamp, timeout race, and revalidation
-        if (navigator.onLine !== false) {
-            const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error('Network timeout')), 6500);
-            });
-            Promise.race([fetch(dbUrl, { cache: 'no-store' }), timeoutPromise])
-                .then(res => {
-                    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                    return res.json();
-                })
-                .then(rawData => {
-                    if (Array.isArray(rawData) && rawData.length > 0) {
-                        if (typeof storePlaylistDatabaseInAllCaches === 'function') {
-                            storePlaylistDatabaseInAllCaches(folderName, rawData);
-                        }
-                        applyNormalizedDataInChunks(rawData, folderName, hasRendered);
-                        hasRendered = true;
+        const dbUrl = `${baseUrl}/${folderName}/_Playlist_Database.json?t=${Date.now()}`;
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Network timeout')), 12000);
+        });
+        Promise.race([fetch(dbUrl, { cache: 'no-store' }), timeoutPromise])
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(rawData => {
+                if (Array.isArray(rawData) && rawData.length > 0) {
+                    if (typeof storePlaylistDatabaseInAllCaches === 'function') {
+                        storePlaylistDatabaseInAllCaches(folderName, rawData);
+                    }
+                    applyNormalizedDataInChunks(rawData, folderName, hasRendered);
+                    hasRendered = true;
 
+                    if (!globalActivePlaylist || queueIndex === -1) {
+                        generateQueue(true, folderName);
+                    } else if (globalActivePlaylist === folderName) {
+                        generateQueue(false, folderName);
+                    }
+                }
+            })
+            .catch(async err => {
+                await cachePromise;
+                if (!hasRendered) {
+                    const fallbackData = typeof getCachedPlaylistDatabase === 'function' ? await getCachedPlaylistDatabase(folderName) : null;
+                    if (fallbackData && !hasRendered) {
+                        applyNormalizedDataInChunks(fallbackData, folderName, false);
+                        hasRendered = true;
                         if (!globalActivePlaylist || queueIndex === -1) {
                             generateQueue(true, folderName);
                         } else if (globalActivePlaylist === folderName) {
                             generateQueue(false, folderName);
                         }
+                    } else if (!hasRendered) {
+                        console.error("Failed to load playlist:", err);
+                        showOfflinePlaylistEmptyState(folderName);
                     }
-                })
-                .catch(async err => {
-                    await cachePromise;
-                    if (!hasRendered) {
-                        const fallbackData = typeof getCachedPlaylistDatabase === 'function' ? await getCachedPlaylistDatabase(folderName) : null;
-                        if (fallbackData && !hasRendered) {
-                            applyNormalizedDataInChunks(fallbackData, folderName, false);
-                            hasRendered = true;
-                            if (!globalActivePlaylist || queueIndex === -1) {
-                                generateQueue(true, folderName);
-                            } else if (globalActivePlaylist === folderName) {
-                                generateQueue(false, folderName);
-                            }
-                        } else if (!hasRendered) {
-                            console.error("Failed to load playlist:", err);
-                            showOfflinePlaylistEmptyState(folderName);
-                        }
-                    }
-                });
-        } else {
-            // When explicitly offline, resolve cache lookup and display actionable empty state if not cached
-            cachePromise.then(cachedData => {
-                const alreadyRendered = hasRendered || (currentPlaylistData && currentPlaylistData.length > 0 && playlistSelect && playlistSelect.value === folderName);
-                if (!cachedData && !alreadyRendered) {
-                    showOfflinePlaylistEmptyState(folderName);
                 }
             });
-        }
 
         // 5. Deferred Service Worker Registration (dedicates 100% network & CPU to LCP paint)
         if (!window._swRegistered && 'serviceWorker' in navigator) {

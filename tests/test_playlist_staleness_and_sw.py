@@ -106,8 +106,16 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         """playback.js must feature actionable offline empty state, timeout race, and multi-tier fallback."""
         self.assertIn("showOfflinePlaylistEmptyState", self.playback_content)
         self.assertIn("retry-playlist-btn", self.playback_content)
-        self.assertIn("6500", self.playback_content)
+        self.assertIn("12000", self.playback_content)
         self.assertIn("getCachedPlaylistDatabase(folderName)", self.playback_content)
+
+    def test_utils_base_url_trimmed(self):
+        """utils.js baseUrl must be trimmed to avoid leading-whitespace URL corruption."""
+        self.assertIn('("__API_GATEWAY_URL__" || "").trim().replace', self.utils_content)
+
+    def test_sw_database_timeout_headroom(self):
+        """sw.js must use 12000ms timeout for database requests to accommodate wearable proxies."""
+        self.assertIn("setTimeout(() => controller.abort(), 12000)", self.sw_content)
 
     def test_playback_has_robust_change_detection(self):
         """playback.js must define isPlaylistDataIdentical and use it in applyPlaylistData and applyNormalizedDataInChunks."""
@@ -144,6 +152,20 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
             self.sw_content,
             r'if\s*\(\s*navUrl\.searchParams\.has\([\'"]v[\'"]\)\s*\)\s*\{[\s\S]*?fetch\(event\.request\)'
         )
+
+    def test_sw_navigation_rate_limit_fallback(self):
+        """sw.js must validate response status and content-type, falling back to cached shell on 429/Error 1015."""
+        self.assertIn("response.ok && contentType.includes('text/html')", self.sw_content)
+        self.assertIn("caches.match('./')", self.sw_content)
+        self.assertIn("caches.match('./index.html')", self.sw_content)
+
+    def test_sw_purge_static_cache_avoids_network_flood(self):
+        """sw.js PURGE_STATIC_CACHE must delete stale caches without firing parallel reload floods."""
+        self.assertNotIn("fetch(asset, { cache: 'reload' })", self.sw_content)
+
+    def test_main_purge_preserves_active_cache(self):
+        """main.js executeSitePurgeAndReload must preserve the active cache to avoid blank-screen on rate limit."""
+        self.assertIn("key !== 'yt-player-cache-v150'", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

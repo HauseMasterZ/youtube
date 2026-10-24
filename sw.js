@@ -70,16 +70,6 @@ self.addEventListener('message', (event) => {
                         }
                     })
                 );
-            }).then(() => {
-                return caches.open(CACHE_NAME).then((cache) => {
-                    return Promise.all(
-                        CORE_ASSETS.map((asset) => {
-                            return fetch(asset, { cache: 'reload' }).then((res) => {
-                                if (res.ok) return cache.put(asset, res);
-                            }).catch(() => {});
-                        })
-                    );
-                });
             })
         );
     }
@@ -219,7 +209,7 @@ self.addEventListener('fetch', (event) => {
             event.respondWith(
                 caches.open(DB_CACHE).then(async (dbCache) => {
                     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-                    const timeoutId = controller ? setTimeout(() => controller.abort(), 6000) : null;
+                    const timeoutId = controller ? setTimeout(() => controller.abort(), 12000) : null;
                     const fetchOpts = { cache: 'no-store' };
                     if (controller) fetchOpts.signal = controller.signal;
 
@@ -285,11 +275,16 @@ self.addEventListener('fetch', (event) => {
         if (navUrl.searchParams.has('v')) {
             event.respondWith(
                 fetch(event.request).then(response => {
-                    if (response.ok) {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (response.ok && contentType.includes('text/html')) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                        return response;
                     }
-                    return response;
+                    // Fallback to cached App Shell on Cloudflare Error 1015 (429 rate limit) or non-200 responses
+                    return caches.match('./')
+                        .then(cached => cached || caches.match('./index.html'))
+                        .then(cached => cached || response);
                 }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./') || caches.match('./index.html')))
             );
             return;
