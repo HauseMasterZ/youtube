@@ -54,31 +54,30 @@
 - Run syntax checks (`node --check ...`).
 - Empirically verify live production endpoints and headers.
 
-## 9. Strict Zero-Emoji Policy
+## 9. Strict Zero-Emoji Policy & Minimalist Targeted Output Directive
 - Strictly ZERO emojis in code, comments, commit messages, tests, documentation, and assistant responses.
+- Output text must be strictly limited to the minimum: strip out all preamble, pleasantries, meta-commentary, and conversational filler. Focus strictly and exclusively on targeted, actionable output text.
 
-## 10. Android SystemUI & HyperOS Media Session Stability Baseline (Commit 05eae74)
-- Permanent Baseline Lock: The media session engine is permanently locked to verified baseline commit `05eae74` (`fix(mediasession): guard metadata rebind on unlock and mode switch to prevent wave freeze and animation leaks`).
-- Root Cause of Permanent Wave Freeze:
-  - In Android 13+ and Xiaomi HyperOS (`SquigglyProgress.kt`), re-assigning `navigator.mediaSession.metadata` triggers `MediaDataManager` and `MediaControlPanel.bindPlayer()`.
-  - This completely destroys the `SquigglyProgress` view and launches an 860ms `heightAnimator` expansion (`0.0f -> 1.0f`).
-  - Re-triggering metadata rebinds on screen unlock or inside periodic timers cancels `heightAnimator` repeatedly, permanently locking `heightFraction = 0.0f` (flat frozen line).
-- The Zero Metadata Churn Invariant:
+## 10. Android SystemUI & HyperOS Media Session Stability & Non-Stripping Protocol
+- Permanent Baseline Lock: The media session engine is permanently locked against artificial state flapping and synthetic pulses.
+- Absolute Prohibition of Synthetic Pause Pulses:
+  - Rapid pulses (<150ms) are coalesced/dropped by Android system_server (MediaSessionRecord via Handler.removeMessages) during lockscreen/Keyguard exit contention, leaving SquigglyProgress permanently frozen while causing an audible/visual brief pause stutter.
+  - Strictly FORBIDDEN to introduce artificial playbackState pulses (such as `hiddenPlayingPulse`, 75ms timeouts, or synthetic pause/play toggles).
+  - Forensic commit archaeology across `9a084a6`, `90d4ae5`, `631485d`, and `ee1acea` proved that rapid 75ms pulses are coalesced/dropped by Android `system_server` (`MediaSessionRecord` via `Handler.removeMessages`) during lockscreen/Keyguard exit contention, leaving `SquigglyProgress` permanently frozen while causing an audible/visual brief pause stutter.
+  - Background playback strictly maintains honest unthrottled position state (`playbackState = 'playing'`) at the natural 1Hz cadence.
+- Lock-Gap Self-Healing Protocol:
+  - When unlocking directly to the launcher homescreen (`com.miui.home`), `document.hidden` remains `true` (no `visibilitychange`).
+  - Background `timeupdate` detects `staleGap` (`Date.now() - window.getLastPositionTimestamp() > 3000ms`).
+  - On wake tick, `main.js` sets `window._forceNextPosition = true` and pushes `updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1)` without metadata rebind and without state flapping.
+- Zero Metadata Churn Invariant:
   - `republishMediaMetadata()` MUST strictly be gated behind `shouldRepublishMetadata()`.
   - When track metadata is already fresh and identical, `navigator.mediaSession.metadata` must NEVER be re-assigned on foreground, on screen wake, or inside `timeupdate`.
-  - Only genuine track ID changes or recovered destroyed sessions may set metadata.
-- Homescreen ~1.1s Self-Healing Latency:
-  - Direct fingerprint unlock to the launcher homescreen (`com.miui.home`) leaves `document.hidden = true` (visibilitychange does not fire).
-  - The background `timeupdate` handler detects `staleGap` (`Date.now() - getLastPositionTimestamp() > 3000ms`).
-  - On the first post-wake tick (~1.0s to 1.1s), `main.js` sets `window._forceNextPosition = true` and dispatches `updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1)`.
-  - Android SystemUI receives the fresh anchor, updates its interpolator, and resumes wave animation cleanly within ~1.1s.
-- Prohibition of Synthetic State Flapping:
-  - Strictly FORBIDDEN to introduce artificial playbackState pulses (such as `hiddenPlayingPulse`), synthetic pause/play toggles, or fake lock-gap metadata rebinds.
-  - Previous churn cycles proved that synthetic pulsing risks audio pops, Bluetooth AVRCP hiccups, and state desync. The ~1.1s natural clock tick recovery is the intentional, verified, permanent design.
-- Documented Nuances of Baseline 05eae74:
-  1. ~1.1s Initial Homescreen Freeze: Normal, expected, self-healing behavior before first background clock tick.
-  2. Mode 1 Paused Settle Ripple: On specific aggressive OEM skins (e.g. OneUI/ColorOS), `settleMode1Paused` passes (200ms, 700ms, 1500ms) with `rate: 1.0` can cause a brief ~0.5s ripple before resting flat. Does not affect active playback.
-  3. Rapid Unlock Cycling: Rapid repeated power button pressing within <1000ms triggers resync passes without cooldown throttling.
+- External Media Interruption Non-Stripping Protocol:
+  - When an external app takes audio focus (`audioPlayer.paused && !window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`.
+  - Strictly FORBIDDEN to call `republishMediaMetadata()` during external media loss (which tears down notification bindings while native session focus is lost).
+  - Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` during external media loss (which attempts to fight for audio focus against the focused app, triggering Android SystemUI to instantly strip and revoke the media notification).
+  - Instead, synchronously invoke `stopLiveAudioAnchor()`, `stopAnchorHeartbeat()`, and `clearSpoofBurst()`.
+  - Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
 
 ## 11. Dual Unlock Recovery & Monotonic Position Guards
 - In-App Instant Wave Resume: When unlocked directly into the app, `visibilitychange` fires and `resyncMediaSessionOnForeground` executes immediately:
@@ -204,4 +203,37 @@
   - Mobile: `${playlistOptions}<option value="__settings__">Settings</option>`
   - Desktop: `${playlistOptions}<option value="UPDATE_SITE">Update Site</option><option value="INSTALL_APP">Install App</option>`
   Any modification attempting to inject `__settings__` or `HARD_RELOAD` into the desktop branch is a strict regression.
+
+## 24. Self-Learning Deterministic Protocol: Zero-Regression Anti-Churn Doctrine
+- Rule 24a (Mandatory Pre-Fix Git Forensic Archaeology):
+  - On EVERY bug report, regression investigation, or RCA request, Antigravity MUST execute git forensic tracing (`git log -S`, `git log -L`, `git show`) to pinpoint the EXACT commit hash, commit message, commit author, commit timestamp, and exact diff lines that introduced the defect.
+  - Antigravity must explicitly present these commit IDs in the RCA before proposing or writing code. Hand-wavy, unanchored, or speculative RCAs are strictly prohibited.
+- Rule 24b (Downstream Asynchronous Event Cascade & Timer Audit):
+  - When modifying any audio engine or MediaSession state variable (`playbackState`, `_pendingSeek`, `wasPausedByUser`, `switching`, `isSeeking`), Antigravity MUST grep and audit ALL asynchronous timers (`setTimeout`, `setInterval`), event listeners (`pause`, `playing`, `ended`, `devicechange`, `statechange`), and helper routines that read or write that variable.
+  - Setting a state variable synchronously without auditing and neutralizing conflicting delayed timers (e.g. `reassertSpoofBurst`, `startAnchorHeartbeat`, `settleMode1Paused`) is a catastrophic protocol violation.
+- Rule 24c (Invariant Anchor Test Immunity):
+  - Every architectural fix, platform quirk workaround, and state-machine transition MUST be permanently locked by an automated unit test with strict regex or structural assertions in `tests/test_*.py`.
+  - Strictly FORBIDDEN to delete, weaken, comment out, or relax any existing test in `tests/test_*.py` during refactoring or churn. If code changes break a test, the code is wrong, not the test.
+- Rule 24d (Amnesia Gutting Prevention & Non-Destructive Scoped Surgery):
+  - Antigravity must NEVER perform wholesale function rewrites, blind simplification, or mass deletions of complex logic when resolving a bug.
+  - Edits must be surgical, minimally invasive, and preserve all surrounding invariants, docstrings, and edge-case guards.
+- Rule 24e (Immediate GEMINI.md Rule Synchronization):
+  - When user directives, discovered failure modes, or verified platform baselines evolve, Antigravity MUST immediately synchronize `GEMINI.md` to reconcile any obsolete or conflicting rules, preserving an authoritative single source of truth across all sessions.
+- Rule 24f (Zombie Test Audit & Obsolete Assertion Resolution):
+  - When a bug fix or architectural correction breaks an existing unit test in `tests/test_*.py`, Antigravity MUST NOT automatically treat the test as authoritative if the test was asserting an obsolete or flawed platform workaround.
+  - Antigravity MUST run git archaeology (`git log -S`, `git log -L`) to trace when and why the assertion was written.
+  - If the test was asserting deprecated behavior that directly causes regressions (e.g. asserting `republishMediaMetadata()` on external focus loss, or asserting the presence of synthetic 75ms pulses), the test must be updated to lock the corrected invariant, rather than bending application code to preserve a known failure mode.
+
+## 25. Android SystemUI SquigglyProgress & MediaControlPanel Invariants
+- Immutable View Reuse Invariant:
+  - On Android 13+ and Xiaomi HyperOS, unlocking directly to the launcher (`com.miui.home`) reuses the existing `MediaControlPanel` view without rebinding.
+  - Screen-off cancels `SquigglyProgress.heightAnimator`, leaving `heightFraction = 0.0f` while `field = true`.
+  - Calling `navigator.mediaSession.setPositionState()` updates seekbar duration and position progress, but does NOT trigger `PlaybackState` listeners and does NOT clear `field` or restart `heightAnimator`.
+  - The squiggly wave resumes animating dynamically upon attended foreground (`visibilitychange`), notification shade expansion, or track transition.
+  - Sub-second synthetic state flapping (`paused` -> 75ms -> `playing`) is strictly prohibited as it is coalesced by `system_server` and causes audio glitches.
+
+## 26. Minimalist Targeted Output Directive (Zero Preamble)
+- Assistant responses must strictly be kept to the absolute minimum.
+- Strip out all conversational preamble, pleasantries, filler phrases, and boilerplate transitions.
+- Focus exclusively and strictly on targeted output text and direct technical answers.
 

@@ -56,14 +56,14 @@
                     anchorStartTimer = null;
                 }
                 if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
+                    navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     updateMediaSessionPosition(pos, dur, 1.0);
-                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
-                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                if (window.wasPausedByUser && typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -115,14 +115,14 @@
                 if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                     if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
                         if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                                ? window.declaredPausedState() : 'playing';
+                            navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'paused';
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
-                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                            if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
-                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                        if (window.wasPausedByUser && typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                         if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                             armAutoKillWatchdog();
                         }
@@ -315,14 +315,14 @@
                 }
 
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
+                    navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(pos, dur);
                     }
-                    if (typeof republishMediaMetadata === 'function') {
+                    if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
                 }
@@ -622,7 +622,7 @@
                     if (needsRebind && typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'paused';
                 }
                 // Forced single transition: Mode 2 paused left _lastSentPosition at
@@ -944,7 +944,7 @@
             republishMediaMetadata();
         }
 
-        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+        navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
             ? window.declaredPausedState() : 'paused';
 
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
@@ -967,6 +967,7 @@
             try {
                 if (window.playbackMode !== 'mode2') return;
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
+                if (window.isCallActive || !window.wasPausedByUser) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
@@ -1192,11 +1193,10 @@
                         const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
                         const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                         updateMediaSessionPosition(pos, dur, 1.0);
-                        if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     }
-                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
-                    if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
-                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                    clearSpoofBurst();
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
                     armAutoKillWatchdog();
                     return;
                 }

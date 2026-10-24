@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Build version: window.APP_BUILD
     let searchMode = 'local'; // 'local' | 'ephemeral'
     let remoteSearchAbortController = null;
+    let lastTimeupdateFire = 0;
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -750,6 +751,9 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("pause", () => {
         if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
+
         if (typeof saveLastPlayedState === 'function') {
             saveLastPlayedState();
         }
@@ -943,6 +947,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const endSeek = (e) => {
         if (!isSeeking) return;
         isSeeking = false;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const targetTime = Number(e.target.value);
         
         if (wasPlayingBeforeSeek) {
@@ -979,6 +985,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
+
+            // Self-heal for lock/Doze gaps where the JS event loop was suspended.
+            // Inter-arrival delta between consecutive timeupdates measures true loop
+            // suspension (monotonic clock), avoiding high-frequency IPC-age thrashing.
+            const nowMonotonic = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+            const effectiveLastFire = Math.max(lastTimeupdateFire, (typeof window !== 'undefined' && window.lastTimeupdateFire) || 0);
+            const eventDelta = (effectiveLastFire > 0) ? (nowMonotonic - effectiveLastFire) : 0;
+            lastTimeupdateFire = nowMonotonic;
+            if (typeof window !== 'undefined') window.lastTimeupdateFire = nowMonotonic;
+
             // Self-heal for lock gaps without visibilitychange (unlock to home
             // screen leaves document.hidden true, so unlock-playing never runs).
             // If SystemUI interpolator starved over 3s, force one anchor even
@@ -989,6 +1005,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     staleGap = (Date.now() - window.getLastPositionTimestamp() > 3000);
                 }
             } catch (e) {}
+
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
                 if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
                     window._forceNextPosition = true;
@@ -1017,6 +1034,8 @@ document.addEventListener("DOMContentLoaded", () => {
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
+        lastTimeupdateFire = 0;
+        if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const now = Date.now();
         if (now - lastEndedTime < 1000) return; // Debounce multiple rapid native ended events
         lastEndedTime = now;
