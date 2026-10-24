@@ -172,10 +172,10 @@
 - Cache-Busted Navigation & Origin Invalidation:
   - Updates Service Worker via `swRegistration.update()`.
   - Sends `{ type: 'SKIP_WAITING' }` to waiting/installing workers.
-  - Purges static app shell caches (`key.startsWith('yt-player-cache')`) while strictly preserving user assets: `yt-player-media` (downloaded audio), `yt-player-thumbs` (cached album art), and `yt-player-databases` (playlist databases).
-  - Posts `{ type: 'PURGE_STATIC_CACHE' }` to the active Service Worker controller to re-fetch `CORE_ASSETS` with `cache: 'reload'`.
-  - Triggers cache-busted reload with URL parameter `?v=${Date.now()}` via `window.location.replace()`.
-  - Service Worker navigation fallback detects `?v=` to bypass cache and execute network-first document fetch, falling back to cached App Shell on non-200 / Cloudflare Error 1015 (rate-limit) responses to guarantee zero error screen exposure.
+  - Preserves active build caches (`-main-`, `-dev-`) and permanent shell cache (`yt-player-shell-v1`) during purge, preventing blank or rate-limited error screens.
+  - Service Worker defines and persists immutable `SHELL_CACHE` (`yt-player-shell-v1`) populated during install and activate, whitelisted from cache rotation.
+  - Multi-tier navigation fallback in Service Worker intercepts all document requests, prioritizing versioned cache and `SHELL_CACHE` before network, and strictly quarantining Cloudflare Error 1015 (429 rate limit) with cached App Shell or synthetic 200 HTML fallback to guarantee zero error screen exposure.
+  - Database retrieval and proxy network timeouts are set to 12000ms to ensure wearable companion devices (smartwatches over Bluetooth) reliably complete synchronization.
   - `DOMContentLoaded` automatically cleanses the `v` parameter from the address bar via `window.history.replaceState`.
 - Playback & State Integrity: Synchronously flushes `flushLastPlayedState()` / `saveLastPlayedState()` to IndexedDB and localStorage before triggering reload, guaranteeing current song playback position and active queue survive reload seamlessly.
 - Offline Defense & State Feedback:
