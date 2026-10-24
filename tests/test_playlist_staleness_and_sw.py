@@ -156,16 +156,25 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
     def test_sw_navigation_rate_limit_fallback(self):
         """sw.js must validate response status and content-type, falling back to cached shell on 429/Error 1015."""
         self.assertIn("response.ok && contentType.includes('text/html')", self.sw_content)
-        self.assertIn("caches.match('./')", self.sw_content)
-        self.assertIn("caches.match('./index.html')", self.sw_content)
+        self.assertIn("caches.match('./', { ignoreSearch: true })", self.sw_content)
+        self.assertIn("caches.match('./index.html', { ignoreSearch: true })", self.sw_content)
 
     def test_sw_purge_static_cache_avoids_network_flood(self):
         """sw.js PURGE_STATIC_CACHE must delete stale caches without firing parallel reload floods."""
         self.assertNotIn("fetch(asset, { cache: 'reload' })", self.sw_content)
 
     def test_main_purge_preserves_active_cache(self):
-        """main.js executeSitePurgeAndReload must preserve the active cache to avoid blank-screen on rate limit."""
+        """main.js executeSitePurgeAndReload must preserve active build caches to avoid blank-screen on rate limit."""
         self.assertIn("key !== 'yt-player-cache-v150'", self.main_content)
+        self.assertIn("!key.includes('-main-')", self.main_content)
+        self.assertIn("!key.includes('-dev-')", self.main_content)
+        self.assertIn("key !== 'yt-player-shell-v1'", self.main_content)
+
+    def test_sw_dedicated_shell_cache(self):
+        """sw.js must define and preserve immutable SHELL_CACHE to guarantee zero error screen exposure."""
+        self.assertIn("const SHELL_CACHE = 'yt-player-shell-v1';", self.sw_content)
+        self.assertIn("cacheName !== SHELL_CACHE", self.sw_content)
+        self.assertIn("ignoreSearch: true", self.sw_content)
 
 if __name__ == '__main__':
     unittest.main()

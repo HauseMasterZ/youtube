@@ -22,6 +22,16 @@ self.addEventListener('install', (event) => {
     event.waitUntil(
         caches.open(CACHE_NAME).then((cache) => {
             return cache.addAll(CORE_ASSETS);
+        }).then(() => {
+            return caches.open(SHELL_CACHE).then(async (shellCache) => {
+                try {
+                    const activeCache = await caches.open(CACHE_NAME);
+                    const rootRes = await activeCache.match('./');
+                    if (rootRes) await shellCache.put('./', rootRes.clone());
+                    const indexRes = await activeCache.match('./index.html');
+                    if (indexRes) await shellCache.put('./index.html', indexRes.clone());
+                } catch (e) {}
+            });
         })
     );
     self.skipWaiting();
@@ -29,13 +39,14 @@ self.addEventListener('install', (event) => {
 
 const THUMBS_CACHE = 'yt-player-thumbs';
 const DB_CACHE = 'yt-player-databases';
+const SHELL_CACHE = 'yt-player-shell-v1';
 
 self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys().then((cacheNames) => {
             return Promise.all(
                 cacheNames.map((cacheName) => {
-                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE && cacheName !== DB_CACHE) {
+                    if (cacheName !== CACHE_NAME && cacheName !== 'yt-player-media' && cacheName !== THUMBS_CACHE && cacheName !== DB_CACHE && cacheName !== SHELL_CACHE) {
                         return caches.delete(cacheName);
                     }
                 })
@@ -51,6 +62,15 @@ self.addEventListener('activate', (event) => {
                     }
                 }
             } catch {}
+        }).then(async () => {
+            try {
+                const shellCache = await caches.open(SHELL_CACHE);
+                const activeCache = await caches.open(CACHE_NAME);
+                const rootRes = await activeCache.match('./');
+                if (rootRes) await shellCache.put('./', rootRes.clone());
+                const indexRes = await activeCache.match('./index.html');
+                if (indexRes) await shellCache.put('./index.html', indexRes.clone());
+            } catch (e) {}
         }).then(() => clients.claim())
     );
 });
@@ -276,16 +296,26 @@ self.addEventListener('fetch', (event) => {
             event.respondWith(
                 fetch(event.request).then(response => {
                     const contentType = response.headers.get('content-type') || '';
-                    if (response.ok && contentType.includes('text/html')) {
+                    if (response.ok && contentType.includes('text/html') && !response.headers.get('cf-mitigated')) {
                         const clone = response.clone();
                         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                        caches.open(SHELL_CACHE).then(cache => cache.put('./', clone));
                         return response;
                     }
                     // Fallback to cached App Shell on Cloudflare Error 1015 (429 rate limit) or non-200 responses
-                    return caches.match('./')
-                        .then(cached => cached || caches.match('./index.html'))
-                        .then(cached => cached || response);
-                }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./') || caches.match('./index.html')))
+                    return caches.match('./', { ignoreSearch: true })
+                        .then(cached => cached || caches.match('./', { ignoreSearch: false }))
+                        .then(cached => cached || caches.match('./index.html', { ignoreSearch: true }))
+                        .then(cached => cached || caches.match('./index.html', { ignoreSearch: false }))
+                        .then(cached => cached || caches.open(SHELL_CACHE).then(sc => sc.match('./').then(r => r || sc.match('./index.html'))))
+                        .then(cached => {
+                            if (cached) return cached;
+                            return new Response(
+                                '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Music</title><meta http-equiv="refresh" content="2;url=/"></head><body style="background:#0a0a0f;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;"><p>Updating application...</p><script>setTimeout(() => { window.location.replace("/"); }, 800);</script></body></html>',
+                                { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+                            );
+                        });
+                }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./', { ignoreSearch: true }) || caches.match('./index.html', { ignoreSearch: true }) || caches.open(SHELL_CACHE).then(sc => sc.match('./').then(r => r || sc.match('./index.html')))))
             );
             return;
         }
@@ -293,16 +323,19 @@ self.addEventListener('fetch', (event) => {
         event.respondWith(
             caches.match(event.request).then(cached => {
                 if (cached) return cached;
-                return caches.match('./').then(cachedRoot => {
+                return caches.match('./', { ignoreSearch: true }).then(cachedRoot => {
                     if (cachedRoot) return cachedRoot;
-                    return caches.match('./index.html').then(cachedIndex => {
+                    return caches.match('./index.html', { ignoreSearch: true }).then(cachedIndex => {
                         if (cachedIndex) return cachedIndex;
-                        return fetch(event.request);
+                        return caches.open(SHELL_CACHE).then(sc => sc.match('./').then(r => r || sc.match('./index.html'))).then(cachedShell => {
+                            if (cachedShell) return cachedShell;
+                            return fetch(event.request);
+                        });
                     });
                 });
             }).catch(() => {
-                return caches.match('./').then(cachedRoot => {
-                    return cachedRoot || caches.match('./index.html');
+                return caches.match('./', { ignoreSearch: true }).then(cachedRoot => {
+                    return cachedRoot || caches.match('./index.html', { ignoreSearch: true }) || caches.open(SHELL_CACHE).then(sc => sc.match('./').then(r => r || sc.match('./index.html')));
                 });
             })
         );
