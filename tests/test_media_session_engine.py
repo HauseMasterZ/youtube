@@ -284,17 +284,6 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'window\.wasPausedByUser\s*=\s*false;[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{\s*if\s*\(\s*typeof\s+startLiveAudioAnchor'
         )
 
-    def test_anchor_survives_external_steal(self):
-        """external-steal branch never stops the anchor; init only pauses it outside Mode 2"""
-        self.assertRegex(
-            self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{(?:(?!stopLiveAudioAnchor)[\s\S])*?return;'
-        )
-        self.assertEqual(
-            len(re.findall(r"if\s*\(\s*window\.playbackMode\s*!==\s*['\"]mode2['\"]\s*\)\s*\{\s*_isInternalAnchorStop", self.ms_content)),
-            2
-        )
-
     def test_anchor_and_context_listeners_never_kill_anchor_in_mode2(self):
         """anchorEl pause and audioContext statechange never call stopLiveAudioAnchor or cancelAutoKillWatchdog"""
         anchor_pause_match = re.search(
@@ -319,16 +308,19 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", ctx_code)
         self.assertIn("republishMediaMetadata()", ctx_code)
 
-    def test_external_steal_republishes_metadata_without_probe_collision(self):
-        """external steal branch re-publishes metadata and avoids background startFocusProbe collision"""
+    def test_external_steal_prevents_card_stripping_and_focus_fight(self):
+        """external steal branch avoids metadata churn and does not fight for audio focus"""
         steal_match = re.search(
             r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
             self.ms_content
         )
         self.assertIsNotNone(steal_match, "Could not find external steal branch")
         steal_code = steal_match.group(1)
-        self.assertIn("republishMediaMetadata()", steal_code)
-        self.assertNotIn("startFocusProbe()", steal_code)
+        self.assertNotIn("republishMediaMetadata()", steal_code)
+        self.assertNotIn("startLiveAudioAnchor()", steal_code)
+        self.assertIn("stopLiveAudioAnchor()", steal_code)
+        self.assertIn("stopAnchorHeartbeat()", steal_code)
+        self.assertIn("clearSpoofBurst()", steal_code)
         self.assertIn("armAutoKillWatchdog()", steal_code)
 
     def test_pause_boundary_recycles_anchor(self):
@@ -1069,22 +1061,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("lastPlayPauseToggleTime", self.ms_content)
         self.assertIn("now - lastPlayPauseToggleTime < 300", self.ms_content)
 
-    def test_transient_unlock_pulse_resets_squiggly_wave(self):
-        """Hidden unlock jank (eventDelta > 380) or stale gap dispatches a 75ms false-to-true state pulse to reset SquigglyProgress"""
+    def test_lock_gap_does_not_pulse_or_republish_metadata(self):
+        """timeupdate preserves clean 1Hz position cadence and avoids artificial state pulses or metadata churn"""
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
             main_src = f.read()
-        self.assertRegex(
-            main_src,
-            r'const\s+isUnlockJank\s*=\s*\(eventDelta\s*>\s*380\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*5000\)\);'
-        )
-        self.assertRegex(
-            main_src,
-            r'const\s+isStaleWake\s*=\s*\(staleGap\s*&&\s*\(nowWall\s*-\s*lastPulse\s*>\s*3000\)\);'
-        )
-        self.assertRegex(
-            main_src,
-            r'if\s*\(\s*isHiddenPlaying\s*&&\s*\(isUnlockJank\s*\|\|\s*isStaleWake\)\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\x27\x22]paused[\x27\x22];[\s\S]*?setTimeout\(\(\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\x27\x22]playing[\x27\x22];[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*audioPlayer\.duration,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*75\);'
-        )
+        stale_block_match = re.search(r'if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\|\|\s*\(staleGap\s*&&\s*!audioPlayer\.paused\s*\)\s*\)\s*\{([\s\S]*?)\n\s*\}', main_src)
+        self.assertIsNotNone(stale_block_match)
+        self.assertNotIn("republishMediaMetadata", stale_block_match.group(1))
+        self.assertNotIn("playbackState = 'paused'", stale_block_match.group(1))
+        self.assertNotIn("playbackState = \"paused\"", stale_block_match.group(1))
+        self.assertIn("window._forceNextPosition = true;", stale_block_match.group(1))
 
     def test_external_interruption_does_not_reassert_spoof_burst(self):
         """External steal branch sets paused, stops heartbeat, clears spoof burst, and does not schedule reassertSpoofBurst"""
