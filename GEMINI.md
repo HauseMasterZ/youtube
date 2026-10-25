@@ -82,10 +82,10 @@
 ## 11. Dual Unlock Recovery & Monotonic Position Guards
 - In-App Instant Wave Resume: When unlocked directly into the app, `visibilitychange` fires and `resyncMediaSessionOnForeground` executes immediately:
   1. Synchronously dispatches `updateMediaSessionPosition(..., force=true)` with `window._forceNextPosition = true`.
-  2. Schedules a 250ms follower pass to guarantee SystemUI receives the position post wake-up jitter.
+  2. Schedules a 600ms follower pass (post Keyguard dismiss window) to guarantee SystemUI receives the position post wake-up jitter.
   3. Resumes wave animation instantly.
 - Monotonic Position Guards:
-  1. Live playback drops backwards jumps (>0.5s within 3000ms), identical rewrites (<0.25s within 1500ms), and wild forward jumps (>3.0s within 1500ms).
+  1. Live playback drops backwards jumps (>0.5s within 3000ms) and identical rewrites (<0.25s within 1500ms). Natural forward playback is unconditionally dispatched without forward jump clamping.
   2. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
 - Mode 2 Paused Micro-Rate Spoof:
   1. Mode 2 paused strictly uses micro-rate `0.00001` with `playbackState = 'playing'` to freeze notification seekbar while keeping the card pinned on mobile.

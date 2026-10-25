@@ -1007,7 +1007,7 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (e) {}
 
             if (roundedSec !== lastRenderTime || (staleGap && !audioPlayer.paused)) {
-                if (staleGap && !audioPlayer.paused && roundedSec === lastRenderTime) {
+                if (staleGap && !audioPlayer.paused) {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
