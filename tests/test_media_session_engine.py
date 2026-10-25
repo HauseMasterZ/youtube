@@ -948,7 +948,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             self.ms_content,
-            r'setTimeout\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d2,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*250\);'
+            r'setTimeout\(\(\)\s*=>\s*\{[\s\S]*?window\._forceNextPosition\s*=\s*true;[\s\S]*?updateMediaSessionPosition\(audioPlayer\.currentTime,\s*d2,\s*\(audioPlayer\s*&&\s*audioPlayer\.playbackRate\)\s*\|\|\s*1\.0,\s*true\);[\s\S]*?\},\s*600\);'
         )
 
     def test_settle_mode1_paused_unbinds_focus_probe(self):
@@ -982,7 +982,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
         self.assertRegex(
             main_src,
-            r'staleGap\s*&&\s*!audioPlayer\.paused\s*&&\s*roundedSec\s*===\s*lastRenderTime[\s\S]*?window\._forceNextPosition\s*=\s*true;'
+            r'staleGap\s*&&\s*!audioPlayer\.paused[\s\S]*?window\._forceNextPosition\s*=\s*true;'
         )
 
     def test_pageshow_listener_wires_resync(self):

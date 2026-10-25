@@ -742,10 +742,7 @@
                     if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
-                    const maxAllowedFwd = Math.max(3.0, ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0) * 2.5);
-                    if (elapsed < 1500 && pos > _lastSentPosition + maxAllowedFwd) {
-                        return;
-                    }
+
                 }
 
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
@@ -925,14 +922,14 @@
             } catch (e) {}
             setTimeout(() => {
                 try {
-                    if (document.hidden || audioPlayer.paused || audioPlayer.switching) return;
+                    if (audioPlayer.paused || audioPlayer.switching) return;
                     if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;
                     navigator.mediaSession.playbackState = 'playing';
                     window._forceNextPosition = true;
                     const d2 = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     updateMediaSessionPosition(audioPlayer.currentTime, d2, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
                 } catch (e) {}
-            }, 250);
+            }, 600);
             if (needsRebind) {
                 // Retained for diagnostics: token already rebound above unconditionally.
             }
