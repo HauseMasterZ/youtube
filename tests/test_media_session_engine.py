@@ -492,7 +492,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """setActionHandler pause handles isActuallyPaused in Mode 1 to resume playback"""
         self.assertRegex(
             self.ms_content,
-            r'const\s+isActuallyPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\);[\s\S]*?if\s*\(\s*isActuallyPaused\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
+            r'const\s+isActuallyPaused\s*=\s*\(typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?\(audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\)\);[\s\S]*?if\s*\(\s*isActuallyPaused(?:\s*&&\s*window\.wasPausedByUser)?\s*\)\s*\{[\s\S]*?audioPlayer\.play\(\)'
         )
 
     def test_mode1_switch_enforces_paused_pipeline(self):
@@ -552,8 +552,11 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window.isCallActive = false;", self.state_content)
 
     def test_phone_call_accepted_sets_paused_with_rate_1_0(self):
-        """devicechange sets isCallActive and forces mode-aware playbackState with rate 1.0"""
-        self.assertIn("window.isCallActive = true;", self.ms_content)
+        """devicechange handles route changes: route addition updates count without latching call, route loss pauses with rate 1.0"""
+        self.assertRegex(
+            self.ms_content,
+            r'newCount\s*>\s*knownOutputCount[\s\S]*?knownOutputCount\s*=\s*newCount;'
+        )
         self.assertRegex(
             self.ms_content,
             r'newCount\s*<\s*knownOutputCount(?:(?!\n\s*knownOutputCount\s*=\s*newCount)[\s\S])*?declaredPausedState\(\)'
@@ -753,10 +756,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_telecom_isolation_stops_heartbeat_synchronously(self):
-        """Call start immediately stops heartbeat and halts anchor to protect Bluetooth SCO"""
+        """External interruption immediately stops heartbeat and halts anchor to protect audio focus"""
         self.assertRegex(
             self.ms_content,
-            r'window\.isCallActive\s*=\s*true;[\s\S]*?stopAnchorHeartbeat\(\);'
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?stopAnchorHeartbeat\(\);[\s\S]*?stopLiveAudioAnchor\(\);'
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
@@ -1084,6 +1087,36 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("startAnchorHeartbeat()", steal_code)
         self.assertIn("clearSpoofBurst()", steal_code)
         self.assertIn("stopAnchorHeartbeat()", steal_code)
+
+    def test_route_addition_does_not_latch_call_or_pause(self):
+        """Audio device addition updates knownOutputCount without setting isCallActive or pausing playback"""
+        route_add_match = re.search(
+            r'else\s+if\s*\(\s*newCount\s*>\s*knownOutputCount\s*\)\s*\{([\s\S]*?)\}',
+            self.ms_content
+        )
+        self.assertIsNotNone(route_add_match, "Could not find route addition branch")
+        body = route_add_match.group(1)
+        self.assertNotIn("window.isCallActive = true;", body)
+        self.assertNotIn("audioPlayer.pause()", body)
+        self.assertNotIn("audioPlayer.instantPause()", body)
+        self.assertIn("knownOutputCount = newCount;", body)
+
+    def test_playpause_requires_user_pause_to_resume(self):
+        """playpause action handler checks window.wasPausedByUser to prevent inverting underruns into resumes"""
+        playpause_match = re.search(
+            r'setActionHandler\(\s*[\'"]playpause[\'"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(playpause_match, "Could not find playpause action handler")
+        body = playpause_match.group(1)
+        self.assertIn("if (isActuallyPaused && window.wasPausedByUser)", body)
+
+    def test_pause_listener_allows_user_pause_during_switching(self):
+        """audioPlayer pause event listener permits user-initiated pauses to pass through even if switching"""
+        self.assertRegex(
+            self.ms_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?\(audioPlayer\.switching\s*&&\s*!window\.wasPausedByUser\)'
+        )
 
 if __name__ == '__main__':
     unittest.main()

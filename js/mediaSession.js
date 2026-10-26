@@ -1083,69 +1083,9 @@
                             }
                         }
                     } else if (newCount > knownOutputCount) {
-                        // Telephony voice call active or new output route added
-                        window.isCallActive = true;
-                        if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-                        const wasAlreadyExternallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.wasPausedByUser);
-                        const wasPlaying = (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused);
-                        if (anchorStartTimer) {
-                            clearTimeout(anchorStartTimer);
-                            anchorStartTimer = null;
-                        }
-                        if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                            if (typeof audioPlayer.instantPause === 'function') {
-                                audioPlayer.instantPause();
-                            } else {
-                                audioPlayer.pause();
-                            }
-                        }
-                        if (wasAlreadyExternallyPaused || wasPlaying) {
-                            window.wasPausedByUser = false;
-                            window.wasPlayingBeforeCall = true;
-                        } else {
-                            window.lastBtDisconnectTime = Date.now();
-                            window.wasPausedByUser = true;
-                            window.wasPlayingBeforeCall = false;
-                        }
-                        stopLiveAudioAnchor();
-                        try {
-                            const _callAnchorEl = document.getElementById("live-stream-anchor");
-                            if (_callAnchorEl) {
-                                _isInternalAnchorStop = true;
-                                try { _callAnchorEl.pause(); } catch (e) {}
-                                try { _callAnchorEl.srcObject = null; } catch (e) {}
-                                try { _callAnchorEl.removeAttribute('src'); } catch (e) {}
-                                try { if (typeof _callAnchorEl.load === 'function') _callAnchorEl.load(); } catch (e) {}
-                                setTimeout(() => { _isInternalAnchorStop = false; }, 200);
-                            }
-                        } catch (e) {}
-                        cancelAutoKillWatchdog();
-                        if (typeof stopFocusProbe === 'function') stopFocusProbe();
-                        if (liveAudioContext && (liveAudioContext.state === 'running' || liveAudioContext.state === 'interrupted')) {
-                            try { liveAudioContext.suspend().catch(() => {}); } catch (e) {}
-                        }
-                        if (typeof setPlayUI === 'function') setPlayUI(false);
-                        if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            // Mode 2 doctrine: ALWAYS 'playing' (helper); the spoof
-                            // is what pins the card through the call.
-                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                                ? window.declaredPausedState() : 'paused';
-                            if (navigator.mediaSession.metadata) {
-                                try {
-                                    navigator.mediaSession.metadata = new MediaMetadata({
-                                        title: navigator.mediaSession.metadata.title,
-                                        artist: navigator.mediaSession.metadata.artist,
-                                        album: navigator.mediaSession.metadata.album,
-                                        artwork: navigator.mediaSession.metadata.artwork
-                                    });
-                                } catch (e) {}
-                            }
-                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                            if (typeof updateMediaSessionPosition === 'function') {
-                                updateMediaSessionPosition(pos, dur, 1.0);
-                            }
-                        }
+                        // Audio output route added (e.g. Bluetooth headset or earbuds connected).
+                        // Do not latch isCallActive or pause playback; update count directly.
+                        knownOutputCount = newCount;
                     }
                     knownOutputCount = newCount;
                 }).catch(() => {});
@@ -1172,7 +1112,7 @@
             if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
         });
         audioPlayer.addEventListener('pause', () => {
-            if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser))) return;
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && ((audioPlayer.switching && !window.wasPausedByUser) || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser))) return;
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
                 anchorStartTimer = null;
@@ -1317,7 +1257,7 @@
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
             if (window.playbackMode === 'mode2') {
-                if (isActuallyPaused) {
+                if (isActuallyPaused && window.wasPausedByUser) {
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
@@ -1416,7 +1356,7 @@
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (window.isCallActive) return;
                 window.mediaSessionDestroyed = false;
-                if (isActuallyPaused) {
+                if (isActuallyPaused && window.wasPausedByUser) {
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }

@@ -200,5 +200,29 @@ class TestDownloadEngine(unittest.TestCase):
             r'cloned\.arrayBuffer\(\)\.then\(\s*buf\s*=>\s*\{[\s\S]*?\'X-Partial-Cached\':\s*\'false\'[\s\S]*?cache\.put\(cacheKeyUrl\.href,\s*fullRes\)'
         )
 
+    def test_bulk_download_concurrency_and_rate_limit_short_circuit(self):
+        """Bulk downloads run sequentially (CONCURRENCY=1) and abort with backoff on HTTP 429"""
+        self.assertIn("const CONCURRENCY = 1;", self.playback_content)
+        self.assertIn("if (typeof window !== 'undefined') window.cfBlockedUntil = Date.now() + 10000;", self.playback_content)
+        self.assertIn("Rate limited by Cloudflare - retry in 10s", self.playback_content)
+
+    def test_initial_buffer_online_recovery_listener(self):
+        """DualAudioPingPong registers online recovery listener on initial buffer fetch and caps attempts"""
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+onInitialOnlineResume\s*=\s*\(\)\s*=>\s*\{[\s\S]*?this\.switchTrack\(url,\s*this\._preventAutoplay'
+        )
+        self.assertIn("window.addEventListener('online', onInitialOnlineResume, { once: true });", self.dom_content)
+        self.assertRegex(
+            self.dom_content,
+            r'if\s*\(\s*\(\s*fetchAttempts\s*>=\s*3\s*&&\s*typeof\s+navigator\s*!==\s*[\'"]undefined[\'"]\s*&&\s*navigator\.onLine\s*===\s*false\s*\)\s*\|\|\s*fetchAttempts\s*>=\s*5\s*\)'
+        )
+
+    def test_sw_quarantines_http_429_responses(self):
+        """sw.js quarantines HTTP 429 responses from media, thumbs, db, and lyrics caches"""
+        self.assertIn("if (!response.ok || response.status === 429) return response;", self.sw_content)
+        self.assertIn("response.ok && response.status !== 429 && response.type !== 'opaque'", self.sw_content)
+        self.assertIn("if (response.ok && response.status !== 429)", self.sw_content)
+
 if __name__ == '__main__':
     unittest.main()

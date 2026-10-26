@@ -100,7 +100,7 @@ class TestLastPlayedRetention(unittest.TestCase):
         self.assertIn('this._preventAutoplay = false;', self.dom_content)
         self.assertIn('if (this._preventAutoplay && (e.type === \'play\' || e.type === \'playing\'))', self.dom_content)
         self.assertIn('this._preventAutoplay = !!preventAutoplay;', self.dom_content)
-        self.assertIn('if (this._pendingSeek === null && !this._preventAutoplay)', self.dom_content)
+        self.assertIn('if (this._pendingSeek === null && !this._preventAutoplay && !window.wasPausedByUser && !this.active.paused)', self.dom_content)
         self.assertIn('if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId)', self.dom_content)
         # Check paused getter honors wasPausedByUser
         self.assertRegex(

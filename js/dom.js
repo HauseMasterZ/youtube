@@ -793,7 +793,7 @@
                         if (this._streamId === activeStreamId) this.switching = false;
                         this.dispatchEvent(new Event('loadedmetadata'));
                         this.dispatchEvent(new Event('canplay'));
-                        if (this._pendingSeek === null) {
+                        if (this._pendingSeek === null && !this._preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
                             this.dispatchEvent(new Event('play'));
                             this.dispatchEvent(new Event('playing'));
                         }
@@ -826,6 +826,15 @@
                         let fetchBackoff = 300;
 
                         let fetchAttempts = 0;
+                        const onInitialOnlineResume = () => {
+                            if (this._currentUrl === url && this._streamId === activeStreamId && !currentAbortSignal.aborted) {
+                                this.switchTrack(url, this._preventAutoplay, this._expectedDuration, resumePosition);
+                            }
+                        };
+                        window.addEventListener('online', onInitialOnlineResume, { once: true });
+                        currentAbortSignal.addEventListener('abort', () => {
+                            window.removeEventListener('online', onInitialOnlineResume);
+                        });
 
                         while (initialBytes < INITIAL_TARGET_BYTES && !streamDone) {
                             if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
@@ -867,8 +876,9 @@
                                     return Promise.resolve();
                                 }
                                 fetchAttempts++;
-                                if (fetchAttempts >= 3 && typeof navigator !== 'undefined' && navigator.onLine === false) {
+                                if ((fetchAttempts >= 3 && typeof navigator !== 'undefined' && navigator.onLine === false) || fetchAttempts >= 5) {
                                     if (this._streamId === activeStreamId) this.switching = false;
+                                    this.dispatchEvent(new Event('error'));
                                     return Promise.resolve();
                                 }
                                 reader = null;
@@ -937,7 +947,7 @@
                         if (this._streamId === activeStreamId) this.switching = false;
                         this.dispatchEvent(new Event('loadedmetadata'));
                         this.dispatchEvent(new Event('canplay'));
-                        if (this._pendingSeek === null && !this._preventAutoplay) {
+                        if (this._pendingSeek === null && !this._preventAutoplay && !window.wasPausedByUser && !this.active.paused) {
                             this.dispatchEvent(new Event('play'));
                             this.dispatchEvent(new Event('playing'));
                         }
