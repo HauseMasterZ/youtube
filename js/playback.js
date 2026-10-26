@@ -1086,6 +1086,10 @@
                 for (let attempt = 1; attempt <= maxRetries; attempt++) {
                     try {
                         const res = await fetch(url, options);
+                        if (res && res.status === 429) {
+                            if (typeof window !== 'undefined') window.cfBlockedUntil = Date.now() + 10000;
+                            return res;
+                        }
                         if (res && (res.ok || res.type === 'opaque')) return res;
                         if (attempt === maxRetries) return res;
                     } catch (err) {
@@ -1101,7 +1105,7 @@
             let savedCount = 0;
             let failedCount = 0;
             const total = tracks.length;
-            const CONCURRENCY = 2;
+            const CONCURRENCY = 1;
             let trackIndex = 0;
 
             const updateDownloadProgressUI = () => {
@@ -1151,6 +1155,11 @@
                                 });
                                 await mediaCache.put(audioUrl, fullRes);
                                 audioSuccess = true;
+                            } else if (res && res.status === 429) {
+                                isDownloadingPlaylist = false;
+                                showDownloadToast('Rate limited by Cloudflare - retry in 10s');
+                                setTimeout(hideDownloadToast, 4000);
+                                break;
                             }
                         } else {
                             audioSuccess = true;
@@ -1187,6 +1196,7 @@
                         failedCount++;
                     }
                     updateDownloadProgressUI();
+                    await new Promise(r => setTimeout(r, 150));
                 }
             };
 

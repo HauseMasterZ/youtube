@@ -159,7 +159,7 @@ self.addEventListener('fetch', (event) => {
                         mode: event.request.mode
                     });
                     return fetch(fullRequest).then(response => {
-                        if (!response.ok) return response;
+                        if (!response.ok || response.status === 429) return response;
                         const cloned = response.clone();
                         cloned.arrayBuffer().then(buf => {
                             const contentType = cloned.headers.get('Content-Type') || (cacheKeyUrl.href.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
@@ -196,7 +196,7 @@ self.addEventListener('fetch', (event) => {
 
                 const revalidatePromise = fetch(event.request).then((response) => {
                     // Never cache opaque responses in THUMBS_CACHE
-                    if (response.ok && response.type !== 'opaque') {
+                    if (response.ok && response.status !== 429 && response.type !== 'opaque') {
                         cache.put(event.request.url, response.clone());
                         limitCacheSize(THUMBS_CACHE, 1000);
                     }
@@ -236,9 +236,12 @@ self.addEventListener('fetch', (event) => {
                     try {
                         const response = await fetch(event.request, fetchOpts);
                         if (timeoutId) clearTimeout(timeoutId);
-                        if (response.ok) {
+                        if (response.ok && response.status !== 429) {
                             const clone = response.clone();
                             dbCache.put(cleanUrl, clone);
+                        } else if (!response.ok || response.status === 429) {
+                            const cached = await dbCache.match(cleanUrl) || await caches.match(cleanUrl);
+                            if (cached) return cached;
                         }
                         return response;
                     } catch (err) {
@@ -257,7 +260,7 @@ self.addEventListener('fetch', (event) => {
             caches.open(DB_CACHE).then(async (dbCache) => {
                 const cached = await dbCache.match(cleanUrl) || await caches.match(cleanUrl);
                 const networkFetch = fetch(event.request, { cache: 'no-store' }).then(response => {
-                    if (response.ok) {
+                    if (response.ok && response.status !== 429) {
                         const clone = response.clone();
                         dbCache.put(cleanUrl, clone);
                     }
@@ -279,7 +282,7 @@ self.addEventListener('fetch', (event) => {
     if (event.request.url.includes('/lyrics/') || event.request.url.includes('.lrc')) {
         event.respondWith(
             fetch(event.request).then(response => {
-                if (response.ok) {
+                if (response.ok && response.status !== 429) {
                     const clone = response.clone();
                     caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
                 }

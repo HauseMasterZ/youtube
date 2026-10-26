@@ -749,7 +749,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     audioPlayer.addEventListener("pause", () => {
-        if (audioPlayer.switching || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+        if ((audioPlayer.switching && !window.wasPausedByUser) || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
 
         lastTimeupdateFire = 0;
         if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
