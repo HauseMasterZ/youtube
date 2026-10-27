@@ -130,15 +130,51 @@
             return;
         }
 
+        let capturedTargetTrackId = null;
+        if (globalActivePlaylist === folderName) {
+            if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId) {
+                capturedTargetTrackId = window._stagedLastPlayedTrack.trackId;
+            } else if (typeof window.getCurrentPlayingTrackId === 'function' && window.getCurrentPlayingTrackId()) {
+                capturedTargetTrackId = window.getCurrentPlayingTrackId();
+            } else if (globalActiveOriginalIndex >= 0) {
+                if (prevData && prevData[globalActiveOriginalIndex]) {
+                    capturedTargetTrackId = Array.isArray(prevData[globalActiveOriginalIndex])
+                        ? prevData[globalActiveOriginalIndex][0]
+                        : prevData[globalActiveOriginalIndex].id;
+                } else if (currentPlaylistData && currentPlaylistData[globalActiveOriginalIndex]) {
+                    capturedTargetTrackId = currentPlaylistData[globalActiveOriginalIndex].id;
+                }
+            }
+        }
+
+        const validRawData = (typeof isValidTrackItem === 'function') ? rawData.filter(isValidTrackItem) : rawData;
         const loadId = ++currentPlaylistLoadId;
-        const totalCount = rawData.length;
+        const totalCount = validRawData.length;
         const INITIAL_CHUNK = 60;
         const CHUNK_SIZE = 200;
 
-        const initialSlice = normalizePlaylistData(rawData, folderName, 0, INITIAL_CHUNK);
+        const initialSlice = normalizePlaylistData(validRawData, folderName, 0, INITIAL_CHUNK);
         applyPlaylistData(folderName, initialSlice, isRevalidation, totalCount);
 
         if (totalCount <= INITIAL_CHUNK) {
+            allDatabases[folderName] = initialSlice;
+            let targetTrackId = capturedTargetTrackId;
+            if (targetTrackId && globalActivePlaylist === folderName) {
+                const newIndex = initialSlice.findIndex(t => t.id === targetTrackId);
+                if (newIndex !== -1) {
+                    globalActiveOriginalIndex = newIndex;
+                }
+            }
+            if (typeof window.rebuildCrossShuffleDeck === 'function') {
+                window.rebuildCrossShuffleDeck();
+            }
+            if (playlistSelect.value === folderName || globalActivePlaylist === folderName) {
+                if (!globalActivePlaylist || queueIndex === -1) {
+                    generateQueue(true, folderName);
+                } else if (globalActivePlaylist === folderName) {
+                    generateQueue(false, folderName);
+                }
+            }
             return;
         }
 
@@ -148,7 +184,7 @@
         function processNextChunk() {
             if (loadId !== currentPlaylistLoadId) return;
 
-            const chunk = normalizePlaylistData(rawData, folderName, currentIndex, CHUNK_SIZE);
+            const chunk = normalizePlaylistData(validRawData, folderName, currentIndex, CHUNK_SIZE);
             for (let i = 0; i < chunk.length; i++) {
                 normalizedAccum.push(chunk[i]);
             }
@@ -174,8 +210,8 @@
                     }
                 }
                 // Reconcile staged last played track or active track against full database
-                let targetTrackId = null;
-                if (globalActivePlaylist === folderName) {
+                let targetTrackId = capturedTargetTrackId;
+                if (!targetTrackId && globalActivePlaylist === folderName) {
                     if (window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackId) {
                         targetTrackId = window._stagedLastPlayedTrack.trackId;
                     } else if (globalActiveOriginalIndex >= 0 && currentPlaylistData && currentPlaylistData[globalActiveOriginalIndex]) {
@@ -192,10 +228,12 @@
                 if (typeof window.rebuildCrossShuffleDeck === 'function') {
                     window.rebuildCrossShuffleDeck();
                 }
-                if (!globalActivePlaylist || queueIndex === -1) {
-                    generateQueue(true, folderName);
-                } else if (globalActivePlaylist === folderName) {
-                    generateQueue(false, folderName);
+                if (playlistSelect.value === folderName || globalActivePlaylist === folderName) {
+                    if (!globalActivePlaylist || queueIndex === -1) {
+                        generateQueue(true, folderName);
+                    } else if (globalActivePlaylist === folderName) {
+                        generateQueue(false, folderName);
+                    }
                 }
             }
         }

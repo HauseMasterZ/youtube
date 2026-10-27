@@ -78,6 +78,12 @@
   - Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` during external media loss (which attempts to fight for audio focus against the focused app, triggering Android SystemUI to instantly strip and revoke the media notification).
   - Instead, synchronously invoke `stopLiveAudioAnchor()`, `stopAnchorHeartbeat()`, and `clearSpoofBurst()`.
   - Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
+- Bluetooth Route Addition vs Audio Interruption Separation:
+  - `navigator.mediaDevices.addEventListener('devicechange')` fires on audio output additions and removals. Web APIs have no Telecom or In-Call API.
+  - Device additions (`newCount > knownOutputCount`) strictly represent audio route expansion (e.g. connecting Bluetooth headphones or earbuds).
+  - Strictly FORBIDDEN to set `window.isCallActive = true` or pause playback on `newCount > knownOutputCount`. Latching call state blocks all subsequent MediaSession action handlers (`play`, `pause`, `playpause`). Route additions must only update `knownOutputCount = newCount`.
+  - True phone call interruptions or external audio steals are signaled when the `<audio>` element fires `pause` with `!window.wasPausedByUser`.
+  - Route loss (`newCount < knownOutputCount`, e.g. turning off Bluetooth) pauses honestly with rate 1.0, sets `window.wasPausedByUser = true`, and marks `lastBtDisconnectTime`.
 
 ## 11. Dual Unlock Recovery & Monotonic Position Guards
 - In-App Instant Wave Resume: When unlocked directly into the app, `visibilitychange` fires and `resyncMediaSessionOnForeground` executes immediately:
@@ -237,4 +243,32 @@
 - Assistant responses must strictly be kept to the absolute minimum.
 - Strip out all conversational preamble, pleasantries, filler phrases, and boilerplate transitions.
 - Focus exclusively and strictly on targeted output text and direct technical answers.
+
+## 27. Cloudflare WAF Rate Limiting & Cache Quarantine Invariant
+- Rate Limit Ceiling (WAF Rule 60s):
+  - Cloudflare enforces rate limiting (>100 non-static requests per 10 seconds per IP, blocked for 10 seconds).
+  - Bulk playlist media downloads must run sequentially with `CONCURRENCY = 1` and minimum 150ms delay between consecutive track requests.
+- Circuit Breaker on HTTP 429:
+  - Upon receiving HTTP 429, client download loops must halt immediately, set `window.cfBlockedUntil = Date.now() + 10000;`, display a rate-limit toast ("Rate limited by Cloudflare - retry in 10s"), and abort remaining queue processing.
+- Strict HTTP 429 Cache Quarantine:
+  - The Service Worker (`sw.js`) MUST NEVER cache HTTP 429 responses.
+  - Quarantined across all cache tiers: `yt-player-media`, `THUMBS_CACHE`, `DB_CACHE` (`yt-player-databases`), and `lyrics/`.
+  - Storing a Cloudflare 429 error body into CacheStorage corrupts assets and causes persistent media playback failures.
+
+## 28. User-Pause State Integrity & Underrun Inversion Guard
+- Synthetic Event Emission Suppression:
+  - Synthetic `play` and `playing` events dispatched during chunk buffering or track loading in `DualAudioPingPong` must be strictly guarded behind `!this._preventAutoplay && !window.wasPausedByUser && !this.active.paused`.
+  - Disagreeing synthetic dispatches while the user is paused flip MediaSession `playbackState` back to `'playing'` and corrupt notification card controls.
+- Underrun-to-Resume Inversion Prohibition:
+  - In Mode 2, `pause` and `playpause` action handlers must evaluate `if (isActuallyPaused && window.wasPausedByUser)` before executing resume.
+  - During network stalls and buffer underruns, `audioPlayer.paused` is true while `window.wasPausedByUser` is false. Evaluating `audioPlayer.paused` alone inverts a pause button tap into `audioPlayer.play()`.
+- User-Pause Transport Switching Pass-Through:
+  - `audioPlayer.addEventListener('pause')` in `main.js` and `mediaSession.js` must NEVER drop user-initiated pauses (`window.wasPausedByUser === true`), even if `audioPlayer.switching` is true.
+
+## 29. Pre-Song Playback Buffer State Transient Recovery
+- Bounded Retries with Terminal Error:
+  - Initial pre-song buffer retrieval must cap attempts at 5 iterations. Upon reaching 5 failed attempts, it must dispatch an `error` event to allow fallback to trigger rather than looping infinitely and triggering rate limits.
+- Single-Trigger Online Resume Hook:
+  - During the initial fetch loop, an `online` listener must be registered with `{ once: true }` and bound to the active track's `AbortSignal` for clean unbinding upon abort or track transition.
+  - Prevents multi-fire cascade if mobile data oscillates rapidly between towers.
 
