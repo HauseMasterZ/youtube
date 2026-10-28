@@ -879,10 +879,19 @@
         const activeColor = (typeof getTrackColor === 'function') ? getTrackColor(track) : ((track.color && track.color !== '#000000') ? track.color : (dominantColorCache.get(track.id) || '#8c73ff'));
         document.documentElement.style.setProperty('--primary-color', activeColor);
 
+        if (preloadedFetches.has(audioUrl)) {
+            const controller = preloadedFetches.get(audioUrl);
+            if (controller && controller.abort) controller.abort();
+            preloadedFetches.delete(audioUrl);
+        }
         if (preloadedFetches.has(cacheKey)) {
             const controller = preloadedFetches.get(cacheKey);
             if (controller && controller.abort) controller.abort();
             preloadedFetches.delete(cacheKey);
+        }
+        for (const [url, controller] of preloadedFetches.entries()) {
+            if (controller && controller.abort) controller.abort();
+            preloadedFetches.delete(url);
         }
         
         // Single source of truth for (re)publishing track metadata: fresh card
@@ -1327,6 +1336,97 @@
         }
     }
 
+    async function downloadSingleTrack(playlist, index) {
+        if (!window.caches) return;
+        const tracks = (allDatabases && allDatabases[playlist]) || (playlist === (playlistSelect && playlistSelect.value) ? currentPlaylistData : null) || [];
+        const track = tracks[index];
+        if (!track) return;
+
+        if (typeof window !== 'undefined' && window.cfBlockedUntil && Date.now() < window.cfBlockedUntil) {
+            const waitSec = Math.ceil((window.cfBlockedUntil - Date.now()) / 1000);
+            showDownloadToast(`Rate limited by Cloudflare - retry in ${waitSec}s`);
+            setTimeout(hideDownloadToast, 3000);
+            return;
+        }
+
+        showDownloadToast(`Downloading: ${track.title || 'track'}...`);
+
+        try {
+            const mediaCache = await caches.open('yt-player-media');
+            const thumbsCache = await caches.open('yt-player-thumbs');
+
+            const audioUrl = getAudioUrl(track);
+            const thumbUrl = getThumbUrl(track);
+
+            // 1. Audio Cache
+            const existingAudio = await mediaCache.match(audioUrl);
+            let isPartial = existingAudio && (existingAudio.headers.get('X-Partial-Cached') === 'true' || existingAudio.status === 206);
+            if (existingAudio && !isPartial && track.duration) {
+                const durSec = (typeof parseISODuration === 'function') ? parseISODuration(track.duration) : 0;
+                const len = existingAudio.headers.get('Content-Length') ? parseInt(existingAudio.headers.get('Content-Length'), 10) : 0;
+                if (durSec > 0 && len > 0 && len < durSec * 4000) {
+                    isPartial = true;
+                }
+            }
+
+            if (!existingAudio || isPartial) {
+                const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
+                const res = await fetch(fetchUrl);
+                if (res && res.status === 429) {
+                    if (typeof window !== 'undefined') window.cfBlockedUntil = Date.now() + 10000;
+                    showDownloadToast("Rate limited by Cloudflare - retry in 10s");
+                    setTimeout(hideDownloadToast, 3000);
+                    return;
+                }
+                if (res && res.ok) {
+                    const buf = await res.arrayBuffer();
+                    const contentType = res.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                    const fullRes = new Response(buf, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': contentType,
+                            'Content-Length': buf.byteLength.toString(),
+                            'X-Partial-Cached': 'false'
+                        }
+                    });
+                    await mediaCache.put(audioUrl, fullRes);
+                } else {
+                    throw new Error("Audio fetch failed");
+                }
+            }
+
+            // 2. Thumbnail Cache
+            if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
+                const tRes = await fetch(thumbUrl).catch(() => {});
+                if (tRes && (tRes.ok || tRes.type === 'opaque')) {
+                    await thumbsCache.put(thumbUrl, tRes);
+                }
+            }
+
+            // 3. Lyrics Cache
+            if (track.file_path && track.id) {
+                const parts = track.file_path.split('/');
+                const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
+                if (!(await mediaCache.match(lyricsUrl))) {
+                    const lRes = await fetch(lyricsUrl).catch(() => {});
+                    if (lRes && lRes.ok) {
+                        await mediaCache.put(lyricsUrl, lRes);
+                    }
+                }
+            }
+
+            if (typeof refreshCachedAudioUrls === 'function') {
+                refreshCachedAudioUrls();
+            }
+
+            showDownloadToast(`[OK] Saved offline: ${track.title || 'track'}`, true);
+            setTimeout(hideDownloadToast, 3000);
+        } catch (e) {
+            showDownloadToast(`Download failed: ${track.title || 'track'}`);
+            setTimeout(hideDownloadToast, 3000);
+        }
+    }
+
     function saveLastPlayedState(forcedPosition = null) {
         try {
             const targetPlaylist = queueBasePlaylist || globalActivePlaylist || (typeof playlistSelect !== 'undefined' ? playlistSelect.value : null);
@@ -1428,3 +1528,4 @@
     window.saveLastPlayedState = saveLastPlayedState;
     window.loadLastPlayedState = loadLastPlayedState;
     window.restoreLastPlayedTrack = restoreLastPlayedTrack;
+    window.downloadSingleTrack = downloadSingleTrack;

@@ -272,3 +272,7 @@
   - During the initial fetch loop, an `online` listener must be registered with `{ once: true }` and bound to the active track's `AbortSignal` for clean unbinding upon abort or track transition.
   - Prevents multi-fire cascade if mobile data oscillates rapidly between towers.
 
+## 30. Tier 4 Server-Side Letterboxing Diagnostic
+- Tier 4 Server-Side Letterboxing Diagnostic:
+  - Letterboxed thumbnails with top and bottom ambient Gaussian blur are pre-rendered server-side by `fit_image_to_square` during Tier 4 YouTube thumbnail fallback.
+  - They are legitimate 720x720 1:1 WebP images. Frontend CSS must not attempt to stretch, crop, or override aspect ratios on `#media-art` or notification thumbnails to "fix" letterboxing; resolution must occur upstream via backend artwork repair.

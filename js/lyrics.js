@@ -99,7 +99,16 @@
                 p.className = 'lyric-line';
                 if (!currentLyricsIsUnsynced) {
                     p.addEventListener('click', () => {
-                        audioPlayer.currentTime = line.time;
+                        const targetTime = line.time;
+                        if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+                        audioPlayer.currentTime = targetTime;
+                        if (typeof updateTimeUI === 'function') updateTimeUI(targetTime);
+                        if (typeof updateLyricsUI === 'function') updateLyricsUI(targetTime);
+                        if (typeof updateMediaSessionPosition === 'function') {
+                            const totalDur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            updateMediaSessionPosition(targetTime, totalDur);
+                        }
+                        if (typeof saveLastPlayedState === 'function') saveLastPlayedState(targetTime);
                     });
                 }
                 lyricsInner.appendChild(p);

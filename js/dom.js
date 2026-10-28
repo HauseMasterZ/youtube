@@ -219,9 +219,11 @@
 
         async _clearSourceBuffer() {
             if (!this._sourceBuffer) return;
+            await this._waitForUpdate();
             try {
                 this._sourceBuffer.abort();
             } catch (e) {}
+            await this._waitForUpdate();
 
             if (this._sourceBuffer.buffered.length > 0) {
                 try {
@@ -607,37 +609,41 @@
                     }
                 };
 
-                if (this._mseEnabled && this._sourceBuffer) {
-                    await this._clearSourceBuffer();
-                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
-                        if (this._streamId === activeStreamId) this.switching = false;
-                        return Promise.resolve();
-                    }
-                }
+                // Parallelize MSE buffer clearance and CacheStorage lookup
+                const clearBufferPromise = (this._mseEnabled && this._sourceBuffer)
+                    ? this._clearSourceBuffer()
+                    : Promise.resolve();
 
                 // 1. FAST PATH / PARTIAL RESUME: If full or partial track is cached in CacheStorage, load instantly (0ms)
                 let cachedPartialBytes = 0;
                 let cachedArrayBuffer = null;
+                let cachedRes = null;
 
                 try {
-                    if (window.caches) {
-                        const mediaCache = await caches.open('yt-player-media');
-                        const cachedRes = await mediaCache.match(url);
-                        if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
-                            let isPartial = cachedRes.status === 206 || cachedRes.headers.get('X-Partial-Cached') === 'true';
-                            cachedArrayBuffer = await cachedRes.arrayBuffer();
-                            cachedPartialBytes = cachedArrayBuffer ? cachedArrayBuffer.byteLength : 0;
+                    const cacheLookupPromise = (window.caches)
+                        ? caches.open('yt-player-media').then(cache => cache.match(url)).catch(() => null)
+                        : Promise.resolve(null);
 
-                            if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+                    const [, matchResult] = await Promise.all([clearBufferPromise, cacheLookupPromise]);
+                    cachedRes = matchResult;
 
-                            if (cachedPartialBytes > 0) {
-                                await this._clearSourceBuffer();
-                                if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+                    if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                        if (this._streamId === activeStreamId) this.switching = false;
+                        return Promise.resolve();
+                    }
 
-                                try {
-                                    this._sourceBuffer.abort();
-                                    this._sourceBuffer.timestampOffset = 0;
-                                } catch (e) {}
+                    if (cachedRes && (this._currentUrl === url && this._streamId === activeStreamId)) {
+                        let isPartial = cachedRes.status === 206 || cachedRes.headers.get('X-Partial-Cached') === 'true';
+                        cachedArrayBuffer = await cachedRes.arrayBuffer();
+                        cachedPartialBytes = cachedArrayBuffer ? cachedArrayBuffer.byteLength : 0;
+
+                        if (this._currentUrl !== url || this._streamId !== activeStreamId) return Promise.resolve();
+
+                        if (cachedPartialBytes > 0) {
+                            try {
+                                this._sourceBuffer.abort();
+                                this._sourceBuffer.timestampOffset = 0;
+                            } catch (e) {}
 
                                 try {
                                     await this._appendToSourceBuffer(cachedArrayBuffer);
@@ -822,7 +828,7 @@
                     } else {
                         const initialChunks = [];
                         let initialBytes = 0;
-                        const INITIAL_TARGET_BYTES = 196608;
+                        const INITIAL_TARGET_BYTES = 40960;
                         let fetchBackoff = 300;
 
                         let fetchAttempts = 0;
@@ -897,7 +903,6 @@
                             offset += c.length;
                         }
 
-                        await this._clearSourceBuffer();
                         if (this._currentUrl !== url || this._streamId !== activeStreamId) {
                             try { reader.cancel(); } catch (e) {}
                             await saveProgress(false);
