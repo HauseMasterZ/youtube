@@ -276,3 +276,9 @@
 - Tier 4 Server-Side Letterboxing Diagnostic:
   - Letterboxed thumbnails with top and bottom ambient Gaussian blur are pre-rendered server-side by `fit_image_to_square` during Tier 4 YouTube thumbnail fallback.
   - They are legitimate 720x720 1:1 WebP images. Frontend CSS must not attempt to stretch, crop, or override aspect ratios on `#media-art` or notification thumbnails to "fix" letterboxing; resolution must occur upstream via backend artwork repair.
+
+## 31. Absolute Prohibition of Package Installations & Host Modifications
+- Strictly FORBIDDEN to execute package installation, removal, or update commands (`pip`, `npm`, `yarn`, `pnpm`, `winget`, `choco`, `scoop`, `conda`, `poetry`, `pipenv`, etc.) globally or locally without explicit, unambiguous user authorization in that exact prompt turn.
+- Strictly FORBIDDEN to alter the host Python environment, site-packages, user profiles, or system-wide software configurations.
+- When local tools or parsers (such as `node` or AST libraries) are absent, Antigravity MUST NEVER attempt autonomous package installation. Antigravity must use Python standard library modules or prompt the user.
+- Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.

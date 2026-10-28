@@ -734,7 +734,6 @@
                                 }
                             }
                         }
-                    }
                 } catch (e) {
                     console.warn("Cache fast-path fallback:", e);
                 }
