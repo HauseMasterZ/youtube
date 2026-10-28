@@ -409,75 +409,126 @@ document.addEventListener("DOMContentLoaded", () => {
         }, 250);
     }
 
-    let holdTimer = null;
-    let holdStartX = 0;
-    let holdStartY = 0;
     let suppressNextClick = false;
 
-    trackList.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        const li = e.target.closest("li");
-        if (!li || !li.dataset.index || !li.dataset.playlist) return;
-        if (e.target.closest(".yt-link-icon")) return;
+    if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let lastDx = 0;
+        let activeLi = null;
+        let currentY = '0px';
+        let isHorizontalSwipe = false;
+        let isSwipeLocked = false;
 
-        holdStartX = e.clientX;
-        holdStartY = e.clientY;
-        suppressNextClick = false;
-        clearTimeout(holdTimer);
+        trackList.addEventListener("touchstart", (e) => {
+            if (!e.touches || e.touches.length !== 1) return;
+            const li = e.target.closest("li");
+            if (!li || !li.dataset.index || !li.dataset.playlist) return;
+            if (e.target.closest(".yt-link-icon")) return;
 
-        holdTimer = setTimeout(() => {
-            suppressNextClick = true;
-            if (window.getSelection) {
-                const sel = window.getSelection();
-                if (sel) {
-                    if (typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
-                    else if (typeof sel.empty === 'function') sel.empty();
+            activeLi = li;
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+            lastDx = 0;
+            isHorizontalSwipe = false;
+            isSwipeLocked = false;
+
+            const pl = li.dataset.playlist;
+            const idx = parseInt(li.dataset.index, 10);
+            const targetTrack = (allDatabases && allDatabases[pl] && allDatabases[pl][idx]) || (currentPlaylistData && currentPlaylistData[idx]);
+            const songColor = targetTrack ? ((typeof getTrackColor === 'function') ? getTrackColor(targetTrack) : ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff'))) : '#8c73ff';
+            activeLi.style.setProperty('--enqueued-color', songColor);
+
+            const match = activeLi.style.transform ? activeLi.style.transform.match(/translate3d\(\s*[^,]+,\s*([^,]+)/) : null;
+            currentY = match ? match[1].trim() : '0px';
+            activeLi.style.transition = '';
+        }, { passive: true });
+
+        trackList.addEventListener("touchmove", (e) => {
+            if (!activeLi || !e.touches || e.touches.length !== 1) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - touchStartX;
+            const dy = touch.clientY - touchStartY;
+            lastDx = dx;
+
+            if (!isSwipeLocked) {
+                const absX = Math.abs(dx);
+                const absY = Math.abs(dy);
+                if (absX > 8 || absY > 8) {
+                    isSwipeLocked = true;
+                    isHorizontalSwipe = absX > absY;
+                    if (!isHorizontalSwipe) {
+                        activeLi = null;
+                        return;
+                    }
+                } else {
+                    return;
                 }
             }
-            queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-            if (navigator.vibrate) navigator.vibrate(40);
-            triggerEnqueuedFlash(li);
-        }, 450);
-    });
 
-    trackList.addEventListener("pointermove", (e) => {
-        if (!holdTimer) return;
-        const dx = Math.abs(e.clientX - holdStartX);
-        const dy = Math.abs(e.clientY - holdStartY);
-        if (dx > 10 || dy > 10) {
-            clearTimeout(holdTimer);
-            holdTimer = null;
-        }
-    });
-
-    trackList.addEventListener("pointerup", () => {
-        if (suppressNextClick) {
-            if (window.getSelection) {
-                const sel = window.getSelection();
-                if (sel) {
-                    if (typeof sel.removeAllRanges === 'function') sel.removeAllRanges();
-                    else if (typeof sel.empty === 'function') sel.empty();
+            if (isHorizontalSwipe) {
+                if (e.cancelable) e.preventDefault();
+                const clampedDx = Math.max(-120, Math.min(120, dx));
+                activeLi.style.transform = `translate3d(${clampedDx}px, ${currentY}, 0)`;
+                if (clampedDx > 40) {
+                    activeLi.classList.add('slide-enqueue');
+                    activeLi.classList.remove('slide-download');
+                } else if (clampedDx < -40) {
+                    activeLi.classList.add('slide-download');
+                    activeLi.classList.remove('slide-enqueue');
+                } else {
+                    activeLi.classList.remove('slide-enqueue', 'slide-download');
                 }
             }
-            setTimeout(() => {
-                suppressNextClick = false;
-            }, 300);
-        }
-        clearTimeout(holdTimer);
-        holdTimer = null;
-    });
+        }, { passive: false });
 
-    trackList.addEventListener("pointercancel", () => {
-        clearTimeout(holdTimer);
-        holdTimer = null;
-    });
+        const handleTouchEnd = (e) => {
+            if (!activeLi) return;
+            const targetLi = activeLi;
+            const targetY = currentY;
+            activeLi = null;
 
-    // Elegant workaround: intercept selection start during touch-hold without disabling select in CSS
-    trackList.addEventListener("selectstart", (e) => {
-        if (holdTimer || suppressNextClick) {
-            e.preventDefault();
-        }
-    });
+            const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
+            const dx = (touch && typeof touch.clientX === 'number') ? (touch.clientX - touchStartX) : lastDx;
+
+            if (isHorizontalSwipe) {
+                suppressNextClick = true;
+                if (dx >= 60) {
+                    const pl = targetLi.dataset.playlist;
+                    const idx = parseInt(targetLi.dataset.index, 10);
+                    if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
+                    if (navigator.vibrate) navigator.vibrate(40);
+                    if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
+                } else if (dx <= -60) {
+                    const pl = targetLi.dataset.playlist;
+                    const idx = parseInt(targetLi.dataset.index, 10);
+                    if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
+                    if (navigator.vibrate) navigator.vibrate(40);
+                }
+            }
+
+            targetLi.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)';
+            targetLi.style.transform = `translate3d(0, ${targetY}, 0)`;
+            targetLi.classList.remove('slide-enqueue', 'slide-download');
+            targetLi.style.removeProperty('--enqueued-color');
+
+            const cleanup = () => {
+                targetLi.removeEventListener('transitionend', cleanup);
+                targetLi.style.transition = '';
+            };
+            targetLi.addEventListener('transitionend', cleanup, { once: true });
+            setTimeout(cleanup, 250);
+
+            if (isHorizontalSwipe) {
+                setTimeout(() => {
+                    suppressNextClick = false;
+                }, 300);
+            }
+        };
+
+        trackList.addEventListener("touchend", handleTouchEnd, { passive: true });
+        trackList.addEventListener("touchcancel", handleTouchEnd, { passive: true });
+    }
 
     trackList.addEventListener("click", (e) => {
         if (suppressNextClick) {
@@ -493,6 +544,10 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     trackList.addEventListener("contextmenu", (e) => {
+        if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
+            e.preventDefault();
+            return;
+        }
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
@@ -504,10 +559,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 else if (typeof sel.empty === 'function') sel.empty();
             }
         }
-        if (!suppressNextClick) {
-            queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-            triggerEnqueuedFlash(li);
-        }
+        queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
+        triggerEnqueuedFlash(li);
     });
 
     window.addEventListener("popstate", (e) => {

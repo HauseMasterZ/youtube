@@ -320,13 +320,32 @@
         return normalized;
     }
 
+    function isZeroOrInvalidDuration(dur) {
+        if (dur === null || dur === undefined || dur === '') return true;
+        if (typeof dur === 'number') return dur <= 0 || isNaN(dur);
+        if (typeof dur === 'string') {
+            const clean = dur.trim().toUpperCase();
+            if (!clean || clean === '0' || clean === '0.0' || clean === '0.00' || clean === '0:00' || clean === '00:00' || clean === '00:00:00' || clean === 'PT0S' || clean === 'PT0M0S' || clean === 'PT0H0M0S' || clean === 'NAN' || clean === 'NULL' || clean === 'NONE') {
+                return true;
+            }
+            const num = parseFloat(clean);
+            if (!isNaN(num) && num <= 0) return true;
+            if (clean.startsWith('PT')) {
+                const digits = clean.match(/\d+/g);
+                if (digits && digits.every(d => parseInt(d, 10) === 0)) return true;
+            }
+        }
+        return false;
+    }
+
     function isValidTrackItem(item) {
         if (!item) return false;
         if (!Array.isArray(item)) {
             if (item.is_dead === true || item.lifecycle_status === 'dead') return false;
-            if (item.duration === 0 || item.duration === 'PT0S' || item.duration === '0') return false;
+            if (isZeroOrInvalidDuration(item.duration)) return false;
+            if (item.lifecycle_status === 'suspected_dead' && !item.file_path && !item.audio_path) return false;
         } else {
-            if (item[3] === 0 || item[3] === 'PT0S' || item[3] === '0') return false;
+            if (isZeroOrInvalidDuration(item[3])) return false;
         }
         const title = String(Array.isArray(item) ? item[1] : (item.title || ''));
         return !title.includes('Deleted/Private Video') && !title.includes('Deleted video') && !title.includes('Private video');
@@ -523,12 +542,13 @@
 
     async function storePlaylistDatabaseInAllCaches(folderName, rawData) {
         if (!folderName || !Array.isArray(rawData) || rawData.length === 0) return;
-        savePlaylistToIDB(folderName, rawData);
+        const validData = rawData.filter(isValidTrackItem);
+        savePlaylistToIDB(folderName, validData);
         if (typeof window !== 'undefined' && 'caches' in window) {
             try {
                 const cleanUrl = `${baseUrl}/${folderName}/_Playlist_Database.json`;
                 const dbCache = await caches.open(DB_CACHE_NAME);
-                const resp = new Response(JSON.stringify(rawData), {
+                const resp = new Response(JSON.stringify(validData), {
                     headers: { 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=31536000' }
                 });
                 await dbCache.put(cleanUrl, resp);
@@ -589,6 +609,7 @@
     window.getCachedPlaylistDatabase = getCachedPlaylistDatabase;
     window.storePlaylistDatabaseInAllCaches = storePlaylistDatabaseInAllCaches;
     window.seedOfflineDatabases = seedOfflineDatabases;
+    window.isValidTrackItem = isValidTrackItem;
 
     async function refreshCachedAudioUrls() {
         if (typeof window === 'undefined' || !('caches' in window)) return new Set();

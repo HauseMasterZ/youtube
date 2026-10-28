@@ -176,5 +176,26 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertIn("cacheName !== SHELL_CACHE", self.sw_content)
         self.assertIn("ignoreSearch: true", self.sw_content)
 
+    def test_apply_normalized_data_captures_target_track_id_early(self):
+        """applyNormalizedDataInChunks must capture targetTrackId before chunk slicing and filter with isValidTrackItem."""
+        self.assertIn("let capturedTargetTrackId = null;", self.playback_content)
+        self.assertIn("const validRawData = (typeof isValidTrackItem === 'function') ? rawData.filter(isValidTrackItem) : rawData;", self.playback_content)
+        self.assertIn("targetTrackId = capturedTargetTrackId;", self.playback_content)
+
+    def test_store_playlist_database_filters_invalid_items(self):
+        """storePlaylistDatabaseInAllCaches must filter invalid items before saving to IndexedDB and Cache API."""
+        self.assertIn("const validData = rawData.filter(isValidTrackItem);", self.utils_content)
+        self.assertIn("savePlaylistToIDB(folderName, validData);", self.utils_content)
+        self.assertIn("JSON.stringify(validData)", self.utils_content)
+        self.assertIn("window.isValidTrackItem = isValidTrackItem;", self.utils_content)
+
+    def test_is_valid_track_item_rejects_zero_duration_skeletons(self):
+        """isValidTrackItem must reject unverified zero duration and suspected dead items without media."""
+        self.assertIn("function isZeroOrInvalidDuration(dur)", self.utils_content)
+        self.assertIn("if (isZeroOrInvalidDuration(item.duration)) return false;", self.utils_content)
+        self.assertIn("if (isZeroOrInvalidDuration(item[3])) return false;", self.utils_content)
+        self.assertIn("if (item.lifecycle_status === 'suspected_dead' && !item.file_path && !item.audio_path) return false;", self.utils_content)
+
 if __name__ == '__main__':
     unittest.main()
+

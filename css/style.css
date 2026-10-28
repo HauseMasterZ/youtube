@@ -949,6 +949,7 @@
             padding: 0;
             margin: 0;
             position: relative;
+            touch-action: pan-y;
         }
 
         #track-list li {
@@ -971,6 +972,7 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            touch-action: pan-y;
         }
 
         .track-skeleton {
@@ -1053,6 +1055,14 @@
         #track-list li.enqueued-flash {
             background-color: color-mix(in srgb, var(--enqueued-color, #8c73ff) 40%, transparent) !important;
             transition: background-color 0.25s ease;
+        }
+
+        #track-list li.slide-enqueue {
+            background-color: color-mix(in srgb, var(--enqueued-color, #8c73ff) 25%, transparent) !important;
+        }
+
+        #track-list li.slide-download {
+            background-color: color-mix(in srgb, #00ff88 25%, transparent) !important;
         }
 
         /* Landscape Layout for <= 1110px (covers all heights, including > 560px) */
