@@ -944,6 +944,32 @@
             text-overflow: ellipsis;
         }
 
+        /* Simple Playlist Scroll Arrow */
+        .playlist-scroll-arrow {
+            position: absolute;
+            right: 28px;
+            bottom: 16px;
+            z-index: 91;
+            background: transparent;
+            border: none;
+            padding: 0;
+            outline: none;
+            box-shadow: none;
+            cursor: pointer;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+        }
+
+        @media (max-width: 750px) and (orientation: portrait), (max-width: 560px) {
+            .playlist-scroll-arrow {
+                bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+            }
+        }
+
         #track-list {
             list-style: none;
             padding: 0;

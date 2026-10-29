@@ -1143,21 +1143,7 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    // External interruption (video/audio steal while playing): set
-                    // state to 'paused' so Android MediaSession does not evict
-                    // the notification card for conflicting with the focused app.
-                    if (typeof setPlayUI === 'function') setPlayUI(false);
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
-                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                        updateMediaSessionPosition(pos, dur, 1.0);
-                    }
-                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-                    clearSpoofBurst();
-                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                    armAutoKillWatchdog();
-                    return;
+                    window.wasPlayingBeforeCall = true;
                 }
                 // Mode 2 pause: recycle the anchor synchronously (stop + start) so
                 // the pause boundary carries a genuine fresh focus request and

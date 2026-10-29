@@ -63,13 +63,12 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_mobile_swipe_backdrop_positioning_and_feedback(self):
-        """main.js positions backdrop at currentY, fills progressively, and scales/highlights legends on threshold"""
+        """main.js positions backdrop at currentY and scales/highlights legends on threshold without linear gradient calculations"""
         self.assertIn("swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;", self.main_content)
         self.assertIn("legEnq.classList.add('legend-triggered')", self.main_content)
         self.assertIn("legDown.classList.add('legend-triggered')", self.main_content)
         self.assertIn("swipeBackdrop.style.opacity = '0';", self.main_content)
-        self.assertIn("linear-gradient(to right,", self.main_content)
-        self.assertIn("linear-gradient(to left,", self.main_content)
+        self.assertNotIn("linear-gradient", self.main_content)
         self.assertIn("if (isHorizontalSwipe && e.type !== 'touchcancel')", self.main_content)
 
     def test_unlock_wave_animation_rebind_cooldown(self):
@@ -133,6 +132,27 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             self.css_content,
             r'#track-list\s+li\.slide-download\s*\{[^}]*background-color:\s*color-mix\(in srgb,\s*#00ff88\s*15%,\s*#000000\)\s*!important;'
         )
+
+    def test_playlist_scroll_arrow_markup_and_css(self):
+        """index.html and style.css define simple playlist scroll arrow button adjacent to fast-scroller with zero extra styling"""
+        self.assertIn('id="playlist-scroll-arrow"', self.html_content)
+        self.assertIn('id="playlist-arrow-up"', self.html_content)
+        self.assertIn('id="playlist-arrow-down"', self.html_content)
+        self.assertIn('.playlist-scroll-arrow', self.css_content)
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*right:\s*28px;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*z-index:\s*91;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*background:\s*transparent;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*border:\s*none;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*outline:\s*none;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*box-shadow:\s*none;')
+        self.assertIn('calc(84px + env(safe-area-inset-bottom, 0px))', self.css_content)
+
+    def test_playlist_scroll_arrow_behavior_in_main(self):
+        """main.js binds scroll listener and click handler toggling top and bottom scroll"""
+        self.assertIn('playlistScrollArrow.addEventListener("click"', self.main_content)
+        self.assertIn('playlistContainer.scrollTop > 2', self.main_content)
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']smooth["\']\s*\}\)')
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']smooth["\']\s*\}\)')
 
     def test_brace_balance(self):
         """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""

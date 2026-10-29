@@ -454,21 +454,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;
                 swipeBackdrop.style.setProperty('--swipe-color', songColor);
                 swipeBackdrop.style.opacity = '0';
-                swipeBackdrop.style.background = 'transparent';
-                swipeBackdrop.style.backgroundColor = 'transparent';
                 const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
                 const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                 if (legEnq) {
                     legEnq.classList.remove('legend-triggered');
-                    legEnq.style.transition = 'none';
                     legEnq.style.opacity = '0';
-                    legEnq.style.transform = 'scale(0.85)';
                 }
                 if (legDown) {
                     legDown.classList.remove('legend-triggered');
-                    legDown.style.transition = 'none';
                     legDown.style.opacity = '0';
-                    legDown.style.transform = 'scale(0.85)';
                 }
             }
         }, { passive: true });
@@ -494,8 +488,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         const swipeBackdrop = document.getElementById("swipe-backdrop");
                         if (swipeBackdrop) {
                             swipeBackdrop.style.opacity = '0';
-                            swipeBackdrop.style.background = 'transparent';
-                            swipeBackdrop.style.backgroundColor = 'transparent';
                         }
                         return;
                     }
@@ -520,56 +512,39 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 const swipeBackdrop = document.getElementById("swipe-backdrop");
                 if (swipeBackdrop) {
-                    const absDx = Math.abs(clampedDx);
-                    const progress = Math.min(1, absDx / 60);
                     const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
                     const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
-                    const songColor = activeLi.style.getPropertyValue('--enqueued-color') || '#8c73ff';
 
                     if (clampedDx > 0) {
-                        const fillPct = (progress * 100).toFixed(1);
-                        const songColorFill = `color-mix(in srgb, ${songColor} 25%, #111111)`;
                         swipeBackdrop.style.opacity = '1';
-                        swipeBackdrop.style.background = `linear-gradient(to right, ${songColorFill} ${fillPct}%, transparent ${fillPct}%)`;
                         if (legEnq) {
                             legEnq.style.opacity = '1';
                             if (clampedDx >= 60) {
                                 legEnq.classList.add('legend-triggered');
-                                legEnq.style.transform = 'scale(1.12)';
                             } else {
                                 legEnq.classList.remove('legend-triggered');
-                                legEnq.style.transform = `scale(${(0.85 + 0.15 * progress).toFixed(2)})`;
                             }
                         }
                         if (legDown) {
                             legDown.classList.remove('legend-triggered');
                             legDown.style.opacity = '0';
-                            legDown.style.transform = 'scale(0.85)';
                         }
                     } else if (clampedDx < 0) {
-                        const fillPct = (progress * 100).toFixed(1);
-                        const downloadColorFill = 'color-mix(in srgb, #00ff88 25%, #111111)';
                         swipeBackdrop.style.opacity = '1';
-                        swipeBackdrop.style.background = `linear-gradient(to left, ${downloadColorFill} ${fillPct}%, transparent ${fillPct}%)`;
                         if (legDown) {
                             legDown.style.opacity = '1';
                             if (clampedDx <= -60) {
                                 legDown.classList.add('legend-triggered');
-                                legDown.style.transform = 'scale(1.12)';
                             } else {
                                 legDown.classList.remove('legend-triggered');
-                                legDown.style.transform = `scale(${(0.85 + 0.15 * progress).toFixed(2)})`;
                             }
                         }
                         if (legEnq) {
                             legEnq.classList.remove('legend-triggered');
                             legEnq.style.opacity = '0';
-                            legEnq.style.transform = 'scale(0.85)';
                         }
                     } else {
                         swipeBackdrop.style.opacity = '0';
-                        swipeBackdrop.style.background = 'transparent';
-                        swipeBackdrop.style.backgroundColor = 'transparent';
                         if (legEnq) {
                             legEnq.classList.remove('legend-triggered');
                             legEnq.style.opacity = '0';
@@ -623,23 +598,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                 if (legEnq) {
                     legEnq.classList.remove('legend-triggered');
-                    legEnq.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
                     legEnq.style.opacity = '0';
-                    legEnq.style.transform = 'scale(0.85)';
                 }
                 if (legDown) {
                     legDown.classList.remove('legend-triggered');
-                    legDown.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
                     legDown.style.opacity = '0';
-                    legDown.style.transform = 'scale(0.85)';
                 }
                 setTimeout(() => {
                     if (swipeBackdrop.style.opacity === '0') {
                         swipeBackdrop.style.transition = '';
-                        swipeBackdrop.style.background = 'transparent';
-                        swipeBackdrop.style.backgroundColor = 'transparent';
-                        if (legEnq) legEnq.style.transition = '';
-                        if (legDown) legDown.style.transition = '';
                     }
                 }, 200);
             }
@@ -961,14 +928,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
                     window.wasPlayingBeforeCall = true;
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                    navigator.mediaSession.playbackState = 'paused';
-                } else {
-                    // Mode 2 in-app user pause: keep 'playing' spoof to pin the wave animation
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
                 }
+                // Mode 2 pause (user or transient interrupt): keep 'playing' spoof to pin the wave animation
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'playing';
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 if (isRecentBtDisconnect) {
@@ -2330,6 +2294,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
         fastScroller.addEventListener("pointerup", stopFastScroll);
         fastScroller.addEventListener("pointercancel", stopFastScroll);
+    }
+
+    // Simple Playlist Scroll Arrow Engine
+    const playlistScrollArrow = document.getElementById("playlist-scroll-arrow");
+    const playlistArrowUp = document.getElementById("playlist-arrow-up");
+    const playlistArrowDown = document.getElementById("playlist-arrow-down");
+
+    function updatePlaylistScrollArrow() {
+        if (!playlistScrollArrow || !playlistContainer) return;
+        const isScrolled = playlistContainer.scrollTop > 2;
+        if (playlistArrowUp && playlistArrowDown) {
+            playlistArrowUp.style.display = isScrolled ? "block" : "none";
+            playlistArrowDown.style.display = isScrolled ? "none" : "block";
+        }
+        playlistScrollArrow.setAttribute("aria-label", isScrolled ? "Scroll to top" : "Scroll to bottom");
+    }
+
+    if (playlistScrollArrow && playlistContainer) {
+        playlistContainer.addEventListener("scroll", updatePlaylistScrollArrow, { passive: true });
+        updatePlaylistScrollArrow();
+
+        playlistScrollArrow.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (playlistContainer.scrollTop > 2) {
+                playlistContainer.scrollTo({ top: 0, behavior: "smooth" });
+            } else {
+                playlistContainer.scrollTo({ top: playlistContainer.scrollHeight, behavior: "smooth" });
+            }
+        });
     }
 
     // PWA Install Prompt Listener
