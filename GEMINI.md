@@ -31,8 +31,9 @@
 
 ## 5. Development & Deployment Workflow
 - Always develop, commit, and test on the `dev` branch first.
-- Push to `origin/dev`, wait for CI/CD GitHub Actions to complete successfully.
-- Merge to `main`, push to `origin/main`, and empirically verify live deployment at `https://music.hausemaster.tech`.
+- Push to `origin/dev`: GitHub Actions automatically builds and deploys the staging distribution directly to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
+- Verify the staged release live at `https://music.hausemaster.tech/dev/`.
+- Merge to `main`, push to `origin/main`, and empirically verify live production deployment at `https://music.hausemaster.tech`.
 - Never commit broken code, skip tests, or merge to main without verification.
 
 ## 6. Frontend Audio Engine & Dual Playback Modes

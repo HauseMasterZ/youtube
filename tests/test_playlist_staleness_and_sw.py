@@ -64,7 +64,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         """worker.js must serve webp thumbnails with revalidation headers and exclude from immutable extensions."""
         if not self.worker_content:
             return
-        self.assertIn("const IMMUTABLE_MEDIA_EXTENSIONS = /\\.(webm|opus|m4a|aac)$/i;", self.worker_content)
+        self.assertIn("const IMMUTABLE_MEDIA_EXTENSIONS = /\\.(webm|opus|m4a|aac|lrc)$/i;", self.worker_content)
+        self.assertNotIn("webp", "webm|opus|m4a|aac|lrc")
         self.assertIn("const isThumbnail = /\\.webp$/i.test(cleanPath);", self.worker_content)
         self.assertIn('"public, max-age=86400, stale-while-revalidate=604800"', self.worker_content)
 
