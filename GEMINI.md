@@ -284,3 +284,10 @@
 - Strictly FORBIDDEN to alter the host Python environment, site-packages, user profiles, or system-wide software configurations.
 - When local tools or parsers (such as `node` or AST libraries) are absent, Antigravity MUST NEVER attempt autonomous package installation. Antigravity must use Python standard library modules or prompt the user.
 - Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.
+
+## 32. Dev-Only Git Push & Staging Deployment Invariant
+- All git commits, pushes, and staging deployments MUST ALWAYS BE SCOPED TO `dev` BY DEFAULT.
+- Strictly FORBIDDEN to execute direct pushes to `main` or `master` (`git push origin main`, bare `git push` on `main`, etc.) unless the user explicitly and unambiguously requests a merge/push to `main` in that exact prompt turn.
+- All git push commands must explicitly target the `dev` branch (e.g. `git push origin dev`).
+- Staging releases automatically deploy to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/` upon pushing to `origin/dev`.
+- Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.
