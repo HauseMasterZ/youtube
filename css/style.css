@@ -949,6 +949,7 @@
             padding: 0;
             margin: 0;
             position: relative;
+            z-index: 1;
             touch-action: pan-y;
         }
 
@@ -973,6 +974,7 @@
             overflow: hidden;
             text-overflow: ellipsis;
             touch-action: pan-y;
+            background-color: #000000;
         }
 
         .track-skeleton {
@@ -1058,11 +1060,60 @@
         }
 
         #track-list li.slide-enqueue {
-            background-color: color-mix(in srgb, var(--enqueued-color, #8c73ff) 25%, transparent) !important;
+            background-color: color-mix(in srgb, var(--enqueued-color, #8c73ff) 15%, #000000) !important;
         }
 
         #track-list li.slide-download {
-            background-color: color-mix(in srgb, #00ff88 25%, transparent) !important;
+            background-color: color-mix(in srgb, #00ff88 15%, #000000) !important;
+        }
+
+        .swipe-backdrop {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 48px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 0;
+            overflow: hidden;
+            will-change: transform, opacity, background-color;
+        }
+
+        .swipe-legend {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            opacity: 0;
+            transform: scale(0.85);
+            will-change: transform, opacity;
+            transition: transform 0.15s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
+        }
+
+        .swipe-legend svg {
+            flex-shrink: 0;
+        }
+
+        .swipe-legend-enqueue {
+            color: var(--swipe-color, var(--enqueued-color, #8c73ff));
+        }
+
+        .swipe-legend-download {
+            color: #00ff88;
+        }
+
+        .swipe-legend.legend-triggered {
+            transform: scale(1.12);
+            opacity: 1 !important;
+            filter: drop-shadow(0 0 4px currentColor);
         }
 
         /* Landscape Layout for <= 1110px (covers all heights, including > 560px) */

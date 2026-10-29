@@ -157,11 +157,12 @@
 - Idempotent Bounce Safety: Duplicate AVRCP pause events (press/release bounces) safely remain paused. Resuming from Bluetooth in Mode 1 is handled exclusively by `setActionHandler('play', handlePlayAction)`.
 - Playpause Debounce: `setActionHandler('playpause')` enforces a 300ms cooldown timestamp to eliminate single-button headset toggle flutters.
 
-## 18. Hold-to-Queue Selection Suppression Invariant (Zero CSS Changes)
-- Zero CSS Selection Tampering: Text selection must never be disabled via CSS stylesheets (`user-select: none` / `-webkit-user-select: none` on `#track-list` or `li` is strictly forbidden). Desktop users must retain full native mouse selection and clipboard copying of song titles and artists.
-- Dynamic `selectstart` Interception: While a pointer hold is active (`holdTimer` or `suppressNextClick`), `trackList.addEventListener("selectstart")` cancels the event via `e.preventDefault()`, stopping mobile browser selection handles and floating copy toolbars before they can spawn.
-- Selection Range Purging: When `holdTimer` fires (450ms) and on `pointerup`, `window.getSelection()?.removeAllRanges()` purges any residual selection ranges.
-- Event Deduplication: `contextmenu` only enqueues if `!suppressNextClick`, preventing double-queuing when long-press fires both the timer and native `contextmenu`. Non-primary mouse buttons (`e.button !== 0`) are ignored on `pointerdown` so desktop right-click passes directly to `contextmenu`.
+## 18. Mobile Swipe Gestures & Text Selection Context Menu Invariant
+- Zero CSS Selection Tampering: Text selection must never be disabled via CSS stylesheets (`user-select: none` / `-webkit-user-select: none` on `#track-list` or `li` is strictly forbidden). Users retain full native text selection and clipboard copying of song titles and artists on both mobile and desktop.
+- Mobile Native Action Mode Preservation: On mobile devices (`isMobileDevice`), hold-to-queue is replaced by horizontal swipe gestures (swipe right to enqueue, swipe left to download single track). The `trackList` `contextmenu` handler returns immediately WITHOUT calling `e.preventDefault()`, ensuring mobile Chromium/WebKit `FloatingActionMode` overlay ("Copy", "Share", "Select All") appears reliably upon highlighting text.
+- Desktop Selection Copy Preservation: On desktop right-click, if `window.getSelection().toString().trim().length > 0`, `trackList` returns immediately WITHOUT calling `e.preventDefault()`, preserving the native desktop context menu for copying text. Right-clicking without an active text selection continues to invoke `queuePlayNext()` and trigger enqueued flash.
+- Selection Click Protection: `trackList` `click` handler checks `if (window.getSelection && window.getSelection().toString().trim().length > 0) return;`, ensuring highlighting text (by mouse drag or touch selection) does not accidentally trigger `playTrackSelection()` on click.
+
 
 ## 19. Desktop Playlist Middle-Click Autoscroll Invariant
 - Native Autoscroll Integrity: On desktop operating systems and browsers (Windows Chromium, Firefox, Edge), middle-clicking (`e.button === 1` / mouse wheel click) within the playlist container (`#playlist-container`) must reliably initiate the browser's native vertical autoscroll engine without being intercepted or canceled.
