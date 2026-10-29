@@ -121,10 +121,24 @@ class TestHoldToQueue(unittest.TestCase):
         )
 
     def test_mobile_contextmenu_suppressed_to_remove_hold_to_queue(self):
-        """Mobile long-press contextmenu is suppressed so hold-to-enqueue does not fire on mobile"""
+        """Mobile contextmenu returns early without e.preventDefault() so hold-to-enqueue does not fire and native copy overlay works"""
         self.assertRegex(
             self.main_content,
-            r'trackList\.addEventListener\(\s*["\']contextmenu["\']\s*,\s*\(e\)\s*=>\s*\{[\s\S]*?if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*["\']undefined["\']\s*&&\s*isMobileDevice\s*\)\s*\{[\s\S]*?e\.preventDefault\(\);[\s\S]*?return;'
+            r'trackList\.addEventListener\(\s*["\']contextmenu["\']\s*,\s*\(e\)\s*=>\s*\{[\s\S]*?if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*["\']undefined["\']\s*&&\s*isMobileDevice\s*\)\s*\{\s*return;\s*\}'
+        )
+
+    def test_desktop_contextmenu_preserves_selection_copy(self):
+        """Desktop right click preserves native context menu when text is selected"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*window\.getSelection\s*&&\s*window\.getSelection\(\)\.toString\(\)\.trim\(\)\.length\s*>\s*0\s*\)\s*\{[\s\S]*?return;'
+        )
+
+    def test_tracklist_click_preserves_text_selection(self):
+        """Click on trackList does not play track if user is selecting text"""
+        self.assertRegex(
+            self.main_content,
+            r'trackList\.addEventListener\(\s*["\']click["\']\s*,\s*\(e\)\s*=>\s*\{[\s\S]*?if\s*\(\s*window\.getSelection\s*&&\s*window\.getSelection\(\)\.toString\(\)\.trim\(\)\.length\s*>\s*0\s*\)\s*\{[\s\S]*?return;[\s\S]*?playTrackSelection'
         )
 
     def test_clear_source_buffer_waits_for_update(self):

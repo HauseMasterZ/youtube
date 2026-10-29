@@ -431,6 +431,7 @@
         if (!probeEl || probeEl._boundFocusProbe) return;
         probeEl._boundFocusProbe = true;
         probeEl.addEventListener("pause", () => {
+            if (document.hidden) return;
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
                 // Steal-or-idle suspend observed. Deliberately NO state write:
@@ -832,6 +833,9 @@
                         return;
                     }
                     if (lastValidMetadata && lastValidMetadata.title) {
+                        try {
+                            navigator.mediaSession.metadata = null;
+                        } catch (e) {}
                         navigator.mediaSession.metadata = new MediaMetadata({
                             title: lastValidMetadata.title,
                             artist: lastValidMetadata.artist,
@@ -867,10 +871,21 @@
     window.republishMediaMetadata = republishMediaMetadata;
 
     window.lastPublishedTrackKey = window.lastPublishedTrackKey || null;
+    let lastUnlockRepublishTime = 0;
+    let unlockResumeFlag = false;
 
-    function shouldRepublishMetadata() {
+    function shouldRepublishMetadata(reason) {
         try {
             if (window.mediaSessionDestroyed) return true;
+            const isUnlock = unlockResumeFlag || (typeof reason === 'string' && (reason.startsWith('unlock-playing') || reason.startsWith('pageshow-playing')));
+            if (isUnlock) {
+                const now = Date.now();
+                if (unlockResumeFlag || (now - lastUnlockRepublishTime >= 5000)) {
+                    unlockResumeFlag = false;
+                    lastUnlockRepublishTime = now;
+                    return true;
+                }
+            }
             const md = (typeof navigator !== 'undefined' && navigator.mediaSession) ? navigator.mediaSession.metadata : null;
             if (!md || !md.title) return true;
             if (typeof globalActivePlaylist !== 'undefined' && typeof globalActiveOriginalIndex === 'number'
@@ -900,6 +915,13 @@
 
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
+            const isUnlockPlaying = typeof reason === 'string' && (reason.startsWith('unlock-playing') || reason.startsWith('pageshow-playing'));
+            if (isUnlockPlaying) {
+                const now = Date.now();
+                if (now - lastUnlockRepublishTime >= 5000) {
+                    unlockResumeFlag = true;
+                }
+            }
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
             // Foreground re-anchor: When metadata is healthy and unchanged, do NOT
             // re-assign navigator.mediaSession.metadata, as rebinding in Android SystemUI
@@ -909,7 +931,7 @@
             // recreating the native MediaControlPanel binding.
             try {
                 if (needsRebind && typeof republishMediaMetadata === 'function') {
-                    republishMediaMetadata();
+                    republishMediaMetadata(true);
                 }
             } catch (e) {}
             try {

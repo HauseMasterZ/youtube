@@ -426,6 +426,13 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!li || !li.dataset.index || !li.dataset.playlist) return;
             if (e.target.closest(".yt-link-icon")) return;
 
+            const pl = li.dataset.playlist;
+            const idx = parseInt(li.dataset.index, 10);
+
+            if (li.classList.contains("active") || (idx === globalActiveOriginalIndex && pl === globalActivePlaylist)) {
+                return;
+            }
+
             activeLi = li;
             touchStartX = e.touches[0].clientX;
             touchStartY = e.touches[0].clientY;
@@ -433,8 +440,6 @@ document.addEventListener("DOMContentLoaded", () => {
             isHorizontalSwipe = false;
             isSwipeLocked = false;
 
-            const pl = li.dataset.playlist;
-            const idx = parseInt(li.dataset.index, 10);
             const targetTrack = (allDatabases && allDatabases[pl] && allDatabases[pl][idx]) || (currentPlaylistData && currentPlaylistData[idx]);
             const songColor = targetTrack ? ((typeof getTrackColor === 'function') ? getTrackColor(targetTrack) : ((targetTrack.color && targetTrack.color !== '#000000') ? targetTrack.color : (dominantColorCache.get(targetTrack.id) || '#8c73ff'))) : '#8c73ff';
             activeLi.style.setProperty('--enqueued-color', songColor);
@@ -442,6 +447,29 @@ document.addEventListener("DOMContentLoaded", () => {
             const match = activeLi.style.transform ? activeLi.style.transform.match(/translate3d\(\s*[^,]+,\s*([^,]+)/) : null;
             currentY = match ? match[1].trim() : '0px';
             activeLi.style.transition = '';
+
+            const swipeBackdrop = document.getElementById("swipe-backdrop");
+            if (swipeBackdrop) {
+                swipeBackdrop.style.transition = 'none';
+                swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;
+                swipeBackdrop.style.setProperty('--swipe-color', songColor);
+                swipeBackdrop.style.opacity = '0';
+                swipeBackdrop.style.backgroundColor = 'transparent';
+                const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
+                const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
+                if (legEnq) {
+                    legEnq.classList.remove('legend-triggered');
+                    legEnq.style.transition = 'none';
+                    legEnq.style.opacity = '0';
+                    legEnq.style.transform = 'scale(0.85)';
+                }
+                if (legDown) {
+                    legDown.classList.remove('legend-triggered');
+                    legDown.style.transition = 'none';
+                    legDown.style.opacity = '0';
+                    legDown.style.transform = 'scale(0.85)';
+                }
+            }
         }, { passive: true });
 
         trackList.addEventListener("touchmove", (e) => {
@@ -458,7 +486,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     isSwipeLocked = true;
                     isHorizontalSwipe = absX > absY;
                     if (!isHorizontalSwipe) {
-                        activeLi = null;
+                        if (activeLi) {
+                            activeLi.style.removeProperty('--enqueued-color');
+                            activeLi = null;
+                        }
+                        const swipeBackdrop = document.getElementById("swipe-backdrop");
+                        if (swipeBackdrop) {
+                            swipeBackdrop.style.opacity = '0';
+                            swipeBackdrop.style.backgroundColor = 'transparent';
+                        }
                         return;
                     }
                 } else {
@@ -478,6 +514,63 @@ document.addEventListener("DOMContentLoaded", () => {
                     activeLi.classList.remove('slide-enqueue');
                 } else {
                     activeLi.classList.remove('slide-enqueue', 'slide-download');
+                }
+
+                const swipeBackdrop = document.getElementById("swipe-backdrop");
+                if (swipeBackdrop) {
+                    const absDx = Math.abs(clampedDx);
+                    const progress = Math.min(1, absDx / 60);
+                    swipeBackdrop.style.opacity = (progress * 0.95).toFixed(2);
+
+                    const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
+                    const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
+                    const songColor = activeLi.style.getPropertyValue('--enqueued-color') || '#8c73ff';
+
+                    if (clampedDx > 0) {
+                        swipeBackdrop.style.backgroundColor = `color-mix(in srgb, ${songColor} ${(progress * 30).toFixed(0)}%, #111111)`;
+                        if (legEnq) {
+                            legEnq.style.opacity = Math.min(1, progress * 1.2).toFixed(2);
+                            if (clampedDx >= 60) {
+                                legEnq.classList.add('legend-triggered');
+                                legEnq.style.transform = 'scale(1.12)';
+                            } else {
+                                legEnq.classList.remove('legend-triggered');
+                                legEnq.style.transform = `scale(${(0.85 + 0.15 * progress).toFixed(2)})`;
+                            }
+                        }
+                        if (legDown) {
+                            legDown.classList.remove('legend-triggered');
+                            legDown.style.opacity = '0';
+                            legDown.style.transform = 'scale(0.85)';
+                        }
+                    } else if (clampedDx < 0) {
+                        swipeBackdrop.style.backgroundColor = `color-mix(in srgb, #00ff88 ${(progress * 25).toFixed(0)}%, #111111)`;
+                        if (legDown) {
+                            legDown.style.opacity = Math.min(1, progress * 1.2).toFixed(2);
+                            if (clampedDx <= -60) {
+                                legDown.classList.add('legend-triggered');
+                                legDown.style.transform = 'scale(1.12)';
+                            } else {
+                                legDown.classList.remove('legend-triggered');
+                                legDown.style.transform = `scale(${(0.85 + 0.15 * progress).toFixed(2)})`;
+                            }
+                        }
+                        if (legEnq) {
+                            legEnq.classList.remove('legend-triggered');
+                            legEnq.style.opacity = '0';
+                            legEnq.style.transform = 'scale(0.85)';
+                        }
+                    } else {
+                        swipeBackdrop.style.backgroundColor = 'transparent';
+                        if (legEnq) {
+                            legEnq.classList.remove('legend-triggered');
+                            legEnq.style.opacity = '0';
+                        }
+                        if (legDown) {
+                            legDown.classList.remove('legend-triggered');
+                            legDown.style.opacity = '0';
+                        }
+                    }
                 }
             }
         }, { passive: false });
@@ -510,7 +603,30 @@ document.addEventListener("DOMContentLoaded", () => {
             targetLi.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)';
             targetLi.style.transform = `translate3d(0, ${targetY}, 0)`;
             targetLi.classList.remove('slide-enqueue', 'slide-download');
-            targetLi.style.removeProperty('--enqueued-color');
+            if (!targetLi.classList.contains('enqueued-flash')) {
+                targetLi.style.removeProperty('--enqueued-color');
+            }
+
+            const swipeBackdrop = document.getElementById("swipe-backdrop");
+            if (swipeBackdrop) {
+                swipeBackdrop.style.transition = 'opacity 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s cubic-bezier(0.2, 0, 0, 1)';
+                swipeBackdrop.style.opacity = '0';
+                swipeBackdrop.style.backgroundColor = 'transparent';
+                const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
+                const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
+                if (legEnq) {
+                    legEnq.classList.remove('legend-triggered');
+                    legEnq.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    legEnq.style.opacity = '0';
+                    legEnq.style.transform = 'scale(0.85)';
+                }
+                if (legDown) {
+                    legDown.classList.remove('legend-triggered');
+                    legDown.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+                    legDown.style.opacity = '0';
+                    legDown.style.transform = 'scale(0.85)';
+                }
+            }
 
             const cleanup = () => {
                 targetLi.removeEventListener('transitionend', cleanup);
@@ -537,6 +653,9 @@ document.addEventListener("DOMContentLoaded", () => {
             e.stopPropagation();
             return;
         }
+        if (window.getSelection && window.getSelection().toString().trim().length > 0) {
+            return;
+        }
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
@@ -545,12 +664,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     trackList.addEventListener("contextmenu", (e) => {
         if (typeof isMobileDevice !== 'undefined' && isMobileDevice) {
-            e.preventDefault();
             return;
         }
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
+        if (window.getSelection && window.getSelection().toString().trim().length > 0) {
+            return;
+        }
+
         e.preventDefault();
         if (window.getSelection) {
             const sel = window.getSelection();
@@ -657,6 +779,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                 ? window.declaredPausedState() : 'paused';
             audioPlayer.instantPause();
+            if (window.playbackMode === 'mode2' && hasMediaSession) {
+                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+            }
         }
     });
 
@@ -917,6 +1043,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
+                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
                 }
             }
         }
