@@ -291,3 +291,14 @@
 - All git push commands must explicitly target the `dev` branch (e.g. `git push origin dev`).
 - Staging releases automatically deploy to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/` upon pushing to `origin/dev`.
 - Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.
+
+
+## 33. External Video Interrupt & Mode 2 Media Notification Pin Preservation
+- In Mode 2, when external media or video steals audio focus (`AUDIOFOCUS_LOSS_TRANSIENT`), `audioPlayer` pauses while `!window.wasPausedByUser`.
+- In Mode 2, MediaSession MUST evaluate `declaredPausedState()` unconditionally without gating on `window.wasPausedByUser`.
+- Chromium Android tears down media notifications immediately if all audio streams pause and `playbackState = 'paused'` is declared. The silent live audio anchor and `playbackState = 'playing'` (at micro-rate `0.00001`) must be retained to defend against native OS card eviction until explicit user-initiated stop.
+
+## 34. Playlist Scroll Edge Navigation
+- `#playlist-scroll-arrow` provides an unstyled edge navigation button positioned at the bottom-right of the playlist panel, offset to clear `#fast-scroller` (`right: 28px`, `z-index: 91`) and dynamic mobile bottom floating UI (`calc(84px + env(safe-area-inset-bottom, 0px))`).
+- Dynamically toggles between up arrow (`scrollTop > 2`, scrolling to 0) and down arrow (`scrollTop <= 2`, scrolling to `scrollHeight`).
+- Synchronized across container scroll, window resize, and virtual track list re-renders.
