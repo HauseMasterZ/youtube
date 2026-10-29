@@ -1082,16 +1082,13 @@
             opacity: 0;
             z-index: 0;
             overflow: hidden;
-            will-change: transform, opacity, background-color;
+            will-change: transform, opacity;
         }
 
         .swipe-legend {
             display: inline-flex;
             align-items: center;
-            gap: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.3px;
+            justify-content: center;
             opacity: 0;
             transform: scale(0.85);
             will-change: transform, opacity;

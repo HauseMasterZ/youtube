@@ -30,7 +30,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [])
 
     def test_swipe_backdrop_markup(self):
-        """index.html contains #swipe-backdrop inside #playlist-container preceding #track-list"""
+        """index.html contains #swipe-backdrop inside #playlist-container preceding #track-list without text hints"""
         container_match = re.search(
             r'id="playlist-container"[\s\S]*?<div id="swipe-backdrop"[^>]*class="swipe-backdrop"[\s\S]*?<ul id="track-list">',
             self.html_content
@@ -38,8 +38,12 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIsNotNone(container_match)
         self.assertIn('class="swipe-legend swipe-legend-enqueue"', self.html_content)
         self.assertIn('class="swipe-legend swipe-legend-download"', self.html_content)
-        self.assertIn('Enqueue', self.html_content)
-        self.assertIn('Download', self.html_content)
+        self.assertNotIn('<span>Enqueue</span>', self.html_content)
+        self.assertNotIn('<span>Download</span>', self.html_content)
+        backdrop_match = re.search(r'<div id="swipe-backdrop"[\s\S]*?</div>\s*</div>', self.html_content)
+        self.assertIsNotNone(backdrop_match)
+        self.assertNotIn('Enqueue', backdrop_match.group(0))
+        self.assertNotIn('Download', backdrop_match.group(0))
 
     def test_swipe_backdrop_and_legend_css(self):
         """css/style.css defines swipe backdrop, legends, and opaque card styles"""
@@ -49,6 +53,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('.swipe-legend-enqueue', self.css_content)
         self.assertIn('.swipe-legend-download', self.css_content)
         self.assertIn('.swipe-legend.legend-triggered', self.css_content)
+        self.assertIn('will-change: transform, opacity;', self.css_content)
 
     def test_active_song_swipe_guard(self):
         """main.js touchstart ignores touch on active song to prevent swiping active track"""
@@ -58,11 +63,14 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_mobile_swipe_backdrop_positioning_and_feedback(self):
-        """main.js positions backdrop at currentY and scales/highlights legends on threshold"""
+        """main.js positions backdrop at currentY, fills progressively, and scales/highlights legends on threshold"""
         self.assertIn("swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;", self.main_content)
         self.assertIn("legEnq.classList.add('legend-triggered')", self.main_content)
         self.assertIn("legDown.classList.add('legend-triggered')", self.main_content)
         self.assertIn("swipeBackdrop.style.opacity = '0';", self.main_content)
+        self.assertIn("linear-gradient(to right,", self.main_content)
+        self.assertIn("linear-gradient(to left,", self.main_content)
+        self.assertIn("if (isHorizontalSwipe && e.type !== 'touchcancel')", self.main_content)
 
     def test_unlock_wave_animation_rebind_cooldown(self):
         """mediaSession.js allows shouldRepublishMetadata once on unlock-playing with 5000ms cooldown"""

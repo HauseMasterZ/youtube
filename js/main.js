@@ -454,6 +454,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;
                 swipeBackdrop.style.setProperty('--swipe-color', songColor);
                 swipeBackdrop.style.opacity = '0';
+                swipeBackdrop.style.background = 'transparent';
                 swipeBackdrop.style.backgroundColor = 'transparent';
                 const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
                 const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
@@ -493,6 +494,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         const swipeBackdrop = document.getElementById("swipe-backdrop");
                         if (swipeBackdrop) {
                             swipeBackdrop.style.opacity = '0';
+                            swipeBackdrop.style.background = 'transparent';
                             swipeBackdrop.style.backgroundColor = 'transparent';
                         }
                         return;
@@ -520,16 +522,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (swipeBackdrop) {
                     const absDx = Math.abs(clampedDx);
                     const progress = Math.min(1, absDx / 60);
-                    swipeBackdrop.style.opacity = (progress * 0.95).toFixed(2);
-
                     const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
                     const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                     const songColor = activeLi.style.getPropertyValue('--enqueued-color') || '#8c73ff';
 
                     if (clampedDx > 0) {
-                        swipeBackdrop.style.backgroundColor = `color-mix(in srgb, ${songColor} ${(progress * 30).toFixed(0)}%, #111111)`;
+                        const fillPct = (progress * 100).toFixed(1);
+                        const songColorFill = `color-mix(in srgb, ${songColor} 25%, #111111)`;
+                        swipeBackdrop.style.opacity = '1';
+                        swipeBackdrop.style.background = `linear-gradient(to right, ${songColorFill} ${fillPct}%, transparent ${fillPct}%)`;
                         if (legEnq) {
-                            legEnq.style.opacity = Math.min(1, progress * 1.2).toFixed(2);
+                            legEnq.style.opacity = '1';
                             if (clampedDx >= 60) {
                                 legEnq.classList.add('legend-triggered');
                                 legEnq.style.transform = 'scale(1.12)';
@@ -544,9 +547,12 @@ document.addEventListener("DOMContentLoaded", () => {
                             legDown.style.transform = 'scale(0.85)';
                         }
                     } else if (clampedDx < 0) {
-                        swipeBackdrop.style.backgroundColor = `color-mix(in srgb, #00ff88 ${(progress * 25).toFixed(0)}%, #111111)`;
+                        const fillPct = (progress * 100).toFixed(1);
+                        const downloadColorFill = 'color-mix(in srgb, #00ff88 25%, #111111)';
+                        swipeBackdrop.style.opacity = '1';
+                        swipeBackdrop.style.background = `linear-gradient(to left, ${downloadColorFill} ${fillPct}%, transparent ${fillPct}%)`;
                         if (legDown) {
-                            legDown.style.opacity = Math.min(1, progress * 1.2).toFixed(2);
+                            legDown.style.opacity = '1';
                             if (clampedDx <= -60) {
                                 legDown.classList.add('legend-triggered');
                                 legDown.style.transform = 'scale(1.12)';
@@ -561,6 +567,8 @@ document.addEventListener("DOMContentLoaded", () => {
                             legEnq.style.transform = 'scale(0.85)';
                         }
                     } else {
+                        swipeBackdrop.style.opacity = '0';
+                        swipeBackdrop.style.background = 'transparent';
                         swipeBackdrop.style.backgroundColor = 'transparent';
                         if (legEnq) {
                             legEnq.classList.remove('legend-triggered');
@@ -584,7 +592,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
             const dx = (touch && typeof touch.clientX === 'number') ? (touch.clientX - touchStartX) : lastDx;
 
-            if (isHorizontalSwipe) {
+            if (isHorizontalSwipe && e.type !== 'touchcancel') {
                 suppressNextClick = true;
                 if (dx >= 60) {
                     const pl = targetLi.dataset.playlist;
@@ -609,9 +617,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const swipeBackdrop = document.getElementById("swipe-backdrop");
             if (swipeBackdrop) {
-                swipeBackdrop.style.transition = 'opacity 0.2s cubic-bezier(0.2, 0, 0, 1), background-color 0.2s cubic-bezier(0.2, 0, 0, 1)';
+                swipeBackdrop.style.transition = 'opacity 0.2s cubic-bezier(0.2, 0, 0, 1)';
                 swipeBackdrop.style.opacity = '0';
-                swipeBackdrop.style.backgroundColor = 'transparent';
                 const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
                 const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                 if (legEnq) {
@@ -626,6 +633,15 @@ document.addEventListener("DOMContentLoaded", () => {
                     legDown.style.opacity = '0';
                     legDown.style.transform = 'scale(0.85)';
                 }
+                setTimeout(() => {
+                    if (swipeBackdrop.style.opacity === '0') {
+                        swipeBackdrop.style.transition = '';
+                        swipeBackdrop.style.background = 'transparent';
+                        swipeBackdrop.style.backgroundColor = 'transparent';
+                        if (legEnq) legEnq.style.transition = '';
+                        if (legDown) legDown.style.transition = '';
+                    }
+                }, 200);
             }
 
             const cleanup = () => {
