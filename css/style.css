@@ -962,6 +962,9 @@
             justify-content: center;
             width: 24px;
             height: 24px;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
 
         @media (max-width: 750px) and (orientation: portrait), (max-width: 560px) {
@@ -1001,6 +1004,7 @@
             text-overflow: ellipsis;
             touch-action: pan-y;
             background-color: #000000;
+            transition: background-color 0.25s ease;
         }
 
         .track-skeleton {

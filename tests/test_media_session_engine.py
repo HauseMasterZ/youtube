@@ -1076,7 +1076,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("window._forceNextPosition = true;", stale_block_match.group(1))
 
     def test_external_interruption_does_not_drop_mode2_pin(self):
-        """External steal in Mode 2 avoids setting paused state and preserves anchor heartbeat"""
+        """External steal in Mode 2 avoids setting paused state, preserves anchor heartbeat, and reasserts spoof burst"""
         self.assertRegex(
             self.main_content,
             r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?declaredPausedState\(\)'
@@ -1084,6 +1084,10 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertRegex(
             self.ms_content,
             r'startAnchorHeartbeat\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst\(\)\s*\{[\s\S]*?if\s*\(\s*window\.isCallActive\s*\|\|\s*isRecentBtDisconnect\s*\)\s*return;'
         )
 
     def test_route_addition_does_not_latch_call_or_pause(self):

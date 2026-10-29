@@ -272,6 +272,9 @@
         }
         
         isRendering = false;
+        if (typeof window.updatePlaylistScrollArrow === 'function') {
+            window.updatePlaylistScrollArrow();
+        }
     }
     function scrollToTrack(originalIndex, forceScroll = false) {
         const currentPl = playlistSelect.value;

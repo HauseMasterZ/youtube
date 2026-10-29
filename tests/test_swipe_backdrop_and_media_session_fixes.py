@@ -145,6 +145,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*border:\s*none;')
         self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*outline:\s*none;')
         self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*box-shadow:\s*none;')
+        self.assertIn('-webkit-tap-highlight-color: transparent;', self.css_content)
+        self.assertIn('transition: background-color 0.25s ease;', self.css_content)
         self.assertIn('calc(84px + env(safe-area-inset-bottom, 0px))', self.css_content)
 
     def test_playlist_scroll_arrow_behavior_in_main(self):
@@ -153,6 +155,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('playlistContainer.scrollTop > 2', self.main_content)
         self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']smooth["\']\s*\}\)')
         self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']smooth["\']\s*\}\)')
+        self.assertIn('window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;', self.main_content)
+        self.assertIn('window.addEventListener("resize", updatePlaylistScrollArrow', self.main_content)
 
     def test_brace_balance(self):
         """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""

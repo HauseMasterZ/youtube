@@ -419,6 +419,9 @@ document.addEventListener("DOMContentLoaded", () => {
         let currentY = '0px';
         let isHorizontalSwipe = false;
         let isSwipeLocked = false;
+        let swipeBackdrop = null;
+        let legEnq = null;
+        let legDown = null;
 
         trackList.addEventListener("touchstart", (e) => {
             if (!e.touches || e.touches.length !== 1) return;
@@ -446,16 +449,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const match = activeLi.style.transform ? activeLi.style.transform.match(/translate3d\(\s*[^,]+,\s*([^,]+)/) : null;
             currentY = match ? match[1].trim() : '0px';
-            activeLi.style.transition = '';
+            activeLi.style.transition = 'none';
 
-            const swipeBackdrop = document.getElementById("swipe-backdrop");
+            swipeBackdrop = document.getElementById("swipe-backdrop");
             if (swipeBackdrop) {
+                legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
+                legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                 swipeBackdrop.style.transition = 'none';
                 swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;
                 swipeBackdrop.style.setProperty('--swipe-color', songColor);
                 swipeBackdrop.style.opacity = '0';
-                const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
-                const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
                 if (legEnq) {
                     legEnq.classList.remove('legend-triggered');
                     legEnq.style.opacity = '0';
@@ -485,7 +488,6 @@ document.addEventListener("DOMContentLoaded", () => {
                             activeLi.style.removeProperty('--enqueued-color');
                             activeLi = null;
                         }
-                        const swipeBackdrop = document.getElementById("swipe-backdrop");
                         if (swipeBackdrop) {
                             swipeBackdrop.style.opacity = '0';
                         }
@@ -510,11 +512,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     activeLi.classList.remove('slide-enqueue', 'slide-download');
                 }
 
-                const swipeBackdrop = document.getElementById("swipe-backdrop");
                 if (swipeBackdrop) {
-                    const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
-                    const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
-
                     if (clampedDx > 0) {
                         swipeBackdrop.style.opacity = '1';
                         if (legEnq) {
@@ -583,32 +581,29 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
-            targetLi.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)';
+            targetLi.style.transition = 'transform 0.22s cubic-bezier(0.2, 0, 0, 1), background-color 0.25s ease';
             targetLi.style.transform = `translate3d(0, ${targetY}, 0)`;
             targetLi.classList.remove('slide-enqueue', 'slide-download');
             if (!targetLi.classList.contains('enqueued-flash')) {
                 targetLi.style.removeProperty('--enqueued-color');
             }
 
-            const swipeBackdrop = document.getElementById("swipe-backdrop");
             if (swipeBackdrop) {
-                swipeBackdrop.style.transition = 'opacity 0.2s cubic-bezier(0.2, 0, 0, 1)';
+                swipeBackdrop.style.transition = 'opacity 0.22s cubic-bezier(0.2, 0, 0, 1)';
                 swipeBackdrop.style.opacity = '0';
-                const legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
-                const legDown = swipeBackdrop.querySelector('.swipe-legend-download');
-                if (legEnq) {
-                    legEnq.classList.remove('legend-triggered');
-                    legEnq.style.opacity = '0';
-                }
-                if (legDown) {
-                    legDown.classList.remove('legend-triggered');
-                    legDown.style.opacity = '0';
-                }
                 setTimeout(() => {
-                    if (swipeBackdrop.style.opacity === '0') {
+                    if (swipeBackdrop && swipeBackdrop.style.opacity === '0') {
                         swipeBackdrop.style.transition = '';
+                        if (legEnq) {
+                            legEnq.classList.remove('legend-triggered');
+                            legEnq.style.opacity = '0';
+                        }
+                        if (legDown) {
+                            legDown.classList.remove('legend-triggered');
+                            legDown.style.opacity = '0';
+                        }
                     }
-                }, 200);
+                }, 220);
             }
 
             const cleanup = () => {
@@ -2313,6 +2308,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (playlistScrollArrow && playlistContainer) {
         playlistContainer.addEventListener("scroll", updatePlaylistScrollArrow, { passive: true });
+        window.addEventListener("resize", updatePlaylistScrollArrow, { passive: true });
         updatePlaylistScrollArrow();
 
         playlistScrollArrow.addEventListener("click", (e) => {
@@ -2324,6 +2320,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
     }
+    window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;
 
     // PWA Install Prompt Listener
     window.addEventListener('beforeinstallprompt', (e) => {
