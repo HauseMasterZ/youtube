@@ -48,7 +48,7 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
 
     def test_sw_cache_version_bumped(self):
         """sw.js CACHE_NAME must be bumped to v151 to purge stale caches."""
-        self.assertIn("yt-player-cache-v151", self.sw_content)
+        self.assertIn("yt-player-cache-v152", self.sw_content)
 
     def test_sw_thumbnail_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate for thumbnails."""
@@ -166,7 +166,7 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
 
     def test_main_purge_preserves_active_cache(self):
         """main.js executeSitePurgeAndReload must preserve active build caches to avoid blank-screen on rate limit."""
-        self.assertIn("key !== 'yt-player-cache-v151'", self.main_content)
+        self.assertIn("key !== 'yt-player-cache-v152'", self.main_content)
         self.assertIn("!key.includes('-main-')", self.main_content)
         self.assertIn("!key.includes('-dev-')", self.main_content)
         self.assertIn("key !== 'yt-player-shell-v1'", self.main_content)
