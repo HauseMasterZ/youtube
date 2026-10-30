@@ -2149,7 +2149,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const keys = await caches.keys();
                 for (const key of keys) {
                     // Only purge older cache versions; preserve active build caches and permanent shell cache
-                    if (key.startsWith('yt-player-cache') && key !== 'yt-player-cache-v152' && !key.includes('-main-') && !key.includes('-dev-') && key !== 'yt-player-shell-v1') {
+                    if (key.startsWith('yt-player-cache') && key !== 'yt-player-cache-v153' && !key.includes('-main-') && !key.includes('-dev-') && key !== 'yt-player-shell-v1') {
                         await caches.delete(key);
                     }
                 }
