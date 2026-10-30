@@ -301,4 +301,13 @@
 ## 34. Playlist Scroll Edge Navigation
 - `#playlist-scroll-arrow` provides an unstyled edge navigation button positioned at the bottom-right of the playlist panel, offset to clear `#fast-scroller` (`right: 28px`, `z-index: 91`) and dynamic mobile bottom floating UI (`calc(84px + env(safe-area-inset-bottom, 0px))`).
 - Dynamically toggles between up arrow (`scrollTop > 2`, scrolling to 0) and down arrow (`scrollTop <= 2`, scrolling to `scrollHeight`).
+- Scrolling is instant jump snap (`behavior: "instant"` / `scrollTop`) without smooth scrolling animation.
 - Synchronized across container scroll, window resize, and virtual track list re-renders.
+
+## 35. Mobile Playlist Swipe Gestures & 50px Fixed Gap Underlay Parity (test.html)
+- Underlay background: `#000000` (`.swipe-underlay`, `.swipe-backdrop`).
+- Action icons: Stroke-based icons for enqueue (list with plus) and download (arrow to tray), sized 22px x 22px with `color: #ffffff`, `stroke-width: 2.2`, `stroke: currentColor`, `fill: none`, `stroke-linecap: round`, `stroke-linejoin: round`.
+- Surface card: `#1e1e1e` with `1px solid rgba(255, 255, 255, 0.08)` and `border-radius: 8px`.
+- 50px fixed gap tracking logic: `parkOffset = 72` (22px icon + 50px gap). While dragging, enqueue icon tracks right swipe at `translateX(currentX - parkOffset)` and download icon tracks left swipe at `translateX(currentX + parkOffset)`.
+- Release and snap: Both surface card and underlay icons snap back to parked state using `transition: transform 250ms cubic-bezier(0.2, 0, 0, 1)`.
+

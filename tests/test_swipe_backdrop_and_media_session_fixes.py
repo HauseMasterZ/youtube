@@ -32,12 +32,14 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
     def test_swipe_backdrop_markup(self):
         """index.html contains #swipe-backdrop inside #playlist-container preceding #track-list without text hints"""
         container_match = re.search(
-            r'id="playlist-container"[\s\S]*?<div id="swipe-backdrop"[^>]*class="swipe-backdrop"[\s\S]*?<ul id="track-list">',
+            r'id="playlist-container"[\s\S]*?<div id="swipe-backdrop"[^>]*class="[^"]*swipe-backdrop[^"]*"[\s\S]*?<ul id="track-list">',
             self.html_content
         )
         self.assertIsNotNone(container_match)
-        self.assertIn('class="swipe-legend swipe-legend-enqueue"', self.html_content)
-        self.assertIn('class="swipe-legend swipe-legend-download"', self.html_content)
+        self.assertIn('action-enqueue', self.html_content)
+        self.assertIn('action-download', self.html_content)
+        self.assertIn('swipe-legend-enqueue', self.html_content)
+        self.assertIn('swipe-legend-download', self.html_content)
         self.assertNotIn('<span>Enqueue</span>', self.html_content)
         self.assertNotIn('<span>Download</span>', self.html_content)
         backdrop_match = re.search(r'<div id="swipe-backdrop"[\s\S]*?</div>\s*</div>', self.html_content)
@@ -46,9 +48,13 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertNotIn('Download', backdrop_match.group(0))
 
     def test_swipe_backdrop_and_legend_css(self):
-        """css/style.css defines swipe backdrop, legends, and opaque card styles"""
+        """css/style.css defines swipe backdrop, legends, and opaque card styles matching test.html"""
         self.assertRegex(self.css_content, r'#track-list\s+li\s*\{[^}]*background-color:\s*#000000;')
         self.assertIn('.swipe-backdrop', self.css_content)
+        self.assertIn('.swipe-underlay', self.css_content)
+        self.assertIn('.underlay-action', self.css_content)
+        self.assertIn('.action-enqueue', self.css_content)
+        self.assertIn('.action-download', self.css_content)
         self.assertIn('.swipe-legend', self.css_content)
         self.assertIn('.swipe-legend-enqueue', self.css_content)
         self.assertIn('.swipe-legend-download', self.css_content)
@@ -123,14 +129,14 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_swipe_card_remains_opaque(self):
-        """css/style.css ensures slide-enqueue and slide-download remain opaque over black"""
+        """css/style.css ensures slide-enqueue and slide-download match test.html surface card styling"""
         self.assertRegex(
             self.css_content,
-            r'#track-list\s+li\.slide-enqueue\s*\{[^}]*background-color:\s*color-mix\(in srgb,\s*var\(--enqueued-color,\s*#8c73ff\)\s*15%,\s*#000000\)\s*!important;'
+            r'#track-list\s+li\.slide-enqueue[^{]*\{[^}]*background:\s*#1e1e1e\s*!important;'
         )
         self.assertRegex(
             self.css_content,
-            r'#track-list\s+li\.slide-download\s*\{[^}]*background-color:\s*color-mix\(in srgb,\s*#00ff88\s*15%,\s*#000000\)\s*!important;'
+            r'#track-list\s+li\.slide-download\s*\{[^}]*background:\s*#1e1e1e\s*!important;'
         )
 
     def test_playlist_scroll_arrow_markup_and_css(self):
@@ -150,11 +156,11 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('calc(84px + env(safe-area-inset-bottom, 0px))', self.css_content)
 
     def test_playlist_scroll_arrow_behavior_in_main(self):
-        """main.js binds scroll listener and click handler toggling top and bottom scroll"""
+        """main.js binds scroll listener and click handler toggling top and bottom instant scroll"""
         self.assertIn('playlistScrollArrow.addEventListener("click"', self.main_content)
         self.assertIn('playlistContainer.scrollTop > 2', self.main_content)
-        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']smooth["\']\s*\}\)')
-        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']smooth["\']\s*\}\)')
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']instant["\']\s*\}\)')
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']instant["\']\s*\}\)')
         self.assertIn('window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;', self.main_content)
         self.assertIn('window.addEventListener("resize", updatePlaylistScrollArrow', self.main_content)
 

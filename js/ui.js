@@ -138,7 +138,7 @@
     function getTrackTemplate() {
         if (!trackTemplate) {
             trackTemplate = document.createElement("li");
-            trackTemplate.className = "track-item";
+            trackTemplate.className = "track-item swipe-surface";
             const tThumb = document.createElement("div");
             tThumb.className = "track-thumb";
             const tSpan = document.createElement("span");

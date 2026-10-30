@@ -422,6 +422,9 @@ document.addEventListener("DOMContentLoaded", () => {
         let swipeBackdrop = null;
         let legEnq = null;
         let legDown = null;
+        const iconWidth = 22;
+        const gap = 50;
+        const parkOffset = gap + iconWidth; // 72px total offset
 
         trackList.addEventListener("touchstart", (e) => {
             if (!e.touches || e.touches.length !== 1) return;
@@ -450,22 +453,23 @@ document.addEventListener("DOMContentLoaded", () => {
             const match = activeLi.style.transform ? activeLi.style.transform.match(/translate3d\(\s*[^,]+,\s*([^,]+)/) : null;
             currentY = match ? match[1].trim() : '0px';
             activeLi.style.transition = 'none';
+            activeLi.classList.remove('snapping');
 
             swipeBackdrop = document.getElementById("swipe-backdrop");
             if (swipeBackdrop) {
-                legEnq = swipeBackdrop.querySelector('.swipe-legend-enqueue');
-                legDown = swipeBackdrop.querySelector('.swipe-legend-download');
+                legEnq = swipeBackdrop.querySelector('.action-enqueue') || swipeBackdrop.querySelector('.swipe-legend-enqueue');
+                legDown = swipeBackdrop.querySelector('.action-download') || swipeBackdrop.querySelector('.swipe-legend-download');
                 swipeBackdrop.style.transition = 'none';
                 swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;
                 swipeBackdrop.style.setProperty('--swipe-color', songColor);
                 swipeBackdrop.style.opacity = '0';
                 if (legEnq) {
-                    legEnq.classList.remove('legend-triggered');
-                    legEnq.style.opacity = '0';
+                    legEnq.classList.remove('snapping', 'legend-triggered');
+                    legEnq.style.transform = `translateX(-${parkOffset}px)`;
                 }
                 if (legDown) {
-                    legDown.classList.remove('legend-triggered');
-                    legDown.style.opacity = '0';
+                    legDown.classList.remove('snapping', 'legend-triggered');
+                    legDown.style.transform = `translateX(${parkOffset}px)`;
                 }
             }
         }, { passive: true });
@@ -500,12 +504,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (isHorizontalSwipe) {
                 if (e.cancelable) e.preventDefault();
-                const clampedDx = Math.max(-120, Math.min(120, dx));
-                activeLi.style.transform = `translate3d(${clampedDx}px, ${currentY}, 0)`;
-                if (clampedDx > 40) {
+                const currentX = dx;
+                activeLi.style.setProperty('--swipe-x', `${currentX}px`);
+                activeLi.style.transform = `translate3d(${currentX}px, ${currentY}, 0)`;
+                if (currentX > 40) {
                     activeLi.classList.add('slide-enqueue');
                     activeLi.classList.remove('slide-download');
-                } else if (clampedDx < -40) {
+                } else if (currentX < -40) {
                     activeLi.classList.add('slide-download');
                     activeLi.classList.remove('slide-enqueue');
                 } else {
@@ -513,11 +518,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
 
                 if (swipeBackdrop) {
-                    if (clampedDx > 0) {
+                    if (currentX > 0) {
+                        // Right Swipe: Logo is locked exactly 50px behind the card's left edge
                         swipeBackdrop.style.opacity = '1';
                         if (legEnq) {
-                            legEnq.style.opacity = '1';
-                            if (clampedDx >= 60) {
+                            legEnq.style.transform = `translateX(${currentX - parkOffset}px)`;
+                            if (currentX >= 60) {
                                 legEnq.classList.add('legend-triggered');
                             } else {
                                 legEnq.classList.remove('legend-triggered');
@@ -525,13 +531,14 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         if (legDown) {
                             legDown.classList.remove('legend-triggered');
-                            legDown.style.opacity = '0';
+                            legDown.style.transform = `translateX(${parkOffset}px)`;
                         }
-                    } else if (clampedDx < 0) {
+                    } else if (currentX < 0) {
+                        // Left Swipe: Logo is locked exactly 50px behind the card's right edge
                         swipeBackdrop.style.opacity = '1';
                         if (legDown) {
-                            legDown.style.opacity = '1';
-                            if (clampedDx <= -60) {
+                            legDown.style.transform = `translateX(${currentX + parkOffset}px)`;
+                            if (currentX <= -60) {
                                 legDown.classList.add('legend-triggered');
                             } else {
                                 legDown.classList.remove('legend-triggered');
@@ -539,17 +546,17 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         if (legEnq) {
                             legEnq.classList.remove('legend-triggered');
-                            legEnq.style.opacity = '0';
+                            legEnq.style.transform = `translateX(-${parkOffset}px)`;
                         }
                     } else {
                         swipeBackdrop.style.opacity = '0';
                         if (legEnq) {
                             legEnq.classList.remove('legend-triggered');
-                            legEnq.style.opacity = '0';
+                            legEnq.style.transform = `translateX(-${parkOffset}px)`;
                         }
                         if (legDown) {
                             legDown.classList.remove('legend-triggered');
-                            legDown.style.opacity = '0';
+                            legDown.style.transform = `translateX(${parkOffset}px)`;
                         }
                     }
                 }
@@ -581,7 +588,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
             }
 
-            targetLi.style.transition = 'transform 0.22s cubic-bezier(0.2, 0, 0, 1), background-color 0.25s ease';
+            // Snap surface and SVGs back to parked state matching test.html
+            targetLi.classList.add('snapping');
+            targetLi.style.transition = 'transform 250ms cubic-bezier(0.2, 0, 0, 1), background-color 0.25s ease';
+            targetLi.style.setProperty('--swipe-x', '0px');
             targetLi.style.transform = `translate3d(0, ${targetY}, 0)`;
             targetLi.classList.remove('slide-enqueue', 'slide-download');
             if (!targetLi.classList.contains('enqueued-flash')) {
@@ -589,29 +599,36 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (swipeBackdrop) {
-                swipeBackdrop.style.transition = 'opacity 0.22s cubic-bezier(0.2, 0, 0, 1)';
+                if (legEnq) {
+                    legEnq.classList.add('snapping');
+                    legEnq.style.transform = `translateX(-${parkOffset}px)`;
+                }
+                if (legDown) {
+                    legDown.classList.add('snapping');
+                    legDown.style.transform = `translateX(${parkOffset}px)`;
+                }
+                swipeBackdrop.style.transition = 'opacity 250ms cubic-bezier(0.2, 0, 0, 1)';
                 swipeBackdrop.style.opacity = '0';
                 setTimeout(() => {
                     if (swipeBackdrop && swipeBackdrop.style.opacity === '0') {
                         swipeBackdrop.style.transition = '';
                         if (legEnq) {
-                            legEnq.classList.remove('legend-triggered');
-                            legEnq.style.opacity = '0';
+                            legEnq.classList.remove('snapping', 'legend-triggered');
                         }
                         if (legDown) {
-                            legDown.classList.remove('legend-triggered');
-                            legDown.style.opacity = '0';
+                            legDown.classList.remove('snapping', 'legend-triggered');
                         }
                     }
-                }, 220);
+                }, 250);
             }
 
             const cleanup = () => {
                 targetLi.removeEventListener('transitionend', cleanup);
+                targetLi.classList.remove('snapping');
                 targetLi.style.transition = '';
             };
             targetLi.addEventListener('transitionend', cleanup, { once: true });
-            setTimeout(cleanup, 250);
+            setTimeout(cleanup, 260);
 
             if (isHorizontalSwipe) {
                 setTimeout(() => {
@@ -2314,9 +2331,9 @@ document.addEventListener("DOMContentLoaded", () => {
         playlistScrollArrow.addEventListener("click", (e) => {
             e.stopPropagation();
             if (playlistContainer.scrollTop > 2) {
-                playlistContainer.scrollTo({ top: 0, behavior: "smooth" });
+                playlistContainer.scrollTo({ top: 0, behavior: "instant" });
             } else {
-                playlistContainer.scrollTo({ top: playlistContainer.scrollHeight, behavior: "smooth" });
+                playlistContainer.scrollTo({ top: playlistContainer.scrollHeight, behavior: "instant" });
             }
         });
     }
