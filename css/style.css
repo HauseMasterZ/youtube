@@ -1078,7 +1078,11 @@
 
         #track-list li.active {
             background-color: var(--active-color);
-            border-left: 3px solid var(--primary-color);
+            border-left: 3px solid var(--primary-color) !important;
+            border-top: none !important;
+            border-right: none !important;
+            border-bottom: none !important;
+            border-radius: 0 !important;
             padding-left: 13px; /* 16px - 3px border */
             color: var(--primary-color);
             font-weight: 600;
