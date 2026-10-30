@@ -304,10 +304,11 @@
 - Scrolling is instant jump snap (`behavior: "instant"` / `scrollTop`) without smooth scrolling animation.
 - Synchronized across container scroll, window resize, and virtual track list re-renders.
 
-## 35. Mobile Playlist Swipe Gestures & 50px Fixed Gap Underlay Parity (test.html)
+## 35. Mobile Playlist Swipe Gestures: Zero-Gap Clamped Underlay & Tap Artifact Prevention
 - Underlay background: `#000000` (`.swipe-underlay`, `.swipe-backdrop`) with `border-radius: 8px`.
 - Action icons: Stroke-based icons for enqueue (list with plus) and download (arrow to tray), sized 22px x 22px with `color: #ffffff`, `stroke-width: 2.2`, `stroke: currentColor`, `fill: none`, `stroke-linecap: round`, `stroke-linejoin: round`.
 - Surface card: `#1e1e1e` with `1px solid rgba(255, 255, 255, 0.08)` and `border-radius: 8px`. Applied seamlessly during `.is-swiping`, `.slide-enqueue`, `.slide-download`, and `.snapping` states so the row card never flashes or reverts prematurely during dragging or snap back.
-- 50px fixed gap tracking logic: `thresholdRatio = 0.05` (5% track width confirms action via `thresholdPx`), `parkOffset = 72` (22px icon + 50px gap). While dragging, enqueue icon tracks right swipe at `translateX(currentX - parkOffset)` and download icon tracks left swipe at `translateX(currentX + parkOffset)`.
-- Release and snap: Both surface card and underlay icons snap back to parked state using `transition: transform 250ms cubic-bezier(0.2, 0, 0, 1)`. Classes cleaned up on snap `transitionend`.
+- Zero-gap tracking & clamp upon full reveal: `gap = 0`, `iconWidth = 22`, `parkOffset = 22px`. The legend icon follows the card div until fully revealed (`0px`), and clamps thereafter without moving further inwards (`Math.min(0, currentX - parkOffset)` for right swipe, `Math.max(0, currentX + parkOffset)` for left swipe).
+- Minimal green hint/glow: On enqueue threshold and successful release, `.enqueue-success` illuminates with `#00ff88`, `drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))`, and a 5px glowing indicator dot while the card smoothly glides back.
+- Tap artifact jumping prevention: On non-horizontal swipe interactions (`!isHorizontalSwipe`), `handleTouchEnd` immediately resets and exits without attaching `transform` transition or `.snapping` classes. In `renderVirtualTracks()`, pooled virtual nodes are sanitized of lingering transitions and swiping/snapping classes so recycling never animates or jumps across the viewport.
 

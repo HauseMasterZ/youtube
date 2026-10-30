@@ -1198,17 +1198,17 @@
             flex-shrink: 0;
         }
 
-        /* Initial parked state (hidden off-screen: 50px gap + 22px icon width) */
+        /* Initial parked state (hidden off-screen: 0px gap + 22px icon width) */
         .action-enqueue,
         .swipe-legend-enqueue {
             left: 0;
-            transform: translateX(-72px);
+            transform: translateX(-22px);
         }
 
         .action-download,
         .swipe-legend-download {
             right: 0;
-            transform: translateX(72px);
+            transform: translateX(22px);
         }
 
         .underlay-action.snapping,
@@ -1219,6 +1219,29 @@
         .underlay-action.legend-triggered,
         .swipe-legend.legend-triggered {
             opacity: 1 !important;
+            color: #00ff88;
+        }
+
+        /* Minimal green hint/glow near enqueue legend signifying successful enqueue */
+        .action-enqueue.enqueue-success,
+        .swipe-legend-enqueue.enqueue-success {
+            color: #00ff88 !important;
+            filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.75));
+            opacity: 1 !important;
+        }
+
+        .action-enqueue.enqueue-success::after,
+        .swipe-legend-enqueue.enqueue-success::after {
+            content: "";
+            position: absolute;
+            top: -2px;
+            right: -3px;
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: #00ff88;
+            box-shadow: 0 0 5px #00ff88, 0 0 8px rgba(0, 255, 136, 0.7);
+            pointer-events: none;
         }
 
         /* Landscape Layout for <= 1110px (covers all heights, including > 560px) */

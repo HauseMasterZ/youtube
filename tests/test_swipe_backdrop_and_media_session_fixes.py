@@ -173,6 +173,29 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;', self.main_content)
         self.assertIn('window.addEventListener("resize", updatePlaylistScrollArrow', self.main_content)
 
+    def test_swipe_zero_gap_and_clamped_reveal(self):
+        """main.js and style.css implement zero-gap and clamp icon after full reveal"""
+        self.assertIn("const gap = 0;", self.main_content)
+        self.assertIn("const enqX = Math.min(0, currentX - parkOffset);", self.main_content)
+        self.assertIn("const downX = Math.max(0, currentX + parkOffset);", self.main_content)
+        self.assertIn("transform: translateX(-22px);", self.css_content)
+        self.assertIn("transform: translateX(22px);", self.css_content)
+
+    def test_tap_artifact_prevention(self):
+        """handleTouchEnd immediately exits on non-swipe taps without transitions or snapping"""
+        self.assertIn("if (!isHorizontalSwipe) {", self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(!isHorizontalSwipe\)\s*\{[\s\S]*?targetLi\.classList\.remove\(["\']snapping["\'][\s\S]*?return;'
+        )
+
+    def test_enqueue_success_minimal_green_hint_glow(self):
+        """style.css and main.js define minimal green hint/glow for successful enqueue"""
+        self.assertIn('.action-enqueue.enqueue-success', self.css_content)
+        self.assertIn('color: #00ff88 !important;', self.css_content)
+        self.assertIn('drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))', self.css_content)
+        self.assertIn("legEnq.classList.add('enqueue-success');", self.main_content)
+
     def test_brace_balance(self):
         """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))

@@ -94,16 +94,38 @@
     /* Initial parked state (hidden off-screen) */
     .action-enqueue {
       left: 0;
-      transform: translateX(-72px); /* 50px gap + 22px icon width */
+      transform: translateX(-22px); /* 0px gap + 22px icon width */
     }
 
     .action-download {
       right: 0;
-      transform: translateX(72px); /* 50px gap + 22px icon width */
+      transform: translateX(22px); /* 0px gap + 22px icon width */
     }
 
     .underlay-action.snapping {
       transition: transform 250ms cubic-bezier(0.2, 0, 0, 1);
+    }
+
+    .underlay-action.legend-triggered {
+      color: #00ff88;
+    }
+
+    .action-enqueue.enqueue-success {
+      color: #00ff88 !important;
+      filter: drop-shadow(0 0 6px rgba(0, 255, 136, 0.75));
+    }
+
+    .action-enqueue.enqueue-success::after {
+      content: "";
+      position: absolute;
+      top: -2px;
+      right: -3px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background-color: #00ff88;
+      box-shadow: 0 0 5px #00ff88, 0 0 8px rgba(0, 255, 136, 0.7);
+      pointer-events: none;
     }
 
     /* Foreground surface (Draggable track row) */
@@ -278,7 +300,7 @@
       let isDragging = false;
       const thresholdRatio = 0.05; // 5% drag width confirms action
       const iconWidth = 22;
-      const gap = 50;
+      const gap = 0;
       const parkOffset = gap + iconWidth; // 72px total offset
 
       surface.addEventListener('pointerdown', (e) => {
@@ -298,16 +320,25 @@
         surface.style.setProperty('--swipe-x', `${currentX}px`);
 
         if (currentX > 0) {
-          // Right Swipe: Logo is locked exactly 50px behind the card's left edge
-          enqueueAction.style.transform = `translateX(${currentX - parkOffset}px)`;
+          // Right Swipe: Logo follows card div till fully revealed (0px), then clamps
+          const enqX = Math.min(0, currentX - parkOffset);
+          enqueueAction.style.transform = `translateX(${enqX}px)`;
           downloadAction.style.transform = `translateX(${parkOffset}px)`;
+          if (currentX >= (surface.offsetWidth * thresholdRatio)) {
+            enqueueAction.classList.add('legend-triggered');
+          } else {
+            enqueueAction.classList.remove('legend-triggered', 'enqueue-success');
+          }
         } else if (currentX < 0) {
-          // Left Swipe: Logo is locked exactly 50px behind the card's right edge
-          downloadAction.style.transform = `translateX(${currentX + parkOffset}px)`;
+          // Left Swipe: Logo follows card div till fully revealed (0px), then clamps
+          const downX = Math.max(0, currentX + parkOffset);
+          downloadAction.style.transform = `translateX(${downX}px)`;
           enqueueAction.style.transform = `translateX(-${parkOffset}px)`;
+          enqueueAction.classList.remove('legend-triggered', 'enqueue-success');
         } else {
           enqueueAction.style.transform = `translateX(-${parkOffset}px)`;
           downloadAction.style.transform = `translateX(${parkOffset}px)`;
+          enqueueAction.classList.remove('legend-triggered', 'enqueue-success');
         }
       });
 
@@ -322,6 +353,9 @@
         if (pastThreshold) {
           // Eject surface off-screen
           const isRight = currentX > 0;
+          if (isRight) {
+            enqueueAction.classList.add('enqueue-success');
+          }
           surface.classList.add(isRight ? 'exiting-right' : 'exiting-left');
 
           surface.addEventListener('transitionend', (ev) => {

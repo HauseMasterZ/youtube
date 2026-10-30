@@ -424,8 +424,8 @@ document.addEventListener("DOMContentLoaded", () => {
         let legDown = null;
         const thresholdRatio = 0.05; // 5% drag width confirms action
         const iconWidth = 22;
-        const gap = 50;
-        const parkOffset = gap + iconWidth; // 72px total offset
+        const gap = 0;
+        const parkOffset = gap + iconWidth; // 22px total offset
 
         trackList.addEventListener("touchstart", (e) => {
             if (!e.touches || e.touches.length !== 1) return;
@@ -523,25 +523,27 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 if (swipeBackdrop) {
                     if (currentX > 0) {
-                        // Right Swipe: Logo is locked exactly 50px behind the card's left edge
+                        // Right Swipe: Logo follows card div till fully revealed (0px), then clamps
                         swipeBackdrop.style.opacity = '1';
                         if (legEnq) {
-                            legEnq.style.transform = `translateX(${currentX - parkOffset}px)`;
+                            const enqX = Math.min(0, currentX - parkOffset);
+                            legEnq.style.transform = `translateX(${enqX}px)`;
                             if (currentX >= 60 || currentX >= thresholdPx) {
                                 legEnq.classList.add('legend-triggered');
                             } else {
-                                legEnq.classList.remove('legend-triggered');
+                                legEnq.classList.remove('legend-triggered', 'enqueue-success');
                             }
                         }
                         if (legDown) {
-                            legDown.classList.remove('legend-triggered');
+                            legDown.classList.remove('legend-triggered', 'enqueue-success');
                             legDown.style.transform = `translateX(${parkOffset}px)`;
                         }
                     } else if (currentX < 0) {
-                        // Left Swipe: Logo is locked exactly 50px behind the card's right edge
+                        // Left Swipe: Logo follows card div till fully revealed (0px), then clamps
                         swipeBackdrop.style.opacity = '1';
                         if (legDown) {
-                            legDown.style.transform = `translateX(${currentX + parkOffset}px)`;
+                            const downX = Math.max(0, currentX + parkOffset);
+                            legDown.style.transform = `translateX(${downX}px)`;
                             if (currentX <= -60 || currentX <= -thresholdPx) {
                                 legDown.classList.add('legend-triggered');
                             } else {
@@ -549,17 +551,17 @@ document.addEventListener("DOMContentLoaded", () => {
                             }
                         }
                         if (legEnq) {
-                            legEnq.classList.remove('legend-triggered');
+                            legEnq.classList.remove('legend-triggered', 'enqueue-success');
                             legEnq.style.transform = `translateX(-${parkOffset}px)`;
                         }
                     } else {
                         swipeBackdrop.style.opacity = '0';
                         if (legEnq) {
-                            legEnq.classList.remove('legend-triggered');
+                            legEnq.classList.remove('legend-triggered', 'enqueue-success');
                             legEnq.style.transform = `translateX(-${parkOffset}px)`;
                         }
                         if (legDown) {
-                            legDown.classList.remove('legend-triggered');
+                            legDown.classList.remove('legend-triggered', 'enqueue-success');
                             legDown.style.transform = `translateX(${parkOffset}px)`;
                         }
                     }
@@ -573,10 +575,24 @@ document.addEventListener("DOMContentLoaded", () => {
             const targetY = currentY;
             activeLi = null;
 
+            // Non-swipe tap or vertical scroll: clean up immediately without transform transition to prevent tap animation artifact
+            if (!isHorizontalSwipe) {
+                targetLi.classList.remove('snapping', 'is-swiping', 'slide-enqueue', 'slide-download');
+                targetLi.style.removeProperty('--enqueued-color');
+                targetLi.style.removeProperty('--swipe-x');
+                targetLi.style.transition = '';
+                if (swipeBackdrop) {
+                    swipeBackdrop.style.opacity = '0';
+                    swipeBackdrop.style.transition = '';
+                }
+                return;
+            }
+
             const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
             const dx = (touch && typeof touch.clientX === 'number') ? (touch.clientX - touchStartX) : lastDx;
             const thresholdPx = (targetLi && targetLi.offsetWidth) ? (targetLi.offsetWidth * thresholdRatio) : 20;
             const pastThreshold = Math.abs(dx) > thresholdPx;
+            let enqueueTriggered = false;
 
             if (isHorizontalSwipe && e.type !== 'touchcancel') {
                 suppressNextClick = true;
@@ -588,6 +604,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
                     if (navigator.vibrate) navigator.vibrate(40);
                     if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
+                    enqueueTriggered = true;
                 } else if (dx <= -60) {
                     const pl = targetLi.dataset.playlist;
                     const idx = parseInt(targetLi.dataset.index, 10);
@@ -599,6 +616,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
                     if (navigator.vibrate) navigator.vibrate(40);
                     if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
+                    enqueueTriggered = true;
                 } else if (isPastThresholdLeft) {
                     const pl = targetLi.dataset.playlist;
                     const idx = parseInt(targetLi.dataset.index, 10);
@@ -618,7 +636,11 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             if (swipeBackdrop) {
-                if (legEnq) {
+                if (enqueueTriggered && legEnq) {
+                    // Signify enqueue success with minimal green hint/glow while card glides back
+                    legEnq.classList.add('enqueue-success');
+                    legEnq.style.transform = 'translateX(0px)';
+                } else if (legEnq) {
                     legEnq.classList.add('snapping');
                     legEnq.style.transform = `translateX(-${parkOffset}px)`;
                 }
@@ -632,7 +654,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (swipeBackdrop && swipeBackdrop.style.opacity === '0') {
                         swipeBackdrop.style.transition = '';
                         if (legEnq) {
-                            legEnq.classList.remove('snapping', 'legend-triggered');
+                            legEnq.classList.remove('snapping', 'legend-triggered', 'enqueue-success');
+                            legEnq.style.transform = `translateX(-${parkOffset}px)`;
                         }
                         if (legDown) {
                             legDown.classList.remove('snapping', 'legend-triggered');
@@ -649,11 +672,9 @@ document.addEventListener("DOMContentLoaded", () => {
             targetLi.addEventListener('transitionend', cleanup, { once: true });
             setTimeout(cleanup, 260);
 
-            if (isHorizontalSwipe) {
-                setTimeout(() => {
-                    suppressNextClick = false;
-                }, 300);
-            }
+            setTimeout(() => {
+                suppressNextClick = false;
+            }, 300);
         };
 
         trackList.addEventListener("touchend", handleTouchEnd, { passive: true });
