@@ -312,3 +312,8 @@
 - Minimal green hint/glow: On enqueue threshold and successful release, `.enqueue-success` illuminates with `#00ff88`, `drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))`, and a 5px glowing indicator dot while the card smoothly glides back.
 - Tap artifact jumping prevention: On non-horizontal swipe interactions (`!isHorizontalSwipe`), `handleTouchEnd` immediately resets and exits without attaching `transform` transition or `.snapping` classes. In `renderVirtualTracks()`, pooled virtual nodes are sanitized of lingering transitions and swiping/snapping classes so recycling never animates or jumps across the viewport.
 
+## 36. Mobile Seekbar Instant Seek & Tap Transfer Invariant
+- Direct Coordinate Calculation on Pointerdown: `seekBar` tap interactions must never rely on deferred native `<input type="range">` tap gesture recognition or delayed `change` events. `pointerdown` computes the seek target timestamp directly from `e.clientX` / touch coordinates relative to `seekBar.getBoundingClientRect()`, sets `seekBar.value`, and pre-arms `pendingSeekTarget`.
+- Zero-Delay Touch Action: `.seek-wrap` and `input[type="range"]#seek-bar` must specify `touch-action: none;` to eliminate the 300ms mobile browser gesture disambiguation delay for touch gestures.
+- Single-Fired Deterministic Seek: `endSeek` resolves `pendingSeekTarget` immediately on `pointerup` (or touch release) without waiting for subsequent synthetic `change` events, ensuring 0ms audio transfer latency on mobile taps.
+

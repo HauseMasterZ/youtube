@@ -18,6 +18,8 @@ class TestLastPlayedRetention(unittest.TestCase):
             cls.main_content = f.read()
         with open(os.path.join(js_dir, 'ui.js'), 'r', encoding='utf-8') as f:
             cls.ui_content = f.read()
+        with open(os.path.join(base_dir, 'css', 'style.css'), 'r', encoding='utf-8') as f:
+            cls.css_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -255,6 +257,27 @@ class TestLastPlayedRetention(unittest.TestCase):
             self.dom_content,
             r'if\s*\(\s*isDifferentUrl\s*\)\s*\{[\s\S]*?const\s+bc\s*=\s*document\.getElementById\([\'"]buffer-container[\'"]\);'
         )
+
+    def test_seekbar_mobile_instant_seek_calculation(self):
+        """main.js defines getSeekTimeFromEvent and arms pendingSeekTarget immediately on pointerdown"""
+        self.assertIn('let pendingSeekTarget = null;', self.main_content)
+        self.assertIn('const getSeekTimeFromEvent = (e) => {', self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'const\s+ratio\s*=\s*Math\.max\(0,\s*Math\.min\(1,\s*\(clientX\s*-\s*rect\.left\)\s*/\s*rect\.width\)\);'
+        )
+        self.assertIn('pendingSeekTarget = calcTime;', self.main_content)
+        self.assertIn('let targetTime = pendingSeekTarget;', self.main_content)
+
+    def test_seekbar_css_touch_action_none_eliminates_300ms_delay(self):
+        """style.css enforces touch-action: none on .seek-wrap and input[type='range']#seek-bar"""
+        seek_wrap_match = re.search(r'\.seek-wrap\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(seek_wrap_match, ".seek-wrap block not found")
+        self.assertIn('touch-action: none;', seek_wrap_match.group(1))
+
+        seek_bar_match = re.search(r'input\[type=[\x27\x22]range[\x27\x22]\]#seek-bar\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(seek_bar_match, "#seek-bar block not found")
+        self.assertIn('touch-action: none;', seek_bar_match.group(1))
 
 if __name__ == '__main__':
     unittest.main()

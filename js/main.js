@@ -1141,10 +1141,36 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     // --------------------------------------------
     let wasPlayingBeforeSeek = false;
-    seekBar.addEventListener("pointerdown", () => {
+    let pendingSeekTarget = null;
+
+    const getSeekTimeFromEvent = (e) => {
+        if (!seekBar) return null;
+        const rect = seekBar.getBoundingClientRect();
+        if (!rect || rect.width <= 0) return null;
+        let clientX = null;
+        if (e.touches && e.touches.length > 0) {
+            clientX = e.touches[0].clientX;
+        } else if (e.changedTouches && e.changedTouches.length > 0) {
+            clientX = e.changedTouches[0].clientX;
+        } else if (typeof e.clientX === 'number') {
+            clientX = e.clientX;
+        }
+        if (clientX === null) return null;
+        const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const maxDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+        return ratio * maxDur;
+    };
+
+    seekBar.addEventListener("pointerdown", (e) => {
         if (!isSeeking) {
             wasPlayingBeforeSeek = !window.wasPausedByUser;
             isSeeking = true;
+        }
+        const calcTime = getSeekTimeFromEvent(e);
+        if (calcTime !== null) {
+            pendingSeekTarget = calcTime;
+            seekBar.value = calcTime;
+            currentTimeDisplay.textContent = formatTime(Math.floor(calcTime));
         }
     });
 
@@ -1154,6 +1180,7 @@ document.addEventListener("DOMContentLoaded", () => {
             isSeeking = true;
         }
         const val = Number(e.target.value);
+        pendingSeekTarget = val;
         currentTimeDisplay.textContent = formatTime(Math.floor(val));
     });
 
@@ -1162,7 +1189,13 @@ document.addEventListener("DOMContentLoaded", () => {
         isSeeking = false;
         lastTimeupdateFire = 0;
         if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
-        const targetTime = Number(e.target.value);
+
+        let targetTime = pendingSeekTarget;
+        if (targetTime === null) {
+            const calc = getSeekTimeFromEvent(e);
+            targetTime = (calc !== null) ? calc : Number(e.target.value);
+        }
+        pendingSeekTarget = null;
         
         if (wasPlayingBeforeSeek) {
             window.wasPausedByUser = false;
@@ -2116,7 +2149,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const keys = await caches.keys();
                 for (const key of keys) {
                     // Only purge older cache versions; preserve active build caches and permanent shell cache
-                    if (key.startsWith('yt-player-cache') && key !== 'yt-player-cache-v150' && !key.includes('-main-') && !key.includes('-dev-') && key !== 'yt-player-shell-v1') {
+                    if (key.startsWith('yt-player-cache') && key !== 'yt-player-cache-v151' && !key.includes('-main-') && !key.includes('-dev-') && key !== 'yt-player-shell-v1') {
                         await caches.delete(key);
                     }
                 }
