@@ -422,6 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let swipeBackdrop = null;
         let legEnq = null;
         let legDown = null;
+        const thresholdRatio = 0.05; // 5% drag width confirms action
         const iconWidth = 22;
         const gap = 50;
         const parkOffset = gap + iconWidth; // 72px total offset
@@ -489,6 +490,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     isHorizontalSwipe = absX > absY;
                     if (!isHorizontalSwipe) {
                         if (activeLi) {
+                            activeLi.classList.remove('is-swiping', 'slide-enqueue', 'slide-download');
                             activeLi.style.removeProperty('--enqueued-color');
                             activeLi = null;
                         }
@@ -497,6 +499,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         return;
                     }
+                    activeLi.classList.add('is-swiping');
                 } else {
                     return;
                 }
@@ -505,6 +508,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isHorizontalSwipe) {
                 if (e.cancelable) e.preventDefault();
                 const currentX = dx;
+                const thresholdPx = (activeLi && activeLi.offsetWidth) ? (activeLi.offsetWidth * thresholdRatio) : 20;
                 activeLi.style.setProperty('--swipe-x', `${currentX}px`);
                 activeLi.style.transform = `translate3d(${currentX}px, ${currentY}, 0)`;
                 if (currentX > 40) {
@@ -523,7 +527,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         swipeBackdrop.style.opacity = '1';
                         if (legEnq) {
                             legEnq.style.transform = `translateX(${currentX - parkOffset}px)`;
-                            if (currentX >= 60) {
+                            if (currentX >= 60 || currentX >= thresholdPx) {
                                 legEnq.classList.add('legend-triggered');
                             } else {
                                 legEnq.classList.remove('legend-triggered');
@@ -538,7 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         swipeBackdrop.style.opacity = '1';
                         if (legDown) {
                             legDown.style.transform = `translateX(${currentX + parkOffset}px)`;
-                            if (currentX <= -60) {
+                            if (currentX <= -60 || currentX <= -thresholdPx) {
                                 legDown.classList.add('legend-triggered');
                             } else {
                                 legDown.classList.remove('legend-triggered');
@@ -571,9 +575,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
             const dx = (touch && typeof touch.clientX === 'number') ? (touch.clientX - touchStartX) : lastDx;
+            const thresholdPx = (targetLi && targetLi.offsetWidth) ? (targetLi.offsetWidth * thresholdRatio) : 20;
+            const pastThreshold = Math.abs(dx) > thresholdPx;
 
             if (isHorizontalSwipe && e.type !== 'touchcancel') {
                 suppressNextClick = true;
+                const isPastThresholdRight = isHorizontalSwipe && (dx > 0 && pastThreshold);
+                const isPastThresholdLeft = isHorizontalSwipe && (dx < 0 && pastThreshold);
                 if (dx >= 60) {
                     const pl = targetLi.dataset.playlist;
                     const idx = parseInt(targetLi.dataset.index, 10);
@@ -581,6 +589,17 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (navigator.vibrate) navigator.vibrate(40);
                     if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
                 } else if (dx <= -60) {
+                    const pl = targetLi.dataset.playlist;
+                    const idx = parseInt(targetLi.dataset.index, 10);
+                    if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
+                    if (navigator.vibrate) navigator.vibrate(40);
+                } else if (isPastThresholdRight) {
+                    const pl = targetLi.dataset.playlist;
+                    const idx = parseInt(targetLi.dataset.index, 10);
+                    if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
+                    if (navigator.vibrate) navigator.vibrate(40);
+                    if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
+                } else if (isPastThresholdLeft) {
                     const pl = targetLi.dataset.playlist;
                     const idx = parseInt(targetLi.dataset.index, 10);
                     if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
@@ -624,7 +643,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const cleanup = () => {
                 targetLi.removeEventListener('transitionend', cleanup);
-                targetLi.classList.remove('snapping');
+                targetLi.classList.remove('snapping', 'is-swiping');
                 targetLi.style.transition = '';
             };
             targetLi.addEventListener('transitionend', cleanup, { once: true });
@@ -2332,8 +2351,10 @@ document.addEventListener("DOMContentLoaded", () => {
             e.stopPropagation();
             if (playlistContainer.scrollTop > 2) {
                 playlistContainer.scrollTo({ top: 0, behavior: "instant" });
+                playlistContainer.scrollTop = 0;
             } else {
                 playlistContainer.scrollTo({ top: playlistContainer.scrollHeight, behavior: "instant" });
+                playlistContainer.scrollTop = playlistContainer.scrollHeight;
             }
         });
     }

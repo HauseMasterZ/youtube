@@ -1089,6 +1089,32 @@
             transition: background-color 0.25s ease;
         }
 
+        /* Vertical collapse wrapper matching test.html */
+        .swipe-item-wrapper {
+            display: grid;
+            grid-template-rows: 1fr;
+            transition: grid-template-rows 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                        margin-bottom 250ms cubic-bezier(0.4, 0, 0.2, 1),
+                        opacity 200ms ease;
+            margin-bottom: 10px;
+            overflow: hidden;
+        }
+
+        .swipe-item-wrapper.collapsed {
+            grid-template-rows: 0fr;
+            margin-bottom: 0px;
+            opacity: 0;
+        }
+
+        .swipe-item-inner {
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            border-radius: 8px;
+            user-select: none;
+            touch-action: pan-y;
+        }
+
         /* Foreground surface (Draggable track row matching test.html) */
         .swipe-surface {
             background: #1e1e1e;
@@ -1117,11 +1143,14 @@
             transform: translateX(-105%) !important;
         }
 
+        #track-list li.is-swiping,
+        #track-list li.snapping,
         #track-list li.slide-enqueue,
         #track-list li.slide-download {
             background: #1e1e1e !important;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 8px !important;
+            cursor: grabbing;
         }
 
         /* Underlay background matching test.html */
@@ -1134,6 +1163,7 @@
             height: 48px;
             box-sizing: border-box;
             background-color: #000000;
+            border-radius: 8px;
             pointer-events: none;
             opacity: 0;
             z-index: 0;

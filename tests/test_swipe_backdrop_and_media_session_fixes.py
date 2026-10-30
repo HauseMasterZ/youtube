@@ -60,6 +60,11 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('.swipe-legend-download', self.css_content)
         self.assertIn('.swipe-legend.legend-triggered', self.css_content)
         self.assertIn('will-change: transform, opacity;', self.css_content)
+        self.assertIn('.swipe-item-wrapper', self.css_content)
+        self.assertIn('.swipe-item-inner', self.css_content)
+        self.assertIn('.swipe-surface', self.css_content)
+        self.assertIn('#track-list li.is-swiping', self.css_content)
+        self.assertIn('#track-list li.snapping', self.css_content)
 
     def test_active_song_swipe_guard(self):
         """main.js touchstart ignores touch on active song to prevent swiping active track"""
@@ -76,6 +81,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn("swipeBackdrop.style.opacity = '0';", self.main_content)
         self.assertNotIn("linear-gradient", self.main_content)
         self.assertIn("if (isHorizontalSwipe && e.type !== 'touchcancel')", self.main_content)
+        self.assertIn("thresholdRatio = 0.05", self.main_content)
+        self.assertIn("activeLi.classList.add('is-swiping')", self.main_content)
 
     def test_unlock_wave_animation_rebind_cooldown(self):
         """mediaSession.js allows shouldRepublishMetadata once on unlock-playing with 5000ms cooldown"""
@@ -161,6 +168,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('playlistContainer.scrollTop > 2', self.main_content)
         self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']instant["\']\s*\}\)')
         self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']instant["\']\s*\}\)')
+        self.assertIn('playlistContainer.scrollTop = 0;', self.main_content)
+        self.assertIn('playlistContainer.scrollTop = playlistContainer.scrollHeight;', self.main_content)
         self.assertIn('window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;', self.main_content)
         self.assertIn('window.addEventListener("resize", updatePlaylistScrollArrow', self.main_content)
 
