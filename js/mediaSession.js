@@ -715,10 +715,10 @@
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
                 const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
-                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration);
+                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration) && forcedDuration > 0;
                 const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate);
 
-                const rawDur = isForcedDurValid ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || parseFloat(seekBar.max) || 0);
+                const rawDur = isForcedDurValid ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0);
                 const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) ? rawDur : 0;
                 const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
                 
@@ -1333,10 +1333,10 @@
                 if (typeof setPlayUI === 'function') setPlayUI(false);
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
-                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur, 1.0);
+                        updateMediaSessionPosition(pos, dur, 1.0, true);
                     }
                 }
                 if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
@@ -1431,7 +1431,7 @@
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
                         if (window.playbackMode !== 'mode2' && typeof updateMediaSessionPosition === 'function') {
-                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
                         }
@@ -1500,8 +1500,8 @@
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
             
             // Explicitly pass seek target and total duration to prevent 0:00 dip
-            const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(seekTarget, totalDur);
+            const totalDur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(seekTarget, totalDur, null, true);
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const now = Date.now();
@@ -1520,8 +1520,8 @@
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(newTime, dur);
+            const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(newTime, dur, null, true);
             // Mode 2 seek-resume: center Play is swallowed by C++ under spoof,
             // so discrete seek buttons double as the guaranteed resume gesture
             // after video steals (both paused/playing occasions). Seekbar
@@ -1537,7 +1537,7 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
                 if (typeof updateMediaSessionPosition === 'function') {
-                    updateMediaSessionPosition(newTime, dur, 1.0);
+                    updateMediaSessionPosition(newTime, dur, 1.0, true);
                 }
                 // Already inside mode2-only block: keep anchor (idempotent).
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
@@ -1559,12 +1559,12 @@
             }
 
             const skipTime = details.seekOffset || 10;
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
             const newTime = Math.min(dur, (audioPlayer.currentTime || 0) + skipTime);
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition(newTime, dur);
+            updateMediaSessionPosition(newTime, dur, null, true);
             // Mode 2 seek-resume (mirror of seekbackward): guaranteed resume
             // gesture after video steals; seekto stays positioning-only.
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {

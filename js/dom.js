@@ -434,12 +434,8 @@
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                if (window.playbackMode === 'mode2') {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
-                } else if (document.hidden) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                 startLiveAudioAnchor();
@@ -493,12 +489,8 @@
             window.wasPausedByUser = true;
             window.wasPlayingBeforeCall = false;
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                if (window.playbackMode === 'mode2') {
-                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'playing';
-                } else if (document.hidden) {
-                    navigator.mediaSession.playbackState = 'paused';
-                }
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                    ? window.declaredPausedState() : 'paused';
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                 startLiveAudioAnchor();

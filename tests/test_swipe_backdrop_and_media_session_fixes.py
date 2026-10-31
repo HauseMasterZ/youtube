@@ -238,18 +238,18 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*&&\s*typeof\s+primeFocusProbe\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*primeFocusProbe\(\);'
         )
 
-    def test_btn_play_pause_pause_branch_mode1_deferred(self):
-        """btnPlayPause pause branch in Mode 1 immediately pauses audible output via instantPause without declaring paused playbackState in foreground"""
+    def test_btn_play_pause_pause_branch_forces_position_in_mode1(self):
+        """btnPlayPause pause branch in Mode 1 immediately sets paused playbackState and forces position update"""
         self.assertRegex(
             self.main_content,
-            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?\}\s*else\s*\{\s*audioPlayer\.instantPause\(\);\s*\}'
+            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?audioPlayer\.instantPause\(\);[\s\S]*?if\s*\(\s*hasMediaSession\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
         )
 
     def test_audio_player_pause_listener_forces_position_in_mode1(self):
-        """audioPlayer pause listener sets paused and passes forceBypass true only when hidden or BT disconnect in Mode 1"""
+        """audioPlayer pause listener sets paused and passes forceBypass true in Mode 1"""
         self.assertRegex(
             self.main_content,
-            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?if\s*\(\s*document\.hidden\s*\|\|\s*isRecentBtDisconnect\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
+            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
         )
 
     def test_visibilitychange_hidden_mode1_paused_synchronization(self):
@@ -272,7 +272,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             gemini_content = f.read()
         self.assertIn('37. Mode 1 Media Notification Retention & Single-Player Isolation Invariant', gemini_content)
         self.assertIn('Single-Player Isolation', gemini_content)
-        self.assertIn('Deferred Paused State Declaration (Recreating Flow B Lifecycle for Flow A)', gemini_content)
+        self.assertIn('Forced Position State Synchronization on Pause', gemini_content)
 
     def test_mode1_handover_keepalive_completely_removed(self):
         """Mode 1 handover keepalive functions are completely removed from mediaSession.js, dom.js, and main.js"""
@@ -301,15 +301,15 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
 
-    def test_dom_pause_defers_mode1_paused_state(self):
-        """dom.js pause and instantPause defer declaring paused playbackState in Mode 1 until document.hidden"""
+    def test_dom_pause_mode1_instant_paused_state(self):
+        """dom.js pause and instantPause declare mode-aware paused state immediately via declaredPausedState"""
         self.assertRegex(
             self.dom_content,
-            r'pause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?\}\s*else\s+if\s*\(\s*document\.hidden\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'pause\(\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(typeof\s+window\.declaredPausedState\s*===\s*[\'"]function[\'"]\)\s*\?\s*window\.declaredPausedState\(\)\s*:\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.dom_content,
-            r'instantPause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?\}\s*else\s+if\s*\(\s*document\.hidden\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'instantPause\(\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*\(typeof\s+window\.declaredPausedState\s*===\s*[\'"]function[\'"]\)\s*\?\s*window\.declaredPausedState\(\)\s*:\s*[\'"]paused[\'"];'
         )
 
     def test_dom_pause_mode1_immediate_without_fade(self):
