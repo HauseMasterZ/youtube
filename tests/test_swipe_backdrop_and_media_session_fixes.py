@@ -16,6 +16,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             cls.ms_content = f.read()
         with open(os.path.join(base_dir, 'js', 'dom.js'), 'r', encoding='utf-8') as f:
             cls.dom_content = f.read()
+        with open(os.path.join(base_dir, 'js', 'playback.js'), 'r', encoding='utf-8') as f:
+            cls.playback_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -30,6 +32,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.main_content), [])
         self.assertEqual(emoji_pattern.findall(self.ms_content), [])
         self.assertEqual(emoji_pattern.findall(self.dom_content), [])
+        self.assertEqual(emoji_pattern.findall(self.playback_content), [])
         self.assertEqual(emoji_pattern.findall(self.test_content), [])
 
     def test_swipe_backdrop_markup(self):
@@ -326,11 +329,51 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             r'setActionHandler\(\s*[\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+updateMediaSessionPosition\s*===\s*[\'"]function[\'"]\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\);'
         )
 
+    def test_media_session_duration_finite_guard(self):
+        """updateMediaSessionPosition validates isFinite for forcedDuration and builds finite positive fallback chain"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isForcedDurValid\s*=\s*typeof\s+forcedDuration\s*===\s*[\'"]number[\'"]\s*&&\s*!isNaN\(\s*forcedDuration\s*\)\s*&&\s*isFinite\(\s*forcedDuration\s*\)\s*&&\s*forcedDuration\s*>\s*0;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'let\s+rawDur\s*=\s*0;[\s\S]*?if\s*\(\s*isForcedDurValid\s*\)\s*\{[\s\S]*?rawDur\s*=\s*forcedDuration;[\s\S]*?audioPlayer\.duration[\s\S]*?audioPlayer\._expectedDuration[\s\S]*?parseFloat\(\s*seekBar\.max\s*\)'
+        )
+
+    def test_dom_duration_getter_mse_and_finite_guard(self):
+        """DualAudioPingPong duration getter prioritizes _expectedDuration under MSE and enforces isFinite on active.duration"""
+        self.assertRegex(
+            self.dom_content,
+            r'get\s+duration\(\)\s*\{[\s\S]*?if\s*\(\s*this\._expectedDuration\s*&&\s*typeof\s+this\._expectedDuration\s*===\s*[\'"]number[\'"]\s*&&\s*isFinite\(\s*this\._expectedDuration\s*\)\s*&&\s*this\._expectedDuration\s*>\s*0\s*\)\s*\{[\s\S]*?if\s*\(\s*this\._mseEnabled\s*\)\s*\{[\s\S]*?return\s+this\._expectedDuration;'
+        )
+
+    def test_timeupdate_dur_resolution_and_pass(self):
+        """main.js timeupdate event listener resolves finite dur and passes dur to updateMediaSessionPosition"""
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\(\s*["\']timeupdate["\'][\s\S]*?const\s+rawDur\s*=\s*audioPlayer\.duration;[\s\S]*?const\s+dur\s*=[\s\S]*?audioPlayer\._expectedDuration[\s\S]*?parseFloat\(\s*seekBar\.max\s*\)[\s\S]*?updateMediaSessionPosition\(\s*ct\s*,\s*dur\s*,\s*audioPlayer\.playbackRate\s*\|\|\s*1\s*\);'
+        )
+
+    def test_perform_seek_delta_forces_position(self):
+        """main.js performSeekDelta updates MediaSession with targetTime, dur, rate, and forceBypass true"""
+        self.assertRegex(
+            self.main_content,
+            r'function\s+performSeekDelta\s*\(\s*delta\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*targetTime\s*,\s*dur\s*,\s*audioPlayer\.playbackRate\s*\|\|\s*1\.0\s*,\s*true\s*\);'
+        )
+
+    def test_playback_js_invalidates_position_cache(self):
+        """playback.js executePlayback invalidates MediaSession position cache to avoid stale values across tracks"""
+        self.assertRegex(
+            self.playback_content,
+            r'function\s+executePlayback[\s\S]*?window\.invalidatePositionCache\(\);'
+        )
+
     def test_brace_balance(self):
-        """main.js, mediaSession.js, and dom.js have balanced curly braces with zero syntax errors"""
+        """main.js, mediaSession.js, dom.js, and playback.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))
         self.assertEqual(self.ms_content.count('{'), self.ms_content.count('}'))
         self.assertEqual(self.dom_content.count('{'), self.dom_content.count('}'))
+        self.assertEqual(self.playback_content.count('{'), self.playback_content.count('}'))
 
 if __name__ == '__main__':
     unittest.main()

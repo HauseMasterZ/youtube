@@ -714,13 +714,22 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
-                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration) && forcedDuration > 0;
-                const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate);
+                const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition) && isFinite(forcedPosition);
+                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration) && isFinite(forcedDuration) && forcedDuration > 0;
+                const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate) && isFinite(forcedRate);
 
-                const rawDur = isForcedDurValid ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0);
+                let rawDur = 0;
+                if (isForcedDurValid) {
+                    rawDur = forcedDuration;
+                } else if (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.duration === 'number' && !isNaN(audioPlayer.duration) && isFinite(audioPlayer.duration) && audioPlayer.duration > 0) {
+                    rawDur = audioPlayer.duration;
+                } else if (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer._expectedDuration === 'number' && !isNaN(audioPlayer._expectedDuration) && isFinite(audioPlayer._expectedDuration) && audioPlayer._expectedDuration > 0) {
+                    rawDur = audioPlayer._expectedDuration;
+                } else if (typeof seekBar !== 'undefined' && seekBar && seekBar.max && isFinite(parseFloat(seekBar.max)) && parseFloat(seekBar.max) > 0) {
+                    rawDur = parseFloat(seekBar.max);
+                }
                 const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) ? rawDur : 0;
-                const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
+                const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0 ? audioPlayer.currentTime : 0));
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
@@ -1433,6 +1442,7 @@
                         if (window.playbackMode !== 'mode2' && typeof updateMediaSessionPosition === 'function') {
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            window._forceNextPosition = true;
                             updateMediaSessionPosition(pos, dur, 1.0);
                         }
                     }

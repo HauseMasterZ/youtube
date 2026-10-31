@@ -796,7 +796,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
             setPlayUI(true);
             if (hasMediaSession) navigator.mediaSession.playbackState = 'playing';
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
+            const rawDur = audioPlayer.duration;
+            const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0)
+                ? rawDur
+                : ((audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0);
             const actualTime = (audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
                 ? audioPlayer.active.currentTime
                 : audioPlayer.currentTime;
@@ -806,6 +809,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (window.lyricsActive && typeof updateLyricsUI === 'function') {
                     updateLyricsUI(0);
                 }
+            }
+            if (hasMediaSession) {
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0, true);
             }
             audioPlayer.play().catch(e => console.warn("Play blocked:", e));
         } else {
@@ -1269,7 +1275,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     let lastSaveStateTime = 0;
     audioPlayer.addEventListener("timeupdate", () => {
-        if (!isSeeking && audioPlayer.duration > 0 && audioPlayer.duration !== Infinity && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
+        const rawDur = audioPlayer.duration;
+        const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0)
+            ? rawDur
+            : ((audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0);
+        if (!isSeeking && dur > 0 && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);
 
@@ -1298,7 +1308,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     window._forceNextPosition = true;
                 }
                 updateTimeUI(ct);
-                updateMediaSessionPosition(ct, audioPlayer.duration, audioPlayer.playbackRate || 1);
+                updateMediaSessionPosition(ct, dur, audioPlayer.playbackRate || 1);
             }
         }
         if (!audioPlayer.paused && typeof saveLastPlayedState === 'function') {
@@ -1334,6 +1344,11 @@ document.addEventListener("DOMContentLoaded", () => {
             if (hasMediaSession) {
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'paused';
+                const rawDur = audioPlayer.duration;
+                const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0)
+                    ? rawDur
+                    : ((audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0);
+                updateMediaSessionPosition(audioPlayer.currentTime || dur, dur, 1.0, true);
             }
             return;
         }
@@ -1452,12 +1467,12 @@ document.addEventListener("DOMContentLoaded", () => {
     function performSeekDelta(delta) {
         if (!audioPlayer.src) return;
         let dur = audioPlayer.duration;
-        if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
+        if (!dur || isNaN(dur) || !isFinite(dur) || dur <= 0) dur = (audioPlayer && audioPlayer._expectedDuration) || parseInt(seekBar.max) || 0;
         let targetTime = Math.max(0, Math.min(dur || 0, audioPlayer.currentTime + delta));
         audioPlayer.currentTime = targetTime;
         updateTimeUI(audioPlayer.currentTime);
         if (window.lyricsActive) updateLyricsUI(audioPlayer.currentTime);
-        updateMediaSessionPosition();
+        updateMediaSessionPosition(targetTime, dur, audioPlayer.playbackRate || 1.0, true);
     }
 
     let lastArtClickTime = 0;

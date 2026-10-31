@@ -299,10 +299,19 @@
 
         get readyState() { return this.active.readyState; }
         get duration() {
-            if (this._mseEnabled && this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration > 0) {
+            if (this._expectedDuration && typeof this._expectedDuration === 'number' && isFinite(this._expectedDuration) && this._expectedDuration > 0) {
+                if (this._mseEnabled) {
+                    return this._expectedDuration;
+                }
+            }
+            const actDur = this.active ? this.active.duration : 0;
+            if (typeof actDur === 'number' && !isNaN(actDur) && isFinite(actDur) && actDur > 0) {
+                return actDur;
+            }
+            if (this._expectedDuration && typeof this._expectedDuration === 'number' && isFinite(this._expectedDuration) && this._expectedDuration > 0) {
                 return this._expectedDuration;
             }
-            return this.active.duration || this._expectedDuration || 0;
+            return 0;
         }
         get paused() {
             if (window.wasPausedByUser) return true;

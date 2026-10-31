@@ -324,5 +324,6 @@
 - Forced Position State Synchronization on Pause: On UI pause (`btnPlayPause`), `audioPlayer` `pause` event, and `visibilitychange` (when hidden while paused), MediaSession position must be updated with `forceBypass = true` to bypass the `< 0.25s` delta throttle and synchronize the stopped state to Android SystemUI.
 - Background Hidden State Transition: When `document.hidden === true` fires while `(audioPlayer.paused || window.wasPausedByUser)` in Mode 1, `navigator.mediaSession.playbackState = 'paused'` and `updateMediaSessionPosition(pos, dur, 1.0, true)` are executed now that the Activity has stopped and the process is backgrounded.
 - Foreground Return State Reaffirmation: When returning to the foreground (`!document.hidden`), if `audioPlayer.paused`, `navigator.mediaSession.playbackState = 'paused'` and `setPlayUI(false)` are reaffirmed.
+- Finite Duration Sanitization & Position Cache Invalidation: MediaSession duration reporting must strictly guard against non-finite (Infinity / NaN) durations across MSE and streaming audio, falling back to _expectedDuration and seekBar.max. On fresh track execution, invalidatePositionCache() must be executed to prevent prior track positions from discarding new track position updates.
 
 

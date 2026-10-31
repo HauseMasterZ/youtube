@@ -695,6 +695,7 @@
         const uiOnly = preventAutoplay;
         isSeeking = false;
         if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+        if (typeof window.invalidatePositionCache === 'function') window.invalidatePositionCache();
         
         // Set active playing intent on fresh track launch (fixes first-ever song load bug)
         if (!uiOnly) {
