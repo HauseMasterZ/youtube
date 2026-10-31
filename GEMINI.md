@@ -318,3 +318,8 @@
 - Zero-Delay Touch Action: `.seek-wrap` and `input[type="range"]#seek-bar` must specify `touch-action: none;` to eliminate the 300ms mobile browser gesture disambiguation delay for touch gestures.
 - Single-Fired Deterministic Seek: `endSeek` resolves `pendingSeekTarget` immediately on `pointerup` (or touch release) without waiting for subsequent synthetic `change` events, ensuring 0ms audio transfer latency on mobile taps.
 
+## 37. Mode 1 Media Notification Retention & Single-Player Isolation Invariant
+- Single-Player Isolation: In Mode 1 (honest HTML5 playback), `audioPlayer` must remain the single registered player in Chromium's `MediaSessionImpl`. Auxiliary audio elements (`focus-probe`, `live-stream-anchor`) must strictly NEVER be primed or played when `window.playbackMode !== 'mode2'`. In Chromium Android (`media_session_impl.cc`), when multiple normal players exist, pausing any player triggers `RemovePlayer` eviction rather than session suspension (`OnSuspendInternal`). When `normal_players_` reaches zero, audio focus is abandoned, causing `MediaSessionHelper` to hide and strip the notification card on Android.
+- Forced Position State Synchronization on Pause: On UI pause (`btnPlayPause`), `audioPlayer` `pause` event, and `visibilitychange` (when hidden while paused), MediaSession position must be updated with `forceBypass = true` to bypass the `< 0.25s` delta throttle and synchronize the stopped state to Android SystemUI.
+- Background Hidden State Preservation: On `visibilitychange` hidden transition while paused in Mode 1, `navigator.mediaSession.playbackState = 'paused'` and `updateMediaSessionPosition(currentTime, dur, 1.0, true)` must be reaffirmed.
+

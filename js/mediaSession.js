@@ -374,6 +374,8 @@
     let _isProbeInternal = false;
 
     function primeFocusProbe() {
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2') return;
         const probeEl = document.getElementById("focus-probe");
         if (!probeEl || focusProbePrimed) return;
         if (!probeEl.src) {

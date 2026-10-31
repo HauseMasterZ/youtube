@@ -771,7 +771,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
-        if (typeof primeFocusProbe === 'function') {
+        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof primeFocusProbe === 'function') {
             primeFocusProbe();
         }
         if (!audioPlayer.src) {
@@ -820,6 +820,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.playbackMode === 'mode2' && hasMediaSession) {
                 const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+            } else if (hasMediaSession) {
+                const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
             }
         }
     });
@@ -999,7 +1002,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 } else if (!window.wasPausedByUser) {
                     window.wasPlayingBeforeCall = true;
                 }
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                 navigator.mediaSession.playbackState = 'paused';
             }
         }
@@ -1092,6 +1095,13 @@ document.addEventListener("DOMContentLoaded", () => {
                         ? window.declaredPausedState() : 'playing';
                     const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+                }
+            } else if (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser) && !audioPlayer.switching) {
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'paused';
+                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                 }
             }
         }
