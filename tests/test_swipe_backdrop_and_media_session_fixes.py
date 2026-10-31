@@ -437,6 +437,49 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('Asynchronous Artwork Metadata Re-Assertion', gemini_content)
         self.assertIn('Republish Dedup Bust Synchronization', gemini_content)
         self.assertIn('Playback Rate Shift Throttle Bypass', gemini_content)
+        self.assertIn('Continuous Duration Fallback Chaining', gemini_content)
+        self.assertIn('Defensive Action Handler Isolation', gemini_content)
+        self.assertIn('MediaSource Duration Early Binding', gemini_content)
+
+    def test_duration_fallback_chaining_in_media_session(self):
+        """updateMediaSessionPosition and syncAfterRepublish fall back to active playlist data when dur <= 0"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*rawDur\s*<=\s*0\s*\)\s*\{[\s\S]*?activeTrack\s*=[\s\S]*?currentPlaylistData\[globalActiveOriginalIndex\][\s\S]*?allDatabases\[globalActivePlaylist\]'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'syncAfterRepublish[\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*\)\s*\{[\s\S]*?currentPlaylistData\[globalActiveOriginalIndex\]'
+        )
+
+    def test_synchronous_artwork_metadata_assertion_in_publish_track_metadata(self):
+        """publishTrackMetadata in playback.js immediately asserts position state right after synchronous new MediaMetadata"""
+        self.assertRegex(
+            self.playback_content,
+            r'navigator\.mediaSession\.metadata\s*=\s*new\s+MediaMetadata\(\{[\s\S]*?artwork:\s*\[\{\s*src:\s*currentSq[\s\S]*?\}\);[\s\S]*?if\s*\(\s*totalDur\s*>\s*0\s*&&\s*typeof\s+updateMediaSessionPosition\s*===\s*[\'"]function[\'"]\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_media_source_duration_initialized_on_sourceopen(self):
+        """dom.js asserts MediaSource duration upon sourceopen event when _expectedDuration is available"""
+        self.assertRegex(
+            self.dom_content,
+            r'addEventListener\(\s*[\'"]sourceopen[\'"]\s*,[\s\S]*?this\._mediaSource\.duration\s*=\s*this\._expectedDuration'
+        )
+
+    def test_seek_action_handlers_duration_fallback(self):
+        """seekto, seekbackward, and seekforward fall back to active playlist track duration"""
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekto[\'"][\s\S]*?if\s*\(\s*totalDur\s*<=\s*0\s*&&\s*typeof\s+currentPlaylistData[\s\S]*?updateMediaSessionPosition\(\s*seekTarget\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekbackward[\'"][\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+currentPlaylistData[\s\S]*?updateMediaSessionPosition\(\s*newTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekforward[\'"][\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+currentPlaylistData[\s\S]*?updateMediaSessionPosition\(\s*newTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
+        )
 
     def test_brace_balance(self):
         """main.js, mediaSession.js, dom.js, and playback.js have balanced curly braces with zero syntax errors"""

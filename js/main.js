@@ -1278,7 +1278,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const rawDur = audioPlayer.duration;
         const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0)
             ? rawDur
-            : ((audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0);
+            : ((audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || ((typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) ? ((typeof parseISODuration === 'function' && currentPlaylistData[globalActiveOriginalIndex].duration) ? parseISODuration(currentPlaylistData[globalActiveOriginalIndex].duration) : (currentPlaylistData[globalActiveOriginalIndex].duration_seconds || 0)) : 0));
         if (!isSeeking && dur > 0 && audioPlayer._pendingSeek === null && !audioPlayer.switching) {
             const ct = audioPlayer.currentTime;
             const roundedSec = Math.floor(ct);

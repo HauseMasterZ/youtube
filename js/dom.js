@@ -177,6 +177,9 @@
                                     this._sourceBuffer = this._mediaSource.addSourceBuffer(mime);
                                     this._sourceBuffer.mode = 'segments';
                                 }
+                                if (this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
+                                    try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                                }
                                 this._mseEnabled = true;
                                 resolve();
                             } catch (e) {
