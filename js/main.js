@@ -1004,8 +1004,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     window.wasPlayingBeforeCall = true;
                 }
                 if (document.hidden || isRecentBtDisconnect) {
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                     navigator.mediaSession.playbackState = 'paused';
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                 }
             }
         }
@@ -1013,7 +1013,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
-            if (!audioPlayer.paused) {
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
                 lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
                 lastRenderTime = -1;
@@ -1080,6 +1080,9 @@ document.addEventListener("DOMContentLoaded", () => {
             } else if (audioPlayer.paused || window.wasPausedByUser) {
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
+                    const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = audioPlayer.currentTime || 0;
+                    updateMediaSessionPosition(pos, dur, 1.0);
                 }
                 setPlayUI(false);
             }

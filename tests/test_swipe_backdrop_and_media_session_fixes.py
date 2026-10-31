@@ -246,10 +246,10 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_audio_player_pause_listener_forces_position_in_mode1(self):
-        """audioPlayer pause listener passes forceBypass true and sets paused only when hidden or BT disconnect in Mode 1"""
+        """audioPlayer pause listener sets paused and passes forceBypass true only when hidden or BT disconnect in Mode 1"""
         self.assertRegex(
             self.main_content,
-            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?if\s*\(\s*document\.hidden\s*\|\|\s*isRecentBtDisconnect\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?if\s*\(\s*document\.hidden\s*\|\|\s*isRecentBtDisconnect\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
         )
 
     def test_visibilitychange_hidden_mode1_paused_synchronization(self):
@@ -310,6 +310,20 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertRegex(
             self.dom_content,
             r'instantPause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?\}\s*else\s+if\s*\(\s*document\.hidden\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+        )
+
+    def test_dom_pause_mode1_immediate_without_fade(self):
+        """dom.js pause immediately pauses with volume 1.0 in Mode 1 without volume fade to prevent card eviction"""
+        self.assertRegex(
+            self.dom_content,
+            r'pause\(\)\s*\{[\s\S]*?if\s*\(\s*document\.hidden\s*\|\|\s*window\.playbackMode\s*===\s*[\'"]mode1[\'"]\s*\)\s*\{[\s\S]*?this\.active\.pause\(\);[\s\S]*?this\.active\.volume\s*=\s*1\.0;'
+        )
+
+    def test_playpause_action_handler_mode1_updates_position(self):
+        """mediaSession.js playpause action handler updates MediaSession position in Mode 1"""
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]playpause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+updateMediaSessionPosition\s*===\s*[\'"]function[\'"]\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*\);'
         )
 
     def test_brace_balance(self):

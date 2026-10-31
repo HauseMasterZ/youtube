@@ -445,7 +445,7 @@
                 startLiveAudioAnchor();
             }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
-            if (document.hidden) {
+            if (document.hidden || window.playbackMode === 'mode1') {
                 this.active.pause();
                 // Keep volume at 1.0 while paused: volume 0 marks the player
                 // muted to the OS and gets the card evicted (m2 60 regression).
