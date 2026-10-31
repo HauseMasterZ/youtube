@@ -18,6 +18,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             cls.dom_content = f.read()
         with open(os.path.join(base_dir, 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             cls.playback_content = f.read()
+        with open(os.path.join(base_dir, 'js', 'utils.js'), 'r', encoding='utf-8') as f:
+            cls.utils_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -33,6 +35,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.ms_content), [])
         self.assertEqual(emoji_pattern.findall(self.dom_content), [])
         self.assertEqual(emoji_pattern.findall(self.playback_content), [])
+        self.assertEqual(emoji_pattern.findall(self.utils_content), [])
         self.assertEqual(emoji_pattern.findall(self.test_content), [])
 
     def test_swipe_backdrop_markup(self):
@@ -368,6 +371,73 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             r'function\s+executePlayback[\s\S]*?window\.invalidatePositionCache\(\);'
         )
 
+    def test_parse_iso_duration_colon_and_numeric_support(self):
+        """parseISODuration in utils.js parses MM:SS, HH:MM:SS, and numeric values accurately"""
+        self.assertRegex(
+            self.utils_content,
+            r'function\s+parseISODuration\s*\(\s*pt\s*\)\s*\{[\s\S]*?typeof\s+pt\s*===\s*[\'"]number[\'"][\s\S]*?str\.includes\([\'"]:\'\)[\s\S]*?parts\.length\s*===\s*2[\s\S]*?parts\.length\s*===\s*3'
+        )
+
+    def test_async_square_artwork_updates_media_session_position(self):
+        """publishTrackMetadata in playback.js syncs position after async square artwork assignment"""
+        self.assertRegex(
+            self.playback_content,
+            r'getSquareArtwork\(thumbUrl,\s*track\.id,\s*\(\s*sqUrl\s*\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.metadata\s*=\s*new\s+MediaMetadata[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+        self.assertRegex(
+            self.playback_content,
+            r'getCachedSquareArtwork\(track\.id,\s*thumbUrl,\s*\(\s*sqUrl\s*\)\s*=>\s*\{[\s\S]*?navigator\.mediaSession\.metadata\s*=\s*new\s+MediaMetadata[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_execute_playback_syncs_initial_micro_rate_position(self):
+        """executePlayback in playback.js dispatches initial position to updateMediaSessionPosition with micro-rate"""
+        self.assertRegex(
+            self.playback_content,
+            r'navigator\.mediaSession\.setPositionState\(\{\s*duration:\s*parsedDuration,\s*playbackRate:\s*0\.00001,\s*position:\s*initialPosition\s*\}\);[\s\S]*?updateMediaSessionPosition\(\s*initialPosition\s*,\s*parsedDuration\s*,\s*0\.00001\s*,\s*true\s*\);'
+        )
+
+    def test_republish_media_metadata_syncs_position(self):
+        """republishMediaMetadata in mediaSession.js re-asserts position via syncAfterRepublish"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+republishMediaMetadata[\s\S]*?syncAfterRepublish[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_position_state_rate_shift_bypasses_throttle(self):
+        """updateMediaSessionPosition tracks _lastSentRate and bypasses delta throttle on rate shift"""
+        self.assertRegex(
+            self.ms_content,
+            r'const\s+isRateShift\s*=\s*\(\s*_lastSentRate\s*>\s*0\s*&&\s*Math\.abs\(\s*validRate\s*-\s*_lastSentRate\s*\)\s*>\s*0\.001\s*\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*!forceBypass\s*&&\s*!isRateShift\s*&&\s*!isPaused\s*&&\s*!isBuffering'
+        )
+
+    def test_sync_duration_unconditionally_updates_media_session(self):
+        """syncDuration in main.js unconditionally synchronizes confirmed audio duration to MediaSession"""
+        self.assertRegex(
+            self.main_content,
+            r'function\s+syncDuration\(\)\s*\{[\s\S]*?if\s*\(\s*currentMax\s*!==\s*roundedDur\s*\)\s*\{[\s\S]*?\}\s*updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*roundedDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_seekto_action_handler_defensive_target_and_position_sync(self):
+        """setActionHandler('seekto') in mediaSession.js safely handles seekTarget and updates position"""
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]seekto[\'"]\s*,\s*\(details\)\s*=>\s*\{[\s\S]*?try\s*\{[\s\S]*?const\s+seekTarget\s*=[\s\S]*?updateMediaSessionPosition\(\s*seekTarget\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_gemini_md_documents_rule_38(self):
+        """GEMINI.md documents Rule 38 Android SystemUI Media Card Seekbar & Continuous Position Synchronization Invariant"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'GEMINI.md'), 'r', encoding='utf-8') as f:
+            gemini_content = f.read()
+        self.assertIn('38. Android SystemUI Media Card Seekbar & Continuous Position Synchronization Invariant', gemini_content)
+        self.assertIn('Universal Duration Parsing', gemini_content)
+        self.assertIn('Asynchronous Artwork Metadata Re-Assertion', gemini_content)
+        self.assertIn('Republish Dedup Bust Synchronization', gemini_content)
+        self.assertIn('Playback Rate Shift Throttle Bypass', gemini_content)
+
     def test_brace_balance(self):
         """main.js, mediaSession.js, dom.js, and playback.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))
@@ -377,5 +447,6 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
 
 

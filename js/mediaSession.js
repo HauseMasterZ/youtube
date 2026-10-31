@@ -706,7 +706,8 @@
 
     let _lastSentPosition = -1;
     let _lastSentTimestamp = 0;
-    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
+    let _lastSentRate = -1;
+    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; _lastSentRate = -1; };
     window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
     window._forceNextPosition = false;
 
@@ -735,6 +736,35 @@
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
                 const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
 
+                let rate;
+                if (isBuffering) {
+                    // Buffer stall / track transition freeze: OS interpolates position
+                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
+                    rate = 0.00001;
+                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
+                    // Spoofed pause: OS advances the card seekbar by rate while
+                    // state reads 'playing', so freeze it with a near-zero rate
+                    // (0 is rejected by setPositionState; hence the micro-rate).
+                    // Scoped strictly to mode2-paused; all other paths below.
+                    rate = 0.00001;
+                } else if (isForcedRateValid && forcedRate > 0) {
+                    rate = forcedRate;
+                } else if (!isPaused) {
+                    // While audio is actively playing, rate must strictly reflect
+                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
+                    // animation animates dynamically and never enters ghost freeze.
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
+                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
+                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
+                    rate = 1.0;
+                } else {
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                }
+
+                const validRate = (typeof rate === 'number' && !isNaN(rate) && isFinite(rate) && rate > 0) ? rate : 1.0;
+                const isRateShift = (_lastSentRate > 0 && Math.abs(validRate - _lastSentRate) > 0.001);
+
                 // Position stability and monotonic guard (bypassed exactly once when
                 // window._forceNextPosition is set or force=true: unlock anchors and
                 // mode-switch transitions must reach SystemUI even if unchanged):
@@ -746,7 +776,7 @@
                 if (forceBypass) {
                     window._forceNextPosition = false;
                 }
-                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                if (!forceBypass && !isRateShift && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
                     const elapsed = Date.now() - _lastSentTimestamp;
                     if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
                         return;
@@ -760,41 +790,14 @@
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
                 //    Re-sending rate 1.0 position updates after pausing re-animates the wave on OEM skins (OneUI/ColorOS).
                 //    Forced transitions (mode-switch) bypass this once via forceBypass above.
-                if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
+                if (!forceBypass && !isRateShift && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
                     if (Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
                 }
 
-                let rate;
-                if (isBuffering) {
-                    // Buffer stall / track transition freeze: OS interpolates position
-                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
-                    rate = 0.00001;
-                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
-                    // Spoofed pause: OS advances the card seekbar by rate while
-                    // state reads 'playing', so freeze it with a near-zero rate
-                    // (0 is rejected by setPositionState; hence the micro-rate).
-                    // Scoped strictly to mode2-paused; all other paths below.
-                    rate = 0.00001;
-                } else if (!isPaused) {
-                    // While audio is actively playing, rate must strictly reflect
-                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
-                    // animation animates dynamically and never enters ghost freeze.
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                } else if (isForcedRateValid && forcedRate > 0) {
-                    rate = forcedRate;
-                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
-                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
-                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
-                    rate = 1.0;
-                } else {
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                }
-
                 if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
-                    const validRate = (typeof rate === 'number' && !isNaN(rate) && isFinite(rate) && rate > 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
@@ -802,9 +805,11 @@
                     });
                     _lastSentPosition = validPos;
                     _lastSentTimestamp = Date.now();
+                    _lastSentRate = validRate;
                 } else if (isSeeking || isPaused) {
                     _lastSentPosition = Math.max(0, pos);
                     _lastSentTimestamp = Date.now();
+                    _lastSentRate = validRate;
                 }
             } catch (e) {
                 // Ignore transient errors
@@ -833,6 +838,16 @@
                     };
                 }
 
+                const syncAfterRepublish = () => {
+                    try {
+                        const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        if (dur > 0 && typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(curPos, dur, null, true);
+                        }
+                    } catch (e) {}
+                };
+
                 if (forceBreakDedup) {
                     try {
                         navigator.mediaSession.metadata = null;
@@ -841,6 +856,7 @@
                         const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
                         const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
                         window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
+                        syncAfterRepublish();
                         return;
                     }
                     if (lastValidMetadata && lastValidMetadata.title) {
@@ -853,6 +869,7 @@
                             album: lastValidMetadata.album,
                             artwork: lastValidMetadata.artwork
                         });
+                        syncAfterRepublish();
                         return;
                     }
                 }
@@ -876,6 +893,7 @@
                     const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
                     window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
                 }
+                syncAfterRepublish();
             } catch (e) {}
         }
     }
@@ -1500,18 +1518,24 @@
             playNext();
         });
         navigator.mediaSession.setActionHandler('seekto', (details) => {
-            const seekTarget = details.seekTime;
-            if (details.fastSeek && 'fastSeek' in audioPlayer) {
-                audioPlayer.fastSeek(seekTarget);
-            } else {
-                audioPlayer.currentTime = seekTarget;
+            try {
+                const seekTarget = (typeof details === 'object' && details !== null && typeof details.seekTime === 'number')
+                    ? details.seekTime
+                    : ((typeof details === 'number') ? details : (audioPlayer ? audioPlayer.currentTime : 0));
+                if (details && details.fastSeek && 'fastSeek' in audioPlayer) {
+                    audioPlayer.fastSeek(seekTarget);
+                } else if (audioPlayer) {
+                    audioPlayer.currentTime = seekTarget;
+                }
+                updateTimeUI(seekTarget);
+                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
+                
+                // Explicitly pass seek target and total duration to prevent 0:00 dip
+                const totalDur = (audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(seekTarget, totalDur, null, true);
+            } catch (e) {
+                console.warn("MediaSession seekto error:", e);
             }
-            updateTimeUI(seekTarget);
-            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
-            
-            // Explicitly pass seek target and total duration to prevent 0:00 dip
-            const totalDur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(seekTarget, totalDur, null, true);
         });
         navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const now = Date.now();

@@ -227,10 +227,21 @@
     }
     function parseISODuration(pt) {
         if (!pt) return 0;
+        if (typeof pt === 'number' && !isNaN(pt) && isFinite(pt)) return Math.floor(pt);
         // If it's already a number or a numeric string, just return it
         if (!isNaN(pt)) return parseInt(pt, 10);
         
-        const match = String(pt).match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        const str = String(pt).trim();
+        if (str.includes(':')) {
+            const parts = str.split(':').map(p => parseInt(p, 10));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return parts[0] * 60 + parts[1];
+            } else if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+                return parts[0] * 3600 + parts[1] * 60 + parts[2];
+            }
+        }
+        
+        const match = str.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
         if (!match) return 0;
         const h = parseInt(match[1] || 0, 10);
         const m = parseInt(match[2] || 0, 10);

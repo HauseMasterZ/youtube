@@ -911,8 +911,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     seekBar.max = roundedDur;
                     totalTimeDisplay.textContent = formatTime(roundedDur);
                     if (typeof updateBufferProgress === 'function') updateBufferProgress();
-                    updateMediaSessionPosition(audioPlayer.currentTime, roundedDur, null, true);
                 }
+                updateMediaSessionPosition(audioPlayer.currentTime, roundedDur, null, true);
             }
         }
     }

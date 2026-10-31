@@ -927,6 +927,11 @@
                                     artist: track.channel,
                                     artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
                                 });
+                                const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                                const totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                if (totalDur > 0 && typeof updateMediaSessionPosition === 'function') {
+                                    updateMediaSessionPosition(curPos, totalDur, null, true);
+                                }
                             } catch (e) {}
                         }
                     });
@@ -940,6 +945,11 @@
                                 artist: track.channel,
                                 artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
                             });
+                            const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                            const totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            if (totalDur > 0 && typeof updateMediaSessionPosition === 'function') {
+                                updateMediaSessionPosition(curPos, totalDur, null, true);
+                            }
                         } catch (e) {}
                     }
                 });
@@ -964,6 +974,9 @@
                         position: initialPosition
                     });
                 } catch(e) {}
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(initialPosition, parsedDuration, 0.00001, true);
+                }
             }
         }
 
