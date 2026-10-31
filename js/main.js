@@ -812,7 +812,7 @@ document.addEventListener("DOMContentLoaded", () => {
             window.wasPausedByUser = true;
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                ? window.declaredPausedState() : 'paused';
+                ? window.declaredPausedState() : ((window.playbackMode === 'mode2') ? 'playing' : 'paused');
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                 startLiveAudioAnchor();
             }
@@ -984,6 +984,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!window.wasPausedByUser) {
                     window.wasPlayingBeforeCall = true;
                 }
+                if (typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
                 // Mode 2 pause (user or transient interrupt): keep 'playing' spoof to pin the wave animation
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
@@ -1074,9 +1077,12 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof saveLastPlayedState === 'function') {
                 saveLastPlayedState();
             }
-            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser) && !audioPlayer.switching) {
                 if (typeof startLiveAudioAnchor === 'function') {
                     startLiveAudioAnchor();
+                }
+                if (typeof startFocusProbe === 'function') {
+                    startFocusProbe();
                 }
                 if (typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();

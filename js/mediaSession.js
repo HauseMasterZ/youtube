@@ -76,7 +76,7 @@
             return liveAudioContext;
         }
         if (liveAudioContext) {
-            if (liveAudioContext.state === 'suspended') {
+            if (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted') {
                 liveAudioContext.resume().catch(() => {});
             }
             const anchorEl = document.getElementById("live-stream-anchor");
@@ -108,7 +108,7 @@
 
         try {
             liveAudioContext = new AudioCtx();
-            if (liveAudioContext.state === 'suspended') {
+            if (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted') {
                 liveAudioContext.resume().catch(() => {});
             }
             liveAudioContext.onstatechange = () => {
@@ -168,7 +168,7 @@
         if (window.isCallActive) return;
         if (window.mediaSessionDestroyed) return;
         initLiveAudioAnchor();
-        if (liveAudioContext && liveAudioContext.state === 'suspended') {
+        if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
             liveAudioContext.resume().catch(() => {});
         }
         const anchorEl = document.getElementById("live-stream-anchor");
@@ -1427,7 +1427,7 @@
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                            ? window.declaredPausedState() : 'paused';
+                            ? window.declaredPausedState() : 'playing';
                     }
                     if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();

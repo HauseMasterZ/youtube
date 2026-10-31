@@ -437,6 +437,9 @@
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'paused';
             }
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                startLiveAudioAnchor();
+            }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
                 this.active.pause();
@@ -488,6 +491,9 @@
             if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'paused';
+            }
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                startLiveAudioAnchor();
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);

@@ -14,6 +14,8 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             cls.main_content = f.read()
         with open(os.path.join(base_dir, 'js', 'mediaSession.js'), 'r', encoding='utf-8') as f:
             cls.ms_content = f.read()
+        with open(os.path.join(base_dir, 'js', 'dom.js'), 'r', encoding='utf-8') as f:
+            cls.dom_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -27,6 +29,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.css_content), [])
         self.assertEqual(emoji_pattern.findall(self.main_content), [])
         self.assertEqual(emoji_pattern.findall(self.ms_content), [])
+        self.assertEqual(emoji_pattern.findall(self.dom_content), [])
         self.assertEqual(emoji_pattern.findall(self.test_content), [])
 
     def test_swipe_backdrop_markup(self):
@@ -195,6 +198,31 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('color: #00ff88 !important;', self.css_content)
         self.assertIn('drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))', self.css_content)
         self.assertIn("legEnq.classList.add('enqueue-success');", self.main_content)
+
+    def test_dom_pause_methods_enforce_live_anchor_in_mode2(self):
+        """DualAudioPlayer pause and instantPause in dom.js enforce startLiveAudioAnchor in Mode 2 before active.pause"""
+        self.assertRegex(
+            self.dom_content,
+            r'pause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'instantPause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
+        )
+
+    def test_main_pause_listener_enforces_live_anchor(self):
+        """main.js audioPlayer pause listener enforces startLiveAudioAnchor in Mode 2"""
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);'
+        )
+
+    def test_media_session_context_resumes_interrupted_state(self):
+        """initLiveAudioAnchor and startLiveAudioAnchor resume liveAudioContext on suspended or interrupted states"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*liveAudioContext\s*&&\s*\(\s*liveAudioContext\.state\s*===\s*[\'"]suspended[\'"]\s*\|\|\s*liveAudioContext\.state\s*===\s*[\'"]interrupted[\'"]\s*\)\s*\)\s*\{\s*liveAudioContext\.resume\(\)'
+        )
 
     def test_brace_balance(self):
         """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""
