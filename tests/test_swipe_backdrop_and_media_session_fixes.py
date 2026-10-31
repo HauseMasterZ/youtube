@@ -238,25 +238,32 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*isMobileDevice\s*&&\s*typeof\s+primeFocusProbe\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*primeFocusProbe\(\);'
         )
 
-    def test_btn_play_pause_pause_branch_forces_position_in_mode1(self):
-        """btnPlayPause pause branch updates MediaSession position with rate 1.0 and forceBypass true in Mode 1"""
+    def test_btn_play_pause_pause_branch_mode1_deferred(self):
+        """btnPlayPause pause branch in Mode 1 immediately pauses audible output via instantPause without declaring paused playbackState in foreground"""
         self.assertRegex(
             self.main_content,
-            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?audioPlayer\.instantPause\(\);[\s\S]*?else\s+if\s*\(\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
+            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?\}\s*else\s*\{\s*audioPlayer\.instantPause\(\);\s*\}'
         )
 
     def test_audio_player_pause_listener_forces_position_in_mode1(self):
-        """audioPlayer pause listener passes forceBypass true in Mode 1"""
+        """audioPlayer pause listener passes forceBypass true and sets paused only when hidden or BT disconnect in Mode 1"""
         self.assertRegex(
             self.main_content,
-            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
+            r'audioPlayer\.addEventListener\(\s*["\']pause["\'][\s\S]*?if\s*\(\s*document\.hidden\s*\|\|\s*isRecentBtDisconnect\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_visibilitychange_hidden_mode1_paused_synchronization(self):
         """visibilitychange hidden handler synchronizes playbackState and forced position in Mode 1 when paused"""
         self.assertRegex(
             self.main_content,
-            r'document\.addEventListener\(\s*["\']visibilitychange["\'][\s\S]*?// Going hidden while paused in Mode 2[\s\S]*?else\s+if\s*\(\s*typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"]\s*&&\s*audioPlayer\s*&&\s*\(\s*audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\s*\)\s*&&\s*!audioPlayer\.switching\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
+            r'document\.addEventListener\(\s*["\']visibilitychange["\'][\s\S]*?// Going hidden while paused in Mode 2[\s\S]*?else\s+if\s*\(\s*typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"]\s*&&\s*audioPlayer\s*&&\s*\(\s*audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\s*\)\s*&&\s*!audioPlayer\.switching\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*pos\s*,\s*dur\s*,\s*1\.0\s*,\s*true\s*\);'
+        )
+
+    def test_visibilitychange_foreground_mode1_paused_reaffirmation(self):
+        """visibilitychange foreground handler reaffirms playbackState = 'paused' and setPlayUI(false) if audioPlayer is paused"""
+        self.assertRegex(
+            self.main_content,
+            r'document\.addEventListener\(\s*["\']visibilitychange["\'][\s\S]*?if\s*\(\s*!document\.hidden\s*\)\s*\{[\s\S]*?else\s+if\s*\(\s*audioPlayer\.paused\s*\|\|\s*window\.wasPausedByUser\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];[\s\S]*?setPlayUI\(false\);'
         )
 
     def test_gemini_md_documents_rule_37(self):
@@ -265,56 +272,44 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             gemini_content = f.read()
         self.assertIn('37. Mode 1 Media Notification Retention & Single-Player Isolation Invariant', gemini_content)
         self.assertIn('Single-Player Isolation', gemini_content)
-        self.assertIn('Forced Position State Synchronization on Pause', gemini_content)
+        self.assertIn('Deferred Paused State Declaration (Recreating Flow B Lifecycle for Flow A)', gemini_content)
 
-    def test_mode1_handover_keepalive_exports_and_guards(self):
-        """mediaSession.js defines and exports Mode 1 handover keepalive functions with mobile and hidden guards"""
-        self.assertIn("window.startMode1HandoverKeepalive = startMode1HandoverKeepalive;", self.ms_content)
-        self.assertIn("window.stopMode1HandoverKeepalive = stopMode1HandoverKeepalive;", self.ms_content)
-        self.assertIn("window.settleMode1HandoverKeepalive = settleMode1HandoverKeepalive;", self.ms_content)
+    def test_mode1_handover_keepalive_completely_removed(self):
+        """Mode 1 handover keepalive functions are completely removed from mediaSession.js, dom.js, and main.js"""
+        for content in (self.ms_content, self.dom_content, self.main_content):
+            self.assertNotIn("startMode1HandoverKeepalive", content)
+            self.assertNotIn("stopMode1HandoverKeepalive", content)
+            self.assertNotIn("settleMode1HandoverKeepalive", content)
+
+    def test_mode1_single_player_isolation(self):
+        """Mode 1 enforces strict single-player isolation where auxiliary audio elements are never primed or started"""
         self.assertRegex(
             self.ms_content,
-            r'function\s+startMode1HandoverKeepalive\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*!isMobileDevice\s*\)\s*return;\s*if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode1[\'"]\s*\)\s*return;\s*if\s*\(\s*window\.isCallActive\s*\)\s*return;\s*if\s*\(\s*window\.mediaSessionDestroyed\s*\)\s*return;\s*if\s*\(\s*typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*\)\s*return;'
+            r'function\s+initLiveAudioAnchor\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?return\s+liveAudioContext;'
         )
-
-    def test_mode1_handover_keepalive_btn_play_pause_wiring(self):
-        """main.js btnPlayPause click handler wires startMode1HandoverKeepalive and stopMode1HandoverKeepalive"""
         self.assertRegex(
-            self.main_content,
-            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?stopMode1HandoverKeepalive\(\);[\s\S]*?startMode1HandoverKeepalive\(\);[\s\S]*?audioPlayer\.instantPause\(\);'
+            self.ms_content,
+            r'function\s+startLiveAudioAnchor\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+primeFocusProbe\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+startFocusProbe\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode2[\'"]\s*\)\s*return;'
         )
 
-    def test_mode1_handover_keepalive_dom_pause_wiring(self):
-        """dom.js pause and instantPause methods call startMode1HandoverKeepalive on Mode 1 pause"""
+
+    def test_dom_pause_defers_mode1_paused_state(self):
+        """dom.js pause and instantPause defer declaring paused playbackState in Mode 1 until document.hidden"""
         self.assertRegex(
             self.dom_content,
-            r'pause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);\s*\}\s*else\s+if\s*\(\s*!window\.isCallActive\s*&&\s*!document\.hidden\s*&&\s*typeof\s+startMode1HandoverKeepalive\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startMode1HandoverKeepalive\(\);'
+            r'pause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?\}\s*else\s+if\s*\(\s*document\.hidden\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
         self.assertRegex(
             self.dom_content,
-            r'instantPause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);\s*\}\s*else\s+if\s*\(\s*!window\.isCallActive\s*&&\s*!document\.hidden\s*&&\s*typeof\s+startMode1HandoverKeepalive\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startMode1HandoverKeepalive\(\);'
-        )
-
-    def test_mode1_handover_keepalive_visibilitychange_wiring(self):
-        """main.js visibilitychange handler wires settleMode1HandoverKeepalive and stopMode1HandoverKeepalive"""
-        self.assertRegex(
-            self.main_content,
-            r'document\.addEventListener\(\s*["\']visibilitychange["\'][\s\S]*?if\s*\(\s*!document\.hidden\s*\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);[\s\S]*?else\s+if\s*\(\s*typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?settleMode1HandoverKeepalive\(\);'
-        )
-
-    def test_mode1_handover_keepalive_media_session_actions(self):
-        """mediaSession.js stops Mode 1 handover keepalive on play action, pause action, and anchor teardown"""
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+handlePlayAction\(\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"]\s*,[\s\S]*?stopMode1HandoverKeepalive\(\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'function\s+teardownLiveAudioAnchor\(\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);'
+            r'instantPause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*\)\s*\{[\s\S]*?declaredPausedState\(\)[\s\S]*?\}\s*else\s+if\s*\(\s*document\.hidden\s*\)\s*\{\s*navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"];'
         )
 
     def test_brace_balance(self):
