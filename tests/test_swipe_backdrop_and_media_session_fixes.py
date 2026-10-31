@@ -267,10 +267,61 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn('Single-Player Isolation', gemini_content)
         self.assertIn('Forced Position State Synchronization on Pause', gemini_content)
 
+    def test_mode1_handover_keepalive_exports_and_guards(self):
+        """mediaSession.js defines and exports Mode 1 handover keepalive functions with mobile and hidden guards"""
+        self.assertIn("window.startMode1HandoverKeepalive = startMode1HandoverKeepalive;", self.ms_content)
+        self.assertIn("window.stopMode1HandoverKeepalive = stopMode1HandoverKeepalive;", self.ms_content)
+        self.assertIn("window.settleMode1HandoverKeepalive = settleMode1HandoverKeepalive;", self.ms_content)
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+startMode1HandoverKeepalive\s*\(\s*\)\s*\{[\s\S]*?if\s*\(\s*typeof\s+isMobileDevice\s*!==\s*[\'"]undefined[\'"]\s*&&\s*!isMobileDevice\s*\)\s*return;\s*if\s*\(\s*window\.playbackMode\s*!==\s*[\'"]mode1[\'"]\s*\)\s*return;\s*if\s*\(\s*window\.isCallActive\s*\)\s*return;\s*if\s*\(\s*window\.mediaSessionDestroyed\s*\)\s*return;\s*if\s*\(\s*typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*document\.hidden\s*\)\s*return;'
+        )
+
+    def test_mode1_handover_keepalive_btn_play_pause_wiring(self):
+        """main.js btnPlayPause click handler wires startMode1HandoverKeepalive and stopMode1HandoverKeepalive"""
+        self.assertRegex(
+            self.main_content,
+            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?stopMode1HandoverKeepalive\(\);[\s\S]*?startMode1HandoverKeepalive\(\);[\s\S]*?audioPlayer\.instantPause\(\);'
+        )
+
+    def test_mode1_handover_keepalive_dom_pause_wiring(self):
+        """dom.js pause and instantPause methods call startMode1HandoverKeepalive on Mode 1 pause"""
+        self.assertRegex(
+            self.dom_content,
+            r'pause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);\s*\}\s*else\s+if\s*\(\s*!window\.isCallActive\s*&&\s*!document\.hidden\s*&&\s*typeof\s+startMode1HandoverKeepalive\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startMode1HandoverKeepalive\(\);'
+        )
+        self.assertRegex(
+            self.dom_content,
+            r'instantPause\(\)\s*\{[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);\s*\}\s*else\s+if\s*\(\s*!window\.isCallActive\s*&&\s*!document\.hidden\s*&&\s*typeof\s+startMode1HandoverKeepalive\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startMode1HandoverKeepalive\(\);'
+        )
+
+    def test_mode1_handover_keepalive_visibilitychange_wiring(self):
+        """main.js visibilitychange handler wires settleMode1HandoverKeepalive and stopMode1HandoverKeepalive"""
+        self.assertRegex(
+            self.main_content,
+            r'document\.addEventListener\(\s*["\']visibilitychange["\'][\s\S]*?if\s*\(\s*!document\.hidden\s*\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);[\s\S]*?else\s+if\s*\(\s*typeof\s+audioPlayer\s*!==\s*[\'"]undefined[\'"][\s\S]*?settleMode1HandoverKeepalive\(\);'
+        )
+
+    def test_mode1_handover_keepalive_media_session_actions(self):
+        """mediaSession.js stops Mode 1 handover keepalive on play action, pause action, and anchor teardown"""
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+handlePlayAction\(\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'navigator\.mediaSession\.setActionHandler\(\s*[\'"]pause[\'"]\s*,[\s\S]*?stopMode1HandoverKeepalive\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+teardownLiveAudioAnchor\(\)\s*\{[\s\S]*?stopMode1HandoverKeepalive\(\);'
+        )
+
     def test_brace_balance(self):
-        """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""
+        """main.js, mediaSession.js, and dom.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))
         self.assertEqual(self.ms_content.count('{'), self.ms_content.count('}'))
+        self.assertEqual(self.dom_content.count('{'), self.dom_content.count('}'))
 
 if __name__ == '__main__':
     unittest.main()

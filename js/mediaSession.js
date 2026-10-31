@@ -223,6 +223,9 @@
         if (typeof stopAnchorHeartbeat === 'function') {
             stopAnchorHeartbeat();
         }
+        if (typeof stopMode1HandoverKeepalive === 'function') {
+            stopMode1HandoverKeepalive();
+        }
         const anchorEl = document.getElementById("live-stream-anchor");
         try {
             const stream = (anchorEl && anchorEl.srcObject) || (liveAudioDestination && liveAudioDestination.stream);
@@ -355,12 +358,82 @@
         _isAnchorPlayPending = false;
     }
 
+    let _mode1SettleTimer = null;
+
+    function startMode1HandoverKeepalive() {
+        if (_mode1SettleTimer) {
+            clearTimeout(_mode1SettleTimer);
+            _mode1SettleTimer = null;
+        }
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode1') return;
+        if (window.isCallActive) return;
+        if (window.mediaSessionDestroyed) return;
+        if (typeof document !== 'undefined' && document.hidden) return;
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (!anchorEl) return;
+        try {
+            if (!anchorEl.src || anchorEl.srcObject) {
+                anchorEl.srcObject = null;
+                anchorEl.src = SILENT_WAV_DATA_URI;
+            }
+            anchorEl.loop = true;
+            if (anchorEl.paused) {
+                _isInternalAnchorStart = true;
+                anchorEl.play().then(() => {
+                    setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                }).catch(() => { _isInternalAnchorStart = false; });
+            }
+        } catch (e) {}
+    }
+
+    function stopMode1HandoverKeepalive() {
+        if (_mode1SettleTimer) {
+            clearTimeout(_mode1SettleTimer);
+            _mode1SettleTimer = null;
+        }
+        const anchorEl = document.getElementById("live-stream-anchor");
+        if (anchorEl && !anchorEl.paused) {
+            try {
+                _isInternalAnchorStop = true;
+                anchorEl.pause();
+            } catch (e) {} finally {
+                _isInternalAnchorStop = false;
+            }
+        }
+    }
+
+    function settleMode1HandoverKeepalive() {
+        if (_mode1SettleTimer) {
+            clearTimeout(_mode1SettleTimer);
+        }
+        _mode1SettleTimer = setTimeout(() => {
+            _mode1SettleTimer = null;
+            if (window.playbackMode !== 'mode1') return;
+            if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
+            if (!audioPlayer.paused && !window.wasPausedByUser) return;
+            if (!document.hidden) return;
+            stopMode1HandoverKeepalive();
+            if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                navigator.mediaSession.playbackState = 'paused';
+                const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                const pos = (audioPlayer && audioPlayer.currentTime) || 0;
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                }
+            }
+        }, 500);
+    }
+
     window.initLiveAudioAnchor = initLiveAudioAnchor;
     window.startLiveAudioAnchor = startLiveAudioAnchor;
     window.stopLiveAudioAnchor = stopLiveAudioAnchor;
     window.teardownLiveAudioAnchor = teardownLiveAudioAnchor;
     window.startAnchorHeartbeat = startAnchorHeartbeat;
     window.stopAnchorHeartbeat = stopAnchorHeartbeat;
+    window.startMode1HandoverKeepalive = startMode1HandoverKeepalive;
+    window.stopMode1HandoverKeepalive = stopMode1HandoverKeepalive;
+    window.settleMode1HandoverKeepalive = settleMode1HandoverKeepalive;
 
     // Focus Probe: silent WAV loop that the OS power manager suspends on
     // audio-focus steals (YouTube) AND on idle battery-saving. A suspend
@@ -1217,8 +1290,13 @@
                     const _resumeAnchorEl = document.getElementById("live-stream-anchor");
                     if (_resumeAnchorEl && _resumeAnchorEl.paused && typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
                 } catch (e) {}
-            } else if (typeof stopLiveAudioAnchor === 'function') {
-                stopLiveAudioAnchor();
+            } else {
+                if (typeof stopLiveAudioAnchor === 'function') {
+                    stopLiveAudioAnchor();
+                }
+                if (typeof stopMode1HandoverKeepalive === 'function') {
+                    stopMode1HandoverKeepalive();
+                }
             }
             cancelAutoKillWatchdog();
             const playPromise = audioPlayer.play();
@@ -1345,6 +1423,9 @@
                     audioPlayer.pause();
                 }
                 stopLiveAudioAnchor();
+                if (typeof stopMode1HandoverKeepalive === 'function') {
+                    stopMode1HandoverKeepalive();
+                }
                 cancelAutoKillWatchdog();
             }
         });
@@ -1445,6 +1526,9 @@
                         if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
                     } else {
                         stopLiveAudioAnchor();
+                        if (typeof stopMode1HandoverKeepalive === 'function') {
+                            stopMode1HandoverKeepalive();
+                        }
                         cancelAutoKillWatchdog();
                     }
                 }

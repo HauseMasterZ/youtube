@@ -341,8 +341,13 @@
                 if (typeof startLiveAudioAnchor === 'function') {
                     startLiveAudioAnchor();
                 }
-            } else if (typeof stopLiveAudioAnchor === 'function') {
-                stopLiveAudioAnchor();
+            } else {
+                if (typeof stopLiveAudioAnchor === 'function') {
+                    stopLiveAudioAnchor();
+                }
+                if (typeof stopMode1HandoverKeepalive === 'function') {
+                    stopMode1HandoverKeepalive();
+                }
             }
             if (typeof cancelAutoKillWatchdog === 'function') {
                 cancelAutoKillWatchdog();
@@ -439,6 +444,8 @@
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                 startLiveAudioAnchor();
+            } else if (!window.isCallActive && !document.hidden && typeof startMode1HandoverKeepalive === 'function') {
+                startMode1HandoverKeepalive();
             }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden) {
@@ -494,6 +501,8 @@
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                 startLiveAudioAnchor();
+            } else if (!window.isCallActive && !document.hidden && typeof startMode1HandoverKeepalive === 'function') {
+                startMode1HandoverKeepalive();
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);
