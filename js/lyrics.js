@@ -50,7 +50,8 @@
             const folder = parts[0];
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            let res = await fetch(lyricsUrl, { priority: 'low' });
+            let res = await fetch(`${lyricsUrl}?v=154`, { priority: 'low' });
+            if (!res.ok) res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             let text = await res.text();
             
@@ -70,7 +71,24 @@
             // Abort if the user skipped to another track while the fetch was pending
             if (currentPlaybackSequence !== sequenceId) return;
             
-            const parsed = parseLRC(text);
+            let parsed = parseLRC(text);
+            // If lyrics are unsynced plain text, re-verify with network to check if synchronized LRC has been published
+            if (parsed.isUnsynced) {
+                try {
+                    const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
+                    if (freshRes.ok) {
+                        const freshText = await freshRes.text();
+                        const freshParsed = parseLRC(freshText);
+                        if (!freshParsed.isUnsynced) {
+                            text = freshText;
+                            parsed = freshParsed;
+                        }
+                    }
+                } catch (err) {}
+            }
+
+            if (currentPlaybackSequence !== sequenceId) return;
+
             currentLyrics = parsed.lyrics;
             currentLyricsIsUnsynced = parsed.isUnsynced;
             

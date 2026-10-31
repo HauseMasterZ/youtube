@@ -29,7 +29,6 @@ jobs:
           path: site-root
 
       - name: Copy Clean Root for Production Edge
-        if: github.ref == 'refs/heads/main'
         run: |
           cp -rf site-root cf-root
           rm -rf cf-root/.git cf-root/.github
@@ -41,20 +40,22 @@ jobs:
           path: dev-src
         continue-on-error: true
 
-      - name: Merge Dev Subdirectory into GitHub Pages Root
+      - name: Merge Dev Subdirectory into Distributions
         run: |
           if [ -d "dev-src" ]; then
             mkdir -p site-root/dev
             cp -rf dev-src/* site-root/dev/
+            mkdir -p cf-root/dev
+            cp -rf dev-src/* cf-root/dev/
             if [ -f "dev-src/_headers" ]; then
               cp -f dev-src/_headers site-root/_headers
-              if [ -d "cf-root" ]; then
-                cp -f dev-src/_headers cf-root/_headers
-              fi
+              cp -f dev-src/_headers cf-root/_headers
             fi
             rm -rf site-root/dev/.git site-root/dev/.github
+            rm -rf cf-root/dev/.git cf-root/dev/.github
           fi
           rm -rf site-root/.git site-root/.github
+          rm -rf cf-root/.git cf-root/.github
 
       - name: Pre-Deployment Syntax & Integrity Guard
         run: |
@@ -77,6 +78,13 @@ jobs:
                 node --check "$f"
               fi
             done
+            if [ -d "cf-root/dev" ]; then
+              for f in cf-root/dev/js/*.js cf-root/dev/sw.js; do
+                if [ -f "$f" ]; then
+                  node --check "$f"
+                fi
+              done
+            fi
           fi
           echo "All source scripts passed syntax verification."
 
@@ -91,6 +99,9 @@ jobs:
           fi
           if [ -d "cf-root" ]; then
             TARGET_FILES="$TARGET_FILES cf-root/index.html cf-root/js/utils.js"
+            if [ -d "cf-root/dev" ]; then
+              TARGET_FILES="$TARGET_FILES cf-root/dev/index.html cf-root/dev/js/utils.js"
+            fi
           fi
 
           GATEWAY_URL="$(echo "$GATEWAY_URL" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
@@ -105,7 +116,7 @@ jobs:
             done
           else
             echo "No custom Gateway URL provided; stripping placeholders."
-            for f in site-root/index.html site-root/dev/index.html cf-root/index.html; do
+            for f in site-root/index.html site-root/dev/index.html cf-root/index.html cf-root/dev/index.html; do
               if [ -f "$f" ]; then
                 sed -i '/__API_GATEWAY_URL__/d' "$f"
               fi
@@ -114,7 +125,7 @@ jobs:
 
           if [ -n "$UPSTREAM_ORIGIN_URL" ]; then
             echo "Injecting configured Upstream Origin URL..."
-            for f in site-root/index.html site-root/dev/index.html cf-root/index.html; do
+            for f in site-root/index.html site-root/dev/index.html cf-root/index.html cf-root/dev/index.html; do
               if [ -f "$f" ]; then
                 sed -i "s|__UPSTREAM_ORIGIN_URL__|$UPSTREAM_ORIGIN_URL|g" "$f"
               fi
@@ -211,9 +222,12 @@ jobs:
             buildDirectory('site-root/dev', 'dev');
           }
 
-          // Build Production Edge clean root (main)
+          // Build Production Edge clean root (main) and dev staging (dev)
           if (fs.existsSync('cf-root')) {
             buildDirectory('cf-root', 'main');
+            if (fs.existsSync('cf-root/dev')) {
+              buildDirectory('cf-root/dev', 'dev');
+            }
           }
           EOF
 
@@ -238,6 +252,13 @@ jobs:
                 node --check "$f"
               fi
             done
+            if [ -d "cf-root/dev" ]; then
+              for f in cf-root/dev/js/bundle.min.js cf-root/dev/sw.js; do
+                if [ -f "$f" ]; then
+                  node --check "$f"
+                fi
+              done
+            fi
           fi
           echo "Distributions verified successfully."
 
@@ -249,7 +270,6 @@ jobs:
           retention-days: 1
 
       - name: Upload Production Edge Distribution Artifact
-        if: github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: edge-distribution
@@ -393,7 +413,7 @@ jobs:
 
   deploy-edge:
     name: Deploy to Production Edge (Production Custom Domain)
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -526,6 +546,15 @@ jobs:
             fi
             sleep 5
           done
+          echo "Warming dev origin: ${PROD_URL}/dev/"
+          for i in 1 2 3; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "${PROD_URL}/dev/" || echo "000")
+            echo "Dev warmup attempt ${i}: HTTP ${CODE}"
+            if [ "$CODE" = "200" ]; then
+              break
+            fi
+            sleep 5
+          done
 
       - name: Audit Production Custom Domain with Lighthouse CI
         id: lighthouse
@@ -536,6 +565,7 @@ jobs:
         with:
           urls: |
             ${{ steps.prod_target.outputs.prod-url }}
+            ${{ format('{0}/dev/', steps.prod_target.outputs.prod-url) }}
           uploadArtifacts: true
           temporaryPublicStorage: true
         continue-on-error: true

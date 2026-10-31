@@ -47,8 +47,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [], "Found emojis in test_playlist_staleness_and_sw.py")
 
     def test_sw_cache_version_bumped(self):
-        """sw.js CACHE_NAME must be bumped to v150 to purge stale caches."""
-        self.assertIn("yt-player-cache-v150", self.sw_content)
+        """sw.js CACHE_NAME must be bumped to v151 to purge stale caches."""
+        self.assertIn("yt-player-cache-v154", self.sw_content)
 
     def test_sw_thumbnail_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate for thumbnails."""
@@ -64,7 +64,8 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
         """worker.js must serve webp thumbnails with revalidation headers and exclude from immutable extensions."""
         if not self.worker_content:
             return
-        self.assertIn("const IMMUTABLE_MEDIA_EXTENSIONS = /\\.(webm|opus|m4a|aac)$/i;", self.worker_content)
+        self.assertIn("const IMMUTABLE_MEDIA_EXTENSIONS = /\\.(webm|opus|m4a|aac|lrc)$/i;", self.worker_content)
+        self.assertNotIn("webp", "webm|opus|m4a|aac|lrc")
         self.assertIn("const isThumbnail = /\\.webp$/i.test(cleanPath);", self.worker_content)
         self.assertIn('"public, max-age=86400, stale-while-revalidate=604800"', self.worker_content)
 
@@ -165,7 +166,7 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
 
     def test_main_purge_preserves_active_cache(self):
         """main.js executeSitePurgeAndReload must preserve active build caches to avoid blank-screen on rate limit."""
-        self.assertIn("key !== 'yt-player-cache-v150'", self.main_content)
+        self.assertIn("key !== 'yt-player-cache-v153'", self.main_content)
         self.assertIn("!key.includes('-main-')", self.main_content)
         self.assertIn("!key.includes('-dev-')", self.main_content)
         self.assertIn("key !== 'yt-player-shell-v1'", self.main_content)

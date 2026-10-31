@@ -2,9 +2,10 @@
 """
 Workspace PreToolUse Safety Guard for PiYT.
 Deterministically intercepts and blocks commands that attempt to install packages,
-modify global environments, or execute unauthorized operations.
+modify global environments, or execute non-dev git push operations.
 """
 import sys
+import os
 import json
 import re
 
@@ -27,6 +28,41 @@ BLOCKED_COMMAND_PATTERNS = [
     r"(?i)\bscoop\s+(install|uninstall|update)\b",
 ]
 
+def check_command(cmd: str):
+    # 1. Package manager block
+    for pattern in BLOCKED_COMMAND_PATTERNS:
+        match = re.search(pattern, cmd)
+        if match:
+            return False, (
+                f"HARD-GATE REJECTED: Command '{cmd.strip()}' matches blocked pattern "
+                f"'{match.group(0)}'. Package installations and global environment modifications "
+                "are strictly prohibited in this workspace."
+            )
+
+    # 2. Git push hard gate: All pushes MUST be explicitly scoped to dev
+    # Matches: git push, git -C <path> push, git --git-dir=... push, etc.
+    if re.search(r"\bgit(\.exe)?\s+(?:-[^\s]+\s+|--[^\s]+\s+|-[^\s]+\s+[^\s]+\s+)*push\b", cmd):
+        allow_main = (
+            os.path.exists("C:/Users/HauseMaster/Documents/Code/PiYT/.agents/.allow_main_push")
+            or os.path.exists(".agents/.allow_main_push")
+            or "ALLOW_MAIN_PUSH=1" in cmd
+        )
+        # Forbid push to main / master unless explicit authorization token exists
+        if re.search(r"\b(main|master)\b", cmd):
+            if not allow_main:
+                return False, (
+                    f"HARD-GATE REJECTED: Command '{cmd.strip()}' attempts to push to 'main' or 'master'. "
+                    "Direct pushes to production branches are strictly forbidden unless the user explicitly requests a merge/push to main."
+                )
+        # Must explicitly target dev branch unless pushing to main under authorization
+        elif not re.search(r"\bdev\b", cmd):
+            return False, (
+                f"HARD-GATE REJECTED: Command '{cmd.strip()}' does not explicitly specify 'dev'. "
+                "Git pushes must explicitly target the 'dev' branch (e.g. 'git push origin dev'). Bare or non-dev pushes are blocked."
+            )
+
+    return True, "Allowed"
+
 def main():
     try:
         raw_input = sys.stdin.read()
@@ -41,18 +77,13 @@ def main():
 
         if tool_name == "run_command":
             cmd = args.get("CommandLine", "")
-            for pattern in BLOCKED_COMMAND_PATTERNS:
-                match = re.search(pattern, cmd)
-                if match:
-                    print(json.dumps({
-                        "decision": "deny",
-                        "reason": (
-                            f"HARD-GATE REJECTED: Command '{cmd.strip()}' matches blocked pattern "
-                            f"'{match.group(0)}'. Package installations and global environment modifications "
-                            "are strictly prohibited in this workspace."
-                        )
-                    }))
-                    return
+            allowed, reason = check_command(cmd)
+            if not allowed:
+                print(json.dumps({
+                    "decision": "deny",
+                    "reason": reason
+                }))
+                return
 
         print(json.dumps({"decision": "allow"}))
     except Exception:

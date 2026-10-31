@@ -31,8 +31,9 @@
 
 ## 5. Development & Deployment Workflow
 - Always develop, commit, and test on the `dev` branch first.
-- Push to `origin/dev`, wait for CI/CD GitHub Actions to complete successfully.
-- Merge to `main`, push to `origin/main`, and empirically verify live deployment at `https://music.hausemaster.tech`.
+- Push to `origin/dev`: GitHub Actions automatically builds and deploys the staging distribution directly to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
+- Verify the staged release live at `https://music.hausemaster.tech/dev/`.
+- Merge to `main`, push to `origin/main`, and empirically verify live production deployment at `https://music.hausemaster.tech`.
 - Never commit broken code, skip tests, or merge to main without verification.
 
 ## 6. Frontend Audio Engine & Dual Playback Modes
@@ -283,3 +284,36 @@
 - Strictly FORBIDDEN to alter the host Python environment, site-packages, user profiles, or system-wide software configurations.
 - When local tools or parsers (such as `node` or AST libraries) are absent, Antigravity MUST NEVER attempt autonomous package installation. Antigravity must use Python standard library modules or prompt the user.
 - Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.
+
+## 32. Dev-Only Git Push & Staging Deployment Invariant
+- All git commits, pushes, and staging deployments MUST ALWAYS BE SCOPED TO `dev` BY DEFAULT.
+- Strictly FORBIDDEN to execute direct pushes to `main` or `master` (`git push origin main`, bare `git push` on `main`, etc.) unless the user explicitly and unambiguously requests a merge/push to `main` in that exact prompt turn.
+- All git push commands must explicitly target the `dev` branch (e.g. `git push origin dev`).
+- Staging releases automatically deploy to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/` upon pushing to `origin/dev`.
+- Deterministically enforced by workspace `PreToolUse` lifecycle hooks in `.agents/hooks.json`.
+
+
+## 33. External Video Interrupt & Mode 2 Media Notification Pin Preservation
+- In Mode 2, when external media or video steals audio focus (`AUDIOFOCUS_LOSS_TRANSIENT`), `audioPlayer` pauses while `!window.wasPausedByUser`.
+- In Mode 2, MediaSession MUST evaluate `declaredPausedState()` unconditionally without gating on `window.wasPausedByUser`.
+- Chromium Android tears down media notifications immediately if all audio streams pause and `playbackState = 'paused'` is declared. The silent live audio anchor and `playbackState = 'playing'` (at micro-rate `0.00001`) must be retained to defend against native OS card eviction until explicit user-initiated stop.
+
+## 34. Playlist Scroll Edge Navigation
+- `#playlist-scroll-arrow` provides an unstyled edge navigation button positioned at the bottom-right of the playlist panel, offset to clear `#fast-scroller` (`right: 28px`, `z-index: 91`) and dynamic mobile bottom floating UI (`calc(84px + env(safe-area-inset-bottom, 0px))`).
+- Dynamically toggles between up arrow (`scrollTop > 2`, scrolling to 0) and down arrow (`scrollTop <= 2`, scrolling to `scrollHeight`).
+- Scrolling is instant jump snap (`behavior: "instant"` / `scrollTop`) without smooth scrolling animation.
+- Synchronized across container scroll, window resize, and virtual track list re-renders.
+
+## 35. Mobile Playlist Swipe Gestures: Zero-Gap Clamped Underlay & Tap Artifact Prevention
+- Underlay background: `#000000` (`.swipe-underlay`, `.swipe-backdrop`) with `border-radius: 8px`.
+- Action icons: Stroke-based icons for enqueue (list with plus) and download (arrow to tray), sized 22px x 22px with `color: #ffffff`, `stroke-width: 2.2`, `stroke: currentColor`, `fill: none`, `stroke-linecap: round`, `stroke-linejoin: round`.
+- Surface card: `#1e1e1e` with `1px solid rgba(255, 255, 255, 0.08)` and `border-radius: 8px`. Applied seamlessly during `.is-swiping`, `.slide-enqueue`, `.slide-download`, and `.snapping` states so the row card never flashes or reverts prematurely during dragging or snap back.
+- Zero-gap tracking & clamp upon full reveal: `gap = 0`, `iconWidth = 22`, `parkOffset = 22px`. The legend icon follows the card div until fully revealed (`0px`), and clamps thereafter without moving further inwards (`Math.min(0, currentX - parkOffset)` for right swipe, `Math.max(0, currentX + parkOffset)` for left swipe).
+- Minimal green hint/glow: On enqueue threshold and successful release, `.enqueue-success` illuminates with `#00ff88`, `drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))`, and a 5px glowing indicator dot while the card smoothly glides back.
+- Tap artifact jumping prevention: On non-horizontal swipe interactions (`!isHorizontalSwipe`), `handleTouchEnd` immediately resets and exits without attaching `transform` transition or `.snapping` classes. In `renderVirtualTracks()`, pooled virtual nodes are sanitized of lingering transitions and swiping/snapping classes so recycling never animates or jumps across the viewport.
+
+## 36. Mobile Seekbar Instant Seek & Tap Transfer Invariant
+- Direct Coordinate Calculation on Pointerdown: `seekBar` tap interactions must never rely on deferred native `<input type="range">` tap gesture recognition or delayed `change` events. `pointerdown` computes the seek target timestamp directly from `e.clientX` / touch coordinates relative to `seekBar.getBoundingClientRect()`, sets `seekBar.value`, and pre-arms `pendingSeekTarget`.
+- Zero-Delay Touch Action: `.seek-wrap` and `input[type="range"]#seek-bar` must specify `touch-action: none;` to eliminate the 300ms mobile browser gesture disambiguation delay for touch gestures.
+- Single-Fired Deterministic Seek: `endSeek` resolves `pendingSeekTarget` immediately on `pointerup` (or touch release) without waiting for subsequent synthetic `change` events, ensuring 0ms audio transfer latency on mobile taps.
+

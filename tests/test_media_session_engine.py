@@ -308,20 +308,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("armAutoKillWatchdog()", ctx_code)
         self.assertIn("republishMediaMetadata()", ctx_code)
 
-    def test_external_steal_prevents_card_stripping_and_focus_fight(self):
-        """external steal branch avoids metadata churn and does not fight for audio focus"""
-        steal_match = re.search(
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
-            self.ms_content
+    def test_external_steal_mode2_keeps_anchor_alive(self):
+        """Mode 2 external steal preserves live audio anchor without stopping anchor or dropping pin"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{\s*window\.wasPlayingBeforeCall\s*=\s*true;\s*\}'
         )
-        self.assertIsNotNone(steal_match, "Could not find external steal branch")
-        steal_code = steal_match.group(1)
-        self.assertNotIn("republishMediaMetadata()", steal_code)
-        self.assertNotIn("startLiveAudioAnchor()", steal_code)
-        self.assertIn("stopLiveAudioAnchor()", steal_code)
-        self.assertIn("stopAnchorHeartbeat()", steal_code)
-        self.assertIn("clearSpoofBurst()", steal_code)
-        self.assertIn("armAutoKillWatchdog()", steal_code)
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive[\s\S]*?startLiveAudioAnchor\(\);'
+        )
 
     def test_pause_boundary_recycles_anchor(self):
         """mode2 user-pause performs flagged stop+start recycle (genuine focus request)"""
@@ -724,18 +720,18 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'document\.addEventListener\(\s*[\'"]visibilitychange[\'"][\s\S]*?republishMediaMetadata\(\);'
         )
 
-    def test_external_interruption_sets_paused_state_and_recycles_anchor(self):
-        """External focus loss in Mode 2 sets declared state to paused so Android does not evict the card while retaining anchor"""
+    def test_external_interruption_mode2_keeps_anchor_alive(self):
+        """External focus loss in Mode 2 preserves anchor and marks wasPlayingBeforeCall without evicting card"""
         self.assertNotIn("_isExternalInterrupted", self.state_content)
         self.assertNotIn("_isExternalInterrupted", self.ms_content)
         self.assertNotIn("_isExternalInterrupted", self.main_content)
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?return;'
+            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?window\.wasPlayingBeforeCall\s*=\s*true;'
         )
         self.assertRegex(
-            self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.playbackState\s*=\s*[\'"]paused[\'"]'
+            self.main_content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?declaredPausedState\(\)'
         )
 
     def test_anchor_heartbeat_lifecycle_functions_defined(self):
@@ -755,11 +751,15 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'anchorEl\.play\(\)\.then\(\s*\(\)\s*=>\s*\{[\s\S]*?declaredPausedState\(\)'
         )
 
-    def test_telecom_isolation_stops_heartbeat_synchronously(self):
-        """External interruption immediately stops heartbeat and halts anchor to protect audio focus"""
+    def test_telecom_and_video_interrupt_mode2_keepalive(self):
+        """Mode 2 transient pause preserves anchor recycling and heartbeat without dropping to honest paused"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{[\s\S]*?stopAnchorHeartbeat\(\);[\s\S]*?stopLiveAudioAnchor\(\);'
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'startLiveAudioAnchor\(\);[\s\S]*?startAnchorHeartbeat\(\);'
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
@@ -1075,18 +1075,20 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("playbackState = \"paused\"", stale_block_match.group(1))
         self.assertIn("window._forceNextPosition = true;", stale_block_match.group(1))
 
-    def test_external_interruption_does_not_reassert_spoof_burst(self):
-        """External steal branch sets paused, stops heartbeat, clears spoof burst, and does not schedule reassertSpoofBurst"""
-        steal_match = re.search(
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)return;',
-            self.ms_content
+    def test_external_interruption_does_not_drop_mode2_pin(self):
+        """External steal in Mode 2 avoids setting paused state, preserves anchor heartbeat, and reasserts spoof burst"""
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{[\s\S]*?declaredPausedState\(\)'
         )
-        self.assertIsNotNone(steal_match, "Could not find external steal branch")
-        steal_code = steal_match.group(1)
-        self.assertNotIn("reassertSpoofBurst()", steal_code)
-        self.assertNotIn("startAnchorHeartbeat()", steal_code)
-        self.assertIn("clearSpoofBurst()", steal_code)
-        self.assertIn("stopAnchorHeartbeat()", steal_code)
+        self.assertRegex(
+            self.ms_content,
+            r'startAnchorHeartbeat\(\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'function\s+reassertSpoofBurst\(\)\s*\{[\s\S]*?if\s*\(\s*window\.isCallActive\s*\|\|\s*isRecentBtDisconnect\s*\)\s*return;'
+        )
 
     def test_route_addition_does_not_latch_call_or_pause(self):
         """Audio device addition updates knownOutputCount without setting isCallActive or pausing playback"""

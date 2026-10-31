@@ -56,14 +56,14 @@
                     anchorStartTimer = null;
                 }
                 if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     updateMediaSessionPosition(pos, dur, 1.0);
-                    if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
-                if (window.wasPausedByUser && typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -115,14 +115,14 @@
                 if (window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
                     if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
                         if (!window.isCallActive && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                            navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
-                                ? window.declaredPausedState() : 'paused';
+                            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                                ? window.declaredPausedState() : 'playing';
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                             updateMediaSessionPosition(pos, dur, 1.0);
-                            if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                         }
-                        if (window.wasPausedByUser && typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                         if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                             armAutoKillWatchdog();
                         }
@@ -315,14 +315,14 @@
                 }
 
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                    navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
-                        ? window.declaredPausedState() : 'paused';
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     if (typeof updateMediaSessionPosition === 'function') {
                         updateMediaSessionPosition(pos, dur);
                     }
-                    if (window.wasPausedByUser && typeof republishMediaMetadata === 'function') {
+                    if (typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
                     }
                 }
@@ -963,7 +963,7 @@
             republishMediaMetadata();
         }
 
-        navigator.mediaSession.playbackState = (window.wasPausedByUser && typeof window.declaredPausedState === 'function')
+        navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
             ? window.declaredPausedState() : 'paused';
 
         const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
@@ -986,7 +986,8 @@
             try {
                 if (window.playbackMode !== 'mode2') return;
                 if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) return;
-                if (window.isCallActive || !window.wasPausedByUser) return;
+                const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
+                if (window.isCallActive || isRecentBtDisconnect) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
@@ -1143,21 +1144,7 @@
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
                 if (!window.wasPausedByUser) {
-                    // External interruption (video/audio steal while playing): set
-                    // state to 'paused' so Android MediaSession does not evict
-                    // the notification card for conflicting with the focused app.
-                    if (typeof setPlayUI === 'function') setPlayUI(false);
-                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
-                        navigator.mediaSession.playbackState = 'paused';
-                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || 0;
-                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
-                        updateMediaSessionPosition(pos, dur, 1.0);
-                    }
-                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-                    clearSpoofBurst();
-                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
-                    armAutoKillWatchdog();
-                    return;
+                    window.wasPlayingBeforeCall = true;
                 }
                 // Mode 2 pause: recycle the anchor synchronously (stop + start) so
                 // the pause boundary carries a genuine fresh focus request and

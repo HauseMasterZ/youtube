@@ -217,11 +217,12 @@
             li.style.display = "flex";
             li.dataset.playlist = item.playlist;
             li.dataset.index = item.index;
+            li.classList.remove("active", "search-highlight", "snapping", "is-swiping", "slide-enqueue", "slide-download");
+            li.style.transition = 'none';
+            li.style.removeProperty('--swipe-x');
             li.style.transform = `translate3d(0, ${i * ITEM_HEIGHT}px, 0)`;
             
             const isCurrentPlaylist = (item.playlist === currentPl);
-            
-            li.classList.remove("active", "search-highlight");
             const isSearching = (selectedSearchIndex >= 0 && typeof searchInput !== 'undefined' && searchInput && searchInput.value.trim() !== "");
             if (isSearching && i === selectedSearchIndex) {
                 li.classList.add("search-highlight");
@@ -272,6 +273,9 @@
         }
         
         isRendering = false;
+        if (typeof window.updatePlaylistScrollArrow === 'function') {
+            window.updatePlaylistScrollArrow();
+        }
     }
     function scrollToTrack(originalIndex, forceScroll = false) {
         const currentPl = playlistSelect.value;

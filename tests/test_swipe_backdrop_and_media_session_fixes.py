@@ -30,25 +30,41 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertEqual(emoji_pattern.findall(self.test_content), [])
 
     def test_swipe_backdrop_markup(self):
-        """index.html contains #swipe-backdrop inside #playlist-container preceding #track-list"""
+        """index.html contains #swipe-backdrop inside #playlist-container preceding #track-list without text hints"""
         container_match = re.search(
-            r'id="playlist-container"[\s\S]*?<div id="swipe-backdrop"[^>]*class="swipe-backdrop"[\s\S]*?<ul id="track-list">',
+            r'id="playlist-container"[\s\S]*?<div id="swipe-backdrop"[^>]*class="[^"]*swipe-backdrop[^"]*"[\s\S]*?<ul id="track-list">',
             self.html_content
         )
         self.assertIsNotNone(container_match)
-        self.assertIn('class="swipe-legend swipe-legend-enqueue"', self.html_content)
-        self.assertIn('class="swipe-legend swipe-legend-download"', self.html_content)
-        self.assertIn('Enqueue', self.html_content)
-        self.assertIn('Download', self.html_content)
+        self.assertIn('action-enqueue', self.html_content)
+        self.assertIn('action-download', self.html_content)
+        self.assertIn('swipe-legend-enqueue', self.html_content)
+        self.assertIn('swipe-legend-download', self.html_content)
+        self.assertNotIn('<span>Enqueue</span>', self.html_content)
+        self.assertNotIn('<span>Download</span>', self.html_content)
+        backdrop_match = re.search(r'<div id="swipe-backdrop"[\s\S]*?</div>\s*</div>', self.html_content)
+        self.assertIsNotNone(backdrop_match)
+        self.assertNotIn('Enqueue', backdrop_match.group(0))
+        self.assertNotIn('Download', backdrop_match.group(0))
 
     def test_swipe_backdrop_and_legend_css(self):
-        """css/style.css defines swipe backdrop, legends, and opaque card styles"""
+        """css/style.css defines swipe backdrop, legends, and opaque card styles matching test.html"""
         self.assertRegex(self.css_content, r'#track-list\s+li\s*\{[^}]*background-color:\s*#000000;')
         self.assertIn('.swipe-backdrop', self.css_content)
+        self.assertIn('.swipe-underlay', self.css_content)
+        self.assertIn('.underlay-action', self.css_content)
+        self.assertIn('.action-enqueue', self.css_content)
+        self.assertIn('.action-download', self.css_content)
         self.assertIn('.swipe-legend', self.css_content)
         self.assertIn('.swipe-legend-enqueue', self.css_content)
         self.assertIn('.swipe-legend-download', self.css_content)
         self.assertIn('.swipe-legend.legend-triggered', self.css_content)
+        self.assertIn('will-change: transform, opacity;', self.css_content)
+        self.assertIn('.swipe-item-wrapper', self.css_content)
+        self.assertIn('.swipe-item-inner', self.css_content)
+        self.assertIn('.swipe-surface', self.css_content)
+        self.assertIn('#track-list li.is-swiping', self.css_content)
+        self.assertIn('#track-list li.snapping', self.css_content)
 
     def test_active_song_swipe_guard(self):
         """main.js touchstart ignores touch on active song to prevent swiping active track"""
@@ -58,11 +74,15 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_mobile_swipe_backdrop_positioning_and_feedback(self):
-        """main.js positions backdrop at currentY and scales/highlights legends on threshold"""
+        """main.js positions backdrop at currentY and scales/highlights legends on threshold without linear gradient calculations"""
         self.assertIn("swipeBackdrop.style.transform = `translate3d(0, ${currentY}, 0)`;", self.main_content)
         self.assertIn("legEnq.classList.add('legend-triggered')", self.main_content)
         self.assertIn("legDown.classList.add('legend-triggered')", self.main_content)
         self.assertIn("swipeBackdrop.style.opacity = '0';", self.main_content)
+        self.assertNotIn("linear-gradient", self.main_content)
+        self.assertIn("if (isHorizontalSwipe && e.type !== 'touchcancel')", self.main_content)
+        self.assertIn("thresholdRatio = 0.05", self.main_content)
+        self.assertIn("activeLi.classList.add('is-swiping')", self.main_content)
 
     def test_unlock_wave_animation_rebind_cooldown(self):
         """mediaSession.js allows shouldRepublishMetadata once on unlock-playing with 5000ms cooldown"""
@@ -116,15 +136,65 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_swipe_card_remains_opaque(self):
-        """css/style.css ensures slide-enqueue and slide-download remain opaque over black"""
+        """css/style.css ensures slide-enqueue and slide-download match test.html surface card styling"""
         self.assertRegex(
             self.css_content,
-            r'#track-list\s+li\.slide-enqueue\s*\{[^}]*background-color:\s*color-mix\(in srgb,\s*var\(--enqueued-color,\s*#8c73ff\)\s*15%,\s*#000000\)\s*!important;'
+            r'#track-list\s+li\.slide-enqueue[^{]*\{[^}]*background:\s*#1e1e1e\s*!important;'
         )
         self.assertRegex(
             self.css_content,
-            r'#track-list\s+li\.slide-download\s*\{[^}]*background-color:\s*color-mix\(in srgb,\s*#00ff88\s*15%,\s*#000000\)\s*!important;'
+            r'#track-list\s+li\.slide-download\s*\{[^}]*background:\s*#1e1e1e\s*!important;'
         )
+
+    def test_playlist_scroll_arrow_markup_and_css(self):
+        """index.html and style.css define simple playlist scroll arrow button adjacent to fast-scroller with zero extra styling"""
+        self.assertIn('id="playlist-scroll-arrow"', self.html_content)
+        self.assertIn('id="playlist-arrow-up"', self.html_content)
+        self.assertIn('id="playlist-arrow-down"', self.html_content)
+        self.assertIn('.playlist-scroll-arrow', self.css_content)
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*right:\s*28px;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*z-index:\s*91;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*background:\s*transparent;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*border:\s*none;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*outline:\s*none;')
+        self.assertRegex(self.css_content, r'\.playlist-scroll-arrow\s*\{[^}]*box-shadow:\s*none;')
+        self.assertIn('-webkit-tap-highlight-color: transparent;', self.css_content)
+        self.assertIn('transition: background-color 0.25s ease;', self.css_content)
+        self.assertIn('calc(84px + env(safe-area-inset-bottom, 0px))', self.css_content)
+
+    def test_playlist_scroll_arrow_behavior_in_main(self):
+        """main.js binds scroll listener and click handler toggling top and bottom instant scroll"""
+        self.assertIn('playlistScrollArrow.addEventListener("click"', self.main_content)
+        self.assertIn('playlistContainer.scrollTop > 2', self.main_content)
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*0,\s*behavior:\s*["\']instant["\']\s*\}\)')
+        self.assertRegex(self.main_content, r'playlistContainer\.scrollTo\(\{\s*top:\s*playlistContainer\.scrollHeight,\s*behavior:\s*["\']instant["\']\s*\}\)')
+        self.assertIn('playlistContainer.scrollTop = 0;', self.main_content)
+        self.assertIn('playlistContainer.scrollTop = playlistContainer.scrollHeight;', self.main_content)
+        self.assertIn('window.updatePlaylistScrollArrow = updatePlaylistScrollArrow;', self.main_content)
+        self.assertIn('window.addEventListener("resize", updatePlaylistScrollArrow', self.main_content)
+
+    def test_swipe_zero_gap_and_clamped_reveal(self):
+        """main.js and style.css implement zero-gap and clamp icon after full reveal"""
+        self.assertIn("const gap = 0;", self.main_content)
+        self.assertIn("const enqX = Math.min(0, currentX - parkOffset);", self.main_content)
+        self.assertIn("const downX = Math.max(0, currentX + parkOffset);", self.main_content)
+        self.assertIn("transform: translateX(-22px);", self.css_content)
+        self.assertIn("transform: translateX(22px);", self.css_content)
+
+    def test_tap_artifact_prevention(self):
+        """handleTouchEnd immediately exits on non-swipe taps without transitions or snapping"""
+        self.assertIn("if (!isHorizontalSwipe) {", self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'if\s*\(!isHorizontalSwipe\)\s*\{[\s\S]*?targetLi\.classList\.remove\(["\']snapping["\'][\s\S]*?return;'
+        )
+
+    def test_enqueue_success_minimal_green_hint_glow(self):
+        """style.css and main.js define minimal green hint/glow for successful enqueue"""
+        self.assertIn('.action-enqueue.enqueue-success', self.css_content)
+        self.assertIn('color: #00ff88 !important;', self.css_content)
+        self.assertIn('drop-shadow(0 0 6px rgba(0, 255, 136, 0.75))', self.css_content)
+        self.assertIn("legEnq.classList.add('enqueue-success');", self.main_content)
 
     def test_brace_balance(self):
         """main.js and mediaSession.js have balanced curly braces with zero syntax errors"""
