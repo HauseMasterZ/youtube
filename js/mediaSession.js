@@ -1146,24 +1146,12 @@
                 if (!window.wasPausedByUser) {
                     window.wasPlayingBeforeCall = true;
                 }
-                // Mode 2 pause: recycle the anchor synchronously (stop + start) so
-                // the pause boundary carries a genuine fresh focus request and
-                // a rendering graph, whether the anchor was running or not.
-                // A mere no-op when already running loses the pin (m2 68).
-                // Flag-guarded: the trailing pause event must not trip the
-                // anchor auto-handlers (esp. watchdog cancel).
+                // Mode 2 pause: seamless handover ensures anchor is actively and
+                // synchronously running without any pause gap.
                 const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     window.mediaSessionDestroyed = false;
-                    try {
-                        const anchorEl = document.getElementById("live-stream-anchor");
-                        if (anchorEl && !anchorEl.paused) {
-                            _isInternalAnchorStop = true;
-                            try { anchorEl.pause(); } catch (e) {}
-                        }
-                    } catch (e) {}
                     startLiveAudioAnchor();
-                    setTimeout(() => { _isInternalAnchorStop = false; }, 200);
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
@@ -1324,6 +1312,9 @@
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
                     }
+                    if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
@@ -1437,6 +1428,9 @@
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'paused';
+                    }
+                    if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();

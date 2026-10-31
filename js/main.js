@@ -813,6 +813,9 @@ document.addEventListener("DOMContentLoaded", () => {
             setPlayUI(false);
             if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                 ? window.declaredPausedState() : 'paused';
+            if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                startLiveAudioAnchor();
+            }
             audioPlayer.instantPause();
             if (window.playbackMode === 'mode2' && hasMediaSession) {
                 const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
@@ -1072,6 +1075,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 saveLastPlayedState();
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
+                if (typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
+                if (typeof armAutoKillWatchdog === 'function') {
+                    armAutoKillWatchdog();
+                }
                 if (hasMediaSession) {
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';

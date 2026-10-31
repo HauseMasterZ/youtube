@@ -118,7 +118,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
         self.assertRegex(
             self.main_content,
-            r'// Going hidden while paused in Mode 2[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
+            r'// Going hidden while paused in Mode 2[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
         )
 
     def test_republish_metadata_preserves_zero_metadata_churn_without_arg(self):
