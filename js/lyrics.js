@@ -50,7 +50,7 @@
             const folder = parts[0];
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            let res = await fetch(`${lyricsUrl}?v=153`, { priority: 'low' });
+            let res = await fetch(`${lyricsUrl}?v=154`, { priority: 'low' });
             if (!res.ok) res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             let text = await res.text();

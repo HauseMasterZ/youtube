@@ -48,7 +48,7 @@ class TestPlaylistStalenessAndSW(unittest.TestCase):
 
     def test_sw_cache_version_bumped(self):
         """sw.js CACHE_NAME must be bumped to v151 to purge stale caches."""
-        self.assertIn("yt-player-cache-v153", self.sw_content)
+        self.assertIn("yt-player-cache-v154", self.sw_content)
 
     def test_sw_thumbnail_swr_strategy(self):
         """sw.js must implement Stale-While-Revalidate for thumbnails."""
