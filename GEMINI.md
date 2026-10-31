@@ -41,6 +41,7 @@
 - Mobile: Permanent Media Source Extensions (MSE) `<audio>.src` attached once on startup via `URL.createObjectURL(mediaSource)`. Never reassign `audio.src` to avoid `AudioTrack` deallocation and notification destruction.
 - Mode 1: Standard battery saver mode. Declares honest `'paused'` state (rate 1.0) when paused.
 - Mode 2: Car & Bluetooth keepalive. Uses silent audio anchor oscillator to keep DACs awake and micro-rate `0.00001` with `playbackState = 'playing'` when paused to freeze seekbar while pinning notification.
+- Anchor Handover & Background Notification Persistence Invariant: When pausing playback in Mode 2, `startLiveAudioAnchor()` must be synchronously invoked before pausing `<audio>` across all pause call sites (`instantPause`, `pause`, event listeners) to eliminate any transient zero-player gap. On `visibilitychange` transitioning to hidden, `startLiveAudioAnchor()`, `startFocusProbe()`, and `armAutoKillWatchdog()` must be enforced. In Mode 1 (honest paused state), Android OS / Chromium terminates the non-foreground service on `Activity.onStop()` by platform design (`shouldBeForeground() == false`); notification persistence while paused across backgrounding is exclusively guaranteed via Mode 2 keepalive.
 - Zero Audio Leak: Immediate synchronous pause during Mode 2 -> Mode 1 switch; zero audio frames leaked.
 
 ## 7. Security, Secrets & Dataset Write Invariants
