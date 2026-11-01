@@ -838,6 +838,12 @@
                     let validPos = Math.max(0, Math.min(pos, dur));
                     if (!isPaused && !isSeeking && !isBuffering && validRate === 1.0 && _lastSentPosition >= 0) {
                         const elapsedSinceLast = Date.now() - _lastSentTimestamp;
+                        if (elapsedSinceLast < 1500) {
+                            const projected = _lastSentPosition + (elapsedSinceLast * 0.001 * validRate);
+                            if (Math.abs(validPos - projected) < 0.25) {
+                                validPos = Math.max(0, Math.min(projected, dur));
+                            }
+                        }
                         if (elapsedSinceLast < 1000 && validPos < _lastSentPosition) {
                             validPos = _lastSentPosition;
                         }
@@ -957,20 +963,10 @@
 
     window.lastPublishedTrackKey = window.lastPublishedTrackKey || null;
     let lastUnlockRepublishTime = 0;
-    let unlockResumeFlag = false;
 
     function shouldRepublishMetadata(reason) {
         try {
             if (window.mediaSessionDestroyed) return true;
-            const isUnlock = unlockResumeFlag || (typeof reason === 'string' && (reason.startsWith('unlock-playing') || reason.startsWith('pageshow-playing')));
-            if (isUnlock) {
-                const now = Date.now();
-                if (unlockResumeFlag || (now - lastUnlockRepublishTime >= 5000)) {
-                    unlockResumeFlag = false;
-                    lastUnlockRepublishTime = now;
-                    return true;
-                }
-            }
             const md = (typeof navigator !== 'undefined' && navigator.mediaSession) ? navigator.mediaSession.metadata : null;
             if (!md || !md.title) return true;
             if (typeof globalActivePlaylist !== 'undefined' && typeof globalActiveOriginalIndex === 'number'
@@ -987,6 +983,9 @@
     }
     window.shouldRepublishMetadata = shouldRepublishMetadata;
 
+    let _lastForegroundResyncTimestamp = 0;
+    let _resyncFollowerTimeout = null;
+
     function resyncMediaSessionOnForeground(reason) {
         if (typeof hasMediaSession === 'undefined' || !hasMediaSession || !navigator.mediaSession) return;
         if (typeof audioPlayer === 'undefined' || !audioPlayer) return;
@@ -998,14 +997,24 @@
             return;
         }
 
+        const now = Date.now();
+        if (now - _lastForegroundResyncTimestamp < 1500) {
+            return;
+        }
+        _lastForegroundResyncTimestamp = now;
+
+        if (_resyncFollowerTimeout) {
+            clearTimeout(_resyncFollowerTimeout);
+            _resyncFollowerTimeout = null;
+        }
+
         const isPaused = audioPlayer.paused || window.wasPausedByUser;
         if (!isPaused) {
             const isUnlockPlaying = typeof reason === 'string' && (reason.startsWith('unlock-playing') || reason.startsWith('pageshow-playing'));
             if (isUnlockPlaying) {
-                const now = Date.now();
-                if (now - lastUnlockRepublishTime >= 5000) {
-                    unlockResumeFlag = true;
-                }
+                // Unlock recovery: Cooldown interval (5000ms) records last wake timestamp.
+                // Zero Metadata Churn Invariant: Never republish metadata when already valid.
+                lastUnlockRepublishTime = now;
             }
             const needsRebind = (typeof shouldRepublishMetadata === 'function') && shouldRepublishMetadata();
             // Foreground re-anchor: When metadata is healthy and unchanged, do NOT
@@ -1027,7 +1036,8 @@
                 const dur = audioPlayer.duration || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, (audioPlayer && audioPlayer.playbackRate) || 1.0, true);
             } catch (e) {}
-            setTimeout(() => {
+            _resyncFollowerTimeout = setTimeout(() => {
+                _resyncFollowerTimeout = null;
                 try {
                     if (audioPlayer.paused || audioPlayer.switching) return;
                     if (typeof hasMediaSession === 'undefined' || !hasMediaSession) return;

@@ -1147,5 +1147,39 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
         )
 
+    def test_resync_media_session_deduplication_and_single_follower(self):
+        """resyncMediaSessionOnForeground debounces within 1500ms and cancels pending follower to eliminate double resume"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*now\s*-\s*_lastForegroundResyncTimestamp\s*<\s*1500\s*\)\s*\{\s*return;\s*\}'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*_resyncFollowerTimeout\s*\)\s*\{\s*clearTimeout\(_resyncFollowerTimeout\);\s*_resyncFollowerTimeout\s*=\s*null;\s*\}'
+        )
+
+    def test_update_media_session_position_smooth_projected_cadence(self):
+        """updateMediaSessionPosition smoothly projects continuous position to eliminate seekbar wave snapping"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*Math\.abs\(validPos\s*-\s*projected\)\s*<\s*0\.25\s*\)\s*\{\s*validPos\s*=\s*Math\.max\(0,\s*Math\.min\(projected,\s*dur\)\);\s*\}'
+        )
+
+    def test_pageshow_avoids_redundant_last_render_time_inversion(self):
+        """pageshow avoids resetting lastRenderTime to prevent premature timeupdate IPC dispatch"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertNotRegex(
+            main_src,
+            r'window\.addEventListener\([\'"pageshow[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?lastRenderTime\s*=\s*-1;'
+        )
+
+    def test_should_republish_metadata_prevents_unlock_metadata_churn(self):
+        """shouldRepublishMetadata does not churn metadata on unlock when metadata is healthy"""
+        self.assertNotRegex(
+            self.ms_content,
+            r'unlockResumeFlag'
+        )
+
 if __name__ == '__main__':
     unittest.main()

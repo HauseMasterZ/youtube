@@ -1160,7 +1160,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // covers unlock-to-home where hidden stays true.
     window.addEventListener("pageshow", () => {
         if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
-            lastRenderTime = -1;
             if (typeof resyncMediaSessionOnForeground === 'function') {
                 resyncMediaSessionOnForeground('pageshow-playing');
             }
