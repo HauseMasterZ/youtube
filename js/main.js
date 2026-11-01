@@ -727,6 +727,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (view !== 'player' && view !== 'lyrics' && nowPlaying.classList.contains("expanded")) {
             nowPlaying.classList.remove("expanded");
+            if (typeof updatePlaylistScrollArrow === 'function') {
+                updatePlaylistScrollArrow();
+            }
         }
     });
 
@@ -1171,6 +1174,9 @@ document.addEventListener("DOMContentLoaded", () => {
             if (e.target.closest('.control-btn, #thumb-toggle-hint, #album-art-container, #current-channel')) return;
             nowPlaying.classList.add("expanded");
             pushHistoryState('player');
+            if (typeof updatePlaylistScrollArrow === 'function') {
+                updatePlaylistScrollArrow();
+            }
         }
     });
 
@@ -1178,6 +1184,9 @@ document.addEventListener("DOMContentLoaded", () => {
         e.stopPropagation();
         if (nowPlaying.classList.contains("expanded")) {
             history.back();
+            if (typeof updatePlaylistScrollArrow === 'function') {
+                updatePlaylistScrollArrow();
+            }
         }
     });
 
@@ -1195,9 +1204,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (nowPlaying.classList.contains("expanded") && deltaY >= minimizeThreshold) {
                 history.back();
+                if (typeof updatePlaylistScrollArrow === 'function') {
+                    updatePlaylistScrollArrow();
+                }
             } else if (!nowPlaying.classList.contains("expanded") && deltaY <= -20) {
                 nowPlaying.classList.add("expanded");
                 pushHistoryState('player');
+                if (typeof updatePlaylistScrollArrow === 'function') {
+                    updatePlaylistScrollArrow();
+                }
             }
         }, {passive: true});
     }
@@ -2458,18 +2473,46 @@ document.addEventListener("DOMContentLoaded", () => {
     const playlistArrowDown = document.getElementById("playlist-arrow-down");
 
     function updatePlaylistScrollArrow() {
-        if (!playlistScrollArrow || !playlistContainer) return;
-        const isScrolled = playlistContainer.scrollTop > 2;
-        if (playlistArrowUp && playlistArrowDown) {
-            playlistArrowUp.style.display = isScrolled ? "block" : "none";
-            playlistArrowDown.style.display = isScrolled ? "none" : "block";
+        const arrowBtn = (typeof playlistScrollArrow !== 'undefined' && playlistScrollArrow) 
+            ? playlistScrollArrow 
+            : document.getElementById("playlist-scroll-arrow");
+        if (!arrowBtn || !playlistContainer) return;
+        const targetPlayer = (typeof nowPlaying !== 'undefined' && nowPlaying) 
+            ? nowPlaying 
+            : document.getElementById("now-playing");
+        const isExpanded = !!(targetPlayer && targetPlayer.classList.contains("expanded"));
+        if (isExpanded) {
+            arrowBtn.style.display = "none";
+            const altToggle = document.getElementById("playlist-toggle") || document.getElementById("btn-playlist");
+            if (altToggle) altToggle.style.display = "none";
+            return;
         }
-        playlistScrollArrow.setAttribute("aria-label", isScrolled ? "Scroll to top" : "Scroll to bottom");
+        arrowBtn.style.display = "";
+        const altToggle = document.getElementById("playlist-toggle") || document.getElementById("btn-playlist");
+        if (altToggle) altToggle.style.display = "";
+        const upSvg = (typeof playlistArrowUp !== 'undefined' && playlistArrowUp) 
+            ? playlistArrowUp 
+            : document.getElementById("playlist-arrow-up");
+        const downSvg = (typeof playlistArrowDown !== 'undefined' && playlistArrowDown) 
+            ? playlistArrowDown 
+            : document.getElementById("playlist-arrow-down");
+        const isScrolled = playlistContainer.scrollTop > 2;
+        if (upSvg && downSvg) {
+            upSvg.style.display = isScrolled ? "block" : "none";
+            downSvg.style.display = isScrolled ? "none" : "block";
+        }
+        arrowBtn.setAttribute("aria-label", isScrolled ? "Scroll to top" : "Scroll to bottom");
     }
 
     if (playlistScrollArrow && playlistContainer) {
         playlistContainer.addEventListener("scroll", updatePlaylistScrollArrow, { passive: true });
         window.addEventListener("resize", updatePlaylistScrollArrow, { passive: true });
+        if (typeof MutationObserver !== "undefined" && nowPlaying) {
+            const playerObserver = new MutationObserver(() => {
+                updatePlaylistScrollArrow();
+            });
+            playerObserver.observe(nowPlaying, { attributes: true, attributeFilter: ["class"] });
+        }
         updatePlaylistScrollArrow();
 
         playlistScrollArrow.addEventListener("click", (e) => {

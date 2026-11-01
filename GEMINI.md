@@ -304,6 +304,7 @@
 - Dynamically toggles between up arrow (`scrollTop > 2`, scrolling to 0) and down arrow (`scrollTop <= 2`, scrolling to `scrollHeight`).
 - Scrolling is instant jump snap (`behavior: "instant"` / `scrollTop`) without smooth scrolling animation.
 - Synchronized across container scroll, window resize, and virtual track list re-renders.
+- Automatically hidden when the miniplayer is expanded into full player view (`.now-playing.expanded`), restoring visibility seamlessly when collapsed back to miniplayer or default mode. Deterministically enforced across CSS `:has(.now-playing.expanded)` and JavaScript `updatePlaylistScrollArrow()` coupled to class mutation observation, navigation/popstate, click, and swipe expand/collapse transitions.
 
 ## 35. Mobile Playlist Swipe Gestures: Zero-Gap Clamped Underlay & Tap Artifact Prevention
 - Underlay background: `#000000` (`.swipe-underlay`, `.swipe-backdrop`) with `border-radius: 8px`.
