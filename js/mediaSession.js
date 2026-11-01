@@ -816,6 +816,9 @@
                     if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
                         return;
                     }
+                    if (elapsed < 850) {
+                        return;
+                    }
                     if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
@@ -832,7 +835,13 @@
                 }
 
                 if (!isNaN(dur) && isFinite(dur) && dur > 0 && !isNaN(pos) && isFinite(pos) && pos >= 0) {
-                    const validPos = Math.max(0, Math.min(pos, dur));
+                    let validPos = Math.max(0, Math.min(pos, dur));
+                    if (!isPaused && !isSeeking && !isBuffering && validRate === 1.0 && _lastSentPosition >= 0) {
+                        const elapsedSinceLast = Date.now() - _lastSentTimestamp;
+                        if (elapsedSinceLast < 1000 && validPos < _lastSentPosition) {
+                            validPos = _lastSentPosition;
+                        }
+                    }
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,

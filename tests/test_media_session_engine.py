@@ -1124,5 +1124,28 @@ class TestMediaSessionEngine(unittest.TestCase):
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?\(audioPlayer\.switching\s*&&\s*!window\.wasPausedByUser\)'
         )
 
+    def test_update_media_session_position_minimum_inter_anchor_cadence(self):
+        """updateMediaSessionPosition enforces minimum 850ms interval to eliminate double resume snaps"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*elapsed\s*<\s*850\s*\)\s*\{\s*return;\s*\}'
+        )
+
+    def test_update_media_session_position_prevents_backward_snap_on_live_playback(self):
+        """updateMediaSessionPosition prevents backward position snapping during live playback"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*elapsedSinceLast\s*<\s*1000\s*&&\s*validPos\s*<\s*_lastSentPosition\s*\)\s*\{\s*validPos\s*=\s*_lastSentPosition;\s*\}'
+        )
+
+    def test_visibilitychange_avoids_redundant_last_render_time_inversion(self):
+        """visibilitychange retains synchronized lastRenderTime to avoid immediate redundant timeupdate firing"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertNotRegex(
+            main_src,
+            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
+        )
+
 if __name__ == '__main__':
     unittest.main()

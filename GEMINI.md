@@ -94,7 +94,9 @@
   3. Resumes wave animation instantly.
 - Monotonic Position Guards:
   1. Live playback drops backwards jumps (>0.5s within 3000ms) and identical rewrites (<0.25s within 1500ms). Natural forward playback is unconditionally dispatched without forward jump clamping.
-  2. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
+  2. Minimum Inter-Anchor Cadence: Live playback enforces an 850ms minimum interval (`elapsed < 850`) to prevent premature secondary position updates on wake/unlock ticks, eliminating double-resume and wave snapping artifacts.
+  3. Monotonic Forward Clamping: Live playback clamps position so that any forced or asynchronous position update arriving within 1000ms cannot jump backwards from `_lastSentPosition` due to OS timer jitter, ensuring SystemUI's `computePosition` interpolator never experiences backward discontinuity.
+  4. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
 - Mode 2 Paused Micro-Rate Spoof:
   1. Mode 2 paused strictly uses micro-rate `0.00001` with `playbackState = 'playing'` to freeze notification seekbar while keeping the card pinned on mobile.
   2. Mode 1 paused strictly uses rate `1.0` with `playbackState = 'paused'`.
