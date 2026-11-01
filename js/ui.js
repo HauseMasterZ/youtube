@@ -277,7 +277,12 @@
             window.updatePlaylistScrollArrow();
         }
     }
-    function scrollToTrack(originalIndex, forceScroll = false) {
+    function scrollToTrack(originalIndex, forceScroll = false, allowScroll = true) {
+        if (!allowScroll) {
+            lastStartIndex = -1;
+            renderVirtualTracks();
+            return;
+        }
         const currentPl = playlistSelect.value;
         const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
         

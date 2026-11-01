@@ -343,5 +343,14 @@
 - Unconditional Duration Confirmation Synchronization: In `main.js` (`syncDuration`), `updateMediaSessionPosition(audioPlayer.currentTime, roundedDur, null, true)` must be dispatched whenever audio events (`durationchange`, `loadedmetadata`, `canplay`) confirm a valid finite positive duration, regardless of whether `seekBar.max` already equaled `roundedDur`.
 - Defensive SeekTo Action Handling: `setActionHandler('seekto')` must validate and clamp incoming seek targets, update UI, and push the seeked target with confirmed duration to `updateMediaSessionPosition`, ensuring Android SystemUI seekbar scrubbing maintains continuous duration and timestamp display.
 
+## 39. Playlist Track Item Click Scroll Retention Invariant
+- Clicking any playlist track item div (`li` in `#track-list`) strictly retains the current `playlistContainer.scrollTop` position without auto-centering or scrolling `#playlist-container`.
+- In `main.js`, `trackList` click listener explicitly invokes `playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index), false)` passing `shouldScroll = false`.
+- In `playback.js`, `playTrackSelection(targetPlaylist, targetOriginalIndex, shouldScroll = false)` propagates `allowScroll = shouldScroll` to `executePlayback(false, false, shouldScroll, null, shouldScroll)`.
+- In `playback.js`, `executePlayback(..., allowScroll = true)` forwards `allowScroll` to `scrollToTrack(originalIndex, forceScroll, allowScroll)`.
+- In `ui.js`, `scrollToTrack(originalIndex, forceScroll = false, allowScroll = true)` immediately short-circuits via `if (!allowScroll) { lastStartIndex = -1; renderVirtualTracks(); return; }`, updating the `.active` item styling without invoking `playlistContainer.scrollTo(...)`.
+- Natural track auto-advancement (`playNext`, `playPrevious`) maintains `allowScroll = true` default behavior.
+
+
 
 

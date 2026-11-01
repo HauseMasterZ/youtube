@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     searchDebounceTimer = null;
                 }
                 const item = filteredIndices[targetIdx];
-                playTrackSelection(item.playlist, item.index);
+                playTrackSelection(item.playlist, item.index, true);
                 searchInput.blur();
             }
         } else if (e.key === "Escape") {
@@ -694,7 +694,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
-        playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index));
+        playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index), false);
     });
 
     trackList.addEventListener("contextmenu", (e) => {

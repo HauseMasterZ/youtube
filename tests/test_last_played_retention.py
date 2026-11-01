@@ -80,7 +80,7 @@ class TestLastPlayedRetention(unittest.TestCase):
         """executePlayback accepts resumePosition, falls back to _stagedLastPlayedTrack snapshot, and stages UI"""
         self.assertRegex(
             self.playback_content,
-            r'function\s+executePlayback\(\s*preventAutoplay\s*=\s*false,\s*isHistoryNav\s*=\s*false,\s*forceScroll\s*=\s*false,\s*resumePosition\s*=\s*null\s*\)'
+            r'function\s+executePlayback\(\s*preventAutoplay\s*=\s*false,\s*isHistoryNav\s*=\s*false,\s*forceScroll\s*=\s*false,\s*resumePosition\s*=\s*null(?:,\s*allowScroll\s*=\s*true)?\s*\)'
         )
         self.assertIn('window._stagedLastPlayedTrack && window._stagedLastPlayedTrack.trackSnapshot', self.playback_content)
         self.assertIn('track = window._stagedLastPlayedTrack.trackSnapshot;', self.playback_content)

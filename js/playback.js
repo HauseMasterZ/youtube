@@ -513,7 +513,7 @@
         }
     };
 
-    async function playTrackSelection(targetPlaylist, targetOriginalIndex) {
+    async function playTrackSelection(targetPlaylist, targetOriginalIndex, shouldScroll = false) {
         if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
             initLiveAudioAnchor();
         }
@@ -595,7 +595,7 @@
             queueIndex = targetOriginalIndex;
         }
 
-        executePlayback(false, false, true);
+        executePlayback(false, false, shouldScroll, null, shouldScroll);
     }
     window.lastPlaybackDirection = 1;
 
@@ -690,7 +690,7 @@
             audioPlayer.play();
         }
     }
-    function executePlayback(preventAutoplay = false, isHistoryNav = false, forceScroll = false, resumePosition = null) {
+    function executePlayback(preventAutoplay = false, isHistoryNav = false, forceScroll = false, resumePosition = null, allowScroll = true) {
         // preventAutoplay here acts as a uiOnly flag for restoring the last played track
         const uiOnly = preventAutoplay;
         isSeeking = false;
@@ -799,7 +799,7 @@
             currentTitle.textContent = "err " + track.title + " skipping...";
             currentTitle.style.color = "#ff5555";
             currentChannel.textContent = track.channel;
-            scrollToTrack(originalIndex, forceScroll);
+            scrollToTrack(originalIndex, forceScroll, allowScroll);
             
             // Mark the visual list item immediately
             Array.from(trackList.children).forEach(li => li.classList.remove('active'));
@@ -846,7 +846,7 @@
         currentTitle.style.color = "#ffffff"; // Reset color in case it was red from an error
         currentChannel.textContent = track.channel;
 
-        scrollToTrack(originalIndex, forceScroll);
+        scrollToTrack(originalIndex, forceScroll, allowScroll);
 
         let parsedDuration = 0;
         if (track.duration) {
