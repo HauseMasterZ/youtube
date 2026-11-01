@@ -982,9 +982,16 @@ document.addEventListener("DOMContentLoaded", () => {
             if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
                 const tr = currentPlaylistData[globalActiveOriginalIndex];
                 if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
-                else if (tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
-                else if (tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
-                else if (tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
             }
             updateMediaSessionPosition(audioPlayer.currentTime, dur > 0 ? dur : null, 1.0, true);
         }

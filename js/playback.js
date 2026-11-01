@@ -851,12 +851,24 @@
         let parsedDuration = 0;
         if (track.duration) {
             parsedDuration = parseISODuration(track.duration);
+            if (parsedDuration <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
+                parsedDuration = parseInt(track.duration_seconds, 10);
+            }
         } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
             parsedDuration = parseInt(track.duration_seconds, 10);
         } else if (track.length_seconds && !isNaN(track.length_seconds)) {
             parsedDuration = parseInt(track.length_seconds, 10);
         } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
             parsedDuration = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+        }
+        if (parsedDuration <= 0) {
+            if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+                parsedDuration = parseInt(track.duration_seconds, 10);
+            } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+                parsedDuration = parseInt(track.length_seconds, 10);
+            } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                parsedDuration = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+            }
         }
 
         if (parsedDuration > 0) {
@@ -922,15 +934,19 @@
                 const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
                 let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 if (totalDur <= 0 && track) {
-                    if (track.duration) {
-                        totalDur = (typeof parseISODuration === 'function') ? parseISODuration(track.duration) : 0;
-                    } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+                    if (track.duration && typeof parseISODuration === 'function') {
+                        totalDur = parseISODuration(track.duration);
+                    }
+                    if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
                         totalDur = parseInt(track.duration_seconds, 10);
-                    } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+                    }
+                    if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
                         totalDur = parseInt(track.length_seconds, 10);
-                    } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                    }
+                    if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
                         totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
-                    } else if (typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                    }
+                    if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
                         totalDur = parsedDuration;
                     }
                 }
@@ -952,15 +968,19 @@
                                 const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
                                 let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                                 if (totalDur <= 0 && track) {
-                                    if (track.duration) {
-                                        totalDur = (typeof parseISODuration === 'function') ? parseISODuration(track.duration) : 0;
-                                    } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+                                    if (track.duration && typeof parseISODuration === 'function') {
+                                        totalDur = parseISODuration(track.duration);
+                                    }
+                                    if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
                                         totalDur = parseInt(track.duration_seconds, 10);
-                                    } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+                                    }
+                                    if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
                                         totalDur = parseInt(track.length_seconds, 10);
-                                    } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                                    }
+                                    if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
                                         totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
-                                    } else if (typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                                    }
+                                    if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
                                         totalDur = parsedDuration;
                                     }
                                 }
@@ -983,15 +1003,19 @@
                             const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
                             let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             if (totalDur <= 0 && track) {
-                                if (track.duration) {
-                                    totalDur = (typeof parseISODuration === 'function') ? parseISODuration(track.duration) : 0;
-                                } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+                                if (track.duration && typeof parseISODuration === 'function') {
+                                    totalDur = parseISODuration(track.duration);
+                                }
+                                if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
                                     totalDur = parseInt(track.duration_seconds, 10);
-                                } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+                                }
+                                if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
                                     totalDur = parseInt(track.length_seconds, 10);
-                                } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                                }
+                                if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
                                     totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
-                                } else if (typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                                }
+                                if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
                                     totalDur = parsedDuration;
                                 }
                             }

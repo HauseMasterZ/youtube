@@ -518,6 +518,39 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
                 r'try\s*\{[\s\S]*?setActionHandler\(\s*[\'"]' + action + r'[\'"]'
             )
 
+    def test_update_media_session_position_duration_string_parsing(self):
+        """mediaSession.js updateMediaSessionPosition parses string duration_seconds and approxDurationMs"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*rawDur\s*<=\s*0\s*&&\s*activeTrack\.duration_seconds\s*&&\s*!isNaN\(activeTrack\.duration_seconds\)\s*\)\s*\{\s*rawDur\s*=\s*parseInt\(activeTrack\.duration_seconds,\s*10\);'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*rawDur\s*<=\s*0\s*&&\s*activeTrack\.approxDurationMs\s*&&\s*!isNaN\(activeTrack\.approxDurationMs\)\s*\)\s*\{\s*rawDur\s*=\s*Math\.floor\(parseInt\(activeTrack\.approxDurationMs,\s*10\)\s*/\s*1000\);'
+        )
+
+    def test_sync_after_republish_sequential_duration_chaining(self):
+        """syncAfterRepublish applies sequential duration chaining across currentPlaylistData and allDatabases"""
+        self.assertRegex(
+            self.ms_content,
+            r'syncAfterRepublish\s*=\s*\(\)\s*=>\s*\{[\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*tr\.duration_seconds[\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+allDatabases'
+        )
+
+    def test_seek_handlers_sequential_duration_chaining(self):
+        """seekto, seekbackward, and seekforward fall back to allDatabases when duration is zero"""
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekto[\'"][\s\S]*?if\s*\(\s*totalDur\s*<=\s*0\s*&&\s*typeof\s+allDatabases'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekbackward[\'"][\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+allDatabases'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'setActionHandler\(\s*[\'"]seekforward[\'"][\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+allDatabases'
+        )
+
     def test_brace_balance(self):
         """main.js, mediaSession.js, dom.js, and playback.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))

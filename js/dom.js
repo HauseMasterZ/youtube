@@ -164,8 +164,18 @@
 
         _initMSE() {
             if (this._mseInitialized) {
-                if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
-                    try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                if (this._mediaSource && (this._mediaSource.readyState === 'open' || this._mediaSource.readyState === 'ended') && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
+                    if (this._sourceBuffer && this._sourceBuffer.updating) {
+                        this._sourceBuffer.addEventListener('updateend', () => {
+                            try {
+                                if (this._mediaSource && (this._mediaSource.readyState === 'open' || this._mediaSource.readyState === 'ended') && this._expectedDuration > 0) {
+                                    this._mediaSource.duration = this._expectedDuration;
+                                }
+                            } catch (e) {}
+                        }, { once: true });
+                    } else {
+                        try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                    }
                 }
                 return;
             }
@@ -192,11 +202,11 @@
                                 this._mseEnabled = false;
                                 resolve();
                             }
-                        }, { once: true });
+                        });
                     });
                     this._mediaSourceUrl = URL.createObjectURL(this._mediaSource);
                     this.active.src = this._mediaSourceUrl;
-                    if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
+                    if (this._mediaSource && (this._mediaSource.readyState === 'open' || this._mediaSource.readyState === 'ended') && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
                         try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
                     }
                 } catch (e) {
@@ -623,7 +633,14 @@
                             if (p.then) {
                                 p.then(() => {
                                     if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
-                                        const dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                        let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                        if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                                            const tr = currentPlaylistData[globalActiveOriginalIndex];
+                                            if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                            if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                            if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                            if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                                        }
                                         if (typeof updateMediaSessionPosition === 'function') {
                                             updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
                                         }
@@ -634,7 +651,26 @@
                                 if (e && e.name === 'AbortError' && !window.wasPausedByUser && this._streamId === activeStreamId) {
                                     setTimeout(() => {
                                         if (!window.wasPausedByUser && this._streamId === activeStreamId && this.active.paused) {
-                                            this.active.play().catch(() => {});
+                                            const retryP = this.active.play();
+                                            if (retryP && retryP.then) {
+                                                retryP.then(() => {
+                                                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                                        let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                                        if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                                                            const tr = currentPlaylistData[globalActiveOriginalIndex];
+                                                            if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                                            if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                                            if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                                            if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                                                        }
+                                                        if (typeof updateMediaSessionPosition === 'function') {
+                                                            updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
+                                                        }
+                                                    }
+                                                }).catch(() => {});
+                                            } else if (retryP && retryP.catch) {
+                                                retryP.catch(() => {});
+                                            }
                                         }
                                     }, 60);
                                 } else {

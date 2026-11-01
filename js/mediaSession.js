@@ -748,15 +748,18 @@
                     }
 
                     if (activeTrack) {
-                        if (activeTrack.duration) {
-                            const parsed = (typeof parseISODuration === 'function') ? parseISODuration(activeTrack.duration) : 0;
+                        if (activeTrack.duration && typeof parseISODuration === 'function') {
+                            const parsed = parseISODuration(activeTrack.duration);
                             if (parsed > 0) rawDur = parsed;
-                        } else if (typeof activeTrack.duration_seconds === 'number' && activeTrack.duration_seconds > 0) {
-                            rawDur = activeTrack.duration_seconds;
-                        } else if (typeof activeTrack.length_seconds === 'number' && activeTrack.length_seconds > 0) {
-                            rawDur = activeTrack.length_seconds;
-                        } else if (typeof activeTrack.approxDurationMs === 'number' && activeTrack.approxDurationMs > 0) {
-                            rawDur = Math.floor(activeTrack.approxDurationMs / 1000);
+                        }
+                        if (rawDur <= 0 && activeTrack.duration_seconds && !isNaN(activeTrack.duration_seconds)) {
+                            rawDur = parseInt(activeTrack.duration_seconds, 10);
+                        }
+                        if (rawDur <= 0 && activeTrack.length_seconds && !isNaN(activeTrack.length_seconds)) {
+                            rawDur = parseInt(activeTrack.length_seconds, 10);
+                        }
+                        if (rawDur <= 0 && activeTrack.approxDurationMs && !isNaN(activeTrack.approxDurationMs)) {
+                            rawDur = Math.floor(parseInt(activeTrack.approxDurationMs, 10) / 1000);
                         }
                     }
                 }
@@ -873,10 +876,17 @@
                         if (dur <= 0) {
                             if (typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
                                 const tr = currentPlaylistData[globalActiveOriginalIndex];
-                                dur = (typeof parseISODuration === 'function' && tr.duration) ? parseISODuration(tr.duration) : (tr.duration_seconds || 0);
-                            } else if (typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                            }
+                            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
                                 const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
-                                dur = (typeof parseISODuration === 'function' && tr.duration) ? parseISODuration(tr.duration) : (tr.duration_seconds || 0);
+                                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
                             }
                         }
                         if (dur > 0 && typeof updateMediaSessionPosition === 'function') {
@@ -1590,7 +1600,17 @@
                 let totalDur = (audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                 if (totalDur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
                     const tr = currentPlaylistData[globalActiveOriginalIndex];
-                    totalDur = (typeof parseISODuration === 'function' && tr.duration) ? parseISODuration(tr.duration) : (tr.duration_seconds || 0);
+                    if (tr.duration && typeof parseISODuration === 'function') totalDur = parseISODuration(tr.duration);
+                    if (totalDur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) totalDur = parseInt(tr.duration_seconds, 10);
+                    if (totalDur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) totalDur = parseInt(tr.length_seconds, 10);
+                    if (totalDur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) totalDur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                }
+                if (totalDur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                    const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                    if (tr.duration && typeof parseISODuration === 'function') totalDur = parseISODuration(tr.duration);
+                    if (totalDur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) totalDur = parseInt(tr.duration_seconds, 10);
+                    if (totalDur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) totalDur = parseInt(tr.length_seconds, 10);
+                    if (totalDur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) totalDur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
                 }
                 updateMediaSessionPosition(seekTarget, totalDur, null, true);
             } catch (e) {
@@ -1622,7 +1642,17 @@
             let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
             if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
                 const tr = currentPlaylistData[globalActiveOriginalIndex];
-                dur = (typeof parseISODuration === 'function' && tr.duration) ? parseISODuration(tr.duration) : (tr.duration_seconds || 0);
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
             }
             updateMediaSessionPosition(newTime, dur, null, true);
             // Mode 2 seek-resume: center Play is swallowed by C++ under spoof,
@@ -1670,7 +1700,17 @@
             let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
             if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
                 const tr = currentPlaylistData[globalActiveOriginalIndex];
-                dur = (typeof parseISODuration === 'function' && tr.duration) ? parseISODuration(tr.duration) : (tr.duration_seconds || 0);
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
             }
             const newTime = Math.min(dur > 0 ? dur : Infinity, (audioPlayer.currentTime || 0) + skipTime);
             audioPlayer.currentTime = newTime;
