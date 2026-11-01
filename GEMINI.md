@@ -102,6 +102,7 @@
 - Mode 2 Paused Micro-Rate Spoof:
   1. Mode 2 paused strictly uses micro-rate `0.00001` with `playbackState = 'playing'` to freeze notification seekbar while keeping the card pinned on mobile.
   2. Mode 1 paused strictly uses rate `1.0` with `playbackState = 'paused'`.
+  3. Mode 2 Pause Eviction Elimination: Pausing via media card action handlers (`pause`, `playpause`) or in-app UI synchronously freezes position at micro-rate 0.00001, republishes metadata, and invokes `startAnchorHeartbeat(0)` with zero delay while guarding `startFocusProbe()` with `!window.wasPausedByUser` and guarding active `anchorEl` against destructive pause cycling, preventing Chromium `normal_players_` drop to 0 and eliminating transient notification card eviction in Android SystemUI.
 - Post-Call Media Card Resurrection Invariant:
   1. When an active call ends (in Mode 1 or Mode 2), Android SystemUI may have evicted or stripped the inactive notification card during the call.
   2. Because Chromium C++ deduplicates identical metadata (`if (metadata_ == metadata) return;`), calling `republishMediaMetadata()` with identical fields sends zero Mojo IPC to Android.

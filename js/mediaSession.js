@@ -192,7 +192,7 @@
             });
         }
         if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-            startAnchorHeartbeat();
+            startAnchorHeartbeat(window.wasPausedByUser ? 0 : 1000);
         }
     }
 
@@ -299,6 +299,25 @@
                 liveAudioContext.resume().catch(() => {});
             }
 
+            // Eliminate destructive anchorEl.pause() when anchorEl is already actively running/playing.
+            // Pausing drops Chromium normal_players_ to 0, evicting the notification card.
+            if (!anchorEl.paused) {
+                if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                    if (typeof updateMediaSessionPosition === 'function') {
+                        updateMediaSessionPosition(pos, dur, 0.00001, true);
+                    }
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
+                }
+                stopAnchorHeartbeat();
+                return;
+            }
+
             _isAnchorPlayPending = true;
             _isInternalAnchorStop = true;
             try { anchorEl.pause(); } catch (e) {}
@@ -320,7 +339,7 @@
                     const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur);
+                        updateMediaSessionPosition(pos, dur, 0.00001, true);
                     }
                     if (typeof republishMediaMetadata === 'function') {
                         republishMediaMetadata();
@@ -333,13 +352,19 @@
             });
         }
 
-        anchorHeartbeatTimeout = setTimeout(() => {
+        const executeTick = () => {
             anchorHeartbeatTimeout = null;
             runTick();
             if (anchorHeartbeatTimer === null && window.playbackMode === 'mode2' && !window.isCallActive && !window.mediaSessionDestroyed && (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused)) {
                 anchorHeartbeatTimer = setInterval(runTick, 1200);
             }
-        }, initialDelay);
+        };
+
+        if (initialDelay <= 0) {
+            executeTick();
+        } else {
+            anchorHeartbeatTimeout = setTimeout(executeTick, initialDelay);
+        }
     }
 
     function stopAnchorHeartbeat() {
@@ -1247,9 +1272,9 @@
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     window.mediaSessionDestroyed = false;
                     startLiveAudioAnchor();
-                    if (typeof startFocusProbe === 'function') startFocusProbe();
+                    if (!window.wasPausedByUser && typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
-                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(window.wasPausedByUser ? 0 : 1000);
                 }
             } else {
                 if (isRecentBtDisconnect) {
@@ -1415,13 +1440,24 @@
                     if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                         startLiveAudioAnchor();
                     }
+                    if (typeof hasMediaSession !== 'undefined' && hasMediaSession && typeof updateMediaSessionPosition === 'function') {
+                        const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                            ? audioPlayer.active.currentTime
+                            : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
+                        updateMediaSessionPosition(pos, dur, 0.00001, true);
+                    }
+                    if (typeof republishMediaMetadata === 'function') {
+                        republishMediaMetadata();
+                    }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
                         audioPlayer.pause();
                     }
                     startLiveAudioAnchor();
-                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                     armAutoKillWatchdog();
                 }
             } else {
@@ -1532,6 +1568,18 @@
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
+                        if (window.playbackMode === 'mode2') {
+                            if (typeof updateMediaSessionPosition === 'function') {
+                                const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                                    ? audioPlayer.active.currentTime
+                                    : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
+                                updateMediaSessionPosition(pos, dur, 0.00001, true);
+                            }
+                            if (typeof republishMediaMetadata === 'function') {
+                                republishMediaMetadata();
+                            }
+                        }
                         if (window.playbackMode !== 'mode2' && typeof updateMediaSessionPosition === 'function') {
                             const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                             const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
@@ -1550,7 +1598,8 @@
                     if (window.playbackMode === 'mode2') {
                         startLiveAudioAnchor();
                         armAutoKillWatchdog();
-                        if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
+                        if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                        if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                     } else {
                         stopLiveAudioAnchor();
                         cancelAutoKillWatchdog();

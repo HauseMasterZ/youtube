@@ -820,23 +820,30 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             window.wasPausedByUser = true;
             setPlayUI(false);
-            if (window.playbackMode === 'mode2') {
-                if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+            if (window.playbackMode === 'mode2' && hasMediaSession) {
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'playing';
+                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+                if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+            }
+            if (window.playbackMode === 'mode2') {
                 if (!window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                     startLiveAudioAnchor();
                 }
                 audioPlayer.instantPause();
+                if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
             } else {
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                        ? audioPlayer.active.currentTime
+                        : (audioPlayer ? audioPlayer.currentTime : 0);
+                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                }
                 audioPlayer.instantPause();
-            }
-            if (window.playbackMode === 'mode2' && hasMediaSession) {
-                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
-            } else if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
             }
         }
     });
@@ -1026,6 +1033,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'playing';
+                if (window.wasPausedByUser) {
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 if (isRecentBtDisconnect) {
