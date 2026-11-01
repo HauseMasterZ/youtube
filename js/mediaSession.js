@@ -1313,9 +1313,14 @@
         // inactivity, not handler presence), and an unhandled triangle risks
         // breaking discrete BT PLAY keys. Triangle taps under spoof stay
         // dropped by Chromium; documented limitation.
-        navigator.mediaSession.setActionHandler('play', handlePlayAction);
+        try {
+            navigator.mediaSession.setActionHandler('play', handlePlayAction);
+        } catch (e) {
+            console.warn("MediaSession play action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('pause', () => {
+        try {
+            navigator.mediaSession.setActionHandler('pause', () => {
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
@@ -1412,6 +1417,10 @@
                 cancelAutoKillWatchdog();
             }
         });
+            try {} catch (e) {}
+        } catch (e) {
+            console.warn("MediaSession pause action registration failed:", e);
+        }
 
         let lastPlayPauseToggleTime = 0;
         try {
@@ -1527,7 +1536,8 @@
             window.lastPlaybackModeTransitions = { time: 0, action: null };
         }
 
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
+        try {
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'next' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1540,8 +1550,12 @@
             }
             playPrev();
         });
+        } catch (e) {
+            console.warn("MediaSession previoustrack action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
+        try {
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'prev' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1554,8 +1568,12 @@
             }
             playNext();
         });
+        } catch (e) {
+            console.warn("MediaSession nexttrack action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
+        try {
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
             try {
                 const seekTarget = (typeof details === 'object' && details !== null && typeof details.seekTime === 'number')
                     ? details.seekTime
@@ -1579,8 +1597,12 @@
                 console.warn("MediaSession seekto error:", e);
             }
         });
+        } catch (e) {
+            console.warn("MediaSession seekto action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        try {
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'seekfwd' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1627,8 +1649,12 @@
                 audioPlayer.play().catch(e => console.warn("MediaSession seekbackward resume error:", e));
             }
         });
+        } catch (e) {
+            console.warn("MediaSession seekbackward action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        try {
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'seekback' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1672,4 +1698,7 @@
                 audioPlayer.play().catch(e => console.warn("MediaSession seekforward resume error:", e));
             }
         });
+        } catch (e) {
+            console.warn("MediaSession seekforward action registration failed:", e);
+        }
     }

@@ -163,7 +163,12 @@
         }
 
         _initMSE() {
-            if (this._mseInitialized) return;
+            if (this._mseInitialized) {
+                if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
+                    try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                }
+                return;
+            }
             this._mseInitialized = true;
             const mime = 'audio/webm; codecs="opus"';
             if ('MediaSource' in window && MediaSource.isTypeSupported(mime)) {
@@ -191,6 +196,9 @@
                     });
                     this._mediaSourceUrl = URL.createObjectURL(this._mediaSource);
                     this.active.src = this._mediaSourceUrl;
+                    if (this._mediaSource && this._mediaSource.readyState === 'open' && this._expectedDuration && typeof this._expectedDuration === 'number' && this._expectedDuration > 0) {
+                        try { this._mediaSource.duration = this._expectedDuration; } catch (e) {}
+                    }
                 } catch (e) {
                     console.warn("MSE init failed:", e);
                     this._mseEnabled = false;
@@ -518,6 +526,7 @@
         }
 
         async switchTrack(url, preventAutoplay, expectedDuration = 0, resumePosition = null) {
+            this._expectedDuration = expectedDuration || 0;
             this._initMSE();
             this.switching = true;
             this._endedFired = false;
@@ -529,7 +538,6 @@
             this._isBufferStalled = false;
             this.lastKnownTime = 0;
             this._currentUrl = url || '';
-            this._expectedDuration = expectedDuration || 0;
             this._preventAutoplay = !!preventAutoplay;
             if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
                 this._pendingSeek = resumePosition;
@@ -612,6 +620,16 @@
                     if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
                         const p = this.active.play();
                         if (p && p.catch) {
+                            if (p.then) {
+                                p.then(() => {
+                                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                        const dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                        if (typeof updateMediaSessionPosition === 'function') {
+                                            updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
+                                        }
+                                    }
+                                });
+                            }
                             p.catch(e => {
                                 if (e && e.name === 'AbortError' && !window.wasPausedByUser && this._streamId === activeStreamId) {
                                     setTimeout(() => {

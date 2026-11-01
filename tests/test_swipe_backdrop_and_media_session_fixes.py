@@ -481,6 +481,43 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
             r'setActionHandler\(\s*[\'"]seekforward[\'"][\s\S]*?if\s*\(\s*dur\s*<=\s*0\s*&&\s*typeof\s+currentPlaylistData[\s\S]*?updateMediaSessionPosition\(\s*newTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
         )
 
+    def test_async_artwork_duration_fallback_chaining(self):
+        """publishTrackMetadata applies duration fallback chaining inside async square artwork callbacks"""
+        self.assertRegex(
+            self.playback_content,
+            r'getSquareArtwork\(thumbUrl,\s*track\.id,\s*\(\s*sqUrl\s*\)\s*=>\s*\{[\s\S]*?let\s+totalDur\s*=[\s\S]*?if\s*\(\s*totalDur\s*<=\s*0\s*&&\s*track\s*\)\s*\{[\s\S]*?track\.duration_seconds[\s\S]*?track\.approxDurationMs[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+        self.assertRegex(
+            self.playback_content,
+            r'getCachedSquareArtwork\(track\.id,\s*thumbUrl,\s*\(\s*sqUrl\s*\)\s*=>\s*\{[\s\S]*?let\s+totalDur\s*=[\s\S]*?if\s*\(\s*totalDur\s*<=\s*0\s*&&\s*track\s*\)\s*\{[\s\S]*?track\.duration_seconds[\s\S]*?track\.approxDurationMs[\s\S]*?updateMediaSessionPosition\(\s*curPos\s*,\s*totalDur\s*,\s*null\s*,\s*true\s*\);'
+        )
+
+    def test_mse_expected_duration_early_binding_in_switch_track(self):
+        """switchTrack sets this._expectedDuration prior to invoking _initMSE"""
+        self.assertRegex(
+            self.dom_content,
+            r'async\s+switchTrack\([^)]*\)\s*\{[\s\S]*?this\._expectedDuration\s*=\s*expectedDuration[\s\S]*?this\._initMSE\(\);'
+        )
+
+    def test_safe_play_and_playing_event_rate_1_dispatch(self):
+        """safePlay and audioPlayer playing event immediately dispatch updateMediaSessionPosition with rate 1.0"""
+        self.assertRegex(
+            self.dom_content,
+            r'const\s+safePlay\s*=\s*\(\s*\)\s*=>\s*\{[\s\S]*?const\s+p\s*=\s*this\.active\.play\(\);[\s\S]*?p\.then\(\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\(\s*this\.active\.currentTime[\s\S]*?1\.0\s*,\s*true\s*\);'
+        )
+        self.assertRegex(
+            self.main_content,
+            r'audioPlayer\.addEventListener\(\s*[\'"]playing[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?lastRenderTime\s*=\s*-1;[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime[\s\S]*?1\.0\s*,\s*true\s*\);'
+        )
+
+    def test_action_handler_individual_try_catch_isolation(self):
+        """mediaSession.js encloses action handler registrations in individual try-catch blocks"""
+        for action in ('play', 'pause', 'playpause', 'previoustrack', 'nexttrack', 'seekto', 'seekbackward', 'seekforward'):
+            self.assertRegex(
+                self.ms_content,
+                r'try\s*\{[\s\S]*?setActionHandler\(\s*[\'"]' + action + r'[\'"]'
+            )
+
     def test_brace_balance(self):
         """main.js, mediaSession.js, dom.js, and playback.js have balanced curly braces with zero syntax errors"""
         self.assertEqual(self.main_content.count('{'), self.main_content.count('}'))
