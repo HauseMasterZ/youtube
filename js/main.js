@@ -1744,6 +1744,18 @@ document.addEventListener("DOMContentLoaded", () => {
         albumArtContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);
     }
 
+    // Ensure default focus persists on main site when buttons are activated via pointer
+    document.addEventListener("click", (e) => {
+        if (!e.detail) return; // keyboard-generated or programmatic clicks
+        const el = e.target instanceof Element ? e.target : null;
+        const btn = el && el.closest('button, [role="button"]');
+        if (!btn) return;
+        if (btn.closest('#settings-modal') || btn.closest('[aria-modal="true"]')) return;
+        if (typeof btn.blur === 'function') {
+            btn.blur();
+        }
+    }, true);
+
     // --- Mobile Horizontal Swipe on Playlist Select Container to Switch Playlists ---
     if (hasTouch && playlistSelectContainer) {
         let plTouchStartX = 0;
@@ -1976,14 +1988,16 @@ document.addEventListener("DOMContentLoaded", () => {
             let dur = audioPlayer.duration;
             if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
             audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-        } else if (e.key === ' ') {
+        } else if (e.key === ' ' || e.code === 'Space') {
             if (e.repeat) {
                 e.preventDefault();
                 return;
             }
-            if (e.target && e.target.tagName === 'BUTTON') return;
-            btnPlayPause.click();
+            if (document.activeElement && typeof document.activeElement.blur === 'function' && document.activeElement !== document.body) {
+                document.activeElement.blur();
+            }
             e.preventDefault();
+            btnPlayPause.click();
         } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
             btnRepeat.click();
             e.preventDefault();
@@ -2071,6 +2085,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function closeSettingsModal() {
         if (settingsModal) settingsModal.style.display = 'none';
         if (settingsBackdrop) settingsBackdrop.style.display = 'none';
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
     }
 
     window.openSettingsModal = openSettingsModal;

@@ -351,6 +351,14 @@
 - In `ui.js`, `scrollToTrack(originalIndex, forceScroll = false, allowScroll = true)` immediately short-circuits via `if (!allowScroll) { lastStartIndex = -1; renderVirtualTracks(); return; }`, updating the `.active` item styling without invoking `playlistContainer.scrollTo(...)`.
 - Natural track auto-advancement (`playNext`, `playPrevious`) maintains `allowScroll = true` default behavior.
 
+## 40. Main PWA Default Focus & Spacebar Play/Pause Invariant
+- Default focus strictly persists on the main PWA site (`document.body`).
+- Pointer clicks (`e.detail > 0`) on buttons (`button, [role="button"]`) outside modal dialogs immediately invoke `btn.blur()`, returning `document.activeElement` to `document.body` and preventing button focus retention.
+- In `main.js`, the global keydown listener for Spacebar (`e.key === ' ' || e.code === 'Space'`) unconditionally blurs active buttons, dispatches `e.preventDefault()`, and triggers `btnPlayPause.click()`.
+- Buttons never retain focus after pointer interaction, and Spacebar keypresses never repeat or activate the most recently clicked button (such as Next Track `#btn-next`).
+- Editable text inputs (`input[type!="range"]`, `textarea`, `select`, `isContentEditable`) and active modal dialogs (`#settings-modal`) remain isolated from global Spacebar playback interception.
+
+
 
 
 
