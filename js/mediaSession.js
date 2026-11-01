@@ -64,6 +64,9 @@
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                 }
                 if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
+                    startLiveAudioAnchor();
+                }
                 if (window.btSleepTimer === null && typeof armAutoKillWatchdog === 'function') {
                     armAutoKillWatchdog();
                 }
@@ -458,7 +461,6 @@
         if (!probeEl || probeEl._boundFocusProbe) return;
         probeEl._boundFocusProbe = true;
         probeEl.addEventListener("pause", () => {
-            if (document.hidden) return;
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
             if (!_isProbeInternal && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !window.isCallActive && !isRecentBtDisconnect) {
                 // Steal-or-idle suspend observed. Deliberately NO state write:
@@ -962,19 +964,23 @@
                 }
 
                 if (current && current.title) {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: current.title,
-                        artist: current.artist,
-                        album: current.album,
-                        artwork: current.artwork
-                    });
+                    if (forceBreakDedup || (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata())) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: current.title,
+                            artist: current.artist,
+                            album: current.album,
+                            artwork: current.artwork
+                        });
+                    }
                 } else if (lastValidMetadata) {
-                    navigator.mediaSession.metadata = new MediaMetadata({
-                        title: lastValidMetadata.title,
-                        artist: lastValidMetadata.artist,
-                        album: lastValidMetadata.album,
-                        artwork: lastValidMetadata.artwork
-                    });
+                    if (forceBreakDedup || (typeof shouldRepublishMetadata === 'function' && shouldRepublishMetadata())) {
+                        navigator.mediaSession.metadata = new MediaMetadata({
+                            title: lastValidMetadata.title,
+                            artist: lastValidMetadata.artist,
+                            album: lastValidMetadata.album,
+                            artwork: lastValidMetadata.artwork
+                        });
+                    }
                 } else if (typeof allDatabases !== 'undefined' && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && allDatabases[globalActivePlaylist][globalActiveOriginalIndex] && typeof window.publishTrackMetadata === 'function') {
                     const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
                     const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
@@ -1109,6 +1115,9 @@
                 const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                 if (window.isCallActive || isRecentBtDisconnect) return;
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
+                    if (window.playbackMode === 'mode2' && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
                     if (typeof updateMediaSessionPosition === 'function' && typeof audioPlayer !== 'undefined' && audioPlayer) {

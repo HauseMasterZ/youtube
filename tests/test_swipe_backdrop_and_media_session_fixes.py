@@ -113,10 +113,14 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         )
 
     def test_probe_pause_listener_hidden_guard(self):
-        """probeEl pause listener ignores power manager suspend events while document is hidden"""
+        """probeEl pause listener unblocks background defense bursts in Mode 2 without document.hidden drop"""
+        self.assertNotIn(
+            'if (document.hidden) return;',
+            self.ms_content
+        )
         self.assertRegex(
             self.ms_content,
-            r'probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{\s*if\s*\(\s*document\.hidden\s*\)\s*return;'
+            r'probeEl\.addEventListener\(\s*["\']pause["\']\s*,\s*\(\)\s*=>\s*\{\s*const\s+isRecentBtDisconnect'
         )
 
     def test_in_app_pause_and_hidden_transition_push_mode2_micro_rate(self):

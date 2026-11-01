@@ -1037,6 +1037,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
                     if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                } else {
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works

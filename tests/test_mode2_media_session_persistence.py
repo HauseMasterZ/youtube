@@ -291,6 +291,72 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
         self.assertFalse(defective_sim.chromium_is_controllable())
         self.assertTrue(defective_sim.android_hide_delayed_task_count > 0, "Legacy unpatched defect triggers hideNotificationDelayed")
 
+    def test_republish_metadata_gates_instantiation_behind_should_republish(self):
+        """republishMediaMetadata gates new MediaMetadata allocation behind shouldRepublishMetadata to prevent SystemUI blinking"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*forceBreakDedup\s*\|\|\s*\(\s*typeof\s+shouldRepublishMetadata\s*===\s*[\'"]function[\'"]\s*&&\s*shouldRepublishMetadata\(\)\s*\)\s*\)\s*\{[\s\S]*?navigator\.mediaSession\.metadata\s*=\s*new\s+MediaMetadata\('
+        )
+
+    def test_reassert_spoof_burst_rearms_live_audio_anchor_in_mode2(self):
+        """reassertSpoofBurst re-arms startLiveAudioAnchor within 150ms progressive tick to satisfy Android 500ms deadline"""
+        burst_match = re.search(
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{([\s\S]*?)\n    \}',
+            self.ms_content
+        )
+        self.assertIsNotNone(burst_match, "reassertSpoofBurst block not found")
+        content = burst_match.group(1)
+        self.assertRegex(
+            content,
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);'
+        )
+
+    def test_anchor_pause_listener_rearms_live_anchor_in_mode2(self):
+        """anchorEl pause listener immediately re-invokes startLiveAudioAnchor in Mode 2"""
+        self.assertRegex(
+            self.ms_content,
+            r'anchorEl\.addEventListener\(\s*["\']pause["\'][\s\S]*?reassertSpoofBurst\(\);[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);'
+        )
+
+    def test_main_pause_listener_triggers_reassert_spoof_burst_on_external_interrupt(self):
+        """audioPlayer pause listener in main.js calls reassertSpoofBurst on external video focus loss (!wasPausedByUser)"""
+        pause_block = re.search(
+            r"audioPlayer\.addEventListener\(\s*['\"]pause['\"][\s\S]*?\n    \}\);",
+            self.main_content
+        )
+        self.assertIsNotNone(pause_block, "audioPlayer pause listener not found in main.js")
+        content = pause_block.group(0)
+        self.assertRegex(
+            content,
+            r"if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{[\s\S]*?\}\s*else\s*\{\s*if\s*\(\s*typeof\s+reassertSpoofBurst\s*===\s*['\"]function['\"]\s*\)\s*reassertSpoofBurst\(\);\s*\}"
+        )
+
+    def test_synthetic_simulation_mode2_external_focus_loss_transient_preserves_card(self):
+        """Synthetic simulation: external video interrupt (AUDIOFOCUS_LOSS_TRANSIENT) preserves pinned notification card"""
+        sim = SyntheticMediaSessionPipeline(playback_mode='mode2')
+        sim.start_playback(track_name='External Interrupt Test Track', duration=210.0)
+
+        # External video steals focus: fires AUDIOFOCUS_LOSS_TRANSIENT
+        sim.simulate_external_focus_loss_transient()
+
+        # Audio player is paused by external system focus loss
+        self.assertTrue(sim.audio_player.paused)
+        self.assertFalse(sim.window['wasPausedByUser'], "External focus steal must NOT mark wasPausedByUser")
+        self.assertTrue(sim.window['wasPlayingBeforeCall'])
+
+        # Mode 2 defense burst is triggered
+        self.assertTrue(sim.reassert_spoof_burst_called)
+
+        # Spoof burst restores anchor to Chromium normal_players_ within 150ms
+        self.assertGreaterEqual(sim.chromium_normal_players_count(), 1)
+        self.assertEqual(sim.chromium_audio_focus_state, 'ACTIVE')
+        self.assertTrue(sim.chromium_is_controllable())
+
+        # Android SystemUI notification card remains pinned
+        self.assertTrue(sim.android_notification_visible)
+        self.assertEqual(sim.android_hide_delayed_task_count, 0, "hideNotificationDelayed must NOT be scheduled on external interrupt")
+        self.assertEqual(sim.navigator_media_session['playbackState'], 'playing')
+
 
 # Synthetic Mock Framework for Chromium & Android SystemUI Media Lifecycle
 
@@ -409,6 +475,10 @@ class SyntheticMediaSessionPipeline:
 
     def _reassert_spoof_burst(self):
         self.reassert_spoof_burst_called = True
+        if self.playback_mode == 'mode2' and not self.simulate_legacy_defect:
+            self.anchor_el.play()
+            self.chromium_normal_players.add(self.anchor_el)
+            self.chromium_audio_focus_state = 'ACTIVE'
 
     def _start_focus_probe(self):
         self.probe_el.play()
@@ -458,10 +528,30 @@ class SyntheticMediaSessionPipeline:
         if self.playback_mode == 'mode2':
             if not self.window['wasPausedByUser'] and not self.simulate_legacy_defect:
                 self._start_focus_probe()
+                # External video interruption defense trigger (main.js else branch)
+                self._reassert_spoof_burst()
             elif self.simulate_legacy_defect:
                 # Legacy unpatched code called probe unconditionally
                 self._start_focus_probe()
                 self._on_player_paused_in_chromium(self.probe_el)
+
+    def simulate_external_focus_loss_transient(self):
+        # Native external focus steal (AUDIOFOCUS_LOSS_TRANSIENT):
+        # Chromium calls SuspendType::kSystem -> OnSuspendInternal(kSystem)
+        # Directly pauses normal_players_ without setting wasPausedByUser
+        self.window['wasPausedByUser'] = False
+        self.window['wasPlayingBeforeCall'] = True
+
+        # Main audio player is paused by native system suspension
+        self.audio_player.pause()
+        self._on_player_paused_in_chromium(self.audio_player)
+        self._on_audio_player_pause_event()
+
+        # In Mode 2, position is preserved and playbackState is maintained
+        if self.playback_mode == 'mode2':
+            dur = self.audio_player.duration
+            self._update_media_session_position(self.audio_player.currentTime, dur, 1.0)
+            self.navigator_media_session['playbackState'] = 'playing'
 
     def _handle_pause_action(self):
         # Emulates setActionHandler('pause') in mediaSession.js

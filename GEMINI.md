@@ -75,11 +75,9 @@
   - `republishMediaMetadata()` MUST strictly be gated behind `shouldRepublishMetadata()`.
   - When track metadata is already fresh and identical, `navigator.mediaSession.metadata` must NEVER be re-assigned on foreground, on screen wake, or inside `timeupdate`.
 - External Media Interruption Non-Stripping Protocol:
-  - When an external app takes audio focus (`audioPlayer.paused && !window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`.
-  - Strictly FORBIDDEN to call `republishMediaMetadata()` during external media loss (which tears down notification bindings while native session focus is lost).
-  - Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` during external media loss (which attempts to fight for audio focus against the focused app, triggering Android SystemUI to instantly strip and revoke the media notification).
-  - Instead, synchronously invoke `stopLiveAudioAnchor()`, `stopAnchorHeartbeat()`, and `clearSpoofBurst()`.
-  - Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
+  - In Mode 1 (and during Bluetooth disconnects or telephone calls): When an external app takes audio focus (`audioPlayer.paused && !window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`. Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` in Mode 1. Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
+  - In Mode 2: MediaSession strictly applies Rule 33 keepalive defense until explicit user stop. Chromium Android tears down media notifications immediately if all audio streams pause and `playbackState = 'paused'` is declared. The silent live audio anchor and `playbackState = 'playing'` (at micro-rate `0.00001`) must be retained to defend against native OS card eviction.
+  - Across all modes, `republishMediaMetadata()` MUST strictly remain gated behind `shouldRepublishMetadata()` to prevent metadata churn and notification animation blinks.
 - Bluetooth Route Addition vs Audio Interruption Separation:
   - `navigator.mediaDevices.addEventListener('devicechange')` fires on audio output additions and removals. Web APIs have no Telecom or In-Call API.
   - Device additions (`newCount > knownOutputCount`) strictly represent audio route expansion (e.g. connecting Bluetooth headphones or earbuds).
