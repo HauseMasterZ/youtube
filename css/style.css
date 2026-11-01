@@ -975,6 +975,21 @@
             }
         }
 
+        .main-layout:has(.now-playing.expanded) .playlist-scroll-arrow,
+        .main-layout:has(.now-playing.expanded) #playlist-scroll-arrow,
+        .main-layout:has(.now-playing.expanded) #playlist-toggle,
+        .main-layout:has(.now-playing.expanded) #btn-playlist,
+        body:has(.now-playing.expanded) .playlist-scroll-arrow,
+        body:has(.now-playing.expanded) #playlist-scroll-arrow,
+        body:has(.now-playing.expanded) #playlist-toggle,
+        body:has(.now-playing.expanded) #btn-playlist,
+        .player-container:has(.now-playing.expanded) + .playlist-panel .playlist-scroll-arrow,
+        .player-container:has(.now-playing.expanded) + .playlist-panel #playlist-scroll-arrow,
+        .player-container:has(.now-playing.expanded) + .playlist-panel #playlist-toggle,
+        .player-container:has(.now-playing.expanded) + .playlist-panel #btn-playlist {
+            display: none !important;
+        }
+
         #track-list {
             list-style: none;
             padding: 0;
@@ -1674,6 +1689,12 @@
                 background-color: #000000;
                 border-color: transparent;
                 cursor: default;
+            }
+
+            .main-layout:has(.now-playing.expanded) .playlist-scroll-arrow,
+            body:has(.now-playing.expanded) .playlist-scroll-arrow,
+            .player-container:has(.now-playing.expanded) + .playlist-panel .playlist-scroll-arrow {
+                display: none !important;
             }
             
             .now-playing.expanded .btn-collapse {

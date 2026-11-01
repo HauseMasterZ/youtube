@@ -76,7 +76,7 @@
             return liveAudioContext;
         }
         if (liveAudioContext) {
-            if (liveAudioContext.state === 'suspended') {
+            if (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted') {
                 liveAudioContext.resume().catch(() => {});
             }
             const anchorEl = document.getElementById("live-stream-anchor");
@@ -108,7 +108,7 @@
 
         try {
             liveAudioContext = new AudioCtx();
-            if (liveAudioContext.state === 'suspended') {
+            if (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted') {
                 liveAudioContext.resume().catch(() => {});
             }
             liveAudioContext.onstatechange = () => {
@@ -168,7 +168,7 @@
         if (window.isCallActive) return;
         if (window.mediaSessionDestroyed) return;
         initLiveAudioAnchor();
-        if (liveAudioContext && liveAudioContext.state === 'suspended') {
+        if (liveAudioContext && (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted')) {
             liveAudioContext.resume().catch(() => {});
         }
         const anchorEl = document.getElementById("live-stream-anchor");
@@ -363,7 +363,7 @@
     window.stopAnchorHeartbeat = stopAnchorHeartbeat;
 
     // Focus Probe: silent WAV loop that the OS power manager suspends on
-    // audio-focus steals (YouTube) AND on idle battery-saving. A suspend
+
     // while music-paused in Mode 2 is our only steal signal for the
     // already-paused case (occasion 4), which fires zero other events.
     // PIN ABSOLUTISM: this handler must NEVER write playbackState. Any
@@ -374,6 +374,8 @@
     let _isProbeInternal = false;
 
     function primeFocusProbe() {
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) return;
+        if (window.playbackMode !== 'mode2') return;
         const probeEl = document.getElementById("focus-probe");
         if (!probeEl || focusProbePrimed) return;
         if (!probeEl.src) {
@@ -704,7 +706,8 @@
 
     let _lastSentPosition = -1;
     let _lastSentTimestamp = 0;
-    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; };
+    let _lastSentRate = -1;
+    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; _lastSentRate = -1; };
     window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
     window._forceNextPosition = false;
 
@@ -712,17 +715,90 @@
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
-                const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition);
-                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration);
-                const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate);
+                const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition) && isFinite(forcedPosition);
+                const isForcedDurValid = typeof forcedDuration === 'number' && !isNaN(forcedDuration) && isFinite(forcedDuration) && forcedDuration > 0;
+                const isForcedRateValid = typeof forcedRate === 'number' && !isNaN(forcedRate) && isFinite(forcedRate);
 
-                const rawDur = isForcedDurValid ? forcedDuration : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || parseFloat(seekBar.max) || 0);
+                let rawDur = 0;
+                if (isForcedDurValid) {
+                    rawDur = forcedDuration;
+                } else if (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.duration === 'number' && !isNaN(audioPlayer.duration) && isFinite(audioPlayer.duration) && audioPlayer.duration > 0) {
+                    rawDur = audioPlayer.duration;
+                } else if (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer._expectedDuration === 'number' && !isNaN(audioPlayer._expectedDuration) && isFinite(audioPlayer._expectedDuration) && audioPlayer._expectedDuration > 0) {
+                    rawDur = audioPlayer._expectedDuration;
+                } else if (typeof seekBar !== 'undefined' && seekBar && seekBar.max && isFinite(parseFloat(seekBar.max)) && parseFloat(seekBar.max) > 0) {
+                    rawDur = parseFloat(seekBar.max);
+                }
+
+                if (rawDur <= 0) {
+                    let activeTrack = null;
+                    if (typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                        activeTrack = currentPlaylistData[globalActiveOriginalIndex];
+                    } else if (typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                        activeTrack = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                    } else if (typeof playQueue !== 'undefined' && Array.isArray(playQueue) && typeof queueIndex === 'number' && queueIndex >= 0 && queueIndex < playQueue.length) {
+                        const qItem = playQueue[queueIndex];
+                        if (typeof qItem === 'object' && qItem !== null && typeof allDatabases !== 'undefined' && allDatabases[qItem.playlist]) {
+                            activeTrack = allDatabases[qItem.playlist][qItem.index];
+                        } else if (typeof qItem === 'number' && typeof currentPlaylistData !== 'undefined' && currentPlaylistData) {
+                            activeTrack = currentPlaylistData[qItem];
+                        }
+                    } else if (typeof window !== 'undefined' && window._stagedLastPlayedTrack) {
+                        activeTrack = window._stagedLastPlayedTrack;
+                    }
+
+                    if (activeTrack) {
+                        if (activeTrack.duration && typeof parseISODuration === 'function') {
+                            const parsed = parseISODuration(activeTrack.duration);
+                            if (parsed > 0) rawDur = parsed;
+                        }
+                        if (rawDur <= 0 && activeTrack.duration_seconds && !isNaN(activeTrack.duration_seconds)) {
+                            rawDur = parseInt(activeTrack.duration_seconds, 10);
+                        }
+                        if (rawDur <= 0 && activeTrack.length_seconds && !isNaN(activeTrack.length_seconds)) {
+                            rawDur = parseInt(activeTrack.length_seconds, 10);
+                        }
+                        if (rawDur <= 0 && activeTrack.approxDurationMs && !isNaN(activeTrack.approxDurationMs)) {
+                            rawDur = Math.floor(parseInt(activeTrack.approxDurationMs, 10) / 1000);
+                        }
+                    }
+                }
+
                 const dur = (typeof rawDur === 'number' && !isNaN(rawDur) && isFinite(rawDur) && rawDur > 0) ? rawDur : 0;
-                const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0);
+                const pos = isForcedPosValid ? forcedPosition : ((typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0 ? audioPlayer.currentTime : 0));
                 
                 const isBuffering = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer._pendingSeek !== null || audioPlayer.switching || audioPlayer._isBufferStalled));
                 const isPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) || (typeof audioPlayer === 'undefined' || !audioPlayer || !audioPlayer.src);
                 const isSeeking = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer._pendingSeek !== null);
+
+                let rate;
+                if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
+                    // Spoofed pause: OS advances the card seekbar by rate while
+                    // state reads 'playing', so freeze it with a near-zero rate
+                    // (0 is rejected by setPositionState; hence the micro-rate).
+                    // Scoped strictly to mode2-paused; all other paths below.
+                    rate = 0.00001;
+                } else if (isForcedRateValid && forcedRate > 0) {
+                    rate = forcedRate;
+                } else if (isBuffering) {
+                    // Buffer stall / track transition freeze: OS interpolates position
+                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
+                    rate = 0.00001;
+                } else if (!isPaused) {
+                    // While audio is actively playing, rate must strictly reflect
+                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
+                    // animation animates dynamically and never enters ghost freeze.
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
+                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
+                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
+                    rate = 1.0;
+                } else {
+                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
+                }
+
+                const validRate = (typeof rate === 'number' && !isNaN(rate) && isFinite(rate) && rate > 0) ? rate : 1.0;
+                const isRateShift = (_lastSentRate > 0 && Math.abs(validRate - _lastSentRate) > 0.001);
 
                 // Position stability and monotonic guard (bypassed exactly once when
                 // window._forceNextPosition is set or force=true: unlock anchors and
@@ -735,7 +811,7 @@
                 if (forceBypass) {
                     window._forceNextPosition = false;
                 }
-                if (!forceBypass && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
+                if (!forceBypass && !isRateShift && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
                     const elapsed = Date.now() - _lastSentTimestamp;
                     if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
                         return;
@@ -749,41 +825,14 @@
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
                 //    Re-sending rate 1.0 position updates after pausing re-animates the wave on OEM skins (OneUI/ColorOS).
                 //    Forced transitions (mode-switch) bypass this once via forceBypass above.
-                if (!forceBypass && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
+                if (!forceBypass && !isRateShift && isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode1') && !isSeeking && _lastSentPosition >= 0) {
                     if (Math.abs(pos - _lastSentPosition) < 0.25) {
                         return;
                     }
                 }
 
-                let rate;
-                if (isBuffering) {
-                    // Buffer stall / track transition freeze: OS interpolates position
-                    // if rate > 0, so freeze with W3C-compliant micro-rate while buffering.
-                    rate = 0.00001;
-                } else if (isPaused && (typeof window.playbackMode !== 'undefined' && window.playbackMode === 'mode2')) {
-                    // Spoofed pause: OS advances the card seekbar by rate while
-                    // state reads 'playing', so freeze it with a near-zero rate
-                    // (0 is rejected by setPositionState; hence the micro-rate).
-                    // Scoped strictly to mode2-paused; all other paths below.
-                    rate = 0.00001;
-                } else if (!isPaused) {
-                    // While audio is actively playing, rate must strictly reflect
-                    // audioPlayer playbackRate (nominally 1.0) so SystemUI wave
-                    // animation animates dynamically and never enters ghost freeze.
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                } else if (isForcedRateValid && forcedRate > 0) {
-                    rate = forcedRate;
-                } else if (navigator.mediaSession.playbackState === 'paused' || isPaused) {
-                    // Mode 1 paused: rate is 1.0 per W3C MediaSession spec.
-                    // Android SystemUI gates wave animation strictly on playbackState == STATE_PLAYING.
-                    rate = 1.0;
-                } else {
-                    rate = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.playbackRate) || 1.0;
-                }
-
-                if (!isNaN(dur) && dur > 0 && !isNaN(pos) && pos >= 0) {
+                if (!isNaN(dur) && isFinite(dur) && dur > 0 && !isNaN(pos) && isFinite(pos) && pos >= 0) {
                     const validPos = Math.max(0, Math.min(pos, dur));
-                    const validRate = (typeof rate === 'number' && !isNaN(rate) && isFinite(rate) && rate > 0) ? rate : 1.0;
                     navigator.mediaSession.setPositionState({
                         duration: dur,
                         playbackRate: validRate,
@@ -791,9 +840,7 @@
                     });
                     _lastSentPosition = validPos;
                     _lastSentTimestamp = Date.now();
-                } else if (isSeeking || isPaused) {
-                    _lastSentPosition = Math.max(0, pos);
-                    _lastSentTimestamp = Date.now();
+                    _lastSentRate = validRate;
                 }
             } catch (e) {
                 // Ignore transient errors
@@ -822,6 +869,32 @@
                     };
                 }
 
+                const syncAfterRepublish = () => {
+                    try {
+                        const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                        let dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                        if (dur <= 0) {
+                            if (typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                                const tr = currentPlaylistData[globalActiveOriginalIndex];
+                                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                            }
+                            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                            }
+                        }
+                        if (dur > 0 && typeof updateMediaSessionPosition === 'function') {
+                            updateMediaSessionPosition(curPos, dur, null, true);
+                        }
+                    } catch (e) {}
+                };
+
                 if (forceBreakDedup) {
                     try {
                         navigator.mediaSession.metadata = null;
@@ -830,6 +903,7 @@
                         const track = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
                         const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
                         window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
+                        syncAfterRepublish();
                         return;
                     }
                     if (lastValidMetadata && lastValidMetadata.title) {
@@ -842,6 +916,7 @@
                             album: lastValidMetadata.album,
                             artwork: lastValidMetadata.artwork
                         });
+                        syncAfterRepublish();
                         return;
                     }
                 }
@@ -865,6 +940,7 @@
                     const thumbUrl = (typeof getThumbUrl === 'function') ? getThumbUrl(track) : (track.thumbnail || '');
                     window.publishTrackMetadata(track, thumbUrl, globalActiveOriginalIndex);
                 }
+                syncAfterRepublish();
             } catch (e) {}
         }
     }
@@ -1146,24 +1222,12 @@
                 if (!window.wasPausedByUser) {
                     window.wasPlayingBeforeCall = true;
                 }
-                // Mode 2 pause: recycle the anchor synchronously (stop + start) so
-                // the pause boundary carries a genuine fresh focus request and
-                // a rendering graph, whether the anchor was running or not.
-                // A mere no-op when already running loses the pin (m2 68).
-                // Flag-guarded: the trailing pause event must not trip the
-                // anchor auto-handlers (esp. watchdog cancel).
+                // Mode 2 pause: seamless handover ensures anchor is actively and
+                // synchronously running without any pause gap.
                 const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
                 if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
                     window.mediaSessionDestroyed = false;
-                    try {
-                        const anchorEl = document.getElementById("live-stream-anchor");
-                        if (anchorEl && !anchorEl.paused) {
-                            _isInternalAnchorStop = true;
-                            try { anchorEl.pause(); } catch (e) {}
-                        }
-                    } catch (e) {}
                     startLiveAudioAnchor();
-                    setTimeout(() => { _isInternalAnchorStop = false; }, 200);
                     if (typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat();
@@ -1259,9 +1323,14 @@
         // inactivity, not handler presence), and an unhandled triangle risks
         // breaking discrete BT PLAY keys. Triangle taps under spoof stay
         // dropped by Chromium; documented limitation.
-        navigator.mediaSession.setActionHandler('play', handlePlayAction);
+        try {
+            navigator.mediaSession.setActionHandler('play', handlePlayAction);
+        } catch (e) {
+            console.warn("MediaSession play action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('pause', () => {
+        try {
+            navigator.mediaSession.setActionHandler('pause', () => {
             const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
@@ -1324,6 +1393,9 @@
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                             ? window.declaredPausedState() : 'playing';
                     }
+                    if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
                     } else if (audioPlayer) {
@@ -1340,10 +1412,10 @@
                 if (typeof setPlayUI === 'function') setPlayUI(false);
                 if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = 'paused';
-                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
                     if (typeof updateMediaSessionPosition === 'function') {
-                        updateMediaSessionPosition(pos, dur, 1.0);
+                        updateMediaSessionPosition(pos, dur, 1.0, true);
                     }
                 }
                 if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
@@ -1355,6 +1427,10 @@
                 cancelAutoKillWatchdog();
             }
         });
+            try {} catch (e) {}
+        } catch (e) {
+            console.warn("MediaSession pause action registration failed:", e);
+        }
 
         let lastPlayPauseToggleTime = 0;
         try {
@@ -1436,7 +1512,16 @@
                     if (typeof setPlayUI === 'function') setPlayUI(false);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                            ? window.declaredPausedState() : 'paused';
+                            ? window.declaredPausedState() : 'playing';
+                        if (window.playbackMode !== 'mode2' && typeof updateMediaSessionPosition === 'function') {
+                            const dur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            const pos = (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.currentTime) || 0;
+                            window._forceNextPosition = true;
+                            updateMediaSessionPosition(pos, dur, 1.0);
+                        }
+                    }
+                    if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
                     }
                     if (audioPlayer && typeof audioPlayer.instantPause === 'function') {
                         audioPlayer.instantPause();
@@ -1461,7 +1546,8 @@
             window.lastPlaybackModeTransitions = { time: 0, action: null };
         }
 
-        navigator.mediaSession.setActionHandler('previoustrack', () => {
+        try {
+            navigator.mediaSession.setActionHandler('previoustrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'next' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1474,8 +1560,12 @@
             }
             playPrev();
         });
+        } catch (e) {
+            console.warn("MediaSession previoustrack action registration failed:", e);
+        }
 
-        navigator.mediaSession.setActionHandler('nexttrack', () => {
+        try {
+            navigator.mediaSession.setActionHandler('nexttrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'prev' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1488,21 +1578,51 @@
             }
             playNext();
         });
-        navigator.mediaSession.setActionHandler('seekto', (details) => {
-            const seekTarget = details.seekTime;
-            if (details.fastSeek && 'fastSeek' in audioPlayer) {
-                audioPlayer.fastSeek(seekTarget);
-            } else {
-                audioPlayer.currentTime = seekTarget;
+        } catch (e) {
+            console.warn("MediaSession nexttrack action registration failed:", e);
+        }
+
+        try {
+            navigator.mediaSession.setActionHandler('seekto', (details) => {
+            try {
+                const seekTarget = (typeof details === 'object' && details !== null && typeof details.seekTime === 'number')
+                    ? details.seekTime
+                    : ((typeof details === 'number') ? details : (audioPlayer ? audioPlayer.currentTime : 0));
+                if (details && details.fastSeek && 'fastSeek' in audioPlayer) {
+                    audioPlayer.fastSeek(seekTarget);
+                } else if (audioPlayer) {
+                    audioPlayer.currentTime = seekTarget;
+                }
+                updateTimeUI(seekTarget);
+                if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
+                
+                // Explicitly pass seek target and total duration to prevent 0:00 dip
+                let totalDur = (audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                if (totalDur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                    const tr = currentPlaylistData[globalActiveOriginalIndex];
+                    if (tr.duration && typeof parseISODuration === 'function') totalDur = parseISODuration(tr.duration);
+                    if (totalDur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) totalDur = parseInt(tr.duration_seconds, 10);
+                    if (totalDur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) totalDur = parseInt(tr.length_seconds, 10);
+                    if (totalDur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) totalDur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                }
+                if (totalDur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                    const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                    if (tr.duration && typeof parseISODuration === 'function') totalDur = parseISODuration(tr.duration);
+                    if (totalDur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) totalDur = parseInt(tr.duration_seconds, 10);
+                    if (totalDur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) totalDur = parseInt(tr.length_seconds, 10);
+                    if (totalDur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) totalDur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                }
+                updateMediaSessionPosition(seekTarget, totalDur, null, true);
+            } catch (e) {
+                console.warn("MediaSession seekto error:", e);
             }
-            updateTimeUI(seekTarget);
-            if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(seekTarget);
-            
-            // Explicitly pass seek target and total duration to prevent 0:00 dip
-            const totalDur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(seekTarget, totalDur);
         });
-        navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        } catch (e) {
+            console.warn("MediaSession seekto action registration failed:", e);
+        }
+
+        try {
+            navigator.mediaSession.setActionHandler('seekbackward', (details) => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'seekfwd' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1519,8 +1639,22 @@
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            updateMediaSessionPosition(newTime, dur);
+            let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
+            if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                const tr = currentPlaylistData[globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            updateMediaSessionPosition(newTime, dur, null, true);
             // Mode 2 seek-resume: center Play is swallowed by C++ under spoof,
             // so discrete seek buttons double as the guaranteed resume gesture
             // after video steals (both paused/playing occasions). Seekbar
@@ -1536,7 +1670,7 @@
                     navigator.mediaSession.playbackState = 'playing';
                 }
                 if (typeof updateMediaSessionPosition === 'function') {
-                    updateMediaSessionPosition(newTime, dur, 1.0);
+                    updateMediaSessionPosition(newTime, dur, 1.0, true);
                 }
                 // Already inside mode2-only block: keep anchor (idempotent).
                 if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
@@ -1545,7 +1679,12 @@
                 audioPlayer.play().catch(e => console.warn("MediaSession seekbackward resume error:", e));
             }
         });
-        navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        } catch (e) {
+            console.warn("MediaSession seekbackward action registration failed:", e);
+        }
+
+        try {
+            navigator.mediaSession.setActionHandler('seekforward', (details) => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
             if (isMobile && window.lastPlaybackModeTransitions.action === 'seekback' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
@@ -1558,12 +1697,26 @@
             }
 
             const skipTime = details.seekOffset || 10;
-            const dur = audioPlayer.duration || parseFloat(seekBar.max) || 0;
-            const newTime = Math.min(dur, (audioPlayer.currentTime || 0) + skipTime);
+            let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
+            if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                const tr = currentPlaylistData[globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            if (dur <= 0 && typeof allDatabases !== 'undefined' && allDatabases && typeof globalActivePlaylist !== 'undefined' && allDatabases[globalActivePlaylist] && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && allDatabases[globalActivePlaylist][globalActiveOriginalIndex]) {
+                const tr = allDatabases[globalActivePlaylist][globalActiveOriginalIndex];
+                if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+            }
+            const newTime = Math.min(dur > 0 ? dur : Infinity, (audioPlayer.currentTime || 0) + skipTime);
             audioPlayer.currentTime = newTime;
             updateTimeUI(newTime);
             if (typeof lyricsActive !== 'undefined' && lyricsActive && typeof updateLyricsUI === 'function') updateLyricsUI(newTime);
-            updateMediaSessionPosition(newTime, dur);
+            updateMediaSessionPosition(newTime, dur, null, true);
             // Mode 2 seek-resume (mirror of seekbackward): guaranteed resume
             // gesture after video steals; seekto stays positioning-only.
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser)) {
@@ -1585,4 +1738,7 @@
                 audioPlayer.play().catch(e => console.warn("MediaSession seekforward resume error:", e));
             }
         });
+        } catch (e) {
+            console.warn("MediaSession seekforward action registration failed:", e);
+        }
     }

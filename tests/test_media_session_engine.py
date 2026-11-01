@@ -320,11 +320,15 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_pause_boundary_recycles_anchor(self):
-        """mode2 user-pause performs flagged stop+start recycle (genuine focus request)"""
-        self.assertRegex(
-            self.ms_content,
-            r'_isInternalAnchorStop\s*=\s*true;[\s\S]*?anchorEl\.pause\(\);[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?setTimeout\(\s*\(\s*\)\s*=>\s*\{\s*_isInternalAnchorStop\s*=\s*false;\s*\},\s*200\s*\);'
+        """mode2 user-pause performs seamless anchor handover without synchronous pause gap"""
+        pause_block_match = re.search(
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?armAutoKillWatchdog\(\);[\s\S]*?\}\);',
+            self.ms_content
         )
+        self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in mediaSession.js")
+        pause_block = pause_block_match.group(0)
+        self.assertIn("startLiveAudioAnchor()", pause_block)
+        self.assertNotIn("anchorEl.pause()", pause_block)
 
     def test_hardware_combo_shortcut(self):
         """Ensure nexttrack, previoustrack, seekforward, and seekbackward handlers detect combo and call togglePlaybackMode"""

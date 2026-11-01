@@ -695,6 +695,7 @@
         const uiOnly = preventAutoplay;
         isSeeking = false;
         if (typeof lastRenderTime !== 'undefined') lastRenderTime = -1;
+        if (typeof window.invalidatePositionCache === 'function') window.invalidatePositionCache();
         
         // Set active playing intent on fresh track launch (fixes first-ever song load bug)
         if (!uiOnly) {
@@ -850,8 +851,24 @@
         let parsedDuration = 0;
         if (track.duration) {
             parsedDuration = parseISODuration(track.duration);
+            if (parsedDuration <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
+                parsedDuration = parseInt(track.duration_seconds, 10);
+            }
         } else if (track.duration_seconds && !isNaN(track.duration_seconds)) {
             parsedDuration = parseInt(track.duration_seconds, 10);
+        } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+            parsedDuration = parseInt(track.length_seconds, 10);
+        } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+            parsedDuration = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+        }
+        if (parsedDuration <= 0) {
+            if (track.duration_seconds && !isNaN(track.duration_seconds)) {
+                parsedDuration = parseInt(track.duration_seconds, 10);
+            } else if (track.length_seconds && !isNaN(track.length_seconds)) {
+                parsedDuration = parseInt(track.length_seconds, 10);
+            } else if (track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                parsedDuration = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+            }
         }
 
         if (parsedDuration > 0) {
@@ -914,6 +931,28 @@
                     artist: track.channel,
                     artwork: [{ src: currentSq, sizes: '512x512', type: 'image/jpeg' }]
                 });
+                const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                if (totalDur <= 0 && track) {
+                    if (track.duration && typeof parseISODuration === 'function') {
+                        totalDur = parseISODuration(track.duration);
+                    }
+                    if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
+                        totalDur = parseInt(track.duration_seconds, 10);
+                    }
+                    if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
+                        totalDur = parseInt(track.length_seconds, 10);
+                    }
+                    if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                        totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+                    }
+                    if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                        totalDur = parsedDuration;
+                    }
+                }
+                if (totalDur > 0 && typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(curPos, totalDur, null, true);
+                }
             } catch (e) { return; }
 
             if (!thumbsDisabled && thumbUrl) {
@@ -926,6 +965,28 @@
                                     artist: track.channel,
                                     artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
                                 });
+                                const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                                let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                if (totalDur <= 0 && track) {
+                                    if (track.duration && typeof parseISODuration === 'function') {
+                                        totalDur = parseISODuration(track.duration);
+                                    }
+                                    if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
+                                        totalDur = parseInt(track.duration_seconds, 10);
+                                    }
+                                    if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
+                                        totalDur = parseInt(track.length_seconds, 10);
+                                    }
+                                    if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                                        totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+                                    }
+                                    if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                                        totalDur = parsedDuration;
+                                    }
+                                }
+                                if (totalDur > 0 && typeof updateMediaSessionPosition === 'function') {
+                                    updateMediaSessionPosition(curPos, totalDur, null, true);
+                                }
                             } catch (e) {}
                         }
                     });
@@ -939,6 +1000,28 @@
                                 artist: track.channel,
                                 artwork: [{ src: sqUrl, sizes: '256x256', type: 'image/jpeg' }]
                             });
+                            const curPos = (typeof audioPlayer !== 'undefined' && audioPlayer && typeof audioPlayer.currentTime === 'number' && isFinite(audioPlayer.currentTime) && audioPlayer.currentTime >= 0) ? audioPlayer.currentTime : 0;
+                            let totalDur = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.duration || audioPlayer._expectedDuration)) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                            if (totalDur <= 0 && track) {
+                                if (track.duration && typeof parseISODuration === 'function') {
+                                    totalDur = parseISODuration(track.duration);
+                                }
+                                if (totalDur <= 0 && track.duration_seconds && !isNaN(track.duration_seconds)) {
+                                    totalDur = parseInt(track.duration_seconds, 10);
+                                }
+                                if (totalDur <= 0 && track.length_seconds && !isNaN(track.length_seconds)) {
+                                    totalDur = parseInt(track.length_seconds, 10);
+                                }
+                                if (totalDur <= 0 && track.approxDurationMs && !isNaN(track.approxDurationMs)) {
+                                    totalDur = Math.floor(parseInt(track.approxDurationMs, 10) / 1000);
+                                }
+                                if (totalDur <= 0 && typeof parsedDuration !== 'undefined' && parsedDuration > 0) {
+                                    totalDur = parsedDuration;
+                                }
+                            }
+                            if (totalDur > 0 && typeof updateMediaSessionPosition === 'function') {
+                                updateMediaSessionPosition(curPos, totalDur, null, true);
+                            }
                         } catch (e) {}
                     }
                 });
@@ -963,6 +1046,9 @@
                         position: initialPosition
                     });
                 } catch(e) {}
+                if (typeof updateMediaSessionPosition === 'function') {
+                    updateMediaSessionPosition(initialPosition, parsedDuration, 0.00001, true);
+                }
             }
         }
 
