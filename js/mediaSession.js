@@ -43,11 +43,7 @@
         if (!anchorEl || anchorEl._boundAutoResume) return;
         anchorEl._boundAutoResume = true;
         anchorEl.addEventListener("play", () => {
-            if (!_isInternalAnchorStart && !window.wasPausedByUser && window.wasPlayingBeforeCall && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && !audioPlayer.switching) {
-                stopLiveAudioAnchor();
-                cancelAutoKillWatchdog();
-                audioPlayer.play().catch(e => console.warn("Anchor auto-resume error:", e));
-            }
+            // Prevent auto-resume races during external interrupts
         });
         anchorEl.addEventListener("pause", () => {
             if (!_isInternalAnchorStop && window.playbackMode === 'mode2' && typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
@@ -194,8 +190,8 @@
                 console.warn("Live anchor play error:", e);
             });
         }
-        if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused) {
-            startAnchorHeartbeat(window.wasPausedByUser ? 0 : 1000);
+        if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.paused && window.wasPausedByUser === true) {
+            startAnchorHeartbeat(0);
         }
     }
 
@@ -1248,6 +1244,7 @@
     // Connect audioPlayer play/pause events to anchor and watchdog
     if (typeof audioPlayer !== 'undefined' && audioPlayer && audioPlayer.addEventListener) {
         audioPlayer.addEventListener('play', () => {
+            clearSpoofBurst();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             if (anchorStartTimer) {
                 clearTimeout(anchorStartTimer);
@@ -1272,18 +1269,20 @@
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !window.isCallActive && !isRecentBtDisconnect) {
-                if (!window.wasPausedByUser) {
-                    window.wasPlayingBeforeCall = true;
-                }
-                // Mode 2 pause: seamless handover ensures anchor is actively and
-                // synchronously running without any pause gap.
-                const isStillBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
-                if (window.playbackMode === 'mode2' && audioPlayer.paused && !window.isCallActive && !isStillBtDisconnect) {
+                if (window.wasPausedByUser) {
+                    // Mode 2 user pause: seamless handover ensures anchor is actively and
+                    // synchronously running without any pause gap.
                     window.mediaSessionDestroyed = false;
                     startLiveAudioAnchor();
-                    if (!window.wasPausedByUser && typeof startFocusProbe === 'function') startFocusProbe();
                     armAutoKillWatchdog();
-                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(window.wasPausedByUser ? 0 : 1000);
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                } else {
+                    // Mode 2 external interrupt: enforce single-player isolation
+                    window.wasPlayingBeforeCall = true;
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                    if (typeof stopFocusProbe === 'function') stopFocusProbe();
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                    if (typeof clearSpoofBurst === 'function') clearSpoofBurst();
                 }
             } else {
                 if (isRecentBtDisconnect) {
@@ -1293,7 +1292,9 @@
                     window.wasPlayingBeforeCall = true;
                 }
                 if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
-                stopLiveAudioAnchor();
+                if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                if (typeof stopFocusProbe === 'function') stopFocusProbe();
+                if (typeof clearSpoofBurst === 'function') clearSpoofBurst();
                 cancelAutoKillWatchdog();
             }
         });
@@ -1308,6 +1309,7 @@
             if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                 return;
             }
+            clearSpoofBurst();
             if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
             window.wasPausedByUser = false;
             window.wasPlayingBeforeCall = true;
@@ -1388,10 +1390,11 @@
             if (window.isCallActive) return;
             window.mediaSessionDestroyed = false;
             if (window.playbackMode === 'mode2') {
-                if (isActuallyPaused && window.wasPausedByUser) {
+                if (isActuallyPaused) {
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
+                    clearSpoofBurst();
                     if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                     // User intentionally resuming from paused state in Mode 2
                     window.wasPausedByUser = false;
@@ -1505,10 +1508,11 @@
                 const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));
                 if (window.isCallActive) return;
                 window.mediaSessionDestroyed = false;
-                if (isActuallyPaused && window.wasPausedByUser) {
+                if (isActuallyPaused) {
                     if (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine()) {
                         return;
                     }
+                    clearSpoofBurst();
                     if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
                     window.wasPausedByUser = false;
                     window.wasPlayingBeforeCall = true;

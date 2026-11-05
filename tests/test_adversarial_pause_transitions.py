@@ -638,7 +638,7 @@ class TestAdversarialPauseTransitions(unittest.TestCase):
         self.assertLess(freeze_idx, pause_idx, "Position freeze must execute BEFORE audioPlayer.instantPause in playpause")
 
     def test_adversarial_static_focus_probe_user_pause_guard(self):
-        """audioPlayer pause event listener in mediaSession.js guards startFocusProbe with !window.wasPausedByUser"""
+        """audioPlayer pause event listener in mediaSession.js enforces single-player isolation on external interrupt"""
         pause_listener_block = re.search(
             r"audioPlayer\.addEventListener\(\s*['\"]pause['\"][\s\S]*?\n\s{8}\}\);",
             self.ms_content
@@ -646,8 +646,10 @@ class TestAdversarialPauseTransitions(unittest.TestCase):
         self.assertIsNotNone(pause_listener_block, "audioPlayer pause listener not found")
         content = pause_listener_block.group(0)
 
-        self.assertIn("if (!window.wasPausedByUser && typeof startFocusProbe === 'function') startFocusProbe();", content)
-        self.assertIn("startAnchorHeartbeat(window.wasPausedByUser ? 0 : 1000);", content)
+        self.assertIn("if (typeof stopFocusProbe === 'function') stopFocusProbe();", content)
+        self.assertIn("if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();", content)
+        self.assertIn("if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();", content)
+        self.assertIn("if (typeof clearSpoofBurst === 'function') clearSpoofBurst();", content)
 
     def test_adversarial_static_non_destructive_heartbeat_guard(self):
         """startAnchorHeartbeat in mediaSession.js guards anchorEl.pause() when anchor is actively running"""

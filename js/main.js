@@ -245,6 +245,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.snapToSearch = snapToSearch;
 
+    searchInput.addEventListener("focus", () => {
+        if (typeof warmRemainingPlaylists === 'function') {
+            warmRemainingPlaylists(playlistSelect.value);
+        }
+    });
+
     searchInput.addEventListener("input", (e) => {
         if (searchMode === 'ephemeral') {
             exitEphemeralSearch();
@@ -259,7 +265,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i })) : [];
             } else {
                 const scoredResults = [];
-                const addedIds = new Set();
                 
                 // 1. Current playlist matches (with a slight current playlist bias of +50)
                 if (currentPlaylistData) {
@@ -268,7 +273,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         const score = calculateFuzzyScore(query, track.title, track.channel);
                         if (score > 0) {
                             scoredResults.push({ playlist: currentPl, index: i, score: score + 50 });
-                            addedIds.add(track.id || track.file_path);
                         }
                     }
                 }
@@ -279,13 +283,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         const data = allDatabases[pl];
                         for (let i = 0; i < data.length; i++) {
                             const track = data[i];
-                            const trackKey = track.id || track.file_path;
-                            if (!addedIds.has(trackKey)) {
-                                const score = calculateFuzzyScore(query, track.title, track.channel);
-                                if (score > 0) {
-                                    scoredResults.push({ playlist: pl, index: i, score: score });
-                                    addedIds.add(trackKey);
-                                }
+                            const score = calculateFuzzyScore(query, track.title, track.channel);
+                            if (score > 0) {
+                                scoredResults.push({ playlist: pl, index: i, score: score });
                             }
                         }
                     }
@@ -1023,22 +1023,26 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                if (!window.wasPausedByUser) {
-                    window.wasPlayingBeforeCall = true;
-                }
-                if (typeof startLiveAudioAnchor === 'function') {
-                    startLiveAudioAnchor();
-                }
-                // Mode 2 pause (user or transient interrupt): keep 'playing' spoof to pin the wave animation
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                    ? window.declaredPausedState() : 'playing';
                 if (window.wasPausedByUser) {
+                    if (typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
+                    // Mode 2 pause: keep 'playing' spoof to pin the wave animation
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
                     if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
                     if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
                 } else {
-                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                    // Mode 2 external video/media interrupt: enforce single-player isolation
+                    window.wasPlayingBeforeCall = true;
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                    if (typeof stopFocusProbe === 'function') stopFocusProbe();
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                    if (typeof clearSpoofBurst === 'function') clearSpoofBurst();
+                    navigator.mediaSession.playbackState = 'paused';
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                 }
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
@@ -1867,13 +1871,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     loadPlaylist(initialPl);
 
-    // Desktop only: Background warm other playlists for instant tab switching & global search
-    if (!isMobileDevice) {
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
-        } else {
-            setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
-        }
+    // Background warm other playlists for instant tab switching & global search
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
+    } else {
+        setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
     }
 
     function warmRemainingPlaylists(activePl) {

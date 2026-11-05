@@ -309,14 +309,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("republishMediaMetadata()", ctx_code)
 
     def test_external_steal_mode2_keeps_anchor_alive(self):
-        """Mode 2 external steal preserves live audio anchor without stopping anchor or dropping pin"""
+        """Mode 2 external steal enforces single-player isolation and records wasPlayingBeforeCall"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{\s*window\.wasPlayingBeforeCall\s*=\s*true;\s*\}'
+            r'window\.wasPlayingBeforeCall\s*=\s*true;\s*if\s*\(\s*typeof\s+stopLiveAudioAnchor'
         )
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive[\s\S]*?startLiveAudioAnchor\(\);'
+            r'if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);'
         )
 
     def test_pause_boundary_recycles_anchor(self):
@@ -538,7 +538,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """Mode 2 starts live audio anchor synchronously on audioPlayer pause with no focus gap"""
         self.assertRegex(
             self.ms_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?if\s*\(\s*window\.wasPausedByUser\s*\)[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
         )
         self.assertNotRegex(
             self.ms_content,
@@ -756,14 +756,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_telecom_and_video_interrupt_mode2_keepalive(self):
-        """Mode 2 transient pause preserves anchor recycling and heartbeat without dropping to honest paused"""
+        """Mode 2 user pause preserves anchor recycling and zero-delay heartbeat"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive'
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive'
         )
         self.assertRegex(
             self.ms_content,
-            r'startLiveAudioAnchor\(\);[\s\S]*?startAnchorHeartbeat\(\);'
+            r'if\s*\(\s*window\.wasPausedByUser\s*\)[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?startAnchorHeartbeat\(0\);'
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
@@ -1107,15 +1107,16 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("audioPlayer.instantPause()", body)
         self.assertIn("knownOutputCount = newCount;", body)
 
-    def test_playpause_requires_user_pause_to_resume(self):
-        """playpause action handler checks window.wasPausedByUser to prevent inverting underruns into resumes"""
+    def test_playpause_resumes_when_is_actually_paused(self):
+        """playpause action handler resumes whenever isActuallyPaused is true and clears burst"""
         playpause_match = re.search(
             r'setActionHandler\(\s*[\'"]playpause[\'"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\);',
             self.ms_content
         )
         self.assertIsNotNone(playpause_match, "Could not find playpause action handler")
         body = playpause_match.group(1)
-        self.assertIn("if (isActuallyPaused && window.wasPausedByUser)", body)
+        self.assertIn("if (isActuallyPaused)", body)
+        self.assertIn("clearSpoofBurst();", body)
 
     def test_pause_listener_allows_user_pause_during_switching(self):
         """audioPlayer pause event listener permits user-initiated pauses to pass through even if switching"""

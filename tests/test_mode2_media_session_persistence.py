@@ -97,7 +97,7 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
         self.assertIn("reassertSpoofBurst();", content)
 
     def test_audio_player_pause_listener_guards_focus_probe(self):
-        """audioPlayer pause event listener in mediaSession.js skips startFocusProbe during intentional user pause in Mode 2"""
+        """audioPlayer pause event listener in mediaSession.js enforces single player isolation on external interrupt"""
         pause_listener_block = re.search(
             r"audioPlayer\.addEventListener\(\s*['\"]pause['\"][\s\S]*?\n\s{8}\}\);",
             self.ms_content
@@ -105,16 +105,14 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
         self.assertIsNotNone(pause_listener_block, "audioPlayer pause listener not found")
         content = pause_listener_block.group(0)
 
-        # startFocusProbe must be guarded by !window.wasPausedByUser
-        self.assertRegex(
-            content,
-            r"if\s*\(\s*!window\.wasPausedByUser\s*&&\s*typeof\s+startFocusProbe\s*===\s*['\"]function['\"]\s*\)\s*startFocusProbe\(\);"
-        )
+        # On external interrupt, stop auxiliary audio elements
+        self.assertIn("if (typeof stopFocusProbe === 'function') stopFocusProbe();", content)
+        self.assertIn("if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();", content)
 
-        # startAnchorHeartbeat must pass 0 when wasPausedByUser is true
+        # startAnchorHeartbeat passes 0 when wasPausedByUser is true
         self.assertRegex(
             content,
-            r"startAnchorHeartbeat\(\s*window\.wasPausedByUser\s*\?\s*0\s*:\s*1000\s*\);"
+            r"startAnchorHeartbeat\(0\);"
         )
 
     def test_start_anchor_heartbeat_non_destructive_when_active(self):
@@ -318,18 +316,17 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
             r'anchorEl\.addEventListener\(\s*["\']pause["\'][\s\S]*?reassertSpoofBurst\(\);[\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);'
         )
 
-    def test_main_pause_listener_triggers_reassert_spoof_burst_on_external_interrupt(self):
-        """audioPlayer pause listener in main.js calls reassertSpoofBurst on external video focus loss (!wasPausedByUser)"""
+    def test_main_pause_listener_enforces_single_player_isolation_on_external_interrupt(self):
+        """audioPlayer pause listener in main.js enforces single-player isolation on external video focus loss (!wasPausedByUser)"""
         pause_block = re.search(
             r"audioPlayer\.addEventListener\(\s*['\"]pause['\"][\s\S]*?\n    \}\);",
             self.main_content
         )
         self.assertIsNotNone(pause_block, "audioPlayer pause listener not found in main.js")
         content = pause_block.group(0)
-        self.assertRegex(
-            content,
-            r"if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{[\s\S]*?\}\s*else\s*\{\s*if\s*\(\s*typeof\s+reassertSpoofBurst\s*===\s*['\"]function['\"]\s*\)\s*reassertSpoofBurst\(\);\s*\}"
-        )
+        self.assertIn("stopLiveAudioAnchor()", content)
+        self.assertIn("navigator.mediaSession.playbackState = 'paused';", content)
+        self.assertIn("updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);", content)
 
     def test_synthetic_simulation_mode2_external_focus_loss_transient_preserves_card(self):
         """Synthetic simulation: external video interrupt (AUDIOFOCUS_LOSS_TRANSIENT) preserves pinned notification card"""
@@ -344,18 +341,17 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
         self.assertFalse(sim.window['wasPausedByUser'], "External focus steal must NOT mark wasPausedByUser")
         self.assertTrue(sim.window['wasPlayingBeforeCall'])
 
-        # Mode 2 defense burst is triggered
-        self.assertTrue(sim.reassert_spoof_burst_called)
+        # Mode 2 defense: single-player isolation, no burst churn
+        self.assertFalse(sim.reassert_spoof_burst_called)
 
-        # Spoof burst restores anchor to Chromium normal_players_ within 150ms
-        self.assertGreaterEqual(sim.chromium_normal_players_count(), 1)
-        self.assertEqual(sim.chromium_audio_focus_state, 'ACTIVE')
+        # Single normal player remains in Chromium normal_players_ (size == 1)
+        self.assertEqual(sim.chromium_normal_players_count(), 1)
         self.assertTrue(sim.chromium_is_controllable())
 
-        # Android SystemUI notification card remains pinned
+        # Android SystemUI notification card remains pinned with honest paused state
         self.assertTrue(sim.android_notification_visible)
         self.assertEqual(sim.android_hide_delayed_task_count, 0, "hideNotificationDelayed must NOT be scheduled on external interrupt")
-        self.assertEqual(sim.navigator_media_session['playbackState'], 'playing')
+        self.assertEqual(sim.navigator_media_session['playbackState'], 'paused')
 
 
 # Synthetic Mock Framework for Chromium & Android SystemUI Media Lifecycle
@@ -511,8 +507,9 @@ class SyntheticMediaSessionPipeline:
     def _on_player_paused_in_chromium(self, player):
         # Chromium MediaSessionImpl::OnPlayerPaused:
         # If normal_players_.size() != 1, RemovePlayer(player)
-        if player in self.chromium_normal_players:
-            self.chromium_normal_players.remove(player)
+        if len(self.chromium_normal_players) != 1:
+            if player in self.chromium_normal_players:
+                self.chromium_normal_players.remove(player)
 
         if len(self.chromium_normal_players) == 0:
             # AbandonSystemAudioFocusIfNeeded()
@@ -526,14 +523,11 @@ class SyntheticMediaSessionPipeline:
     def _on_audio_player_pause_event(self):
         # Emulates audioPlayer.addEventListener('pause')
         if self.playback_mode == 'mode2':
-            if not self.window['wasPausedByUser'] and not self.simulate_legacy_defect:
-                self._start_focus_probe()
-                # External video interruption defense trigger (main.js else branch)
+            if self.window['wasPausedByUser']:
                 self._reassert_spoof_burst()
-            elif self.simulate_legacy_defect:
-                # Legacy unpatched code called probe unconditionally
-                self._start_focus_probe()
-                self._on_player_paused_in_chromium(self.probe_el)
+            else:
+                self.reassert_spoof_burst_called = False
+                self.navigator_media_session['playbackState'] = 'paused'
 
     def simulate_external_focus_loss_transient(self):
         # Native external focus steal (AUDIOFOCUS_LOSS_TRANSIENT):
@@ -550,8 +544,8 @@ class SyntheticMediaSessionPipeline:
         # In Mode 2, position is preserved and playbackState is maintained
         if self.playback_mode == 'mode2':
             dur = self.audio_player.duration
-            self._update_media_session_position(self.audio_player.currentTime, dur, 1.0)
-            self.navigator_media_session['playbackState'] = 'playing'
+            self._update_media_session_position(self.audio_player.currentTime, dur, 1.0, True)
+            self.navigator_media_session['playbackState'] = 'paused'
 
     def _handle_pause_action(self):
         # Emulates setActionHandler('pause') in mediaSession.js
@@ -577,7 +571,7 @@ class SyntheticMediaSessionPipeline:
 
     def _handle_playpause_action(self):
         is_paused = self.audio_player.paused or self.window['wasPausedByUser']
-        if is_paused and self.window['wasPausedByUser']:
+        if is_paused:
             self._handle_play_action()
         else:
             self._handle_pause_action()

@@ -82,16 +82,7 @@
         currentPlaylistData = normalizedData;
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
-        if (filterText) {
-            filteredIndices = [];
-            currentPlaylistData.forEach((track, idx) => {
-                const titleMatch = track.title && track.title.toLowerCase().includes(filterText);
-                const channelMatch = track.channel && track.channel.toLowerCase().includes(filterText);
-                if (titleMatch || channelMatch) {
-                    filteredIndices.push({ playlist: folderName, index: idx });
-                }
-            });
-        } else {
+        if (!filterText) {
             const len = currentPlaylistData.length;
             const indices = new Array(len);
             for (let i = 0; i < len; i++) {
