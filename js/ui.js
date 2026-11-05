@@ -206,7 +206,7 @@
         let childIdx = 0;
         for (let i = startIndex; i <= endIndex; i++) {
             const item = filteredIndices[i];
-            const plData = allDatabases[item.playlist];
+            const plData = (allDatabases && allDatabases[item.playlist]) || (item.playlist === currentPl ? currentPlaylistData : null);
             if (!plData || !plData[item.index]) continue;
             const track = plData[item.index];
             const li = trackList.children[childIdx++];
@@ -277,7 +277,12 @@
             window.updatePlaylistScrollArrow();
         }
     }
-    function scrollToTrack(originalIndex, forceScroll = false) {
+    function scrollToTrack(originalIndex, forceScroll = false, allowScroll = true) {
+        if (!allowScroll) {
+            lastStartIndex = -1;
+            renderVirtualTracks();
+            return;
+        }
         const currentPl = playlistSelect.value;
         const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
         

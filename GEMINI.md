@@ -75,11 +75,9 @@
   - `republishMediaMetadata()` MUST strictly be gated behind `shouldRepublishMetadata()`.
   - When track metadata is already fresh and identical, `navigator.mediaSession.metadata` must NEVER be re-assigned on foreground, on screen wake, or inside `timeupdate`.
 - External Media Interruption Non-Stripping Protocol:
-  - When an external app takes audio focus (`audioPlayer.paused && !window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`.
-  - Strictly FORBIDDEN to call `republishMediaMetadata()` during external media loss (which tears down notification bindings while native session focus is lost).
-  - Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` during external media loss (which attempts to fight for audio focus against the focused app, triggering Android SystemUI to instantly strip and revoke the media notification).
-  - Instead, synchronously invoke `stopLiveAudioAnchor()`, `stopAnchorHeartbeat()`, and `clearSpoofBurst()`.
-  - Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
+  - In Mode 1 (and during Bluetooth disconnects or telephone calls): When an external app takes audio focus (`audioPlayer.paused && !window.wasPausedByUser`), state is set honestly to `'paused'` with rate `1.0`. Strictly FORBIDDEN to call `startLiveAudioAnchor()` or schedule `reassertSpoofBurst()` / `startAnchorHeartbeat()` in Mode 1. Android SystemUI retains the media card with an honest Play button in the notification shade, enabling 1-tap playback resumption via `handlePlayAction()`.
+  - In Mode 2: MediaSession strictly applies Rule 33 keepalive defense until explicit user stop. Chromium Android tears down media notifications immediately if all audio streams pause and `playbackState = 'paused'` is declared. The silent live audio anchor and `playbackState = 'playing'` (at micro-rate `0.00001`) must be retained to defend against native OS card eviction.
+  - Across all modes, `republishMediaMetadata()` MUST strictly remain gated behind `shouldRepublishMetadata()` to prevent metadata churn and notification animation blinks.
 - Bluetooth Route Addition vs Audio Interruption Separation:
   - `navigator.mediaDevices.addEventListener('devicechange')` fires on audio output additions and removals. Web APIs have no Telecom or In-Call API.
   - Device additions (`newCount > knownOutputCount`) strictly represent audio route expansion (e.g. connecting Bluetooth headphones or earbuds).
@@ -94,10 +92,15 @@
   3. Resumes wave animation instantly.
 - Monotonic Position Guards:
   1. Live playback drops backwards jumps (>0.5s within 3000ms) and identical rewrites (<0.25s within 1500ms). Natural forward playback is unconditionally dispatched without forward jump clamping.
-  2. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
+  2. Minimum Inter-Anchor Cadence: Live playback enforces an 850ms minimum interval (`elapsed < 850`) to prevent premature secondary position updates on wake/unlock ticks, eliminating double-resume and wave snapping artifacts.
+  3. Monotonic Forward Clamping: Live playback clamps position so that any forced or asynchronous position update arriving within 1000ms cannot jump backwards from `_lastSentPosition` due to OS timer jitter, ensuring SystemUI's `computePosition` interpolator never experiences backward discontinuity.
+  4. Bypassed strictly when `force === true` or `window._forceNextPosition === true` for genuine seeks, unlocks, and mode transitions.
+  5. Continuous Projected Cadence: During continuous 1.0x live playback, position updates arriving within 1500ms that fall within normal timer / buffer jitter (+/-250ms) of SystemUI's projected position (`_lastSentPosition + elapsed * 0.001 * validRate`) are smoothly aligned to `projected`, eliminating wave phase snapping and seekbar thumb jumps.
+  6. Foreground Resync Deduplication & Zero Churn: `resyncMediaSessionOnForeground` debounces wake/foreground triggers within 1500ms and cancels pending follower timeouts, preventing duplicate IPC bursts across `visibilitychange` and `pageshow`. Rebinding metadata (`republishMediaMetadata`) is strictly prohibited on unlock when metadata is healthy and unchanged, ensuring `navigator.mediaSession.metadata = null` is never dispatched to Android SystemUI and preventing double-resume wave reset artifacts.
 - Mode 2 Paused Micro-Rate Spoof:
   1. Mode 2 paused strictly uses micro-rate `0.00001` with `playbackState = 'playing'` to freeze notification seekbar while keeping the card pinned on mobile.
   2. Mode 1 paused strictly uses rate `1.0` with `playbackState = 'paused'`.
+  3. Mode 2 Pause Eviction Elimination: Pausing via media card action handlers (`pause`, `playpause`) or in-app UI synchronously freezes position at micro-rate 0.00001, republishes metadata, and invokes `startAnchorHeartbeat(0)` with zero delay while guarding `startFocusProbe()` with `!window.wasPausedByUser` and guarding active `anchorEl` against destructive pause cycling, preventing Chromium `normal_players_` drop to 0 and eliminating transient notification card eviction in Android SystemUI.
 - Post-Call Media Card Resurrection Invariant:
   1. When an active call ends (in Mode 1 or Mode 2), Android SystemUI may have evicted or stripped the inactive notification card during the call.
   2. Because Chromium C++ deduplicates identical metadata (`if (metadata_ == metadata) return;`), calling `republishMediaMetadata()` with identical fields sends zero Mojo IPC to Android.
@@ -337,6 +340,23 @@
 - MediaSource Duration Early Binding: In `dom.js` (`_initMSE`), `this._mediaSource.duration = this._expectedDuration` must be asserted upon the `sourceopen` event listener when `_expectedDuration > 0`, preventing Chromium's audio pipeline from classifying the stream as an unbounded/live stream.
 - Unconditional Duration Confirmation Synchronization: In `main.js` (`syncDuration`), `updateMediaSessionPosition(audioPlayer.currentTime, roundedDur, null, true)` must be dispatched whenever audio events (`durationchange`, `loadedmetadata`, `canplay`) confirm a valid finite positive duration, regardless of whether `seekBar.max` already equaled `roundedDur`.
 - Defensive SeekTo Action Handling: `setActionHandler('seekto')` must validate and clamp incoming seek targets, update UI, and push the seeked target with confirmed duration to `updateMediaSessionPosition`, ensuring Android SystemUI seekbar scrubbing maintains continuous duration and timestamp display.
+
+## 39. Playlist Track Item Click Scroll Retention Invariant
+- Clicking any playlist track item div (`li` in `#track-list`) strictly retains the current `playlistContainer.scrollTop` position without auto-centering or scrolling `#playlist-container`.
+- In `main.js`, `trackList` click listener explicitly invokes `playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index), false)` passing `shouldScroll = false`.
+- In `playback.js`, `playTrackSelection(targetPlaylist, targetOriginalIndex, shouldScroll = false)` propagates `allowScroll = shouldScroll` to `executePlayback(false, false, shouldScroll, null, shouldScroll)`.
+- In `playback.js`, `executePlayback(..., allowScroll = true)` forwards `allowScroll` to `scrollToTrack(originalIndex, forceScroll, allowScroll)`.
+- In `ui.js`, `scrollToTrack(originalIndex, forceScroll = false, allowScroll = true)` immediately short-circuits via `if (!allowScroll) { lastStartIndex = -1; renderVirtualTracks(); return; }`, updating the `.active` item styling without invoking `playlistContainer.scrollTo(...)`.
+- Natural track auto-advancement (`playNext`, `playPrevious`) maintains `allowScroll = true` default behavior.
+
+## 40. Main PWA Default Focus & Spacebar Play/Pause Invariant
+- Default focus strictly persists on the main PWA site (`document.body`).
+- Pointer clicks (`e.detail > 0`) on buttons (`button, [role="button"]`) outside modal dialogs immediately invoke `btn.blur()`, returning `document.activeElement` to `document.body` and preventing button focus retention.
+- In `main.js`, the global keydown listener for Spacebar (`e.key === ' ' || e.code === 'Space'`) unconditionally blurs active buttons, dispatches `e.preventDefault()`, and triggers `btnPlayPause.click()`.
+- Buttons never retain focus after pointer interaction, and Spacebar keypresses never repeat or activate the most recently clicked button (such as Next Track `#btn-next`).
+- Editable text inputs (`input[type!="range"]`, `textarea`, `select`, `isContentEditable`) and active modal dialogs (`#settings-modal`) remain isolated from global Spacebar playback interception.
+
+
 
 
 

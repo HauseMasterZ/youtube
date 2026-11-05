@@ -245,6 +245,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.snapToSearch = snapToSearch;
 
+    searchInput.addEventListener("focus", () => {
+        if (typeof warmRemainingPlaylists === 'function') {
+            warmRemainingPlaylists(playlistSelect.value);
+        }
+    });
+
     searchInput.addEventListener("input", (e) => {
         if (searchMode === 'ephemeral') {
             exitEphemeralSearch();
@@ -259,7 +265,6 @@ document.addEventListener("DOMContentLoaded", () => {
                 filteredIndices = currentPlaylistData ? currentPlaylistData.map((_, i) => ({ playlist: currentPl, index: i })) : [];
             } else {
                 const scoredResults = [];
-                const addedIds = new Set();
                 
                 // 1. Current playlist matches (with a slight current playlist bias of +50)
                 if (currentPlaylistData) {
@@ -268,7 +273,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         const score = calculateFuzzyScore(query, track.title, track.channel);
                         if (score > 0) {
                             scoredResults.push({ playlist: currentPl, index: i, score: score + 50 });
-                            addedIds.add(track.id || track.file_path);
                         }
                     }
                 }
@@ -279,13 +283,9 @@ document.addEventListener("DOMContentLoaded", () => {
                         const data = allDatabases[pl];
                         for (let i = 0; i < data.length; i++) {
                             const track = data[i];
-                            const trackKey = track.id || track.file_path;
-                            if (!addedIds.has(trackKey)) {
-                                const score = calculateFuzzyScore(query, track.title, track.channel);
-                                if (score > 0) {
-                                    scoredResults.push({ playlist: pl, index: i, score: score });
-                                    addedIds.add(trackKey);
-                                }
+                            const score = calculateFuzzyScore(query, track.title, track.channel);
+                            if (score > 0) {
+                                scoredResults.push({ playlist: pl, index: i, score: score });
                             }
                         }
                     }
@@ -345,7 +345,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     searchDebounceTimer = null;
                 }
                 const item = filteredIndices[targetIdx];
-                playTrackSelection(item.playlist, item.index);
+                playTrackSelection(item.playlist, item.index, true);
                 searchInput.blur();
             }
         } else if (e.key === "Escape") {
@@ -694,7 +694,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const li = e.target.closest("li");
         if (!li || !li.dataset.index || !li.dataset.playlist) return;
         
-        playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index));
+        playTrackSelection(li.dataset.playlist, parseInt(li.dataset.index), false);
     });
 
     trackList.addEventListener("contextmenu", (e) => {
@@ -820,23 +820,30 @@ document.addEventListener("DOMContentLoaded", () => {
         } else {
             window.wasPausedByUser = true;
             setPlayUI(false);
-            if (window.playbackMode === 'mode2') {
-                if (hasMediaSession) navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+            if (window.playbackMode === 'mode2' && hasMediaSession) {
+                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'playing';
+                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+                if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+            }
+            if (window.playbackMode === 'mode2') {
                 if (!window.isCallActive && typeof startLiveAudioAnchor === 'function') {
                     startLiveAudioAnchor();
                 }
                 audioPlayer.instantPause();
+                if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
             } else {
+                if (hasMediaSession) {
+                    navigator.mediaSession.playbackState = 'paused';
+                    const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                    const pos = (audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
+                        ? audioPlayer.active.currentTime
+                        : (audioPlayer ? audioPlayer.currentTime : 0);
+                    updateMediaSessionPosition(pos, dur, 1.0, true);
+                }
                 audioPlayer.instantPause();
-            }
-            if (window.playbackMode === 'mode2' && hasMediaSession) {
-                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
-            } else if (hasMediaSession) {
-                navigator.mediaSession.playbackState = 'paused';
-                const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
             }
         }
     });
@@ -1016,16 +1023,27 @@ document.addEventListener("DOMContentLoaded", () => {
             const isRecentBtDisconnect = (typeof window.lastBtDisconnectTime === 'number' && Date.now() - window.lastBtDisconnectTime < 2500);
 
             if (window.playbackMode === 'mode2' && !isRecentBtDisconnect) {
-                if (!window.wasPausedByUser) {
+                if (window.wasPausedByUser) {
+                    if (typeof startLiveAudioAnchor === 'function') {
+                        startLiveAudioAnchor();
+                    }
+                    // Mode 2 pause: keep 'playing' spoof to pin the wave animation
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                        ? window.declaredPausedState() : 'playing';
+                    if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
+                    if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
+                    if (typeof reassertSpoofBurst === 'function') reassertSpoofBurst();
+                } else {
+                    // Mode 2 external video/media interrupt: enforce single-player isolation
                     window.wasPlayingBeforeCall = true;
+                    if (typeof stopLiveAudioAnchor === 'function') stopLiveAudioAnchor();
+                    if (typeof stopFocusProbe === 'function') stopFocusProbe();
+                    if (typeof stopAnchorHeartbeat === 'function') stopAnchorHeartbeat();
+                    if (typeof clearSpoofBurst === 'function') clearSpoofBurst();
+                    navigator.mediaSession.playbackState = 'paused';
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0, true);
                 }
-                if (typeof startLiveAudioAnchor === 'function') {
-                    startLiveAudioAnchor();
-                }
-                // Mode 2 pause (user or transient interrupt): keep 'playing' spoof to pin the wave animation
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
-                navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
-                    ? window.declaredPausedState() : 'playing';
             } else {
                 // Mode 1 or BT disconnect: set 'paused' so Android native focus resume works
                 if (isRecentBtDisconnect) {
@@ -1045,7 +1063,6 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
                 lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
-                lastRenderTime = -1;
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
@@ -1161,7 +1178,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // covers unlock-to-home where hidden stays true.
     window.addEventListener("pageshow", () => {
         if (!document.hidden && !audioPlayer.paused && !audioPlayer.switching) {
-            lastRenderTime = -1;
             if (typeof resyncMediaSessionOnForeground === 'function') {
                 resyncMediaSessionOnForeground('pageshow-playing');
             }
@@ -1734,6 +1750,18 @@ document.addEventListener("DOMContentLoaded", () => {
         albumArtContainer.addEventListener("pointerdown", blurPlaylistSelectIfActive);
     }
 
+    // Ensure default focus persists on main site when buttons are activated via pointer
+    document.addEventListener("click", (e) => {
+        if (!e.detail) return; // keyboard-generated or programmatic clicks
+        const el = e.target instanceof Element ? e.target : null;
+        const btn = el && el.closest('button, [role="button"]');
+        if (!btn) return;
+        if (btn.closest('#settings-modal') || btn.closest('[aria-modal="true"]')) return;
+        if (typeof btn.blur === 'function') {
+            btn.blur();
+        }
+    }, true);
+
     // --- Mobile Horizontal Swipe on Playlist Select Container to Switch Playlists ---
     if (hasTouch && playlistSelectContainer) {
         let plTouchStartX = 0;
@@ -1843,13 +1871,11 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     loadPlaylist(initialPl);
 
-    // Desktop only: Background warm other playlists for instant tab switching & global search
-    if (!isMobileDevice) {
-        if ('requestIdleCallback' in window) {
-            requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
-        } else {
-            setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
-        }
+    // Background warm other playlists for instant tab switching & global search
+    if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => warmRemainingPlaylists(initialPl), { timeout: 4000 });
+    } else {
+        setTimeout(() => warmRemainingPlaylists(initialPl), 1500);
     }
 
     function warmRemainingPlaylists(activePl) {
@@ -1966,14 +1992,16 @@ document.addEventListener("DOMContentLoaded", () => {
             let dur = audioPlayer.duration;
             if (!dur || isNaN(dur) || dur === Infinity) dur = parseInt(seekBar.max) || 0;
             audioPlayer.currentTime = Math.min(dur || 0, audioPlayer.currentTime + 5);
-        } else if (e.key === ' ') {
+        } else if (e.key === ' ' || e.code === 'Space') {
             if (e.repeat) {
                 e.preventDefault();
                 return;
             }
-            if (e.target && e.target.tagName === 'BUTTON') return;
-            btnPlayPause.click();
+            if (document.activeElement && typeof document.activeElement.blur === 'function' && document.activeElement !== document.body) {
+                document.activeElement.blur();
+            }
             e.preventDefault();
+            btnPlayPause.click();
         } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
             btnRepeat.click();
             e.preventDefault();
@@ -2061,6 +2089,9 @@ document.addEventListener("DOMContentLoaded", () => {
     function closeSettingsModal() {
         if (settingsModal) settingsModal.style.display = 'none';
         if (settingsBackdrop) settingsBackdrop.style.display = 'none';
+        if (document.activeElement && typeof document.activeElement.blur === 'function') {
+            document.activeElement.blur();
+        }
     }
 
     window.openSettingsModal = openSettingsModal;

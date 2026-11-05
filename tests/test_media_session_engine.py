@@ -309,14 +309,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn("republishMediaMetadata()", ctx_code)
 
     def test_external_steal_mode2_keeps_anchor_alive(self):
-        """Mode 2 external steal preserves live audio anchor without stopping anchor or dropping pin"""
+        """Mode 2 external steal enforces single-player isolation and records wasPlayingBeforeCall"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*!window\.wasPausedByUser\s*\)\s*\{\s*window\.wasPlayingBeforeCall\s*=\s*true;\s*\}'
+            r'window\.wasPlayingBeforeCall\s*=\s*true;\s*if\s*\(\s*typeof\s+stopLiveAudioAnchor'
         )
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive[\s\S]*?startLiveAudioAnchor\(\);'
+            r'if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{[\s\S]*?startLiveAudioAnchor\(\);'
         )
 
     def test_pause_boundary_recycles_anchor(self):
@@ -538,7 +538,7 @@ class TestMediaSessionEngine(unittest.TestCase):
         """Mode 2 starts live audio anchor synchronously on audioPlayer pause with no focus gap"""
         self.assertRegex(
             self.ms_content,
-            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
+            r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"][\s\S]*?if\s*\(\s*window\.wasPausedByUser\s*\)[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?armAutoKillWatchdog\(\);'
         )
         self.assertNotRegex(
             self.ms_content,
@@ -756,14 +756,14 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_telecom_and_video_interrupt_mode2_keepalive(self):
-        """Mode 2 transient pause preserves anchor recycling and heartbeat without dropping to honest paused"""
+        """Mode 2 user pause preserves anchor recycling and zero-delay heartbeat"""
         self.assertRegex(
             self.ms_content,
-            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*audioPlayer\.paused\s*&&\s*!window\.isCallActive'
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive'
         )
         self.assertRegex(
             self.ms_content,
-            r'startLiveAudioAnchor\(\);[\s\S]*?startAnchorHeartbeat\(\);'
+            r'if\s*\(\s*window\.wasPausedByUser\s*\)[\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?startAnchorHeartbeat\(0\);'
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
@@ -1107,21 +1107,79 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertNotIn("audioPlayer.instantPause()", body)
         self.assertIn("knownOutputCount = newCount;", body)
 
-    def test_playpause_requires_user_pause_to_resume(self):
-        """playpause action handler checks window.wasPausedByUser to prevent inverting underruns into resumes"""
+    def test_playpause_resumes_when_is_actually_paused(self):
+        """playpause action handler resumes whenever isActuallyPaused is true and clears burst"""
         playpause_match = re.search(
             r'setActionHandler\(\s*[\'"]playpause[\'"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\n\s*\}\);',
             self.ms_content
         )
         self.assertIsNotNone(playpause_match, "Could not find playpause action handler")
         body = playpause_match.group(1)
-        self.assertIn("if (isActuallyPaused && window.wasPausedByUser)", body)
+        self.assertIn("if (isActuallyPaused)", body)
+        self.assertIn("clearSpoofBurst();", body)
 
     def test_pause_listener_allows_user_pause_during_switching(self):
         """audioPlayer pause event listener permits user-initiated pauses to pass through even if switching"""
         self.assertRegex(
             self.ms_content,
             r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?\(audioPlayer\.switching\s*&&\s*!window\.wasPausedByUser\)'
+        )
+
+    def test_update_media_session_position_minimum_inter_anchor_cadence(self):
+        """updateMediaSessionPosition enforces minimum 850ms interval to eliminate double resume snaps"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*elapsed\s*<\s*850\s*\)\s*\{\s*return;\s*\}'
+        )
+
+    def test_update_media_session_position_prevents_backward_snap_on_live_playback(self):
+        """updateMediaSessionPosition prevents backward position snapping during live playback"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*elapsedSinceLast\s*<\s*1000\s*&&\s*validPos\s*<\s*_lastSentPosition\s*\)\s*\{\s*validPos\s*=\s*_lastSentPosition;\s*\}'
+        )
+
+    def test_visibilitychange_avoids_redundant_last_render_time_inversion(self):
+        """visibilitychange retains synchronized lastRenderTime to avoid immediate redundant timeupdate firing"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertNotRegex(
+            main_src,
+            r'updateTimeUI\(Math\.floor\(audioPlayer\.currentTime\)\);[\s\n\r]*lastRenderTime\s*=\s*-1;'
+        )
+
+    def test_resync_media_session_deduplication_and_single_follower(self):
+        """resyncMediaSessionOnForeground debounces within 1500ms and cancels pending follower to eliminate double resume"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*now\s*-\s*_lastForegroundResyncTimestamp\s*<\s*1500\s*\)\s*\{\s*return;\s*\}'
+        )
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*_resyncFollowerTimeout\s*\)\s*\{\s*clearTimeout\(_resyncFollowerTimeout\);\s*_resyncFollowerTimeout\s*=\s*null;\s*\}'
+        )
+
+    def test_update_media_session_position_smooth_projected_cadence(self):
+        """updateMediaSessionPosition smoothly projects continuous position to eliminate seekbar wave snapping"""
+        self.assertRegex(
+            self.ms_content,
+            r'if\s*\(\s*Math\.abs\(validPos\s*-\s*projected\)\s*<\s*0\.25\s*\)\s*\{\s*validPos\s*=\s*Math\.max\(0,\s*Math\.min\(projected,\s*dur\)\);\s*\}'
+        )
+
+    def test_pageshow_avoids_redundant_last_render_time_inversion(self):
+        """pageshow avoids resetting lastRenderTime to prevent premature timeupdate IPC dispatch"""
+        with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'main.js'), 'r', encoding='utf-8') as f:
+            main_src = f.read()
+        self.assertNotRegex(
+            main_src,
+            r'window\.addEventListener\([\'"pageshow[\'"]\s*,\s*\(\)\s*=>\s*\{[\s\S]*?lastRenderTime\s*=\s*-1;'
+        )
+
+    def test_should_republish_metadata_prevents_unlock_metadata_churn(self):
+        """shouldRepublishMetadata does not churn metadata on unlock when metadata is healthy"""
+        self.assertNotRegex(
+            self.ms_content,
+            r'unlockResumeFlag'
         )
 
 if __name__ == '__main__':
