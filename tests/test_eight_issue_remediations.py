@@ -155,21 +155,22 @@ class TestEightIssueRemediations(unittest.TestCase):
         )
 
     def test_issue8_double_swipe_de_perform(self):
-        """Double swipe removes from playQueue with Unqueued toast, and deletes from CacheStorage with Removed toast."""
+        """Double swipe removes from playQueue without unqueue toast; download de-confirmation cancels in-flight or does nothing if already cached."""
         # Right swipe unqueue logic in queuePlayNext
         self.assertIn("return { unqueued: true };", self.playback_content)
         self.assertIn("return { unqueued: false };", self.playback_content)
         self.assertIn("window.enqueuedTrackKeys", self.playback_content)
         self.assertIn("window.enqueuedTrackKeys = new Set();", self.state_content)
 
-        # Right swipe unqueue handling in main.js
-        self.assertIn("showEphemeralToast(\"Unqueued\", false);", self.main_content)
+        # Right swipe unqueue handling in main.js: no unqueue toast
+        self.assertNotIn("showEphemeralToast(\"Unqueued\", false);", self.main_content)
         self.assertIn("targetLi.classList.remove('enqueued-flash');", self.main_content)
 
-        # Left swipe removal in downloadSingleTrack
-        self.assertIn("await mediaCache.delete(audioUrl);", self.playback_content)
-        self.assertIn("Removed from offline", self.playback_content)
-        self.assertIn("return { removed: true };", self.playback_content)
+        # Left swipe de-confirmation in downloadSingleTrack: abort in-flight or no-op if done
+        self.assertIn("window.activeDownloadAbortControllers", self.playback_content)
+        self.assertIn("existingCtrl.abort();", self.playback_content)
+        self.assertIn("return { cancelled: true };", self.playback_content)
+        self.assertIn("return { alreadyDownloaded: true };", self.playback_content)
 
     def test_queue_play_next_double_swipe_simulation(self):
         """Simulate single playlist queuePlayNext to verify 1st swipe enqueues and 2nd swipe unqueues."""

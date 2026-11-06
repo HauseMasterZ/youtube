@@ -1471,12 +1471,28 @@
             return;
         }
 
+        const audioUrl = getAudioUrl(track);
+        const thumbUrl = getThumbUrl(track);
+        const downloadKey = audioUrl;
+
+        window.activeDownloadAbortControllers = window.activeDownloadAbortControllers || new Map();
+
+        // If currently downloading (in-flight): cancel the download
+        if (window.activeDownloadAbortControllers.has(downloadKey)) {
+            const existingCtrl = window.activeDownloadAbortControllers.get(downloadKey);
+            window.activeDownloadAbortControllers.delete(downloadKey);
+            if (existingCtrl) {
+                existingCtrl.abort();
+            }
+            showDownloadToast(`Cancelled download: ${track.title || 'track'}`);
+            setTimeout(hideDownloadToast, 3000);
+            return { cancelled: true };
+        }
+
+        let abortController = null;
         try {
             const mediaCache = await caches.open('yt-player-media');
             const thumbsCache = await caches.open('yt-player-thumbs');
-
-            const audioUrl = getAudioUrl(track);
-            const thumbUrl = getThumbUrl(track);
 
             // 1. Audio Cache
             const existingAudio = await mediaCache.match(audioUrl);
@@ -1489,30 +1505,19 @@
                 }
             }
 
-            // Double swipe: If already fully cached offline, remove from cache
+            // De-confirmation rule: If download is already done, don't do anything
             if (existingAudio && !isPartial) {
-                await mediaCache.delete(audioUrl);
-                if (thumbUrl) {
-                    try { await thumbsCache.delete(thumbUrl); } catch (e) {}
-                }
-                if (track.file_path && track.id) {
-                    const parts = track.file_path.split('/');
-                    const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
-                    try { await mediaCache.delete(lyricsUrl); } catch (e) {}
-                }
-                if (typeof refreshCachedAudioUrls === 'function') {
-                    await refreshCachedAudioUrls();
-                }
-                showDownloadToast(`Removed from offline: ${track.title || 'track'}`, false);
-                setTimeout(hideDownloadToast, 3000);
-                return { removed: true };
+                return { alreadyDownloaded: true };
             }
+
+            abortController = new AbortController();
+            window.activeDownloadAbortControllers.set(downloadKey, abortController);
 
             showDownloadToast(`Downloading: ${track.title || 'track'}...`);
 
             if (!existingAudio || isPartial) {
                 const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;
-                const res = await fetch(fetchUrl);
+                const res = await fetch(fetchUrl, { signal: abortController.signal });
                 if (res && res.status === 429) {
                     if (typeof window !== 'undefined') window.cfBlockedUntil = Date.now() + 10000;
                     showDownloadToast("Rate limited by Cloudflare - retry in 10s");
@@ -1538,7 +1543,7 @@
 
             // 2. Thumbnail Cache
             if (thumbUrl && !(await thumbsCache.match(thumbUrl))) {
-                const tRes = await fetch(thumbUrl).catch(() => {});
+                const tRes = await fetch(thumbUrl, { signal: abortController.signal }).catch(() => {});
                 if (tRes && (tRes.ok || tRes.type === 'opaque')) {
                     await thumbsCache.put(thumbUrl, tRes);
                 }
@@ -1549,7 +1554,7 @@
                 const parts = track.file_path.split('/');
                 const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
                 if (!(await mediaCache.match(lyricsUrl))) {
-                    const lRes = await fetch(lyricsUrl).catch(() => {});
+                    const lRes = await fetch(lyricsUrl, { signal: abortController.signal }).catch(() => {});
                     if (lRes && lRes.ok) {
                         await mediaCache.put(lyricsUrl, lRes);
                     }
@@ -1563,8 +1568,19 @@
             showDownloadToast(`[OK] Saved offline: ${track.title || 'track'}`, true);
             setTimeout(hideDownloadToast, 3000);
         } catch (e) {
+            if (e && (e.name === 'AbortError' || (abortController && abortController.signal && abortController.signal.aborted))) {
+                try {
+                    const mediaCache = await caches.open('yt-player-media');
+                    await mediaCache.delete(audioUrl);
+                } catch (_) {}
+                return { cancelled: true };
+            }
             showDownloadToast(`Download failed: ${track.title || 'track'}`);
             setTimeout(hideDownloadToast, 3000);
+        } finally {
+            if (abortController && window.activeDownloadAbortControllers && window.activeDownloadAbortControllers.get(downloadKey) === abortController) {
+                window.activeDownloadAbortControllers.delete(downloadKey);
+            }
         }
     }
 

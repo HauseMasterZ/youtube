@@ -360,11 +360,18 @@
 - Every page reload, browser refresh, or PWA restart strictly defaults to Mode 1 (`window.playbackMode = 'mode1'`) without restoring Mode 2 from persistent storage.
 
 ## 42. Gesture Double-Swipe De-Performance Invariant
-- Swiping right to enqueue a track that is already in `playQueue` removes/unqueues it, clears enqueued visual cues, and displays an "Unqueued" toast.
-- Swiping left to download a track that is already fully cached offline deletes it from CacheStorage, refreshes the cached audio list, and displays a "Removed from offline" toast.
+- Swiping right to enqueue a track that is already in `playQueue` removes/unqueues it and clears enqueued visual cues without displaying an unqueue toast icon.
+- Swiping left to download a track that is already fully cached offline does nothing (no deletion, no cache removal, no toast).
+- Swiping left to download a track that is currently in-flight downloading cancels/aborts the in-flight download and displays a "Cancelled download" toast.
 
 ## 43. Minimum Swipe Gesture Threshold Invariant
 - Track list horizontal swipe actions require at least a 0.20 drag width ratio with an absolute minimum floor of 64px (`Math.max(64, offsetWidth * thresholdRatio)`) before activating enqueue or download actions.
+
+## 44. Bluetooth AVRCP Playback Resume & Media Key Invariant
+- Bluetooth headset resume commands (`onPlay`, `onPause` while paused, or `MediaPlayPause` / `MediaPlay` key events) must resume audio playback unconditionally without being blocked by `wasPausedByUser`.
+- In `mediaSession.js`, `setActionHandler('pause')` delegates to `handlePlayAction()` whenever `isActuallyPaused` is true, ensuring single-button and toggle Bluetooth headsets immediately resume playback across both Mode 1 and Mode 2.
+- In `main.js`, `audioPlayer.addEventListener("play")` treats native and AVRCP play events as authorized user playback, clearing `window.wasPausedByUser = false;` without invoking `instantPause()` (blocking rogue play strictly on `isCallActive` or `isPostCallQuarantine`).
+- Universal `keydown` listener intercepts `MediaPlayPause`, `MediaPlay`, `MediaPause`, `MediaTrackNext`, and `MediaTrackPrevious` to support physical headset and hardware media keys.
 
 
 

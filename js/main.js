@@ -606,7 +606,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (qRes && qRes.unqueued) {
                             targetLi.classList.remove('enqueued-flash');
                             targetLi.style.removeProperty('--enqueued-color');
-                            showEphemeralToast("Unqueued", false);
                             enqueueTriggered = false;
                         } else {
                             if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
@@ -716,7 +715,6 @@ document.addEventListener("DOMContentLoaded", () => {
         if (qRes && qRes.unqueued) {
             li.classList.remove("enqueued-flash");
             li.style.removeProperty('--enqueued-color');
-            showEphemeralToast("Unqueued", false);
         } else {
             triggerEnqueuedFlash(li);
         }
@@ -951,7 +949,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     
     audioPlayer.addEventListener("play", () => {
-        if (window.wasPausedByUser) {
+        if (window.isCallActive || (typeof window.isPostCallQuarantine === 'function' && window.isPostCallQuarantine())) {
             audioPlayer.instantPause();
             return;
         }
@@ -2018,6 +2016,21 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             e.preventDefault();
             btnPlayPause.click();
+        } else if (e.key === 'MediaPlayPause' || e.code === 'MediaPlayPause') {
+            e.preventDefault();
+            btnPlayPause.click();
+        } else if (e.key === 'MediaPlay' || e.code === 'MediaPlay') {
+            e.preventDefault();
+            if (audioPlayer.paused || window.wasPausedByUser) btnPlayPause.click();
+        } else if (e.key === 'MediaPause' || e.code === 'MediaPause') {
+            e.preventDefault();
+            if (!audioPlayer.paused && !window.wasPausedByUser) btnPlayPause.click();
+        } else if (e.key === 'MediaTrackNext' || e.code === 'MediaTrackNext') {
+            e.preventDefault();
+            btnNext.click();
+        } else if (e.key === 'MediaTrackPrevious' || e.code === 'MediaTrackPrevious') {
+            e.preventDefault();
+            btnPrev.click();
         } else if ((e.key === 'r' || e.key === 'R') && !e.ctrlKey && !e.altKey && !e.metaKey) {
             btnRepeat.click();
             e.preventDefault();
