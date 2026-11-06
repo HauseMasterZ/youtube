@@ -955,6 +955,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         window.wasPausedByUser = false;
         window.wasPlayingBeforeCall = true;
+        if (audioPlayer && typeof audioPlayer._preventAutoplay !== 'undefined') {
+            audioPlayer._preventAutoplay = false;
+        }
         // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
         if (window.playbackMode === 'mode2') {
             if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();

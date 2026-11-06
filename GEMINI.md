@@ -369,8 +369,9 @@
 
 ## 44. Bluetooth AVRCP Playback Resume & Media Key Invariant
 - Bluetooth headset resume commands (`onPlay`, `onPause` while paused, or `MediaPlayPause` / `MediaPlay` key events) must resume audio playback unconditionally without being blocked by `wasPausedByUser`.
-- In `mediaSession.js`, `setActionHandler('pause')` delegates to `handlePlayAction()` whenever `isActuallyPaused` is true, ensuring single-button and toggle Bluetooth headsets immediately resume playback across both Mode 1 and Mode 2.
-- In `main.js`, `audioPlayer.addEventListener("play")` treats native and AVRCP play events as authorized user playback, clearing `window.wasPausedByUser = false;` without invoking `instantPause()` (blocking rogue play strictly on `isCallActive` or `isPostCallQuarantine`).
+- In `dom.js`, `DualAudioPingPong.play()` clears `this._preventAutoplay = false;` on authorized playback, ensuring genuine events propagate to audioPlayer listeners while preserving `forwardEvent` pre-staging event suppression (`this._preventAutoplay && (e.type === 'play' || e.type === 'playing')`), alongside the `if (window.wasPausedByUser) { return Promise.resolve(); }` authorization choke point in `play()`.
+- In `mediaSession.js`, `setActionHandler('pause')` when `isActuallyPaused` is true clears `window.wasPausedByUser = false;` and unconditionally invokes `audioPlayer.play()`, ensuring single-button and toggle Bluetooth headsets immediately resume playback across both Mode 1 and Mode 2 without skipping play on transitional unpaused states.
+- In `main.js`, `audioPlayer.addEventListener("play")` treats native and AVRCP play events as authorized user playback, clearing `window.wasPausedByUser = false;` and `audioPlayer._preventAutoplay = false;` without invoking `instantPause()` (blocking rogue play strictly on `isCallActive` or `isPostCallQuarantine`).
 - Universal `keydown` listener intercepts `MediaPlayPause`, `MediaPlay`, `MediaPause`, `MediaTrackNext`, and `MediaTrackPrevious` to support physical headset and hardware media keys.
 
 ## 45. CI/CD Automated Cache Invalidation Invariant

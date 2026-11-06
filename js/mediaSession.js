@@ -1444,7 +1444,7 @@
                     stopLiveAudioAnchor();
                 }
                 cancelAutoKillWatchdog();
-                if (audioPlayer && audioPlayer.paused) {
+                if (audioPlayer) {
                     const playPromise = audioPlayer.play();
                     if (playPromise && playPromise.then) {
                         playPromise.then(() => {
