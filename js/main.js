@@ -422,7 +422,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let swipeBackdrop = null;
         let legEnq = null;
         let legDown = null;
-        const thresholdRatio = 0.05; // 5% drag width confirms action
+        const thresholdRatio = 0.20; // 20% drag width confirms action
         const iconWidth = 22;
         const gap = 0;
         const parkOffset = gap + iconWidth; // 22px total offset
@@ -508,7 +508,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isHorizontalSwipe) {
                 if (e.cancelable) e.preventDefault();
                 const currentX = dx;
-                const thresholdPx = (activeLi && activeLi.offsetWidth) ? (activeLi.offsetWidth * thresholdRatio) : 20;
+                const thresholdPx = (activeLi && activeLi.offsetWidth) ? Math.max(64, activeLi.offsetWidth * thresholdRatio) : 64;
                 activeLi.style.setProperty('--swipe-x', `${currentX}px`);
                 activeLi.style.transform = `translate3d(${currentX}px, ${currentY}, 0)`;
                 if (currentX > 40) {
@@ -528,7 +528,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (legEnq) {
                             const enqX = Math.min(0, currentX - parkOffset);
                             legEnq.style.transform = `translateX(${enqX}px)`;
-                            if (currentX >= 60 || currentX >= thresholdPx) {
+                            if (currentX >= thresholdPx) {
                                 legEnq.classList.add('legend-triggered');
                             } else {
                                 legEnq.classList.remove('legend-triggered', 'enqueue-success');
@@ -544,7 +544,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         if (legDown) {
                             const downX = Math.max(0, currentX + parkOffset);
                             legDown.style.transform = `translateX(${downX}px)`;
-                            if (currentX <= -60 || currentX <= -thresholdPx) {
+                            if (currentX <= -thresholdPx) {
                                 legDown.classList.add('legend-triggered');
                             } else {
                                 legDown.classList.remove('legend-triggered');
@@ -590,38 +590,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const touch = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : null;
             const dx = (touch && typeof touch.clientX === 'number') ? (touch.clientX - touchStartX) : lastDx;
-            const thresholdPx = (targetLi && targetLi.offsetWidth) ? (targetLi.offsetWidth * thresholdRatio) : 20;
-            const pastThreshold = Math.abs(dx) > thresholdPx;
+            const thresholdPx = (targetLi && targetLi.offsetWidth) ? Math.max(64, targetLi.offsetWidth * thresholdRatio) : 64;
+            const pastThreshold = Math.abs(dx) >= thresholdPx;
             let enqueueTriggered = false;
 
             if (isHorizontalSwipe && e.type !== 'touchcancel') {
                 suppressNextClick = true;
-                const isPastThresholdRight = isHorizontalSwipe && (dx > 0 && pastThreshold);
-                const isPastThresholdLeft = isHorizontalSwipe && (dx < 0 && pastThreshold);
-                if (dx >= 60) {
-                    const pl = targetLi.dataset.playlist;
-                    const idx = parseInt(targetLi.dataset.index, 10);
-                    if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
-                    if (navigator.vibrate) navigator.vibrate(40);
-                    if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
-                    enqueueTriggered = true;
-                } else if (dx <= -60) {
-                    const pl = targetLi.dataset.playlist;
-                    const idx = parseInt(targetLi.dataset.index, 10);
-                    if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
-                    if (navigator.vibrate) navigator.vibrate(40);
-                } else if (isPastThresholdRight) {
-                    const pl = targetLi.dataset.playlist;
-                    const idx = parseInt(targetLi.dataset.index, 10);
-                    if (typeof queuePlayNext === 'function') queuePlayNext(pl, idx);
-                    if (navigator.vibrate) navigator.vibrate(40);
-                    if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
-                    enqueueTriggered = true;
-                } else if (isPastThresholdLeft) {
-                    const pl = targetLi.dataset.playlist;
-                    const idx = parseInt(targetLi.dataset.index, 10);
-                    if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
-                    if (navigator.vibrate) navigator.vibrate(40);
+                if (pastThreshold) {
+                    if (dx >= 60) {
+                        const pl = targetLi.dataset.playlist;
+                        const idx = parseInt(targetLi.dataset.index, 10);
+                        let qRes = null;
+                        if (typeof queuePlayNext === 'function') qRes = queuePlayNext(pl, idx);
+                        if (navigator.vibrate) navigator.vibrate(40);
+                        if (qRes && qRes.unqueued) {
+                            targetLi.classList.remove('enqueued-flash');
+                            targetLi.style.removeProperty('--enqueued-color');
+                            showEphemeralToast("Unqueued", false);
+                            enqueueTriggered = false;
+                        } else {
+                            if (typeof triggerEnqueuedFlash === 'function') triggerEnqueuedFlash(targetLi);
+                            enqueueTriggered = true;
+                        }
+                    } else if (dx <= -60) {
+                        const pl = targetLi.dataset.playlist;
+                        const idx = parseInt(targetLi.dataset.index, 10);
+                        if (typeof window.downloadSingleTrack === 'function') window.downloadSingleTrack(pl, idx);
+                        if (navigator.vibrate) navigator.vibrate(40);
+                    }
                 }
             }
 
@@ -716,8 +712,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 else if (typeof sel.empty === 'function') sel.empty();
             }
         }
-        queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
-        triggerEnqueuedFlash(li);
+        const qRes = queuePlayNext(li.dataset.playlist, parseInt(li.dataset.index));
+        if (qRes && qRes.unqueued) {
+            li.classList.remove("enqueued-flash");
+            li.style.removeProperty('--enqueued-color');
+            showEphemeralToast("Unqueued", false);
+        } else {
+            triggerEnqueuedFlash(li);
+        }
     });
 
     window.addEventListener("popstate", (e) => {
@@ -1264,6 +1266,20 @@ document.addEventListener("DOMContentLoaded", () => {
             pendingSeekTarget = calcTime;
             seekBar.value = calcTime;
             currentTimeDisplay.textContent = formatTime(Math.floor(calcTime));
+            try {
+                audioPlayer.currentTime = calcTime;
+            } catch (err) {
+                console.warn("Seek error:", err);
+            }
+            updateTimeUI(calcTime);
+            if (window.lyricsActive) updateLyricsUI(calcTime);
+            const totalDur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || parseFloat(seekBar.max) || 0;
+            updateMediaSessionPosition(calcTime, totalDur, null, true);
+            if (wasPlayingBeforeSeek) {
+                window.wasPausedByUser = false;
+                audioPlayer.play().catch(console.warn);
+                setPlayUI(true);
+            }
         }
     });
 
@@ -2125,15 +2141,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-    const isMobileInit = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
-    const storedPlaybackMode = isMobileInit
-        ? ((typeof window.getStoredSetting === 'function')
-            ? window.getStoredSetting('yt_playback_mode', 'mode1')
-            : ((typeof localStorage !== 'undefined' && localStorage.getItem('yt_playback_mode')) || 'mode1'))
-        : 'mode1';
-    if (storedPlaybackMode === 'mode2' && typeof togglePlaybackMode === 'function') {
-        togglePlaybackMode('mode2');
-    } else if (typeof togglePlaybackMode === 'function') {
+    if (typeof togglePlaybackMode === 'function') {
         togglePlaybackMode('mode1');
     }
 

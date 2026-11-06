@@ -90,7 +90,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         self.assertIn("swipeBackdrop.style.opacity = '0';", self.main_content)
         self.assertNotIn("linear-gradient", self.main_content)
         self.assertIn("if (isHorizontalSwipe && e.type !== 'touchcancel')", self.main_content)
-        self.assertIn("thresholdRatio = 0.05", self.main_content)
+        self.assertIn("thresholdRatio = 0.20", self.main_content)
         self.assertIn("activeLi.classList.add('is-swiping')", self.main_content)
 
     def test_unlock_wave_animation_rebind_cooldown(self):

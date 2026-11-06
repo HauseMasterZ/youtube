@@ -356,6 +356,17 @@
 - Buttons never retain focus after pointer interaction, and Spacebar keypresses never repeat or activate the most recently clicked button (such as Next Track `#btn-next`).
 - Editable text inputs (`input[type!="range"]`, `textarea`, `select`, `isContentEditable`) and active modal dialogs (`#settings-modal`) remain isolated from global Spacebar playback interception.
 
+## 41. Playback Mode 1 Default Startup Invariant
+- Every page reload, browser refresh, or PWA restart strictly defaults to Mode 1 (`window.playbackMode = 'mode1'`) without restoring Mode 2 from persistent storage.
+
+## 42. Gesture Double-Swipe De-Performance Invariant
+- Swiping right to enqueue a track that is already in `playQueue` removes/unqueues it, clears enqueued visual cues, and displays an "Unqueued" toast.
+- Swiping left to download a track that is already fully cached offline deletes it from CacheStorage, refreshes the cached audio list, and displays a "Removed from offline" toast.
+
+## 43. Minimum Swipe Gesture Threshold Invariant
+- Track list horizontal swipe actions require at least a 0.20 drag width ratio with an absolute minimum floor of 64px (`Math.max(64, offsetWidth * thresholdRatio)`) before activating enqueue or download actions.
+
+
 
 
 

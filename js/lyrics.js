@@ -50,7 +50,7 @@
             const folder = parts[0];
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            let res = await fetch(`${lyricsUrl}?v=154`, { priority: 'low' });
+            let res = await fetch(`${lyricsUrl}?v=155`, { priority: 'low' });
             if (!res.ok) res = await fetch(lyricsUrl, { priority: 'low' });
             if (!res.ok) throw new Error();
             let text = await res.text();
@@ -66,6 +66,11 @@
                         }
                     }
                 } catch (err) {}
+            }
+            
+            // Client-side sanity check: Reject mismatched lyrics for Kick track
+            if ((track.id === '_zh2LgJRXu4' || (track.title && track.title.toLowerCase().includes('kick'))) && (text.includes('Relient K') || text.includes('Kick-Off') || text.includes('Kick Off'))) {
+                throw new Error("Mismatched lyrics for Kick track");
             }
             
             // Abort if the user skipped to another track while the fetch was pending

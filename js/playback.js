@@ -451,7 +451,10 @@
         }
         
         playQueue = indices;
-        if (resetPlayback) queueIndex = -1;
+        if (resetPlayback) {
+            queueIndex = -1;
+            if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.clear();
+        }
     }
 
     // Helper for cross-playlist shuffle: switch playlist context and play a specific track
@@ -476,6 +479,7 @@
             trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
             poolInitialized = false;
             playQueue = currentPlaylistData ? Array.from({length: currentPlaylistData.length}, (_, i) => i) : [];
+            if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.clear();
         }
         globalActivePlaylist = playlist;
         globalActiveOriginalIndex = trackIndex;
@@ -487,20 +491,58 @@
     window.playTrackSelection = playTrackSelection;
 
     window.queuePlayNext = function(playlist, originalIndex) {
+        const key = `${playlist}:${originalIndex}`;
         if (shuffleMode === 1) {
             // Cross-playlist shuffle mode
             const existingIdx = crossShuffleHistory.findIndex(t => t.playlist === playlist && t.index === originalIndex);
+            const isEnqueued = (window.enqueuedTrackKeys && window.enqueuedTrackKeys.has(key)) || (existingIdx !== -1 && existingIdx === crossShufflePos + 1);
+            if (isEnqueued && existingIdx !== -1) {
+                crossShuffleHistory.splice(existingIdx, 1);
+                if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.delete(key);
+                return { unqueued: true };
+            }
             if (existingIdx !== -1) {
                 crossShuffleHistory.splice(existingIdx, 1);
                 if (existingIdx <= crossShufflePos) crossShufflePos--;
             }
             crossShuffleHistory.splice(crossShufflePos + 1, 0, { playlist, index: originalIndex });
+            if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.add(key);
+            return { unqueued: false };
         } else {
             // Single playlist mode
+            const curPl = queueBasePlaylist || globalActivePlaylist || (playlistSelect ? playlistSelect.value : '');
+            const isMatch = (item) => {
+                if (typeof item === 'number') {
+                    return item === originalIndex && playlist === curPl;
+                } else if (item && typeof item === 'object') {
+                    return item.playlist === playlist && item.index === originalIndex;
+                }
+                return false;
+            };
+
+            const existingIdx = playQueue.findIndex(isMatch);
             const insertPos = queueIndex >= 0 ? queueIndex + 1 : 0;
-            const curPl = queueBasePlaylist || globalActivePlaylist || playlistSelect.value;
+            const isEnqueued = (window.enqueuedTrackKeys && window.enqueuedTrackKeys.has(key)) || (existingIdx !== -1 && existingIdx === insertPos);
+            if (isEnqueued && existingIdx !== -1) {
+                playQueue.splice(existingIdx, 1);
+                if (existingIdx <= queueIndex) {
+                    queueIndex--;
+                }
+                if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.delete(key);
+                return { unqueued: true };
+            }
+
+            if (existingIdx !== -1) {
+                playQueue.splice(existingIdx, 1);
+                if (existingIdx <= queueIndex) {
+                    queueIndex--;
+                }
+            }
+            const targetPos = queueIndex >= 0 ? queueIndex + 1 : 0;
             const itemToQueue = (playlist === curPl) ? originalIndex : { playlist, index: originalIndex };
-            playQueue.splice(insertPos, 0, itemToQueue);
+            playQueue.splice(targetPos, 0, itemToQueue);
+            if (window.enqueuedTrackKeys) window.enqueuedTrackKeys.add(key);
+            return { unqueued: false };
         }
     };
 
@@ -752,6 +794,9 @@
 
         globalActiveOriginalIndex = originalIndex;
         globalActivePlaylist = targetPlaylist;
+        if (window.enqueuedTrackKeys) {
+            window.enqueuedTrackKeys.delete(`${targetPlaylist}:${originalIndex}`);
+        }
 
         // Record into playback history stack for reverse chronological previous-track navigation
         if (!uiOnly && !isHistoryNav) {
@@ -1426,8 +1471,6 @@
             return;
         }
 
-        showDownloadToast(`Downloading: ${track.title || 'track'}...`);
-
         try {
             const mediaCache = await caches.open('yt-player-media');
             const thumbsCache = await caches.open('yt-player-thumbs');
@@ -1445,6 +1488,27 @@
                     isPartial = true;
                 }
             }
+
+            // Double swipe: If already fully cached offline, remove from cache
+            if (existingAudio && !isPartial) {
+                await mediaCache.delete(audioUrl);
+                if (thumbUrl) {
+                    try { await thumbsCache.delete(thumbUrl); } catch (e) {}
+                }
+                if (track.file_path && track.id) {
+                    const parts = track.file_path.split('/');
+                    const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
+                    try { await mediaCache.delete(lyricsUrl); } catch (e) {}
+                }
+                if (typeof refreshCachedAudioUrls === 'function') {
+                    await refreshCachedAudioUrls();
+                }
+                showDownloadToast(`Removed from offline: ${track.title || 'track'}`, false);
+                setTimeout(hideDownloadToast, 3000);
+                return { removed: true };
+            }
+
+            showDownloadToast(`Downloading: ${track.title || 'track'}...`);
 
             if (!existingAudio || isPartial) {
                 const fetchUrl = audioUrl.includes('?') ? `${audioUrl}&bypass=true` : `${audioUrl}?bypass=true`;

@@ -105,15 +105,6 @@
 
     window.playbackMode = 'mode1';
     var _playbackModeVal = 'mode1';
-    try {
-        const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
-        if (isMobile) {
-            const _storedPlaybackMode = getStoredSetting('yt_playback_mode', 'mode1');
-            if (_storedPlaybackMode === 'mode2') {
-                _playbackModeVal = 'mode2';
-            }
-        }
-    } catch (e) {}
 
     try {
         Object.defineProperty(window, 'playbackMode', {
@@ -134,6 +125,7 @@
     window.lastPlaybackModeTransitions = [];
     window.cachedAudioUrlSet = new Set();
     window.cachedAudioFilePaths = new Set();
+    window.enqueuedTrackKeys = new Set();
 
     function isShuffleDownloadedOnly() {
         const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);

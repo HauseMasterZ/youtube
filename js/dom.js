@@ -583,9 +583,92 @@
                 return Promise.resolve();
             }
 
+            this._streamId = (this._streamId || 0) + 1;
+            const activeStreamId = this._streamId;
+
+            if (this._streamAbortController) {
+                try { this._streamAbortController.abort(); } catch (e) {}
+            }
+            this._streamAbortController = new AbortController();
+            const currentAbortSignal = this._streamAbortController.signal;
+
+            if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
+                this._pendingSeek = resumePosition;
+            }
+
+            const safePlay = () => {
+                if (this._isDirectAudio && this._pendingSeek !== null && this.active.readyState >= 1) {
+                    try { this.active.currentTime = this._pendingSeek; } catch (e) {}
+                    this._pendingSeek = null;
+                }
+                if (this._pendingSeek !== null) {
+                    const buff = (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) ? this._sourceBuffer.buffered : null;
+                    const bEnd = (buff && buff.length > 0) ? buff.end(buff.length - 1) : 0;
+                    const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
+                    const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
+                    if (bEnd < this._pendingSeek + reqLead && !this._streamDone) {
+                        this.active.pause();
+                        return;
+                    }
+                }
+                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                    const p = this.active.play();
+                    if (p && p.catch) {
+                        if (p.then) {
+                            p.then(() => {
+                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                    let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                    if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                                        const tr = currentPlaylistData[globalActiveOriginalIndex];
+                                        if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                        if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                        if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                        if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                                    }
+                                    if (typeof updateMediaSessionPosition === 'function') {
+                                        updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
+                                    }
+                                }
+                            });
+                        }
+                        p.catch(e => {
+                            if (e && e.name === 'AbortError' && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                setTimeout(() => {
+                                    if (!window.wasPausedByUser && this._streamId === activeStreamId && this.active.paused) {
+                                        const retryP = this.active.play();
+                                        if (retryP && retryP.then) {
+                                            retryP.then(() => {
+                                                if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
+                                                    let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
+                                                    if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
+                                                        const tr = currentPlaylistData[globalActiveOriginalIndex];
+                                                        if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
+                                                        if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
+                                                        if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
+                                                        if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
+                                                    }
+                                                    if (typeof updateMediaSessionPosition === 'function') {
+                                                        updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
+                                                    }
+                                                }
+                                            }).catch(() => {});
+                                        } else if (retryP && retryP.catch) {
+                                            retryP.catch(() => {});
+                                        }
+                                    }
+                                }, 60);
+                            } else {
+                                console.warn("MSE play error:", e);
+                            }
+                        });
+                    }
+                }
+            };
+
+            const isMseSupported = ('MediaSource' in window && MediaSource.isTypeSupported('audio/webm; codecs="opus"'));
             const isOpusDirect = url && url.includes('.opus') && !('MediaSource' in window && MediaSource.isTypeSupported('audio/ogg; codecs="opus"'));
 
-            if (!isOpusDirect) {
+            if (isMseSupported && !isOpusDirect) {
                 if (!this._mseInitialized || !this._mediaSource || this._mediaSource.readyState === 'closed' || this.active.src !== this._mediaSourceUrl) {
                     this._resetMSE();
                 }
@@ -603,83 +686,6 @@
                 if (!this._preventAutoplay && typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                     navigator.mediaSession.playbackState = "playing";
                 }
-
-                if (this._streamAbortController) {
-                    try { this._streamAbortController.abort(); } catch (e) {}
-                }
-                this._streamAbortController = new AbortController();
-                const currentAbortSignal = this._streamAbortController.signal;
-
-                this._streamId = (this._streamId || 0) + 1;
-                const activeStreamId = this._streamId;
-                if (!this._preventAutoplay && resumePosition !== null && resumePosition > 0) {
-                    this._pendingSeek = resumePosition;
-                }
-
-                const safePlay = () => {
-                    if (this._pendingSeek !== null) {
-                        const buff = (!this._isDirectAudio && this._mseEnabled && this._sourceBuffer) ? this._sourceBuffer.buffered : null;
-                        const bEnd = (buff && buff.length > 0) ? buff.end(buff.length - 1) : 0;
-                        const dur = this._expectedDuration || (this.active && this.active.duration) || 0;
-                        const reqLead = (this._streamDone || (dur > 0 && this._pendingSeek >= dur - 2.0)) ? 0 : 2.0;
-                        if (bEnd < this._pendingSeek + reqLead && !this._streamDone) {
-                            this.active.pause();
-                            return;
-                        }
-                    }
-                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
-                        const p = this.active.play();
-                        if (p && p.catch) {
-                            if (p.then) {
-                                p.then(() => {
-                                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
-                                        let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                                        if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
-                                            const tr = currentPlaylistData[globalActiveOriginalIndex];
-                                            if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
-                                            if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
-                                            if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
-                                            if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
-                                        }
-                                        if (typeof updateMediaSessionPosition === 'function') {
-                                            updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
-                                        }
-                                    }
-                                });
-                            }
-                            p.catch(e => {
-                                if (e && e.name === 'AbortError' && !window.wasPausedByUser && this._streamId === activeStreamId) {
-                                    setTimeout(() => {
-                                        if (!window.wasPausedByUser && this._streamId === activeStreamId && this.active.paused) {
-                                            const retryP = this.active.play();
-                                            if (retryP && retryP.then) {
-                                                retryP.then(() => {
-                                                    if (!this._preventAutoplay && !window.wasPausedByUser && this._streamId === activeStreamId) {
-                                                        let dur = this._expectedDuration || (this.active && this.active.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                                                        if (dur <= 0 && typeof currentPlaylistData !== 'undefined' && currentPlaylistData && typeof globalActiveOriginalIndex === 'number' && globalActiveOriginalIndex >= 0 && currentPlaylistData[globalActiveOriginalIndex]) {
-                                                            const tr = currentPlaylistData[globalActiveOriginalIndex];
-                                                            if (tr.duration && typeof parseISODuration === 'function') dur = parseISODuration(tr.duration);
-                                                            if (dur <= 0 && tr.duration_seconds && !isNaN(tr.duration_seconds)) dur = parseInt(tr.duration_seconds, 10);
-                                                            if (dur <= 0 && tr.length_seconds && !isNaN(tr.length_seconds)) dur = parseInt(tr.length_seconds, 10);
-                                                            if (dur <= 0 && tr.approxDurationMs && !isNaN(tr.approxDurationMs)) dur = Math.floor(parseInt(tr.approxDurationMs, 10) / 1000);
-                                                        }
-                                                        if (typeof updateMediaSessionPosition === 'function') {
-                                                            updateMediaSessionPosition(this.active.currentTime, dur > 0 ? dur : null, 1.0, true);
-                                                        }
-                                                    }
-                                                }).catch(() => {});
-                                            } else if (retryP && retryP.catch) {
-                                                retryP.catch(() => {});
-                                            }
-                                        }
-                                    }, 60);
-                                } else {
-                                    console.warn("MSE play error:", e);
-                                }
-                            });
-                        }
-                    }
-                };
 
                 // Parallelize MSE buffer clearance and CacheStorage lookup
                 const clearBufferPromise = (this._mseEnabled && this._sourceBuffer)
@@ -1319,14 +1325,42 @@
                         navigator.mediaSession.playbackState = "playing";
                     }
                     this.active.src = url;
-                    if (resumePosition !== null && resumePosition > 0) {
-                        try { this.active.currentTime = resumePosition; } catch (e) {}
+                    if (this._pendingSeek !== null) {
+                        if (this.active.readyState >= 1) {
+                            try { this.active.currentTime = this._pendingSeek; } catch (e) {}
+                            this._pendingSeek = null;
+                        } else {
+                            const onReady = () => {
+                                this.active.removeEventListener('loadedmetadata', onReady);
+                                this.active.removeEventListener('canplay', onReady);
+                                if (this._pendingSeek !== null && this._streamId === activeStreamId) {
+                                    try { this.active.currentTime = this._pendingSeek; } catch (e) {}
+                                    this._pendingSeek = null;
+                                }
+                            };
+                            this.active.addEventListener('loadedmetadata', onReady, { once: true });
+                            this.active.addEventListener('canplay', onReady, { once: true });
+                        }
                     }
                     safePlay();
                 } else {
                     this.active.src = url;
-                    if (resumePosition !== null && resumePosition > 0) {
-                        try { this.active.currentTime = resumePosition; } catch (e) {}
+                    if (this._pendingSeek !== null) {
+                        if (this.active.readyState >= 1) {
+                            try { this.active.currentTime = this._pendingSeek; } catch (e) {}
+                            this._pendingSeek = null;
+                        } else {
+                            const onReady = () => {
+                                this.active.removeEventListener('loadedmetadata', onReady);
+                                this.active.removeEventListener('canplay', onReady);
+                                if (this._pendingSeek !== null && this._streamId === activeStreamId) {
+                                    try { this.active.currentTime = this._pendingSeek; } catch (e) {}
+                                    this._pendingSeek = null;
+                                }
+                            };
+                            this.active.addEventListener('loadedmetadata', onReady, { once: true });
+                            this.active.addEventListener('canplay', onReady, { once: true });
+                        }
                     }
                     this.active.load();
                 }

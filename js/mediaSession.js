@@ -484,6 +484,9 @@
     function armAutoKillWatchdog() {
         cancelAutoKillWatchdog();
         if (window.playbackMode !== 'mode2') return;
+        if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+            return;
+        }
 
         const rawTimeout = (typeof window.btTimeoutMins !== 'undefined' && window.btTimeoutMins !== null)
             ? String(window.btTimeoutMins).trim()
@@ -497,6 +500,10 @@
 
         const ms = mins * 60 * 1000;
         window.btSleepTimer = setTimeout(() => {
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+                cancelAutoKillWatchdog();
+                return;
+            }
             window.mediaSessionDestroyed = true;
             if (typeof audioPlayer !== 'undefined' && audioPlayer) {
                 try {
@@ -1234,6 +1241,8 @@
                         // Audio output route added (e.g. Bluetooth headset or earbuds connected).
                         // Do not latch isCallActive or pause playback; update count directly.
                         knownOutputCount = newCount;
+                        window.lastBtDisconnectTime = 0;
+                        window.wasPausedByUser = false;
                     }
                     knownOutputCount = newCount;
                 }).catch(() => {});
@@ -1403,6 +1412,15 @@
                     if (typeof setPlayUI === 'function') setPlayUI(true);
                     if (typeof hasMediaSession !== 'undefined' && hasMediaSession) {
                         navigator.mediaSession.playbackState = 'playing';
+                    }
+                    if (!audioPlayer.src) {
+                        if (typeof playQueue !== 'undefined' && playQueue.length > 0 && typeof queueIndex !== 'undefined' && queueIndex !== -1) {
+                            executePlayback(false);
+                        } else if (typeof playQueue !== 'undefined' && playQueue.length > 0) {
+                            queueIndex = 0;
+                            executePlayback(false);
+                        }
+                        return;
                     }
                     const dur = (audioPlayer && audioPlayer.duration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
                     const actualTime = (audioPlayer && audioPlayer.active && typeof audioPlayer.active.currentTime === 'number')
