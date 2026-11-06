@@ -373,6 +373,10 @@
 - In `main.js`, `audioPlayer.addEventListener("play")` treats native and AVRCP play events as authorized user playback, clearing `window.wasPausedByUser = false;` without invoking `instantPause()` (blocking rogue play strictly on `isCallActive` or `isPostCallQuarantine`).
 - Universal `keydown` listener intercepts `MediaPlayPause`, `MediaPlay`, `MediaPause`, `MediaTrackNext`, and `MediaTrackPrevious` to support physical headset and hardware media keys.
 
+## 45. CI/CD Automated Cache Invalidation Invariant
+- GitHub Actions (`.github/workflows/deploy.yaml`) automatically computes `buildVer` and replaces `const CACHE_NAME` in `sw.js` with `yt-player-cache-${branchPrefix}-${buildVer}`, inlining and cache-busting bundles (`bundle.min.js?v=${buildVer}`).
+- Manual bumping of `CACHE_NAME` in `sw.js` is completely redundant and strictly prohibited. Unit tests must use regex pattern matching (`yt-player-cache-.*`) instead of hardcoded version numbers.
+
 
 
 
