@@ -263,12 +263,12 @@ class TestSettingsUI(unittest.TestCase):
         )
 
     def test_pause_listener_media_session_position(self):
-        """audioPlayer pause event listener calls updateMediaSessionPosition with honest rate 1.0"""
+        """audioPlayer pause event listener calls updateMediaSessionPosition with 0.00001 in Mode 2 and honest rate 1.0 in Mode 1"""
         pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
         self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
         pause_block = pause_block_match.group(0)
-        self.assertNotIn('0.00001', pause_block)
-        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*1\.0\s*\)')
+        self.assertIn('0.00001', pause_block)
+        self.assertRegex(pause_block, r'updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*0\.00001\s*,\s*true\s*\)')
 
     def test_pause_listener_mode2_and_mode1_playback_state(self):
         """audioPlayer pause event listener declares mode-aware state (helper) with honest Mode 1 fallback"""

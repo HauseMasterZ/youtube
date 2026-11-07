@@ -429,5 +429,136 @@ class TestMode2MediaCardAndBluetoothResume(unittest.TestCase):
         self.assertFalse(state["audioPaused"])
         self.assertEqual(state["playbackState"], "playing")
 
+    def test_main_mode2_pause_passes_micro_rate_and_not_rate_1(self):
+        """main.js Mode 2 pause listener calls updateMediaSessionPosition with 0.00001, true and not 1.0."""
+        pause_block_match = re.search(r'audioPlayer\.addEventListener\(\s*[\'"]pause[\'"]\s*,[\s\S]*?\}\);', self.main_content)
+        self.assertIsNotNone(pause_block_match, "Could not find audioPlayer pause listener in main.js")
+        pause_block = pause_block_match.group(0)
+
+        # Mode 2 user pause block:
+        mode2_user_pause_match = re.search(
+            r'if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!isRecentBtDisconnect\s*\)\s*\{\s*if\s*\(\s*window\.wasPausedByUser\s*\)\s*\{([\s\S]*?)\}\s*else',
+            pause_block
+        )
+        self.assertIsNotNone(mode2_user_pause_match, "Could not find Mode 2 wasPausedByUser pause block in main.js")
+        mode2_block = mode2_user_pause_match.group(1)
+
+        # Must pass 0.00001, true
+        self.assertIn("updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true);", mode2_block)
+        # Must NOT pass 1.0 (rate flapping regression prevention)
+        self.assertNotIn("updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0)", mode2_block)
+
+    def test_media_session_mode2_pause_and_playpause_resume_on_is_actually_paused(self):
+        """mediaSession.js pause and playpause action handlers resume playback when isActuallyPaused is true."""
+        # 1. pause handler:
+        pause_block_match = re.search(
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]pause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);\s*try",
+            self.ms_content
+        )
+        self.assertIsNotNone(pause_block_match, "Could not find pause action handler in mediaSession.js")
+        pause_code = pause_block_match.group(1)
+
+        self.assertIn("const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));", pause_code)
+        self.assertRegex(
+            pause_code,
+            r"if\s*\(isActuallyPaused\)\s*\{[\s\S]*?window\.wasPausedByUser\s*=\s*false;[\s\S]*?audioPlayer\._preventAutoplay\s*=\s*false;[\s\S]*?audioPlayer\.play\(\)"
+        )
+
+        # 2. playpause handler:
+        playpause_block_match = re.search(
+            r"navigator\.mediaSession\.setActionHandler\(\s*['\"]playpause['\"]\s*,\s*\(\)\s*=>\s*\{([\s\S]*?)\}\s*\);\s*\}\s*catch",
+            self.ms_content
+        )
+        self.assertIsNotNone(playpause_block_match, "Could not find playpause action handler in mediaSession.js")
+        playpause_code = playpause_block_match.group(1)
+
+        self.assertIn("const isActuallyPaused = (typeof audioPlayer !== 'undefined' && audioPlayer && (audioPlayer.paused || window.wasPausedByUser));", playpause_code)
+        self.assertRegex(
+            playpause_code,
+            r"if\s*\(isActuallyPaused\)\s*\{[\s\S]*?window\.wasPausedByUser\s*=\s*false;[\s\S]*?audioPlayer\._preventAutoplay\s*=\s*false;[\s\S]*?audioPlayer\.play\(\)"
+        )
+
+    def test_media_session_mode2_play_action_resumes_playback(self):
+        """mediaSession.js handlePlayAction clears flags, forces rate 1.0, and calls audioPlayer.play()."""
+        play_block_match = re.search(
+            r"function\s+handlePlayAction\(\)\s*\{([\s\S]*?)\n\s{4}\}",
+            self.ms_content
+        )
+        self.assertIsNotNone(play_block_match, "Could not find handlePlayAction in mediaSession.js")
+        play_code = play_block_match.group(1)
+
+        self.assertIn("window.wasPausedByUser = false;", play_code)
+        self.assertIn("audioPlayer._preventAutoplay = false;", play_code)
+        self.assertIn("updateMediaSessionPosition(actualTime, dur, 1.0, true);", play_code)
+        self.assertIn("audioPlayer.play();", play_code)
+
+    def test_media_session_resume_ordering_metadata_before_position_rate_1(self):
+        """republishMediaMetadata strictly precedes updateMediaSessionPosition with rate 1.0 across all resume sites."""
+        # Check handlePlayAction
+        handle_play_match = re.search(r"function\s+handlePlayAction\(\)\s*\{([\s\S]*?)audioPlayer\.play\(\)", self.ms_content)
+        self.assertIsNotNone(handle_play_match)
+        play_code = handle_play_match.group(1)
+        meta_pos = play_code.find("republishMediaMetadata")
+        update_pos = play_code.find("updateMediaSessionPosition(actualTime, dur, 1.0, true)")
+        self.assertNotEqual(meta_pos, -1)
+        self.assertNotEqual(update_pos, -1)
+        self.assertLess(meta_pos, update_pos, "republishMediaMetadata must precede updateMediaSessionPosition in handlePlayAction")
+
+        # Check pause resume branch
+        pause_match = re.search(r"setActionHandler\(\s*['\"]pause['\"][\s\S]*?if\s*\(isActuallyPaused\)\s*\{([\s\S]*?)audioPlayer\.play\(\)", self.ms_content)
+        self.assertIsNotNone(pause_match)
+        pause_resume_code = pause_match.group(1)
+        meta_pos = pause_resume_code.find("republishMediaMetadata")
+        update_pos = pause_resume_code.find("updateMediaSessionPosition(actualTime, dur, 1.0, true)")
+        self.assertNotEqual(meta_pos, -1)
+        self.assertNotEqual(update_pos, -1)
+        self.assertLess(meta_pos, update_pos, "republishMediaMetadata must precede updateMediaSessionPosition in pause resume branch")
+
+        # Check playpause resume branch
+        playpause_match = re.search(r"setActionHandler\(\s*['\"]playpause['\"][\s\S]*?if\s*\(isActuallyPaused\)\s*\{([\s\S]*?)audioPlayer\.play\(\)", self.ms_content)
+        self.assertIsNotNone(playpause_match)
+        playpause_resume_code = playpause_match.group(1)
+        meta_pos = playpause_resume_code.find("republishMediaMetadata")
+        update_pos = playpause_resume_code.find("updateMediaSessionPosition(actualTime, dur, 1.0, true)")
+        self.assertNotEqual(meta_pos, -1)
+        self.assertNotEqual(update_pos, -1)
+        self.assertLess(meta_pos, update_pos, "republishMediaMetadata must precede updateMediaSessionPosition in playpause resume branch")
+
+    def test_conditional_anchor_avoids_redundant_play_on_resume(self):
+        """Conditional anchor guard (!anchor || anchor.paused) strictly avoids redundant play() on resume across all paths."""
+        # Verify guard pattern in mediaSession.js
+        self.assertRegex(self.ms_content, r'!_resumeAnchorEl\s*\|\|\s*_resumeAnchorEl\.paused')
+        self.assertRegex(self.ms_content, r'!_pauseResumeAnchorEl\s*\|\|\s*_pauseResumeAnchorEl\.paused')
+        self.assertRegex(self.ms_content, r'!_toggleAnchorEl\s*\|\|\s*_toggleAnchorEl\.paused')
+
+        # Simulation: when anchor is running (paused=False), resume must not trigger anchor.play()
+        class AnchorTracker:
+            def __init__(self, is_paused=False):
+                self.paused = is_paused
+                self.play_calls = 0
+
+            def play(self):
+                self.paused = False
+                self.play_calls += 1
+
+        # Case 1: Anchor is already running
+        running_anchor = AnchorTracker(is_paused=False)
+        if not running_anchor or running_anchor.paused:
+            running_anchor.play()
+        self.assertEqual(running_anchor.play_calls, 0, "Running anchor must not receive redundant play() calls on resume")
+
+        # Case 2: Anchor is paused
+        paused_anchor = AnchorTracker(is_paused=True)
+        if not paused_anchor or paused_anchor.paused:
+            paused_anchor.play()
+        self.assertEqual(paused_anchor.play_calls, 1, "Paused anchor must receive play() call on resume")
+
+        # Case 3: Anchor is None (not yet in DOM)
+        none_anchor = None
+        started = False
+        if not none_anchor or none_anchor.paused:
+            started = True
+        self.assertTrue(started, "Null anchor must trigger anchor start")
+
 if __name__ == '__main__':
     unittest.main()

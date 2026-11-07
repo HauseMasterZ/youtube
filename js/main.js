@@ -1050,7 +1050,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         startLiveAudioAnchor();
                     }
                     // Mode 2 pause: keep 'playing' spoof to pin the wave animation
-                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 1.0);
+                    updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true);
                     navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                         ? window.declaredPausedState() : 'playing';
                     if (typeof republishMediaMetadata === 'function') republishMediaMetadata();

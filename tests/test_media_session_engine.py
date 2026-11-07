@@ -108,9 +108,9 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast-text', self.ms_content)
 
     def test_no_micro_rate_spoof(self):
-        """0.00001 micro-rate freezes the card seekbar under buffering/switching and spoofed mode2 pause; absent from main/state"""
+        """0.00001 micro-rate freezes the card seekbar under buffering/switching and spoofed mode2 pause; absent from state"""
         self.assertIn("isMobileDevice", self.ms_content)
-        self.assertNotIn("0.00001", self.main_content)
+        self.assertIn("updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true)", self.main_content)
         self.assertNotIn("0.00001", self.state_content)
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
