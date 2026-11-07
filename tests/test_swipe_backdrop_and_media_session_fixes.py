@@ -127,7 +127,7 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         """btnPlayPause and visibilitychange push forced position update in Mode 2"""
         self.assertRegex(
             self.main_content,
-            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);'
+            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*(?:null|0\.00001)\s*,\s*true\s*\);'
         )
         self.assertRegex(
             self.main_content,
@@ -213,11 +213,11 @@ class TestSwipeBackdropAndMediaSessionFixes(unittest.TestCase):
         """DualAudioPlayer pause and instantPause in dom.js enforce startLiveAudioAnchor in Mode 2 before active.pause"""
         self.assertRegex(
             self.dom_content,
-            r'pause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
+            r'pause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"][\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
         )
         self.assertRegex(
             self.dom_content,
-            r'instantPause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
+            r'instantPause\(\)\s*\{[\s\S]*?window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*!window\.isCallActive\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*[\'"]function[\'"][\s\S]*?startLiveAudioAnchor\(\);[\s\S]*?this\.active\.pause\(\);'
         )
 
     def test_main_pause_listener_enforces_live_anchor(self):

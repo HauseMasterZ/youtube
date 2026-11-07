@@ -471,7 +471,10 @@
                     ? window.declaredPausedState() : 'paused';
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
-                startLiveAudioAnchor();
+                const _anchor = document.getElementById("live-stream-anchor");
+                if (!_anchor || _anchor.paused) {
+                    startLiveAudioAnchor();
+                }
             }
             if (this.active.paused || this.fadeInterval) return Promise.resolve();
             if (document.hidden || window.playbackMode === 'mode1') {
@@ -526,7 +529,10 @@
                     ? window.declaredPausedState() : 'paused';
             }
             if (window.playbackMode === 'mode2' && !window.isCallActive && typeof startLiveAudioAnchor === 'function') {
-                startLiveAudioAnchor();
+                const _anchor = document.getElementById("live-stream-anchor");
+                if (!_anchor || _anchor.paused) {
+                    startLiveAudioAnchor();
+                }
             }
             if (this.fadeInterval) {
                 clearInterval(this.fadeInterval);

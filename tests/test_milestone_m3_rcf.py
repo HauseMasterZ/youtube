@@ -107,7 +107,7 @@ class TestMilestoneM3RCF(unittest.TestCase):
         self.assertIsNotNone(anchor_block, "startLiveAudioAnchor block not found")
         content = anchor_block.group(0)
         self.assertIn("window.wasPausedByUser === true", content)
-        self.assertIn("startAnchorHeartbeat(0);", content)
+        self.assertRegex(content, r"startAnchorHeartbeat\((?:0|200)\);")
 
     def test_anchor_auto_resume_neutralized(self):
         """_setupAnchorAutoResume does not auto-resume on anchor play event"""

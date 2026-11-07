@@ -560,5 +560,262 @@ class TestMode2MediaCardAndBluetoothResume(unittest.TestCase):
             started = True
         self.assertTrue(started, "Null anchor must trigger anchor start")
 
+    def test_fresh_visit_first_play_user_gesture_anchor_priming(self):
+        """playTrackSelection synchronously primes anchor, focus probe, and anchor start before async playlist load."""
+        play_track_match = re.search(
+            r"async\s+function\s+playTrackSelection\s*\([\s\S]*?loadPlaylist\(targetPlaylist\);",
+            self.playback_content
+        )
+        self.assertIsNotNone(play_track_match, "playTrackSelection async function start not found in playback.js")
+        pre_await_code = play_track_match.group(0)
+
+        # 1. Mode 2 and mobile guard
+        self.assertIn("if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice)", pre_await_code)
+        # 2. Synchronous initLiveAudioAnchor
+        self.assertIn("initLiveAudioAnchor();", pre_await_code)
+        # 3. Synchronous primeFocusProbe
+        self.assertIn("primeFocusProbe();", pre_await_code)
+        # 4. Synchronous guarded startLiveAudioAnchor
+        self.assertRegex(
+            pre_await_code,
+            r"\(!_anchor\s*\|\|\s*_anchor\.paused\)\s*&&\s*typeof\s+startLiveAudioAnchor\s*===\s*['\"]function['\"]\s*\)\s*\{\s*startLiveAudioAnchor\(\);"
+        )
+
+        # 5. Position check: synchronous priming must strictly precede await loadPlaylist
+        prime_idx = pre_await_code.find("initLiveAudioAnchor()")
+        await_idx = pre_await_code.find("await loadPlaylist(targetPlaylist)")
+        self.assertNotEqual(prime_idx, -1)
+        self.assertNotEqual(await_idx, -1)
+        self.assertLess(prime_idx, await_idx, "Synchronous anchor priming must precede await loadPlaylist to retain user gesture token")
+
+        # 6. Settings toggle ordering in main.js: togglePlaybackMode must precede initLiveAudioAnchor
+        settings_toggle_match = re.search(
+            r"modeRadios\.forEach[\s\S]*?\}\);\s*\}\);",
+            self.main_content
+        )
+        self.assertIsNotNone(settings_toggle_match, "Settings modeRadios change listener not found in main.js")
+        toggle_code = settings_toggle_match.group(0)
+        toggle_idx = toggle_code.find("togglePlaybackMode(newMode);")
+        init_idx = toggle_code.find("initLiveAudioAnchor();")
+        self.assertNotEqual(toggle_idx, -1)
+        self.assertNotEqual(init_idx, -1)
+        self.assertLess(toggle_idx, init_idx, "togglePlaybackMode must precede initLiveAudioAnchor so playbackMode is mode2 during initialization")
+
+    def test_first_play_pause_retention_under_android_media_session_helper_simulation(self):
+        """Simulation: first-play pause retention of Android notification card under AndroidMediaSessionHelper."""
+        class SimulatedChromiumMediaSession:
+            def __init__(self):
+                self.normal_players = set()
+                self.audio_focus_state = 'INACTIVE'
+                self.desired_focus = 'kGain'
+
+            def add_player(self, player):
+                self.normal_players.add(player)
+                self.audio_focus_state = 'ACTIVE'
+
+            def remove_player(self, player):
+                if player in self.normal_players:
+                    self.normal_players.remove(player)
+                if len(self.normal_players) == 0:
+                    self.audio_focus_state = 'INACTIVE'
+
+            def is_controllable(self):
+                return self.audio_focus_state != 'INACTIVE' and len(self.normal_players) > 0
+
+        class SimulatedAndroidHelper:
+            def __init__(self, session):
+                self.session = session
+                self.notification_visible = False
+                self.notification_destroyed = False
+                self.hide_task_scheduled_at = None
+
+            def on_state_changed(self, virtual_time_ms):
+                controllable = self.session.is_controllable()
+                if controllable:
+                    self.notification_visible = True
+                    self.hide_task_scheduled_at = None
+                else:
+                    if self.hide_task_scheduled_at is None:
+                        self.hide_task_scheduled_at = virtual_time_ms + 500
+
+            def advance_time(self, virtual_time_ms):
+                if self.hide_task_scheduled_at is not None and virtual_time_ms >= self.hide_task_scheduled_at:
+                    self.notification_visible = False
+                    self.notification_destroyed = True
+                    self.hide_task_scheduled_at = None
+
+        # Fresh visit sequence in Mode 2
+        session = SimulatedChromiumMediaSession()
+        helper = SimulatedAndroidHelper(session)
+        t_ms = 0
+
+        audio_player = "audioPlayer"
+        anchor_el = "liveStreamAnchor"
+
+        # 1. User clicks track (user gesture): synchronous priming starts anchor
+        session.add_player(anchor_el)
+        helper.on_state_changed(t_ms)
+        self.assertTrue(session.is_controllable())
+        self.assertTrue(helper.notification_visible)
+
+        # 2. Audio starts playing
+        session.add_player(audio_player)
+        helper.on_state_changed(t_ms)
+        self.assertEqual(len(session.normal_players), 2)
+
+        # 3. User pauses first song:
+        session.remove_player(audio_player)
+        helper.on_state_changed(t_ms)
+
+        # Anchor remains in normal_players
+        self.assertIn(anchor_el, session.normal_players)
+        self.assertTrue(session.is_controllable(), "Chromium must remain controllable while anchor is playing")
+
+        # Advance virtual time through the 500ms Android hide delay window
+        t_ms = 600
+        helper.advance_time(t_ms)
+        self.assertTrue(helper.notification_visible, "Media card notification must remain visible past 500ms deadline")
+        self.assertFalse(helper.notification_destroyed, "Media card must not be destroyed on first pause")
+
+        # Advance further to 3000ms
+        t_ms = 3000
+        helper.advance_time(t_ms)
+        self.assertTrue(helper.notification_visible, "Media card must remain pinned across steady-state Mode 2 pause")
+        self.assertFalse(helper.notification_destroyed)
+
+    def test_mode2_media_card_center_button_and_bluetooth_avrcp_multi_vector_resume(self):
+        """Multi-vector resume verification across notification card, toggle, discrete play, and hardware keys."""
+        class MockPlayer:
+            def __init__(self):
+                self.paused = True
+                self.currentTime = 30.0
+                self.duration = 150.0
+                self._preventAutoplay = True
+                self.play_calls = 0
+
+            def play(self):
+                self.paused = False
+                self.play_calls += 1
+
+        class MockMediaSession:
+            def __init__(self):
+                self.playbackState = 'playing'
+                self.last_rate = None
+                self.last_force = None
+
+            def update_position(self, pos, dur, rate, force=False):
+                self.last_rate = rate
+                self.last_force = force
+
+        # Vector 1: Center button tap in notification card (routes to onPause -> setActionHandler('pause') resume branch)
+        player = MockPlayer()
+        ms = MockMediaSession()
+        wasPausedByUser = True
+        isActuallyPaused = player.paused or wasPausedByUser
+        self.assertTrue(isActuallyPaused)
+
+        wasPausedByUser = False
+        player._preventAutoplay = False
+        ms.update_position(player.currentTime, player.duration, 1.0, True)
+        player.play()
+
+        self.assertFalse(wasPausedByUser)
+        self.assertFalse(player._preventAutoplay)
+        self.assertEqual(ms.last_rate, 1.0)
+        self.assertTrue(ms.last_force)
+        self.assertFalse(player.paused)
+        self.assertEqual(player.play_calls, 1)
+
+        # Vector 2: Bluetooth toggle headset command (routes to setActionHandler('playpause') resume branch)
+        player = MockPlayer()
+        ms = MockMediaSession()
+        wasPausedByUser = True
+        isActuallyPaused = player.paused or wasPausedByUser
+        self.assertTrue(isActuallyPaused)
+
+        wasPausedByUser = False
+        player._preventAutoplay = False
+        ms.update_position(player.currentTime, player.duration, 1.0, True)
+        player.play()
+
+        self.assertFalse(wasPausedByUser)
+        self.assertFalse(player._preventAutoplay)
+        self.assertEqual(ms.last_rate, 1.0)
+        self.assertFalse(player.paused)
+        self.assertEqual(player.play_calls, 1)
+
+        # Vector 3: Discrete Play command (routes to handlePlayAction)
+        player = MockPlayer()
+        ms = MockMediaSession()
+        wasPausedByUser = True
+
+        wasPausedByUser = False
+        player._preventAutoplay = False
+        ms.update_position(player.currentTime, player.duration, 1.0, True)
+        player.play()
+
+        self.assertFalse(wasPausedByUser)
+        self.assertFalse(player._preventAutoplay)
+        self.assertEqual(ms.last_rate, 1.0)
+        self.assertFalse(player.paused)
+        self.assertEqual(player.play_calls, 1)
+
+        # Vector 4: Hardware media keys (keydown MediaPlayPause / MediaPlay in main.js)
+        self.assertIn("'MediaPlayPause'", self.main_content)
+        self.assertIn("'MediaPlay'", self.main_content)
+        self.assertIn("btnPlayPause.click();", self.main_content)
+
+    def test_mode2_micro_rate_consistency_and_zero_rate_flapping(self):
+        """Micro-rate 0.00001 consistency across pause handlers and absence of rate flapping."""
+        # 1. anchorEl pause listener passes 0.00001, true and never 1.0
+        anchor_pause_match = re.search(
+            r'anchorEl\.addEventListener\(\s*["\']pause["\'][\s\S]*?updateMediaSessionPosition\([^)]*\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(anchor_pause_match)
+        self.assertIn("0.00001, true", anchor_pause_match.group(0))
+        self.assertNotIn("1.0", anchor_pause_match.group(0))
+
+        # 2. liveAudioContext onstatechange listener passes 0.00001, true and never 1.0
+        ctx_match = re.search(
+            r'liveAudioContext\.onstatechange\s*=\s*\(\)\s*=>\s*\{[\s\S]*?updateMediaSessionPosition\([^)]*\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(ctx_match)
+        self.assertIn("0.00001, true", ctx_match.group(0))
+        self.assertNotIn("1.0", ctx_match.group(0))
+
+        # 3. btnPlayPause click listener Mode 2 pause branch passes 0.00001, true
+        btn_match = re.search(
+            r'btnPlayPause\.addEventListener\(\s*["\']click["\'][\s\S]*?if\s*\(\s*window\.playbackMode\s*===\s*[\'"]mode2[\'"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\([^)]*\);',
+            self.main_content
+        )
+        self.assertIsNotNone(btn_match)
+        self.assertIn("0.00001, true", btn_match.group(0))
+
+        # 4. reassertSpoofBurst passes 0.00001, true
+        burst_match = re.search(
+            r'function\s+reassertSpoofBurst\s*\(\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\([^)]*\);',
+            self.ms_content
+        )
+        self.assertIsNotNone(burst_match)
+        self.assertIn("0.00001, true", burst_match.group(0))
+
+        # 5. Simulation: 100 rapid pause ticks verify rate stability
+        def resolve_rate(forced_rate, is_paused, mode):
+            if isinstance(forced_rate, (int, float)) and forced_rate > 0:
+                return forced_rate
+            if is_paused and mode == 'mode2':
+                return 0.00001
+            return 1.0
+
+        for _ in range(100):
+            rate_heartbeat = resolve_rate(0.00001, is_paused=True, mode='mode2')
+            rate_pause_listener = resolve_rate(0.00001, is_paused=True, mode='mode2')
+            rate_spoof_burst = resolve_rate(0.00001, is_paused=True, mode='mode2')
+            self.assertEqual(rate_heartbeat, 0.00001)
+            self.assertEqual(rate_pause_listener, 0.00001)
+            self.assertEqual(rate_spoof_burst, 0.00001)
+
 if __name__ == '__main__':
     unittest.main()

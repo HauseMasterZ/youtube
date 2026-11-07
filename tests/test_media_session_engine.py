@@ -767,14 +767,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
-        """Heartbeat uses forced pause-then-play recycle with 200ms stop window to force genuine WebMediaPlayer focus request"""
+        """Heartbeat uses non-destructive play recycle without aborting in-flight play requests"""
+        heartbeat_body = self.ms_content.split("function startAnchorHeartbeat")[1].split("function stopAnchorHeartbeat")[0]
+        self.assertNotIn("try { anchorEl.pause(); }", heartbeat_body)
         self.assertRegex(
             self.ms_content,
-            r'_isInternalAnchorStop\s*=\s*true;\s*try\s*\{\s*anchorEl\.pause\(\);\s*\}\s*catch\s*\(e\)\s*\{\}\s*setTimeout\(\s*\(\)\s*=>\s*\{\s*_isInternalAnchorStop\s*=\s*false;\s*\},\s*200\s*\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'_isInternalAnchorStart\s*=\s*true;\s*anchorEl\.play\(\)\.then'
+            r'_isInternalAnchorStart\s*=\s*true;\s*const\s+currentGen\s*=\s*_anchorGeneration;\s*anchorEl\.play\(\)\.then'
         )
 
     def test_heartbeat_split_timer_handles_and_liveness_check(self):

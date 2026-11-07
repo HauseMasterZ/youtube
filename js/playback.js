@@ -547,8 +547,17 @@
     };
 
     async function playTrackSelection(targetPlaylist, targetOriginalIndex, shouldScroll = false) {
-        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice && typeof initLiveAudioAnchor === 'function') {
-            initLiveAudioAnchor();
+        if (window.playbackMode === 'mode2' && typeof isMobileDevice !== 'undefined' && isMobileDevice) {
+            if (typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
+            }
+            if (typeof primeFocusProbe === 'function') {
+                primeFocusProbe();
+            }
+            const _anchor = document.getElementById("live-stream-anchor");
+            if ((!_anchor || _anchor.paused) && typeof startLiveAudioAnchor === 'function') {
+                startLiveAudioAnchor();
+            }
         }
         if (searchDebounceTimer) {
             clearTimeout(searchDebounceTimer);

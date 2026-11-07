@@ -833,12 +833,15 @@ document.addEventListener("DOMContentLoaded", () => {
                 navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
                     ? window.declaredPausedState() : 'playing';
                 const dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
-                updateMediaSessionPosition(audioPlayer.currentTime, dur, null, true);
+                updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true);
                 if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
             }
             if (window.playbackMode === 'mode2') {
                 if (!window.isCallActive && typeof startLiveAudioAnchor === 'function') {
-                    startLiveAudioAnchor();
+                    const _anchor = document.getElementById("live-stream-anchor");
+                    if (!_anchor || _anchor.paused) {
+                        startLiveAudioAnchor();
+                    }
                 }
                 audioPlayer.instantPause();
                 if (typeof startAnchorHeartbeat === 'function') startAnchorHeartbeat(0);
@@ -2167,11 +2170,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (mode1Radio) mode1Radio.checked = true;
                 if (mode2Radio) mode2Radio.checked = false;
             }
-            if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
-                initLiveAudioAnchor();
-            }
             if (typeof togglePlaybackMode === 'function') {
                 togglePlaybackMode(newMode);
+            }
+            if (newMode === 'mode2' && typeof initLiveAudioAnchor === 'function') {
+                initLiveAudioAnchor();
             }
         });
     });
