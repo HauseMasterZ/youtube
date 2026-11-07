@@ -369,7 +369,10 @@
             // no focus yank is possible. Mode 1 stops it as before.
             if (window.playbackMode === 'mode2') {
                 if (typeof startLiveAudioAnchor === 'function') {
-                    startLiveAudioAnchor();
+                    const _anchor = document.getElementById("live-stream-anchor");
+                    if (!_anchor || _anchor.paused) {
+                        startLiveAudioAnchor();
+                    }
                 }
             } else if (typeof stopLiveAudioAnchor === 'function') {
                 stopLiveAudioAnchor();

@@ -790,9 +790,17 @@ document.addEventListener("DOMContentLoaded", () => {
         // Toggle based on user playback intent to prevent ghost state during initial buffering
         if (window.wasPausedByUser || audioPlayer.paused) {
             window.wasPausedByUser = false;
+            if (audioPlayer && typeof audioPlayer._preventAutoplay !== 'undefined') {
+                audioPlayer._preventAutoplay = false;
+            }
             // Always-on anchor in Mode 2; stop only in Mode 1.
             if (window.playbackMode === 'mode2') {
-                if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+                if (typeof startLiveAudioAnchor === 'function') {
+                    const _anchor = document.getElementById("live-stream-anchor");
+                    if (!_anchor || _anchor.paused) {
+                        startLiveAudioAnchor();
+                    }
+                }
             } else if (typeof stopLiveAudioAnchor === 'function') {
                 stopLiveAudioAnchor();
             }
@@ -813,6 +821,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateLyricsUI(0);
                 }
             }
+            if (typeof republishMediaMetadata === 'function') republishMediaMetadata();
             if (hasMediaSession) {
                 updateMediaSessionPosition(audioPlayer.currentTime, dur, audioPlayer.playbackRate || 1.0, true);
             }
@@ -960,7 +969,12 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
         if (window.playbackMode === 'mode2') {
-            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            if (typeof startLiveAudioAnchor === 'function') {
+                const _anchor = document.getElementById("live-stream-anchor");
+                if (!_anchor || _anchor.paused) {
+                    startLiveAudioAnchor();
+                }
+            }
         } else if (typeof stopLiveAudioAnchor === 'function') {
             stopLiveAudioAnchor();
         }
@@ -982,7 +996,12 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
         if (window.playbackMode === 'mode2') {
-            if (typeof startLiveAudioAnchor === 'function') startLiveAudioAnchor();
+            if (typeof startLiveAudioAnchor === 'function') {
+                const _anchor = document.getElementById("live-stream-anchor");
+                if (!_anchor || _anchor.paused) {
+                    startLiveAudioAnchor();
+                }
+            }
         } else if (typeof stopLiveAudioAnchor === 'function') {
             stopLiveAudioAnchor();
         }
