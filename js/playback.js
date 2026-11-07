@@ -1353,12 +1353,24 @@
 
                         // 3. Lyrics Cache
                         if (track.file_path && track.id) {
-                            const parts = track.file_path.split('/');
+                            const candidates = (typeof getLyricsCandidates === 'function')
+                                ? getLyricsCandidates(track)
+                                : ((typeof window !== 'undefined' && typeof window.getLyricsCandidates === 'function')
+                                    ? window.getLyricsCandidates(track)
+                                    : []);
+                            const parts = (track.file_path || "").replace(/\\/g, '/').split('/').filter(Boolean);
                             const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
-                            if (!(await mediaCache.match(lyricsUrl))) {
-                                const res = await fetchWithRetry(lyricsUrl, { signal }, 2).catch(() => {});
-                                if (res && res.ok) {
-                                    await mediaCache.put(lyricsUrl, res);
+                            if (!candidates.includes(lyricsUrl)) candidates.unshift(lyricsUrl);
+                            for (const candUrl of candidates) {
+                                if (!(await mediaCache.match(candUrl, { ignoreSearch: true }))) {
+                                    const res = await fetchWithRetry(candUrl, { signal }, 2).catch(() => {});
+                                    if (res && res.ok) {
+                                        await mediaCache.put(lyricsUrl, res.clone());
+                                        await mediaCache.put(candUrl, res);
+                                        break;
+                                    }
+                                } else {
+                                    break;
                                 }
                             }
                         }
@@ -1432,12 +1444,24 @@
                         }
 
                         if (track.file_path && track.id) {
-                            const parts = track.file_path.split('/');
+                            const candidates = (typeof getLyricsCandidates === 'function')
+                                ? getLyricsCandidates(track)
+                                : ((typeof window !== 'undefined' && typeof window.getLyricsCandidates === 'function')
+                                    ? window.getLyricsCandidates(track)
+                                    : []);
+                            const parts = (track.file_path || "").replace(/\\/g, '/').split('/').filter(Boolean);
                             const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
-                            if (!(await mediaCache.match(lyricsUrl))) {
-                                const lRes = await fetchWithRetry(lyricsUrl, { signal }, 2).catch(() => {});
-                                if (lRes && lRes.ok) {
-                                    await mediaCache.put(lyricsUrl, lRes);
+                            if (!candidates.includes(lyricsUrl)) candidates.unshift(lyricsUrl);
+                            for (const candUrl of candidates) {
+                                if (!(await mediaCache.match(candUrl, { ignoreSearch: true }))) {
+                                    const lRes = await fetchWithRetry(candUrl, { signal }, 2).catch(() => {});
+                                    if (lRes && lRes.ok) {
+                                        await mediaCache.put(lyricsUrl, lRes.clone());
+                                        await mediaCache.put(candUrl, lRes);
+                                        break;
+                                    }
+                                } else {
+                                    break;
                                 }
                             }
                         }
@@ -1560,12 +1584,24 @@
 
             // 3. Lyrics Cache
             if (track.file_path && track.id) {
-                const parts = track.file_path.split('/');
+                const candidates = (typeof getLyricsCandidates === 'function')
+                    ? getLyricsCandidates(track)
+                    : ((typeof window !== 'undefined' && typeof window.getLyricsCandidates === 'function')
+                        ? window.getLyricsCandidates(track)
+                        : []);
+                const parts = (track.file_path || "").replace(/\\/g, '/').split('/').filter(Boolean);
                 const lyricsUrl = `${baseUrl}/${encodeURIComponent(parts[0])}/lyrics/${encodeURIComponent(track.id)}.lrc`;
-                if (!(await mediaCache.match(lyricsUrl))) {
-                    const lRes = await fetch(lyricsUrl, { signal: abortController.signal }).catch(() => {});
-                    if (lRes && lRes.ok) {
-                        await mediaCache.put(lyricsUrl, lRes);
+                if (!candidates.includes(lyricsUrl)) candidates.unshift(lyricsUrl);
+                for (const candUrl of candidates) {
+                    if (!(await mediaCache.match(candUrl, { ignoreSearch: true }))) {
+                        const lRes = await fetch(candUrl, { signal: abortController.signal }).catch(() => {});
+                        if (lRes && lRes.ok) {
+                            await mediaCache.put(lyricsUrl, lRes.clone());
+                            await mediaCache.put(candUrl, lRes);
+                            break;
+                        }
+                    } else {
+                        break;
                     }
                 }
             }

@@ -286,10 +286,10 @@ self.addEventListener('fetch', (event) => {
             fetch(event.request).then(response => {
                 if (response.ok && response.status !== 429) {
                     const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    caches.open('yt-player-media').then(cache => cache.put(event.request, clone));
                 }
                 return response;
-            }).catch(() => caches.match(event.request))
+            }).catch(() => caches.open('yt-player-media').then(cache => cache.match(event.request, { ignoreSearch: true })).then(cached => cached || caches.match(event.request, { ignoreSearch: true })))
         );
         return;
     }

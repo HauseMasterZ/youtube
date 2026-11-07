@@ -46,19 +46,80 @@
         isAutoScrollActive = true;
         
         try {
-            const parts = track.file_path.split('/');
-            const folder = parts[0];
+            const normalizedPath = (track.file_path || "").replace(/\\/g, '/');
+            const parts = normalizedPath.split('/').filter(Boolean);
+            const folder = parts.length > 0 ? parts[0] : "";
             const lyricsUrl = `${baseUrl}/${encodeURIComponent(folder)}/lyrics/${encodeURIComponent(track.id)}.lrc`;
             
-            let res = await fetch(`${lyricsUrl}?v=155`, { priority: 'low' });
-            if (!res.ok) res = await fetch(lyricsUrl, { priority: 'low' });
-            if (!res.ok) throw new Error();
-            let text = await res.text();
+            const candidates = (typeof getLyricsCandidates === 'function')
+                ? getLyricsCandidates(track)
+                : ((typeof window !== 'undefined' && typeof window.getLyricsCandidates === 'function')
+                    ? window.getLyricsCandidates(track)
+                    : [lyricsUrl]);
+            if (!candidates.includes(lyricsUrl)) {
+                candidates.unshift(lyricsUrl);
+            }
+
+            let text = null;
+            let matchedUrl = null;
+
+            for (const candUrl of candidates) {
+                if (currentPlaybackSequence !== sequenceId) return;
+                try {
+                    let res = (candUrl === lyricsUrl)
+                        ? await fetch(`${lyricsUrl}?v=155`, { priority: 'low' })
+                        : await fetch(`${candUrl}?v=155`, { priority: 'low' });
+                    if (!res.ok) res = await fetch(candUrl, { priority: 'low' });
+                    if (res && res.ok) {
+                        const candidateText = await res.text();
+                        if (candidateText && candidateText.trim().length > 0) {
+                            text = candidateText;
+                            matchedUrl = candUrl;
+                            break;
+                        }
+                    }
+                } catch (netErr) {}
+            }
+
+            if (!text && typeof caches !== 'undefined') {
+                try {
+                    const mediaCache = await caches.open('yt-player-media');
+                    for (const candUrl of candidates) {
+                        let cachedRes = await mediaCache.match(candUrl, { ignoreSearch: true });
+                        if (!cachedRes) {
+                            cachedRes = await mediaCache.match(`${candUrl}?v=155`, { ignoreSearch: true });
+                        }
+                        if (cachedRes && cachedRes.ok) {
+                            const cachedText = await cachedRes.text();
+                            if (cachedText && cachedText.trim().length > 0) {
+                                text = cachedText;
+                                matchedUrl = candUrl;
+                                break;
+                            }
+                        }
+                    }
+                    if (!text) {
+                        for (const candUrl of candidates) {
+                            const genericRes = await caches.match(candUrl, { ignoreSearch: true });
+                            if (genericRes && genericRes.ok) {
+                                const genText = await genericRes.text();
+                                if (genText && genText.trim().length > 0) {
+                                    text = genText;
+                                    matchedUrl = candUrl;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                } catch (cacheErr) {}
+            }
+
+            if (!text) throw new Error("Lyrics not found");
             
             // If the cached response was an old dummy placeholder, re-verify with a fresh network request
             if (text.trim() === '[00:00.00] \u266a' || text.trim().length <= 25) {
                 try {
-                    const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
+                    const freshRes = await fetch(`${matchedUrl || lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
                     if (freshRes.ok) {
                         const freshText = await freshRes.text();
                         if (freshText && freshText.trim().length > 25) {
@@ -80,7 +141,7 @@
             // If lyrics are unsynced plain text, re-verify with network to check if synchronized LRC has been published
             if (parsed.isUnsynced) {
                 try {
-                    const freshRes = await fetch(`${lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
+                    const freshRes = await fetch(`${matchedUrl || lyricsUrl}?t=${Date.now()}`, { cache: 'no-cache' });
                     if (freshRes.ok) {
                         const freshText = await freshRes.text();
                         const freshParsed = parseLRC(freshText);

@@ -138,21 +138,24 @@
             liveAudioOscillator.start();
 
             const anchorEl = document.getElementById("live-stream-anchor");
-            if (anchorEl && liveAudioDestination && liveAudioDestination.stream) {
-                anchorEl.loop = true;
-                anchorEl.removeAttribute('src');
-                anchorEl.srcObject = liveAudioDestination.stream;
-                if (anchorEl.paused) {
-                    _isInternalAnchorStart = true;
-                    anchorEl.play().then(() => {
-                        setTimeout(() => { _isInternalAnchorStart = false; }, 200);
-                        // Always-on anchor in Mode 2 (see above).
-                        if (window.playbackMode !== 'mode2') {
-                            _isInternalAnchorStop = true;
-                            anchorEl.pause();
-                            _isInternalAnchorStop = false;
-                        }
-                    }).catch(() => { _isInternalAnchorStart = false; });
+            if (anchorEl) {
+                _setupAnchorAutoResume(anchorEl);
+                if (liveAudioDestination && liveAudioDestination.stream) {
+                    anchorEl.loop = true;
+                    anchorEl.removeAttribute('src');
+                    anchorEl.srcObject = liveAudioDestination.stream;
+                    if (anchorEl.paused) {
+                        _isInternalAnchorStart = true;
+                        anchorEl.play().then(() => {
+                            setTimeout(() => { _isInternalAnchorStart = false; }, 200);
+                            // Always-on anchor in Mode 2 (see above).
+                            if (window.playbackMode !== 'mode2') {
+                                _isInternalAnchorStop = true;
+                                anchorEl.pause();
+                                _isInternalAnchorStop = false;
+                            }
+                        }).catch(() => { _isInternalAnchorStart = false; });
+                    }
                 }
             }
         } catch (e) {
@@ -862,7 +865,7 @@
 
                 if (!isNaN(dur) && isFinite(dur) && dur > 0 && !isNaN(pos) && isFinite(pos) && pos >= 0) {
                     let validPos = Math.max(0, Math.min(pos, dur));
-                    if (!isPaused && !isSeeking && !isBuffering && validRate === 1.0 && _lastSentPosition >= 0) {
+                    if (!forceBypass && !isPaused && !isSeeking && !isBuffering && validRate === 1.0 && _lastSentPosition >= 0) {
                         const elapsedSinceLast = Date.now() - _lastSentTimestamp;
                         if (elapsedSinceLast < 1500) {
                             const projected = _lastSentPosition + (elapsedSinceLast * 0.001 * validRate);
