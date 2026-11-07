@@ -383,6 +383,15 @@
 - GitHub Actions (`.github/workflows/deploy.yaml`) automatically computes `buildVer` and replaces `const CACHE_NAME` in `sw.js` with `yt-player-cache-${branchPrefix}-${buildVer}`, inlining and cache-busting bundles (`bundle.min.js?v=${buildVer}`).
 - Manual bumping of `CACHE_NAME` in `sw.js` is completely redundant and strictly prohibited. Unit tests must use regex pattern matching (`yt-player-cache-.*`) instead of hardcoded version numbers.
 
+## 46. Mobile Screen Unlock Media Card Animation Resync Invariant
+- Direct device unlock or foregrounding must immediately restore active sound wave and seekbar animations on the media card.
+- In `mediaSession.js`, projection coercion in `updateMediaSessionPosition` honors `!forceBypass`, ensuring that waking or unlocking the mobile device forces rate `1.0` and uncoerced position timestamps directly into Android SystemUI `PlaybackState` without suppression.
+
+## 47. Mobile Lyrics (LRC) Multi-Candidate Resolution & Caching Invariant
+- In `utils.js`, `getLyricsCandidates(track)` generates normalized candidate paths across exact path, title variants, lowercase conversions, and track IDs.
+- In `lyrics.js`, the lyrics fetch pipeline sequentially evaluates candidate URLs with `priority: 'low'`, caching successful hits and preventing missing lyrics due to case sensitivity, backslash/slash discrepancies, or mobile path resolution differences.
+- In `sw.js`, `.lrc` file requests are routed through `yt-player-media` cache using `ignoreSearch: true`.
+
 
 
 
