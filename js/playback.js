@@ -1183,6 +1183,20 @@
                     const buf = await response.arrayBuffer();
                     if (controller.signal.aborted) return;
                     const contentType = response.headers.get('Content-Type') || (audioUrl.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                    const reportedLen = response.headers.get('Content-Length') ? parseInt(response.headers.get('Content-Length'), 10) : 0;
+                    const isComplete = reportedLen > 0 ? buf.byteLength >= reportedLen : buf.byteLength > 100000;
+                    if (!isComplete) {
+                        const partialRes = new Response(buf, {
+                            status: 200,
+                            headers: {
+                                'Content-Type': contentType,
+                                'Content-Length': buf.byteLength.toString(),
+                                'X-Partial-Cached': 'true'
+                            }
+                        });
+                        await cache.put(audioUrl, partialRes);
+                        return;
+                    }
                     const fullRes = new Response(buf, {
                         status: 200,
                         headers: {

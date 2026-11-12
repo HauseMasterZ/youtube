@@ -392,6 +392,12 @@
 - In `lyrics.js`, the lyrics fetch pipeline sequentially evaluates candidate URLs with `priority: 'low'`, caching successful hits and preventing missing lyrics due to case sensitivity, backslash/slash discrepancies, or mobile path resolution differences.
 - In `sw.js`, `.lrc` file requests are routed through `yt-player-media` cache using `ignoreSearch: true`.
 
+## 48. Truncated Audio Cache Detection & Recovery Invariant
+- In `dom.js`, `isExplicitlyComplete` strictly validates that `cachedPartialBytes >= (this._expectedDuration * 4000)` before accepting `X-Partial-Cached: 'false'`. If cached bytes fall below expected duration bitrate or if `buffEnd < this._expectedDuration - 15`, `isExplicitlyPartial` and `isDurationIncomplete` treat the entry as partial, self-heal CacheStorage with `X-Partial-Cached: 'true'`, and trigger background Range ingestion without invoking `endOfStream()` or marking `this._streamDone = true`.
+- In `dom.js`, `timeupdate` only clamps `effectiveEnd = Math.min(dur, buffEnd)` when `buffEnd >= dur - 15` (or `dur <= 0`), preventing truncated buffers from prematurely firing `ended` and auto-skipping tracks.
+- In `sw.js` and `playback.js` (`preloadNextTrack`), fetched audio responses verify that `buf.byteLength >= reportedLen` before tagging responses with `'X-Partial-Cached': 'false'`. Truncated or aborted network streams are tagged with `'X-Partial-Cached': 'true'`.
+- In `dom.js`, Range fetch HTTP 416 responses occurring on premature buffers (`demuxedBuffEnd < this._expectedDuration - 15`) clear the invalid buffer and restart fetch from byte 0 instead of prematurely concluding the stream.
+
 
 
 

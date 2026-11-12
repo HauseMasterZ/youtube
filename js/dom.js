@@ -96,7 +96,7 @@
                         let effectiveEnd = dur;
                         if (!this._isDirectAudio && this._mseEnabled && this._streamDone && this._sourceBuffer && this._sourceBuffer.buffered.length > 0) {
                             const buffEnd = this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1);
-                            if (buffEnd > 0) {
+                            if (buffEnd > 0 && (dur <= 0 || buffEnd >= dur - 15)) {
                                 effectiveEnd = Math.min(dur, buffEnd);
                             }
                         }
@@ -751,12 +751,12 @@
                                     : 0;
 
                                 const reportedLength = cachedRes.headers.get('Content-Length') ? parseInt(cachedRes.headers.get('Content-Length'), 10) : 0;
-                                const isExplicitlyComplete = cachedRes.headers.get('X-Partial-Cached') === 'false';
-                                const isExplicitlyPartial = cachedRes.headers.get('X-Partial-Cached') === 'true';
+                                const isExplicitlyComplete = cachedRes.headers.get('X-Partial-Cached') === 'false' && (this._expectedDuration <= 0 || cachedPartialBytes >= (this._expectedDuration * 4000));
+                                const isExplicitlyPartial = cachedRes.headers.get('X-Partial-Cached') === 'true' || (!isExplicitlyComplete && this._expectedDuration > 0 && cachedPartialBytes < (this._expectedDuration * 4000));
 
                                 const isDurationIncomplete = !isExplicitlyComplete && this._expectedDuration > 0 && buffEnd < (this._expectedDuration - 15);
                                 const isSizeIncomplete = !isExplicitlyComplete && this._expectedDuration > 0 && cachedPartialBytes < (this._expectedDuration * 4000);
-                                const isLengthIncomplete = !isExplicitlyComplete && reportedLength > 0 && cachedPartialBytes < reportedLength;
+                                const isLengthIncomplete = reportedLength > 0 && cachedPartialBytes < reportedLength;
 
                                 if (isExplicitlyPartial || isDurationIncomplete || isSizeIncomplete || isLengthIncomplete) {
                                     isPartial = true;
@@ -896,15 +896,44 @@
                         try {
                             response = await fetch(fetchUrl, { headers: fetchHeaders, signal: currentAbortSignal, priority: 'high' });
                             if (response && response.status === 416) {
-                                streamDone = true;
-                                this._streamDone = true;
-                                if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                    try { this._mediaSource.endOfStream(); } catch (e) {}
+                                const demuxedBuffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                    ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                    : 0;
+                                const isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 15);
+                                if (isDurationComplete) {
+                                    streamDone = true;
+                                    this._streamDone = true;
+                                    if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                        try { this._mediaSource.endOfStream(); } catch (e) {}
+                                    }
+                                    await saveProgress(true);
+                                    reader = null;
+                                } else {
+                                    totalBytesAppended = 0;
+                                    accumulatedChunks.length = 0;
+                                    await this._clearSourceBuffer();
+                                    cachedPartialBytes = 0;
+                                    const freshUrl = url.includes('?') ? `${url}&bypass=true` : `${url}?bypass=true`;
+                                    response = await fetch(freshUrl, { signal: currentAbortSignal, priority: 'high' });
+                                    if (response && response.ok && response.body) {
+                                        reader = response.body.getReader();
+                                    } else {
+                                        reader = null;
+                                    }
                                 }
-                                await saveProgress(true);
-                                reader = null;
                             } else if (response && (response.ok || response.status === 206) && response.body) {
                                 reader = response.body.getReader();
+                                if (response.status === 200 && cachedPartialBytes > 0) {
+                                    let skipped = 0;
+                                    while (skipped < cachedPartialBytes) {
+                                        const { value: sChunk, done: sDone } = await reader.read();
+                                        if (sDone || this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) {
+                                            try { reader.cancel(); } catch (e) {}
+                                            break;
+                                        }
+                                        if (sChunk) skipped += sChunk.length;
+                                    }
+                                }
                             } else {
                                 reader = null;
                             }
@@ -1219,15 +1248,27 @@
                                     if (this._currentUrl !== url || this._streamId !== activeStreamId || currentAbortSignal.aborted) return;
 
                                     if (resumeRes.status === 416) {
-                                        streamDone = true;
-                                        this._streamDone = true;
-                                        if (this._mediaSource && this._mediaSource.readyState === 'open') {
-                                            try { this._mediaSource.endOfStream(); } catch (e) {}
+                                        const demuxedBuffEnd = (this._sourceBuffer && this._sourceBuffer.buffered.length > 0)
+                                            ? this._sourceBuffer.buffered.end(this._sourceBuffer.buffered.length - 1)
+                                            : 0;
+                                        const isDurationComplete = this._expectedDuration <= 0 || demuxedBuffEnd >= (this._expectedDuration - 15);
+                                        if (isDurationComplete) {
+                                            streamDone = true;
+                                            this._streamDone = true;
+                                            if (this._mediaSource && this._mediaSource.readyState === 'open') {
+                                                try { this._mediaSource.endOfStream(); } catch (e) {}
+                                            }
+                                            await saveProgress(true);
+                                            isRecovering = false;
+                                            this.dispatchEvent(new Event('progress'));
+                                            return;
+                                        } else {
+                                            totalBytesAppended = 0;
+                                            accumulatedChunks.length = 0;
+                                            await this._clearSourceBuffer();
+                                            cachedPartialBytes = 0;
+                                            continue;
                                         }
-                                        await saveProgress(true);
-                                        isRecovering = false;
-                                        this.dispatchEvent(new Event('progress'));
-                                        return;
                                     }
 
                                     if (resumeRes.ok || resumeRes.status === 206) {

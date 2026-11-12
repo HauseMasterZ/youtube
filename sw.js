@@ -165,6 +165,20 @@ self.addEventListener('fetch', (event) => {
                         const cloned = response.clone();
                         cloned.arrayBuffer().then(buf => {
                             const contentType = cloned.headers.get('Content-Type') || (cacheKeyUrl.href.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                            const reportedLen = cloned.headers.get('Content-Length') ? parseInt(cloned.headers.get('Content-Length'), 10) : 0;
+                            const isComplete = reportedLen > 0 ? buf.byteLength >= reportedLen : buf.byteLength > 100000;
+                            if (!isComplete) {
+                                const partialRes = new Response(buf, {
+                                    status: 200,
+                                    headers: {
+                                        'Content-Type': contentType,
+                                        'Content-Length': buf.byteLength.toString(),
+                                        'X-Partial-Cached': 'true'
+                                    }
+                                });
+                                cache.put(cacheKeyUrl.href, partialRes);
+                                return;
+                            }
                             const fullRes = new Response(buf, {
                                 status: 200,
                                 headers: {
