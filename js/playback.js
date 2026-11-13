@@ -83,9 +83,9 @@
         const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
 
         if (!filterText) {
-            const len = currentPlaylistData.length;
-            const indices = new Array(len);
-            for (let i = 0; i < len; i++) {
+            const effectiveLen = (totalCount > 0 && totalCount > currentPlaylistData.length) ? totalCount : currentPlaylistData.length;
+            const indices = new Array(effectiveLen);
+            for (let i = 0; i < effectiveLen; i++) {
                 indices[i] = { playlist: folderName, index: i };
             }
             filteredIndices = indices;
@@ -104,10 +104,12 @@
 
         renderVirtualTracks();
 
-        if (!isRevalidation) {
+        const shouldInitialScroll = !isRevalidation || (window._stagedLastPlayedTrack && !window._stagedLastPlayedTrackScrolled);
+        if (shouldInitialScroll) {
             if (globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
                 scrollToTrack(globalActiveOriginalIndex, true);
-            } else {
+                window._stagedLastPlayedTrackScrolled = true;
+            } else if (!isRevalidation) {
                 playlistContainer.scrollTop = 0;
             }
         }
@@ -144,10 +146,22 @@
         const INITIAL_CHUNK = 60;
         const CHUNK_SIZE = 200;
 
-        const initialSlice = normalizePlaylistData(validRawData, folderName, 0, INITIAL_CHUNK);
+        let targetIndexInRaw = -1;
+        if (capturedTargetTrackId) {
+            targetIndexInRaw = validRawData.findIndex(t => (Array.isArray(t) ? t[0] : t.id) === capturedTargetTrackId);
+        }
+        if (targetIndexInRaw === -1 && globalActivePlaylist === folderName && globalActiveOriginalIndex >= 0 && globalActiveOriginalIndex < totalCount) {
+            targetIndexInRaw = globalActiveOriginalIndex;
+        }
+
+        const initialEnd = (targetIndexInRaw >= INITIAL_CHUNK)
+            ? Math.min(totalCount, Math.max(INITIAL_CHUNK, targetIndexInRaw + 25))
+            : INITIAL_CHUNK;
+
+        const initialSlice = normalizePlaylistData(validRawData, folderName, 0, initialEnd);
         applyPlaylistData(folderName, initialSlice, isRevalidation, totalCount);
 
-        if (totalCount <= INITIAL_CHUNK) {
+        if (totalCount <= initialEnd) {
             allDatabases[folderName] = initialSlice;
             let targetTrackId = capturedTargetTrackId;
             if (targetTrackId && globalActivePlaylist === folderName) {
@@ -170,7 +184,7 @@
         }
 
         let normalizedAccum = initialSlice.slice();
-        let currentIndex = INITIAL_CHUNK;
+        let currentIndex = initialSlice.length;
 
         function processNextChunk() {
             if (loadId !== currentPlaylistLoadId) return;
@@ -186,20 +200,6 @@
             if (currentIndex < totalCount) {
                 setTimeout(processNextChunk, 0);
             } else {
-                if (playlistSelect.value === folderName) {
-                    currentPlaylistData = normalizedAccum;
-                    const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
-                    if (!filterText) {
-                        const len = normalizedAccum.length;
-                        const indices = new Array(len);
-                        for (let i = 0; i < len; i++) {
-                            indices[i] = { playlist: folderName, index: i };
-                        }
-                        filteredIndices = indices;
-                        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
-                        renderVirtualTracks();
-                    }
-                }
                 // Reconcile staged last played track or active track against full database
                 let targetTrackId = capturedTargetTrackId;
                 if (!targetTrackId && globalActivePlaylist === folderName) {
@@ -213,6 +213,28 @@
                     const newIndex = normalizedAccum.findIndex(t => t.id === targetTrackId);
                     if (newIndex !== -1) {
                         globalActiveOriginalIndex = newIndex;
+                    }
+                }
+
+                if (playlistSelect.value === folderName) {
+                    currentPlaylistData = normalizedAccum;
+                    const filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
+                    if (!filterText) {
+                        const len = normalizedAccum.length;
+                        const indices = new Array(len);
+                        for (let i = 0; i < len; i++) {
+                            indices[i] = { playlist: folderName, index: i };
+                        }
+                        filteredIndices = indices;
+                        trackList.style.height = `${filteredIndices.length * ITEM_HEIGHT}px`;
+                    }
+                    lastStartIndex = -1;
+                    renderVirtualTracks();
+
+                    const shouldScrollOnChunkFinish = !isRevalidation || (window._stagedLastPlayedTrack && !window._stagedLastPlayedTrackScrolled);
+                    if (shouldScrollOnChunkFinish && globalActivePlaylist === folderName && globalActiveOriginalIndex !== -1) {
+                        scrollToTrack(globalActiveOriginalIndex, true);
+                        window._stagedLastPlayedTrackScrolled = true;
                     }
                 }
 
@@ -1728,9 +1750,12 @@
     function restoreLastPlayedTrack(lastPlayed) {
         if (!lastPlayed || !lastPlayed.trackId || !lastPlayed.trackSnapshot || !lastPlayed.playlist) return;
         window._stagedLastPlayedTrack = lastPlayed;
+        window._stagedLastPlayedTrackScrolled = false;
         globalActivePlaylist = lastPlayed.playlist;
-        globalActiveOriginalIndex = (typeof lastPlayed.originalIndex === 'number' && lastPlayed.originalIndex >= 0) ? lastPlayed.originalIndex : 0;
-        queueIndex = (typeof lastPlayed.queueIndex === 'number' && lastPlayed.queueIndex >= 0) ? lastPlayed.queueIndex : globalActiveOriginalIndex;
+        const parsedOrig = parseInt(lastPlayed.originalIndex, 10);
+        globalActiveOriginalIndex = (!isNaN(parsedOrig) && parsedOrig >= 0) ? parsedOrig : ((typeof lastPlayed.originalIndex === 'number' && lastPlayed.originalIndex >= 0) ? lastPlayed.originalIndex : 0);
+        const parsedQueue = parseInt(lastPlayed.queueIndex, 10);
+        queueIndex = (!isNaN(parsedQueue) && parsedQueue >= 0) ? parsedQueue : globalActiveOriginalIndex;
         queueBasePlaylist = lastPlayed.playlist;
         playQueue = [globalActiveOriginalIndex];
         window.wasPausedByUser = true;

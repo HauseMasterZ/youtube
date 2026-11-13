@@ -217,6 +217,7 @@
             li.style.display = "flex";
             li.dataset.playlist = item.playlist;
             li.dataset.index = item.index;
+            li.dataset.originalIndex = item.index;
             li.classList.remove("active", "search-highlight", "snapping", "is-swiping", "slide-enqueue", "slide-download");
             li.style.transition = 'none';
             li.style.removeProperty('--swipe-x');
@@ -226,7 +227,7 @@
             const isSearching = (selectedSearchIndex >= 0 && typeof searchInput !== 'undefined' && searchInput && searchInput.value.trim() !== "");
             if (isSearching && i === selectedSearchIndex) {
                 li.classList.add("search-highlight");
-            } else if (item.playlist === globalActivePlaylist && item.index === globalActiveOriginalIndex) {
+            } else if (item.playlist === globalActivePlaylist && item.index == globalActiveOriginalIndex) {
                 li.classList.add('active');
             }
             
@@ -284,7 +285,7 @@
             return;
         }
         const currentPl = playlistSelect.value;
-        const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
+        const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index == originalIndex);
         
         if (virtualIndex === -1) {
             // Track is currently filtered out of view, silently update active class state
@@ -297,10 +298,24 @@
         if (forceScroll || !isUserActiveScrolling) {
             const scrollPos = virtualIndex * ITEM_HEIGHT;
             const containerHeight = playlistContainer.clientHeight || 400;
-            playlistContainer.scrollTo({ 
-                top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
-                behavior: "instant" 
-            });
+            const targetTop = Math.max(0, scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2));
+            playlistContainer.scrollTop = targetTop;
+            if (typeof playlistContainer.scrollTo === 'function') {
+                playlistContainer.scrollTo({ 
+                    top: targetTop, 
+                    behavior: "instant" 
+                });
+            }
+            if (typeof requestAnimationFrame === 'function' && forceScroll) {
+                requestAnimationFrame(() => {
+                    const refreshedHeight = playlistContainer.clientHeight || containerHeight;
+                    const refinedTop = Math.max(0, scrollPos - (refreshedHeight / 2) + (ITEM_HEIGHT / 2));
+                    playlistContainer.scrollTop = refinedTop;
+                    if (typeof playlistContainer.scrollTo === 'function') {
+                        playlistContainer.scrollTo({ top: refinedTop, behavior: "instant" });
+                    }
+                });
+            }
         }
         
         // Force highlight update immediately even during scroll

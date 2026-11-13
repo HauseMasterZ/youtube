@@ -398,6 +398,17 @@
 - In `sw.js` and `playback.js` (`preloadNextTrack`), fetched audio responses verify that `buf.byteLength >= reportedLen` before tagging responses with `'X-Partial-Cached': 'false'`. Truncated or aborted network streams are tagged with `'X-Partial-Cached': 'true'`.
 - In `dom.js`, Range fetch HTTP 416 responses occurring on premature buffers (`demuxedBuffEnd < this._expectedDuration - 15`) clear the invalid buffer and restart fetch from byte 0 instead of prematurely concluding the stream.
 
+## 49. Last Played Playlist Active Element Scroll & Position Invariant
+- In `playback.js`, `restoreLastPlayedTrack` parses `originalIndex` and `queueIndex` via `parseInt(..., 10)` and sets `window._stagedLastPlayedTrackScrolled = false;`.
+- In `playback.js`, `applyNormalizedDataInChunks` detects `targetIndexInRaw` in `validRawData` for the staged or active track ID, and expands `initialSlice` beyond `INITIAL_CHUNK` (60) up to `Math.min(totalCount, Math.max(INITIAL_CHUNK, targetIndexInRaw + 25))` so that the active track is immediately present in memory during initial 0ms render.
+- In `playback.js`, `applyPlaylistData` initializes `filteredIndices` with `totalCount` when `!filterText` and `totalCount > 0`, ensuring all tracks are indexed for lookup.
+- In `playback.js`, `shouldInitialScroll = !isRevalidation || (window._stagedLastPlayedTrack && !window._stagedLastPlayedTrackScrolled);` permits scrolling to the active track on initial load even if data arrives via network revalidation or cache resolution, marking `window._stagedLastPlayedTrackScrolled = true;`.
+- In `playback.js`, `processNextChunk` reconciles `globalActiveOriginalIndex = newIndex` before rendering virtual tracks and invokes `scrollToTrack(globalActiveOriginalIndex, true)` upon completing all chunks.
+- In `ui.js`, `scrollToTrack` uses loose equality `item.index == originalIndex`, clamps target offset to `Math.max(0, ...)`, sets `playlistContainer.scrollTop = targetTop`, calls `playlistContainer.scrollTo`, and schedules `requestAnimationFrame` when `forceScroll` is true for post-layout centering.
+- In `ui.js`, `renderVirtualTracks` sets both `li.dataset.index` and `li.dataset.originalIndex`, and applies `.active` when `item.playlist === globalActivePlaylist && item.index == globalActiveOriginalIndex`.
+- Rule 6 scroll retention on user clicks is strictly preserved (`allowScroll = false` in `scrollToTrack` returns early without modifying scroll position).
+
+
 
 
 
