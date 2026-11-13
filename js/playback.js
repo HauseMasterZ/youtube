@@ -616,6 +616,9 @@
         }
 
         selectedSearchIndex = -1;
+        window.userInitiatedTrackSelection = true;
+        window.consecutiveTrackErrors = 0;
+        window.consecutiveDeadTrackSkips = 0;
         // If we are playing from a search, clear search input and reset list view
         if (searchInput.value.trim() !== "") {
             searchInput.value = "";
@@ -663,8 +666,54 @@
     }
     window.lastPlaybackDirection = 1;
 
+    function findNextPlayableOfflineIndex(direction = 1) {
+        if (!currentPlaylistData || !playQueue || playQueue.length === 0) return -1;
+        if (typeof isTrackAudioCached !== 'function') return -1;
+
+        const total = playQueue.length;
+        const step = direction === -1 ? -1 : 1;
+        let idx = queueIndex + step;
+        let checked = 0;
+
+        while (checked < total) {
+            if (idx >= total) {
+                if (repeatMode === 1) {
+                    idx = 0;
+                } else {
+                    break;
+                }
+            } else if (idx < 0) {
+                if (repeatMode === 1) {
+                    idx = total - 1;
+                } else {
+                    break;
+                }
+            }
+
+            const rawItem = playQueue[idx];
+            let candTrack = null;
+            if (typeof rawItem === 'object' && rawItem !== null) {
+                candTrack = allDatabases[rawItem.playlist] && allDatabases[rawItem.playlist][rawItem.index];
+            } else {
+                const basePl = queueBasePlaylist || globalActivePlaylist || (playlistSelect ? playlistSelect.value : '');
+                candTrack = (allDatabases[basePl] && allDatabases[basePl][rawItem]) || (currentPlaylistData ? currentPlaylistData[rawItem] : null);
+            }
+
+            if (candTrack && isTrackAudioCached(candTrack)) {
+                return idx;
+            }
+
+            idx += step;
+            checked++;
+        }
+        return -1;
+    }
+    window.findNextPlayableOfflineIndex = findNextPlayableOfflineIndex;
+
     function playNext() {
         window.lastPlaybackDirection = 1;
+        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+
         // Cross-playlist shuffle (mode 1)
         if (shuffleMode === 1) {
             if (crossShufflePos < crossShuffleHistory.length - 1) {
@@ -673,7 +722,7 @@
             } else {
                 // Reached the end of the global deck, reshuffle!
                 const downloadedOnly = typeof isShuffleDownloadedOnly === 'function' && isShuffleDownloadedOnly();
-                if (downloadedOnly) {
+                if (isOffline || downloadedOnly) {
                     crossShuffleHistory = crossShuffleHistory.filter(item => {
                         const tr = allDatabases[item.playlist] && allDatabases[item.playlist][item.index];
                         return tr && typeof isTrackAudioCached === 'function' && isTrackAudioCached(tr);
@@ -689,7 +738,12 @@
                 crossShufflePos = 0;
             }
 
-            if (crossShuffleHistory.length === 0) return;
+            if (crossShuffleHistory.length === 0) {
+                if (isOffline && typeof window.stopPlaybackOnNetworkFailure === 'function') {
+                    window.stopPlaybackOnNetworkFailure(true);
+                }
+                return;
+            }
             const target = crossShuffleHistory[crossShufflePos];
             if (target && target.playlist) {
                 playFromPlaylist(target.playlist, target.index, true);
@@ -706,6 +760,20 @@
         }
 
         if (playQueue.length === 0) return;
+
+        if (isOffline) {
+            const nextOfflineIdx = findNextPlayableOfflineIndex(1);
+            if (nextOfflineIdx !== -1) {
+                queueIndex = nextOfflineIdx;
+                executePlayback();
+                return;
+            } else {
+                if (typeof window.stopPlaybackOnNetworkFailure === 'function') {
+                    window.stopPlaybackOnNetworkFailure(true);
+                    return;
+                }
+            }
+        }
 
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
@@ -741,6 +809,16 @@
         }
         
         if (playQueue.length === 0) return;
+
+        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+        if (isOffline && queueIndex > 0) {
+            const prevOfflineIdx = findNextPlayableOfflineIndex(-1);
+            if (prevOfflineIdx !== -1) {
+                queueIndex = prevOfflineIdx;
+                executePlayback();
+                return;
+            }
+        }
 
         if (queueIndex > 0) {
             queueIndex--;
@@ -896,6 +974,25 @@
             }
 
             if (!uiOnly && autoplayEnabled) {
+                window.consecutiveDeadTrackSkips = (window.consecutiveDeadTrackSkips || 0) + 1;
+                if (window.consecutiveDeadTrackSkips >= 3) {
+                    if (errorSkipTimer) {
+                        clearTimeout(errorSkipTimer);
+                        errorSkipTimer = null;
+                    }
+                    audioPlayer.pause();
+                    window.wasPausedByUser = true;
+                    setPlayUI(false);
+                    currentTitle.textContent = "Playback stopped: tracks unavailable";
+                    currentTitle.style.color = "#ff5555";
+                    if (typeof showEphemeralToast === 'function') {
+                        showEphemeralToast("Tracks unavailable - playback stopped", false);
+                    }
+                    if (hasMediaSession) {
+                        navigator.mediaSession.playbackState = 'paused';
+                    }
+                    return;
+                }
                 // Instantly auto-skip to the next track if we are actively playing and autoplay is enabled
                 errorSkipTimer = setTimeout(() => {
                     if (window.lastPlaybackDirection === -1) {
@@ -907,6 +1004,8 @@
             }
             return;
         }
+
+        window.consecutiveDeadTrackSkips = 0;
 
         currentTitle.textContent = track.title;
         document.title = track.title.length > 20 ? track.title.substring(0, 20) + "..." : track.title;

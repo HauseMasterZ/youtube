@@ -880,8 +880,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    btnNext.addEventListener("click", playNext);
-    btnPrev.addEventListener("click", playPrev);
+    btnNext.addEventListener("click", () => {
+        window.consecutiveTrackErrors = 0;
+        window.consecutiveDeadTrackSkips = 0;
+        playNext();
+    });
+    btnPrev.addEventListener("click", () => {
+        window.consecutiveTrackErrors = 0;
+        window.consecutiveDeadTrackSkips = 0;
+        playPrev();
+    });
 
     btnShuffle.addEventListener("click", () => {
         shuffleMode = (shuffleMode + 1) % 3;
@@ -1481,7 +1489,51 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("playing", () => {
         isRecoveringAudio = false;
         recoveryAttempts = 0;
+        window.consecutiveTrackErrors = 0;
+        window.consecutiveDeadTrackSkips = 0;
+        window.userInitiatedTrackSelection = false;
     });
+
+    window.addEventListener('online', () => {
+        window.consecutiveTrackErrors = 0;
+        window.consecutiveDeadTrackSkips = 0;
+    });
+
+    function stopPlaybackOnNetworkFailure(isOffline, isExplicitSelection = false) {
+        if (errorSkipTimer) {
+            clearTimeout(errorSkipTimer);
+            errorSkipTimer = null;
+        }
+        audioPlayer.pause();
+        window.wasPausedByUser = true;
+        setPlayUI(false);
+
+        const errorMsg = isExplicitSelection
+            ? "Track not available offline"
+            : (isOffline ? "Offline - playback stopped" : "Connection lost - playback stopped");
+        currentTitle.textContent = errorMsg;
+        currentTitle.style.color = "#ff5555";
+        if (currentChannel) {
+            currentChannel.textContent = isExplicitSelection
+                ? "Connect to internet or select a downloaded track"
+                : "Connect to internet or play offline downloads";
+        }
+
+        if (typeof showEphemeralToast === 'function') {
+            showEphemeralToast(isExplicitSelection
+                ? "Track not available offline"
+                : (isOffline ? "Offline: Connect to internet to play tracks" : "Connection lost - playback stopped"), false);
+        }
+
+        if (hasMediaSession) {
+            navigator.mediaSession.playbackState = (typeof window.declaredPausedState === 'function')
+                ? window.declaredPausedState() : 'paused';
+            if (navigator.mediaSession.metadata) {
+                navigator.mediaSession.metadata.title = errorMsg;
+            }
+        }
+    }
+    window.stopPlaybackOnNetworkFailure = stopPlaybackOnNetworkFailure;
 
     audioPlayer.addEventListener("error", () => {
         if (audioPlayer.switching) return;
@@ -1490,9 +1542,12 @@ document.addEventListener("DOMContentLoaded", () => {
         // Ignore MEDIA_ERR_ABORTED (1) from in-flight aborted stream / track change
         if (err && err.code === 1) return;
         if (!audioPlayer.getAttribute('src') || errorSkipTimer) return;
-          
+
+        const isOffline = (typeof navigator !== 'undefined' && navigator.onLine === false);
+
         // Android Power Management / Network drop: Try to recover before skipping (both buffering & mid-playback)
-        if (recoveryAttempts < 3 && !isRecoveringAudio) {
+        // Strictly skip network recovery attempts when known to be offline
+        if (!isOffline && recoveryAttempts < 3 && !isRecoveringAudio) {
             isRecoveringAudio = true;
             recoveryAttempts++;
             const ct = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : (audioPlayer.lastKnownTime || 0);
@@ -1518,6 +1573,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
         recoveryAttempts = 0;
         isRecoveringAudio = false;
+        window.consecutiveTrackErrors = (window.consecutiveTrackErrors || 0) + 1;
+
+        const wasExplicit = Boolean(window.userInitiatedTrackSelection);
+        window.userInitiatedTrackSelection = false;
+
+        // If offline or consecutive network errors indicate internet is dead:
+        if (isOffline || window.consecutiveTrackErrors >= 3) {
+            if (!wasExplicit) {
+                const nextOfflineIdx = (typeof window.findNextPlayableOfflineIndex === 'function')
+                    ? window.findNextPlayableOfflineIndex(window.lastPlaybackDirection || 1)
+                    : -1;
+
+                if (nextOfflineIdx !== -1) {
+                    if (typeof showEphemeralToast === 'function') {
+                        showEphemeralToast("Offline: Skipping to downloaded track", true);
+                    }
+                    queueIndex = nextOfflineIdx;
+                    executePlayback(false, false, true);
+                    return;
+                }
+            }
+
+            // No offline tracks available or user clicked uncached track: STOP playback immediately
+            stopPlaybackOnNetworkFailure(isOffline, wasExplicit);
+            return;
+        }
 
         currentTitle.textContent = "Error loading file... skipping";
         currentTitle.style.color = "#ff5555";

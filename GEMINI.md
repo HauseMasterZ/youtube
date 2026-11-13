@@ -408,6 +408,16 @@
 - In `ui.js`, `renderVirtualTracks` sets both `li.dataset.index` and `li.dataset.originalIndex`, and applies `.active` when `item.playlist === globalActivePlaylist && item.index == globalActiveOriginalIndex`.
 - Rule 6 scroll retention on user clicks is strictly preserved (`allowScroll = false` in `scrollToTrack` returns early without modifying scroll position).
 
+## 50. Dead Internet & Offline Playback Failure Loop Prevention Invariant
+- In `main.js`, `stopPlaybackOnNetworkFailure(isOffline, isExplicitSelection)` clears any pending `errorSkipTimer`, pauses `audioPlayer`, enforces `window.wasPausedByUser = true`, sets `setPlayUI(false)`, and updates title and MediaSession to paused without scheduling auto-skips.
+- In `main.js`, `audioPlayer.addEventListener("error")` bypasses network recovery attempts when `navigator.onLine === false`, tracks `window.consecutiveTrackErrors`, and triggers `stopPlaybackOnNetworkFailure` when offline or after 3 consecutive failures if no cached offline tracks are available in `playQueue`.
+- In `playback.js`, `findNextPlayableOfflineIndex(direction)` checks `isTrackAudioCached(candidateTrack)` in `playQueue` (respecting `repeatMode === 1`), advancing directly to offline-ready tracks without cycling through uncached songs.
+- In `playback.js`, `playNext()` and `playPrev()` inspect `isOffline` and invoke `stopPlaybackOnNetworkFailure(true)` if all remaining tracks are uncached, preventing endless auto-skip loops across the playlist.
+- In `playback.js`, consecutive dead tracks (`track.is_dead`) are capped at 3 (`consecutiveDeadTrackSkips >= 3`) before halting auto-skips.
+- Manual track selection (`userInitiatedTrackSelection = true`) on an uncached track while offline immediately halts with "Track not available offline" rather than auto-skipping.
+- `window.consecutiveTrackErrors` and `window.consecutiveDeadTrackSkips` reset to 0 upon successful playback (`playing` event), connectivity restoration (`online` event), or manual user navigation (`btnNext`, `btnPrev`, `playFromPlaylist`).
+
+
 
 
 
