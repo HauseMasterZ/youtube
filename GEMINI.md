@@ -435,6 +435,10 @@
 - In `mediaSession.js`, `updateMediaSessionPosition` dampens `navigator.mediaSession.setPositionState` IPC calls during steady-state audio playback via monotonic drift-throttling (`drift = Math.abs(pos - projected) <= 1.5s`), suppressing high-frequency OS IPC calls and DWM wakeups while maintaining sub-second timeline extrapolation accuracy across Windows SMTC and Android SystemUI. State transitions (play, pause, seek, duration change, track change, device unlock) bypass dampening via `force = true` or `forceBypass`, immediately updating the OS media controller.
 - In `mediaSession.js`, `window.getLastPositionTimestamp()` tracks `Math.max(_lastSentTimestamp, _lastPositionCheckTimestamp)`, ensuring continuous 1Hz position evaluation prevents false `staleGap` triggers during steady playback while preserving genuine Doze and device sleep gap detection (> 3000ms).
 - In `main.js`, `markUserActive` filters out stationary pointer movements (`movementX === 0 && movementY === 0`), preventing synthetic mousemove and hover events from breaking steady-state idle presentation mode.
+- In `mediaSession.js`, `initLiveAudioAnchor` explicitly returns null when `!isMobileDevice`, ensuring desktop environments never instantiate `AudioContext`, `createMediaStreamDestination`, or oscillator nodes.
+- In `index.html`, `<audio id="focus-probe">` enforces `preload="none"`, preventing speculative audio codec pipeline initialization on desktop boot.
+- In `ui.js`, `updateTimeUI` nests `seekBar.value` assignment strictly inside the integer second `if (roundedSec !== lastRenderTime)` branch, eliminating 4 Hz sub-second floating-point jitter repaints on the range input slider thumb during active playback.
+- In `style.css`, `.underlay-action` and `.swipe-legend` omit static `will-change: transform`, eliminating persistent compositor texture layer allocations for inactive swipe legends.
 
 
 

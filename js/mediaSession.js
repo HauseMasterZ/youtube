@@ -74,6 +74,9 @@
         if (window.playbackMode !== 'mode2') {
             return liveAudioContext;
         }
+        if (typeof isMobileDevice !== 'undefined' && !isMobileDevice) {
+            return null;
+        }
         if (liveAudioContext) {
             if (liveAudioContext.state === 'suspended' || liveAudioContext.state === 'interrupted') {
                 liveAudioContext.resume().catch(() => {});

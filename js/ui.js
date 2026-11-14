@@ -424,11 +424,11 @@
                 }
             }
         }
-        if (seekBar.value != seconds) {
-            seekBar.value = seconds;
-        }
         const roundedSec = Math.floor(seconds);
         if (roundedSec !== lastRenderTime) {
+            if (seekBar.value != seconds) {
+                seekBar.value = seconds;
+            }
             const formatted = formatTime(roundedSec);
             if (currentTimeDisplay.textContent !== formatted) {
                 currentTimeDisplay.textContent = formatted;
