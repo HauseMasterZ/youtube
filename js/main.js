@@ -1284,7 +1284,6 @@ document.addEventListener("DOMContentLoaded", () => {
                     updateMediaSessionPosition(pos, dur, 1.0, true);
                 }
             }
-        } else {
             window.isPlaybackUiIdle = true;
             if (userActivityDebounceTimer) {
                 clearTimeout(userActivityDebounceTimer);
