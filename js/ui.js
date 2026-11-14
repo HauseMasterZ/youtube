@@ -336,6 +336,7 @@
     let lastBufferSignature = '';
     function updateBufferProgress() {
         if (typeof document !== 'undefined' && document.hidden) return;
+        if (typeof window !== 'undefined' && window.isPlaybackUiIdle) return;
         if (audioPlayer && audioPlayer._streamDone && lastBufferSignature === 'complete') return;
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
@@ -407,6 +408,11 @@
 
     function updateTimeUI(seconds) {
         if (typeof document !== 'undefined' && document.hidden) return;
+        const isUiIdle = !!(typeof window !== 'undefined' && window.isPlaybackUiIdle && (!window.lyricsActive || (typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus())));
+        if (isUiIdle) {
+            lastRenderTime = Math.floor(seconds);
+            return;
+        }
         const max = parseFloat(seekBar.max) || 0;
         if (seconds > max && audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) {
             const trueDur = Math.floor(audioPlayer.duration);

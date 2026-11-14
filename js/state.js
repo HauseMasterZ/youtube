@@ -49,6 +49,7 @@
     window.lastCallEndTime = 0;
     window.isCallActive = false;
     window.mediaSessionDestroyed = false;
+    window.isPlaybackUiIdle = false;
     const preloadedFetches = new Map(); // audioUrl -> Promise
 
     // Virtual Scroller state

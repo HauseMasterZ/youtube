@@ -1819,6 +1819,13 @@
                 timestamp: Date.now()
             };
 
+            // Steady-state storage churn elimination: skip invariant writes during playback
+            const currentSignature = `${targetPlaylist}:${track.id}:${globalActiveOriginalIndex}:${queueIndex}:${typeof shuffleMode === 'number' ? shuffleMode : 0}:${typeof repeatMode === 'number' ? repeatMode : 0}`;
+            if (forcedPosition === null && window._lastSavedSignature === currentSignature) {
+                return;
+            }
+            window._lastSavedSignature = currentSignature;
+
             if (typeof localStorage !== 'undefined' && localStorage) {
                 localStorage.setItem('yt_last_played', JSON.stringify(payload));
             }

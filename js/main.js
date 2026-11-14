@@ -14,6 +14,59 @@ document.addEventListener("DOMContentLoaded", () => {
     let remoteSearchAbortController = null;
     let lastTimeupdateFire = 0;
 
+    // Activity-Based Idle Detection & Presentation Suspension
+    window.isPlaybackUiIdle = false;
+    let userActivityDebounceTimer = null;
+    const PLAYBACK_IDLE_TIMEOUT_MS = 2500;
+
+    function schedulePlaybackIdleCheck() {
+        if (userActivityDebounceTimer) {
+            clearTimeout(userActivityDebounceTimer);
+            userActivityDebounceTimer = null;
+        }
+        if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused && !document.hidden) {
+            userActivityDebounceTimer = setTimeout(() => {
+                if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused && !document.hidden) {
+                    window.isPlaybackUiIdle = true;
+                }
+            }, PLAYBACK_IDLE_TIMEOUT_MS);
+        }
+    }
+
+    function markUserActive(event) {
+        const wasIdle = !!window.isPlaybackUiIdle;
+        window.isPlaybackUiIdle = false;
+
+        if (userActivityDebounceTimer) {
+            clearTimeout(userActivityDebounceTimer);
+            userActivityDebounceTimer = null;
+        }
+
+        // Instant interaction resynchronization with 0ms latency
+        if (wasIdle) {
+            lastRenderTime = -1;
+            if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+                updateTimeUI(audioPlayer.currentTime);
+                if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            }
+        }
+
+        schedulePlaybackIdleCheck();
+    }
+    window.markUserActive = markUserActive;
+    window.schedulePlaybackIdleCheck = schedulePlaybackIdleCheck;
+
+    const userActivityEvents = ['pointermove', 'pointerdown', 'touchstart', 'keydown', 'wheel'];
+    userActivityEvents.forEach(evt => {
+        window.addEventListener(evt, markUserActive, { passive: true });
+    });
+    window.addEventListener('focus', markUserActive);
+    window.addEventListener('blur', () => {
+        if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
+            window.isPlaybackUiIdle = true;
+        }
+    });
+
     function escapeHtml(str) {
         if (!str) return '';
         return String(str)
@@ -1016,6 +1069,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;
+        markUserActive();
 
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
@@ -1043,6 +1097,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof cancelAutoKillWatchdog === 'function') cancelAutoKillWatchdog();
         setPlayUI(true);
         lastRenderTime = -1;
+        markUserActive();
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
             let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;
@@ -1066,6 +1121,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
     audioPlayer.addEventListener("pause", () => {
         if ((audioPlayer.switching && !window.wasPausedByUser) || (audioPlayer._pendingSeek !== null && !window.wasPausedByUser)) return;
+
+        window.isPlaybackUiIdle = false;
+        if (userActivityDebounceTimer) {
+            clearTimeout(userActivityDebounceTimer);
+            userActivityDebounceTimer = null;
+        }
 
         lastTimeupdateFire = 0;
         if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
@@ -1117,6 +1178,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     document.addEventListener("visibilitychange", () => {
         if (!document.hidden) {
+            markUserActive();
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
                 lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
@@ -1218,6 +1280,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     const pos = audioPlayer.currentTime || 0;
                     updateMediaSessionPosition(pos, dur, 1.0, true);
                 }
+            }
+        } else {
+            window.isPlaybackUiIdle = true;
+            if (userActivityDebounceTimer) {
+                clearTimeout(userActivityDebounceTimer);
+                userActivityDebounceTimer = null;
             }
         }
     });
@@ -1451,17 +1519,22 @@ document.addEventListener("DOMContentLoaded", () => {
             if (window.lyricsActive && typeof updateLyricsUI === 'function') {
                 updateLyricsUI(audioPlayer.currentTime);
             }
-            if (typeof updateBufferProgress === 'function') updateBufferProgress();
+            if (!window.isPlaybackUiIdle && typeof updateBufferProgress === 'function') updateBufferProgress();
         }
     });
 
     audioPlayer.addEventListener("progress", () => {
-        if (typeof updateBufferProgress === 'function') updateBufferProgress();
+        if (!window.isPlaybackUiIdle && typeof updateBufferProgress === 'function') updateBufferProgress();
     });
 
     let lastEndedTime = 0;
     audioPlayer.addEventListener("ended", () => {
         if (audioPlayer.switching) return;
+        window.isPlaybackUiIdle = false;
+        if (userActivityDebounceTimer) {
+            clearTimeout(userActivityDebounceTimer);
+            userActivityDebounceTimer = null;
+        }
         lastTimeupdateFire = 0;
         if (typeof window !== 'undefined') window.lastTimeupdateFire = 0;
         const now = Date.now();
