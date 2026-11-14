@@ -417,6 +417,14 @@
 - Manual track selection (`userInitiatedTrackSelection = true`) on an uncached track while offline immediately halts with "Track not available offline" rather than auto-skipping.
 - `window.consecutiveTrackErrors` and `window.consecutiveDeadTrackSkips` reset to 0 upon successful playback (`playing` event), connectivity restoration (`online` event), or manual user navigation (`btnNext`, `btnPrev`, `playFromPlaylist`).
 
+## 51. GPU Utilization Idle Playback Compositor Optimization Invariant
+- In `style.css`, `#track-list li` omits static `will-change: transform`, flattening idle virtual tracks into a single compositor layer with `contain: layout paint;`, while applying `will-change: transform` strictly during active swipe and snapping gestures (`#track-list li.is-swiping`, `#track-list li.snapping`).
+- In `index.html` and `style.css`, `#fast-scroll-bubble` defaults to `display: none;`, eliminating backdrop blur (`backdrop-filter: blur(16px)`) shader passes from the compositor when inactive. In `main.js`, `fastBubble.style.display` toggles to `'flex'` on fast-scroller `pointerdown` and returns to `'none'` on `stopFastScroll`.
+- In `index.html` and `style.css`, `#swipe-backdrop` defaults to `display: none;`, preventing idle allocation of composited GPU texture layers for swipe underlays and action SVGs. In `main.js`, `swipeBackdrop.style.display` is activated to `'block'` on touch gesture start and restored to `'none'` on swipe settle, touch cancel, or scroll disambiguation.
+- In `style.css`, `.seek-wrap` and `.time-display` enforce `contain: layout paint;`, isolating periodic slider thumb and timer text repaints from triggering ancestor container layout invalidations.
+- In `style.css`, `#mode-toast` and `.mode-toast` default to `display: none;`, preventing un-culled backdrop filter evaluation when inactive.
+
+
 
 
 

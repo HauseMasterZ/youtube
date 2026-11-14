@@ -458,6 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             swipeBackdrop = document.getElementById("swipe-backdrop");
             if (swipeBackdrop) {
+                swipeBackdrop.style.display = 'block';
                 legEnq = swipeBackdrop.querySelector('.action-enqueue') || swipeBackdrop.querySelector('.swipe-legend-enqueue');
                 legDown = swipeBackdrop.querySelector('.action-download') || swipeBackdrop.querySelector('.swipe-legend-download');
                 swipeBackdrop.style.transition = 'none';
@@ -496,6 +497,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         }
                         if (swipeBackdrop) {
                             swipeBackdrop.style.opacity = '0';
+                            swipeBackdrop.style.display = 'none';
                         }
                         return;
                     }
@@ -584,6 +586,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (swipeBackdrop) {
                     swipeBackdrop.style.opacity = '0';
                     swipeBackdrop.style.transition = '';
+                    swipeBackdrop.style.display = 'none';
                 }
                 return;
             }
@@ -648,6 +651,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 setTimeout(() => {
                     if (swipeBackdrop && swipeBackdrop.style.opacity === '0') {
                         swipeBackdrop.style.transition = '';
+                        swipeBackdrop.style.display = 'none';
                         if (legEnq) {
                             legEnq.classList.remove('snapping', 'legend-triggered', 'enqueue-success');
                             legEnq.style.transform = `translateX(-${parkOffset}px)`;
@@ -2622,6 +2626,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (e.clientX >= rect.right - 20 && e.clientX <= rect.right + 2) {
                 isFastScrolling = true;
                 fastScroller.classList.add("active");
+                fastBubble.style.display = "flex";
                 fastBubble.classList.add("active");
                 fastScroller.setPointerCapture(e.pointerId);
                 updateFastScrollPosition(e.clientY);
@@ -2641,6 +2646,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 isFastScrolling = false;
                 fastScroller.classList.remove("active");
                 fastBubble.classList.remove("active");
+                fastBubble.style.display = "none";
                 try { fastScroller.releasePointerCapture(e.pointerId); } catch (err) {}
                 lastHapticTrack = -1;
             }
