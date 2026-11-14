@@ -736,12 +736,15 @@
     let _lastSentPosition = -1;
     let _lastSentTimestamp = 0;
     let _lastSentRate = -1;
-    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; _lastSentRate = -1; };
-    window.getLastPositionTimestamp = function() { return _lastSentTimestamp; };
+    let _lastSentDuration = -1;
+    let _lastPositionCheckTimestamp = 0;
+    window.invalidatePositionCache = function() { _lastSentPosition = -1; _lastSentTimestamp = 0; _lastSentRate = -1; _lastSentDuration = -1; _lastPositionCheckTimestamp = 0; };
+    window.getLastPositionTimestamp = function() { return Math.max(_lastSentTimestamp, _lastPositionCheckTimestamp); };
     window._forceNextPosition = false;
 
     // MediaSession Position State Management
     function updateMediaSessionPosition(forcedPosition = null, forcedDuration = null, forcedRate = null, force = false) {
+        _lastPositionCheckTimestamp = Date.now();
         if (typeof hasMediaSession !== 'undefined' && hasMediaSession && 'setPositionState' in navigator.mediaSession) {
             try {
                 const isForcedPosValid = typeof forcedPosition === 'number' && !isNaN(forcedPosition) && isFinite(forcedPosition);
@@ -841,17 +844,25 @@
                     window._forceNextPosition = false;
                 }
                 if (!forceBypass && !isRateShift && !isPaused && !isBuffering && !isSeeking && _lastSentPosition >= 0) {
-                    const elapsed = Date.now() - _lastSentTimestamp;
-                    if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
-                        return;
+                    if (_lastSentDuration > 0 && dur > 0 && Math.abs(dur - _lastSentDuration) > 1.0) {
+                        // Duration shift detected: allow refresh
+                    } else {
+                        const elapsed = Date.now() - _lastSentTimestamp;
+                        if (pos < _lastSentPosition - 0.5 && elapsed < 3000) {
+                            return;
+                        }
+                        if (elapsed < 850) {
+                            return;
+                        }
+                        if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
+                            return;
+                        }
+                        const projected = _lastSentPosition + (elapsed * 0.001 * validRate);
+                        const drift = Math.abs(pos - projected);
+                        if (drift <= 1.5) {
+                            return;
+                        }
                     }
-                    if (elapsed < 850) {
-                        return;
-                    }
-                    if (elapsed < 1500 && Math.abs(pos - _lastSentPosition) < 0.25) {
-                        return;
-                    }
-
                 }
 
                 // 2. Mode 1 paused: drop redundant position rewrites when position is unchanged (< 0.25s).
@@ -885,6 +896,7 @@
                     _lastSentPosition = validPos;
                     _lastSentTimestamp = Date.now();
                     _lastSentRate = validRate;
+                    _lastSentDuration = dur;
                 }
             } catch (e) {
                 // Ignore transient errors

@@ -34,6 +34,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function markUserActive(event) {
+        if (event && event.type === 'pointermove' && typeof event.movementX === 'number' && typeof event.movementY === 'number' && event.movementX === 0 && event.movementY === 0) {
+            return;
+        }
         const wasIdle = !!window.isPlaybackUiIdle;
         window.isPlaybackUiIdle = false;
 
