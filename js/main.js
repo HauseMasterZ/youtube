@@ -1120,6 +1120,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (typeof audioPlayer !== 'undefined' && audioPlayer && !audioPlayer.paused) {
                 lastRenderTime = -1;
                 updateTimeUI(Math.floor(audioPlayer.currentTime));
+                if (typeof updateBufferProgress === 'function') updateBufferProgress();
 
                 // Re-sync MediaSession state when PWA is foregrounded
                 if (typeof resyncMediaSessionOnForeground === 'function') {
@@ -1425,7 +1426,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (isStaleWake) {
                     window._forceNextPosition = true;
                 }
-                updateTimeUI(ct);
+                if (!document.hidden) {
+                    updateTimeUI(ct);
+                } else {
+                    lastRenderTime = roundedSec;
+                }
                 if (isStaleWake) {
                     updateMediaSessionPosition(ct, dur, 1.0, true);
                 } else {
@@ -1437,13 +1442,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const now = Date.now();
             if (now - lastSaveStateTime > 2000) {
                 lastSaveStateTime = now;
-                saveLastPlayedState();
+                if (!document.hidden) {
+                    saveLastPlayedState();
+                }
             }
         }
-        if (window.lyricsActive && typeof updateLyricsUI === 'function') {
-            updateLyricsUI(audioPlayer.currentTime);
+        if (!document.hidden) {
+            if (window.lyricsActive && typeof updateLyricsUI === 'function') {
+                updateLyricsUI(audioPlayer.currentTime);
+            }
+            if (typeof updateBufferProgress === 'function') updateBufferProgress();
         }
-        if (typeof updateBufferProgress === 'function') updateBufferProgress();
     });
 
     audioPlayer.addEventListener("progress", () => {

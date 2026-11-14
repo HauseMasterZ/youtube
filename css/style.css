@@ -397,6 +397,7 @@
             font-size: 13px;
         }
 
+        #now-playing,
         .now-playing {
             padding: 0px 0px 0px 0px;
             text-align: center;
@@ -408,6 +409,7 @@
             max-width: 700px;
             margin: 0 auto;
             box-sizing: border-box;
+            contain: layout;
         }
 
         #album-art-container {
@@ -595,6 +597,8 @@
             gap: 12px;
             margin-bottom: 16px;
             box-sizing: border-box;
+            contain: layout paint;
+            transform: translateZ(0);
         }
 
         .time-display {
@@ -615,6 +619,7 @@
             cursor: pointer;
             touch-action: none;
             contain: layout paint;
+            transform: translateZ(0);
         }
 
         .seek-track {
@@ -628,10 +633,12 @@
             pointer-events: none;
         }
 
+        #buffer-container,
         .buffer-container {
             position: absolute;
             inset: 0;
             pointer-events: none;
+            contain: layout paint;
         }
 
         .buffer-segment {
@@ -1144,7 +1151,6 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             cursor: grab;
-            will-change: transform;
             transform: translateX(var(--swipe-x, 0px));
         }
 

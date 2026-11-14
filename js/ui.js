@@ -335,6 +335,8 @@
     let lastBufferUrl = '';
     let lastBufferSignature = '';
     function updateBufferProgress() {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        if (audioPlayer && audioPlayer._streamDone && lastBufferSignature === 'complete') return;
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
 
@@ -404,18 +406,27 @@
     window.updateBufferProgress = updateBufferProgress;
 
     function updateTimeUI(seconds) {
+        if (typeof document !== 'undefined' && document.hidden) return;
         const max = parseFloat(seekBar.max) || 0;
         if (seconds > max && audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) {
             const trueDur = Math.floor(audioPlayer.duration);
             if (trueDur > max) {
                 seekBar.max = trueDur;
-                totalTimeDisplay.textContent = formatTime(trueDur);
+                const formattedDur = formatTime(trueDur);
+                if (totalTimeDisplay.textContent !== formattedDur) {
+                    totalTimeDisplay.textContent = formattedDur;
+                }
             }
         }
-        seekBar.value = seconds;
+        if (seekBar.value != seconds) {
+            seekBar.value = seconds;
+        }
         const roundedSec = Math.floor(seconds);
         if (roundedSec !== lastRenderTime) {
-            currentTimeDisplay.textContent = formatTime(roundedSec);
+            const formatted = formatTime(roundedSec);
+            if (currentTimeDisplay.textContent !== formatted) {
+                currentTimeDisplay.textContent = formatted;
+            }
             lastRenderTime = roundedSec;
         }
     }
