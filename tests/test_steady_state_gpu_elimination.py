@@ -143,12 +143,12 @@ class TestSteadyStateGpuElimination(unittest.TestCase):
         self.assertNotIn('will-change:', block, ".swipe-surface must not have will-change")
 
     def test_css_progress_container_layout_containment_and_layer_promotion(self):
-        """style.css .progress-container has contain: layout paint and transform: translateZ(0)"""
+        """style.css .progress-container has contain: layout paint and no forced layer allocation"""
         match = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match, ".progress-container rule not found in style.css")
         block = match.group(1)
         self.assertIn('contain: layout paint;', block)
-        self.assertIn('transform: translateZ(0);', block)
+        self.assertNotIn('transform: translateZ(0);', block)
 
     def test_css_buffer_container_layout_containment(self):
         """style.css #buffer-container has contain: layout paint"""
@@ -165,12 +165,12 @@ class TestSteadyStateGpuElimination(unittest.TestCase):
         self.assertIn('contain: layout;', block)
 
     def test_css_seek_wrap_compositor_layer_promotion(self):
-        """style.css .seek-wrap promotes compositing layer with transform: translateZ(0)"""
+        """style.css .seek-wrap uses layout containment without forced layer allocation"""
         match = re.search(r'\.seek-wrap\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match, ".seek-wrap rule not found in style.css")
         block = match.group(1)
         self.assertIn('contain: layout paint;', block)
-        self.assertIn('transform: translateZ(0);', block)
+        self.assertNotIn('transform: translateZ(0);', block)
 
     def test_gemini_invariants_document_steady_state_gpu_elimination(self):
         """Root GEMINI.md Rule 18 and youtube/GEMINI.md Rule 51 document steady-state 0% GPU optimizations"""

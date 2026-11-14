@@ -7,12 +7,15 @@ class TestGpuSteadyStateMediaSessionDampening(unittest.TestCase):
     def setUpClass(cls):
         cls.base_dir = os.path.dirname(os.path.dirname(__file__))
         cls.js_dir = os.path.join(cls.base_dir, 'js')
+        cls.css_dir = os.path.join(cls.base_dir, 'css')
         cls.tests_dir = os.path.join(cls.base_dir, 'tests')
 
         with open(os.path.join(cls.js_dir, 'mediaSession.js'), 'r', encoding='utf-8') as f:
             cls.ms_src = f.read()
         with open(os.path.join(cls.js_dir, 'main.js'), 'r', encoding='utf-8') as f:
             cls.main_src = f.read()
+        with open(os.path.join(cls.css_dir, 'style.css'), 'r', encoding='utf-8') as f:
+            cls.css_src = f.read()
         with open(os.path.join(os.path.dirname(cls.base_dir), 'GEMINI.md'), 'r', encoding='utf-8') as f:
             cls.root_gemini = f.read()
         with open(os.path.join(cls.base_dir, 'GEMINI.md'), 'r', encoding='utf-8') as f:
@@ -30,6 +33,7 @@ class TestGpuSteadyStateMediaSessionDampening(unittest.TestCase):
         for name, content in [
             ('mediaSession.js', self.ms_src),
             ('main.js', self.main_src),
+            ('style.css', self.css_src),
             ('root GEMINI.md', self.root_gemini),
             ('youtube GEMINI.md', self.yt_gemini),
             ('test_gpu_steady_state_mediasession_dampening.py', this_content),
@@ -42,6 +46,7 @@ class TestGpuSteadyStateMediaSessionDampening(unittest.TestCase):
         target_files = [
             os.path.join(self.js_dir, 'mediaSession.js'),
             os.path.join(self.js_dir, 'main.js'),
+            os.path.join(self.css_dir, 'style.css'),
             os.path.join(os.path.dirname(self.base_dir), 'GEMINI.md'),
             os.path.join(self.base_dir, 'GEMINI.md'),
             __file__,
@@ -75,6 +80,18 @@ class TestGpuSteadyStateMediaSessionDampening(unittest.TestCase):
         for phrase in phrases:
             self.assertIn(phrase, self.root_gemini, f"Missing phrase in root GEMINI.md: {phrase}")
             self.assertIn(phrase, self.yt_gemini, f"Missing phrase in youtube/GEMINI.md: {phrase}")
+
+    def test_compositor_layer_allocation_audit_no_forced_translatez(self):
+        """Audit compositing layers: .progress-container and .seek-wrap enforce layout containment without forced translateZ(0)"""
+        match_progress = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_src)
+        self.assertIsNotNone(match_progress, ".progress-container rule not found in style.css")
+        self.assertIn('contain: layout paint;', match_progress.group(1))
+        self.assertNotIn('transform: translateZ(0);', match_progress.group(1))
+
+        match_seek = re.search(r'\.seek-wrap\s*\{([^}]+)\}', self.css_src)
+        self.assertIsNotNone(match_seek, ".seek-wrap rule not found in style.css")
+        self.assertIn('contain: layout paint;', match_seek.group(1))
+        self.assertNotIn('transform: translateZ(0);', match_seek.group(1))
 
     def test_synthetic_mediasession_drift_throttling_simulation(self):
         """Simulate mediaSession updateMediaSessionPosition state machine under steady state and drift conditions"""
