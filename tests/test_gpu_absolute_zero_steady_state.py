@@ -94,7 +94,7 @@ class TestGpuAbsoluteZeroSteadyState(unittest.TestCase):
         self.assertNotIn('will-change:', block, ".underlay-action, .swipe-legend must not have will-change")
 
     def test_synthetic_steady_state_simulation(self):
-        """Synthetic simulation verifies 0 DOM updates and 0 Web Audio calls during steady idle playback"""
+        """Synthetic simulation verifies continuous 1Hz moving seekbar and 0 Web Audio calls during steady playback"""
         class MockPlayer:
             def __init__(self):
                 self.currentTime = 0.0
@@ -102,15 +102,11 @@ class TestGpuAbsoluteZeroSteadyState(unittest.TestCase):
 
         class MockUI:
             def __init__(self):
-                self.isPlaybackUiIdle = False
                 self.lastRenderTime = -1
                 self.dom_mutations = 0
                 self.seekbar_value = 0
 
             def updateTimeUI(self, seconds):
-                if self.isPlaybackUiIdle:
-                    self.lastRenderTime = int(seconds)
-                    return
                 roundedSec = int(seconds)
                 if roundedSec != self.lastRenderTime:
                     if self.seekbar_value != roundedSec:
@@ -121,17 +117,10 @@ class TestGpuAbsoluteZeroSteadyState(unittest.TestCase):
         ui = MockUI()
         player = MockPlayer()
 
-        # Phase 1: User active (first 2 seconds)
-        for t in [0.25, 0.50, 0.75, 1.0, 1.25, 1.50, 1.75, 2.0]:
-            ui.updateTimeUI(t)
-        self.assertEqual(ui.dom_mutations, 2, "During active state, DOM updates at most 1 time per integer second")
-
-        # Phase 2: Steady state idle presentation engages
-        ui.isPlaybackUiIdle = True
-        initial_mutations = ui.dom_mutations
-        for t in [2.25, 2.50, 2.75, 3.0, 3.25, 3.50, 3.75, 4.0, 5.0, 6.0, 7.0]:
-            ui.updateTimeUI(t)
-        self.assertEqual(ui.dom_mutations, initial_mutations, "During idle state, DOM mutations must be exactly 0")
+        # Over 8 seconds of continuous playback at 4 Hz (32 ticks from 0.25 to 8.0):
+        for i in range(1, 33):
+            ui.updateTimeUI(i * 0.25)
+        self.assertEqual(ui.dom_mutations, 8, "Seekbar updates smoothly and continuously exactly 1 time per integer second")
 
 if __name__ == '__main__':
     unittest.main()

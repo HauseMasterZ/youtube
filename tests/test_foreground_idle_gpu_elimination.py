@@ -91,13 +91,14 @@ class TestForegroundIdleGpuElimination(unittest.TestCase):
             r'window\.addEventListener\([\'"]blur[\'"],\s*\(\)\s*=>\s*\{[\s\S]*?window\.isPlaybackUiIdle\s*=\s*true;'
         )
 
-    def test_ui_update_time_ui_suspends_dom_mutations_on_playback_ui_idle(self):
-        """ui.js updateTimeUI early exits and advances lastRenderTime when window.isPlaybackUiIdle is true"""
+    def test_ui_update_time_ui_advances_continuously_without_freeze(self):
+        """ui.js updateTimeUI does not freeze during playback and advances seekbar and time display at 1Hz"""
+        self.assertNotIn('isUiIdle', self.ui_src, "updateTimeUI must not freeze seekbar via isUiIdle")
         match = re.search(
-            r'const\s+isUiIdle\s*=\s*!!\(\s*typeof\s+window\s*!==\s*[\'"]undefined[\'"]\s*&&\s*window\.isPlaybackUiIdle\s*&&\s*\(!window\.lyricsActive\s*\|\|\s*\(typeof\s+document\s*!==\s*[\'"]undefined[\'"]\s*&&\s*typeof\s+document\.hasFocus\s*===\s*[\'"]function[\'"]\s*&&\s*!document\.hasFocus\(\)\)\)\);[\s\S]*?if\s*\(\s*isUiIdle\s*\)\s*\{\s*lastRenderTime\s*=\s*Math\.floor\(seconds\);\s*return;\s*\}',
+            r'const\s+roundedSec\s*=\s*Math\.floor\(seconds\);\s*if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*seconds;[\s\S]*?currentTimeDisplay\.textContent\s*=\s*formatted;',
             self.ui_src
         )
-        self.assertIsNotNone(match, "updateTimeUI must check isUiIdle, advance lastRenderTime, and early return")
+        self.assertIsNotNone(match, "updateTimeUI must continuously update seekbar and time display on integer seconds")
 
     def test_ui_update_buffer_progress_suspends_on_playback_ui_idle(self):
         """ui.js updateBufferProgress early exits when window.isPlaybackUiIdle is true"""
@@ -197,14 +198,11 @@ class TestForegroundIdleGpuElimination(unittest.TestCase):
             def updateTimeUI(self, seconds):
                 if self.hidden:
                     return
-                is_ui_idle = self.isPlaybackUiIdle and (not self.lyricsActive or not self.focused)
-                if is_ui_idle:
-                    self.lastRenderTime = int(seconds)
-                    return
-                # Real DOM mutations occur
-                self.time_ui_dom_mutations += 1
-                self.compositor_frame_presents += 1
-                self.lastRenderTime = int(seconds)
+                roundedSec = int(seconds)
+                if roundedSec != self.lastRenderTime:
+                    self.time_ui_dom_mutations += 1
+                    self.compositor_frame_presents += 1
+                    self.lastRenderTime = roundedSec
 
             def updateBufferProgress(self):
                 if self.hidden or self.isPlaybackUiIdle:
@@ -285,51 +283,35 @@ class TestForegroundIdleGpuElimination(unittest.TestCase):
             viewport.tick(player, delta_ms=250)
 
         self.assertTrue(viewport.isPlaybackUiIdle, "After >= 2.5s without activity, player must be idle")
-        # During the idle period after 2.5s:
-        # DOM mutations to time UI and buffer must be completely FROZEN (0 presentations)!
-        # At most 2 updates happened during the first 2.5s before idle engaged
+        # Time UI updates smoothly and continuously at 1 Hz on integer second boundaries
         mutations_during_phase2 = viewport.time_ui_dom_mutations - baseline_dom_mutations
-        self.assertLessEqual(mutations_during_phase2, 3, "UI mutations must halt once idle engages")
+        self.assertEqual(mutations_during_phase2, 5, "Time UI and seekbar must advance exactly 1 time per second")
 
-        # Record frozen baseline during steady idle
-        frozen_dom_mutations = viewport.time_ui_dom_mutations
-        frozen_buffer_mutations = viewport.buffer_progress_mutations
-        frozen_presents = viewport.compositor_frame_presents
-        frozen_storage = viewport.storage_writes
+        # Record baseline during steady playback
+        steady_dom_mutations = viewport.time_ui_dom_mutations
+        steady_buffer_mutations = viewport.buffer_progress_mutations
+        steady_storage = viewport.storage_writes
 
-        # Run 8 more ticks (2.0s) strictly during idle
+        # Run 8 more ticks (2.0s)
         for i in range(8):
             viewport.tick(player, delta_ms=250)
 
-        # EXACTLY ZERO DOM mutations, ZERO buffer mutations, ZERO presents, ZERO storage writes
-        self.assertEqual(viewport.time_ui_dom_mutations, frozen_dom_mutations, "0 time UI mutations during idle")
-        self.assertEqual(viewport.buffer_progress_mutations, frozen_buffer_mutations, "0 buffer mutations during idle")
-        self.assertEqual(viewport.compositor_frame_presents, frozen_presents, "0 frame presents during idle (0% GPU!)")
-        self.assertEqual(viewport.storage_writes, frozen_storage, "0 storage writes during idle")
+        # 2 more mutations for 2 seconds of playback, 0 buffer regenerations, 0 storage writes
+        self.assertEqual(viewport.time_ui_dom_mutations, steady_dom_mutations + 2, "Time UI advances 2 times over 2 seconds")
+        self.assertEqual(viewport.buffer_progress_mutations, steady_buffer_mutations, "0 buffer mutations during steady playback")
+        self.assertEqual(viewport.storage_writes, steady_storage, "0 storage writes during steady playback")
 
         # BUT MediaSession position state MUST continue at 1 Hz for Android SystemUI / Windows SMTC!
         ms_updates_during_idle = viewport.mediasession_position_updates - baseline_ms_updates
         self.assertGreaterEqual(ms_updates_during_idle, 5, "MediaSession must continue at 1Hz during idle")
 
-        # Phase 3: Instant interaction resynchronization upon simulated pointermove
+        # Phase 3: Interaction resynchronization upon simulated pointermove
         viewport.mark_user_active('pointermove')
         self.assertFalse(viewport.isPlaybackUiIdle, "User activity must immediately clear idle flag")
-        self.assertEqual(viewport.time_ui_dom_mutations, frozen_dom_mutations + 1, "Must synchronously resync time UI (0ms latency)")
-        self.assertEqual(viewport.buffer_progress_mutations, frozen_buffer_mutations + 1, "Must synchronously resync buffer UI")
 
-        # Phase 4: Window blur / defocus gating
-        viewport.focused = False
-        viewport.isPlaybackUiIdle = True # blur event fires
-        blur_dom_baseline = viewport.time_ui_dom_mutations
-        for i in range(8):
-            viewport.tick(player, delta_ms=250)
-        self.assertEqual(viewport.time_ui_dom_mutations, blur_dom_baseline, "0 DOM mutations while window is blurred")
-
-        # Phase 5: Window focus resync
-        viewport.focused = True
+        # Phase 4: Window focus resync
         viewport.mark_user_active('focus')
         self.assertFalse(viewport.isPlaybackUiIdle, "Window focus must clear idle flag")
-        self.assertEqual(viewport.time_ui_dom_mutations, blur_dom_baseline + 1, "Focus must immediately resync UI")
 
 if __name__ == '__main__':
     unittest.main()
