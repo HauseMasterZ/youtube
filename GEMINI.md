@@ -440,6 +440,10 @@
 - In `ui.js`, `updateTimeUI` nests `seekBar.value` assignment strictly inside the integer second `if (roundedSec !== lastRenderTime)` branch, eliminating 4 Hz sub-second floating-point jitter repaints on the range input slider thumb during active playback.
 - In `style.css`, `.underlay-action` and `.swipe-legend` omit static `will-change: transform`, eliminating persistent compositor texture layer allocations for inactive swipe legends.
 
+## 52. Mechanical Answer-First & Deployment Verification Invariant
+- When the user asks a question, requests an explanation, or instructs 'answer first', Antigravity is strictly forbidden from mutating source files (`edit_file`, `write_file`) or executing `git commit`. Deterministically enforced by workspace `PreToolUse` lifecycle hook (`.agents/scripts/safety_guard.py`), which hard-blocks write tools and git commits when `lastUserInput` is an inquiry without an explicit directive to modify files.
+- Direct or unverified `git push` commands are strictly forbidden and hard-blocked by `safety_guard.py`. All code pushes to `dev` must be executed via `python .agents/scripts/deploy_and_verify.py`, which validates JavaScript syntax across all source files, runs `pytest`, pushes to `origin dev`, and actively polls the GitHub Actions deployment workflow until `completed` / `success` is confirmed on `https://music.hausemaster.tech/dev/`.
+
 
 
 
