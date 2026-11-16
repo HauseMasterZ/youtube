@@ -598,6 +598,7 @@
             margin-bottom: 16px;
             box-sizing: border-box;
             contain: layout paint;
+            transform: translateZ(0);
         }
 
         .time-display {

@@ -128,9 +128,9 @@ class TestSteadyStateGpuElimination(unittest.TestCase):
         self.assertIsNotNone(match, "currentTimeDisplay.textContent must be memoized in updateTimeUI")
 
     def test_ui_time_ui_seekbar_value_change_guard(self):
-        """ui.js updateTimeUI avoids setting seekBar.value when already equal to seconds"""
+        """ui.js updateTimeUI avoids setting seekBar.value when already equal to roundedSec"""
         match = re.search(
-            r'if\s*\(\s*seekBar\.value\s*!=\s*seconds\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*seconds;[\s\S]*?\}',
+            r'if\s*\(\s*(?:isFinite\(seconds\)\s*&&\s*)?seekBar\.value\s*!=\s*roundedSec\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*roundedSec;[\s\S]*?\}',
             self.ui_src
         )
         self.assertIsNotNone(match, "seekBar.value mutation must be guarded against identical values")
@@ -143,12 +143,12 @@ class TestSteadyStateGpuElimination(unittest.TestCase):
         self.assertNotIn('will-change:', block, ".swipe-surface must not have will-change")
 
     def test_css_progress_container_layout_containment_and_layer_promotion(self):
-        """style.css .progress-container has contain: layout paint and no forced layer allocation"""
+        """style.css .progress-container has contain: layout paint and isolated layer promotion"""
         match = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match, ".progress-container rule not found in style.css")
         block = match.group(1)
         self.assertIn('contain: layout paint;', block)
-        self.assertNotIn('transform: translateZ(0);', block)
+        self.assertIn('transform: translateZ(0);', block)
 
     def test_css_buffer_container_layout_containment(self):
         """style.css #buffer-container has contain: layout paint"""

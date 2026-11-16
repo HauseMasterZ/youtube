@@ -1037,7 +1037,6 @@ document.addEventListener("DOMContentLoaded", () => {
     audioPlayer.addEventListener("ratechange", updateMediaSessionPosition);
     
     audioPlayer.addEventListener("progress", () => {
-        if (typeof updateBufferProgress === 'function') updateBufferProgress();
         if (!audioPlayer.duration || audioPlayer.duration === Infinity) return;
         const buffered = audioPlayer.buffered;
         if (buffered.length > 0) {
@@ -1073,6 +1072,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(true);
         lastRenderTime = -1;
         markUserActive();
+        schedulePlaybackIdleCheck();
 
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
@@ -1101,6 +1101,7 @@ document.addEventListener("DOMContentLoaded", () => {
         setPlayUI(true);
         lastRenderTime = -1;
         markUserActive();
+        schedulePlaybackIdleCheck();
         if (hasMediaSession) {
             navigator.mediaSession.playbackState = 'playing';
             let dur = audioPlayer.duration || (audioPlayer && audioPlayer._expectedDuration) || (typeof seekBar !== 'undefined' && parseFloat(seekBar.max)) || 0;

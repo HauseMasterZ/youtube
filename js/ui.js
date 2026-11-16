@@ -421,8 +421,8 @@
         }
         const roundedSec = Math.floor(seconds);
         if (roundedSec !== lastRenderTime) {
-            if (seekBar.value != seconds) {
-                seekBar.value = seconds;
+            if (isFinite(seconds) && seekBar.value != roundedSec) {
+                seekBar.value = roundedSec;
             }
             const formatted = formatTime(roundedSec);
             if (currentTimeDisplay.textContent !== formatted) {

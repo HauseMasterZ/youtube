@@ -81,7 +81,7 @@ class TestGpuAbsoluteZeroSteadyState(unittest.TestCase):
     def test_seekbar_update_gated_by_integer_second(self):
         """ui.js updateTimeUI nests seekBar.value update inside integer second lastRenderTime guard"""
         match = re.search(
-            r'const\s+roundedSec\s*=\s*Math\.floor\(seconds\);\s*if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?if\s*\(\s*seekBar\.value\s*!=\s*seconds\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*seconds;\s*\}[\s\S]*?lastRenderTime\s*=\s*roundedSec;\s*\}',
+            r'const\s+roundedSec\s*=\s*Math\.floor\(seconds\);\s*if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?if\s*\(\s*(?:isFinite\(seconds\)\s*&&\s*)?seekBar\.value\s*!=\s*roundedSec\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*roundedSec;\s*\}[\s\S]*?lastRenderTime\s*=\s*roundedSec;\s*\}',
             self.ui_src
         )
         self.assertIsNotNone(match, "seekBar.value update must be nested inside roundedSec !== lastRenderTime guard")

@@ -95,7 +95,7 @@ class TestForegroundIdleGpuElimination(unittest.TestCase):
         """ui.js updateTimeUI does not freeze during playback and advances seekbar and time display at 1Hz"""
         self.assertNotIn('isUiIdle', self.ui_src, "updateTimeUI must not freeze seekbar via isUiIdle")
         match = re.search(
-            r'const\s+roundedSec\s*=\s*Math\.floor\(seconds\);\s*if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*seconds;[\s\S]*?currentTimeDisplay\.textContent\s*=\s*formatted;',
+            r'const\s+roundedSec\s*=\s*Math\.floor\(seconds\);\s*if\s*\(\s*roundedSec\s*!==\s*lastRenderTime\s*\)\s*\{[\s\S]*?seekBar\.value\s*=\s*(?:seconds|roundedSec);[\s\S]*?currentTimeDisplay\.textContent\s*=\s*formatted;',
             self.ui_src
         )
         self.assertIsNotNone(match, "updateTimeUI must continuously update seekbar and time display on integer seconds")
