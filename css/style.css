@@ -627,7 +627,6 @@
             height: 4px;
             background: transparent;
             border-radius: 2px;
-            overflow: hidden;
             pointer-events: none;
         }
 
@@ -664,6 +663,7 @@
             cursor: pointer;
             z-index: 2;
             touch-action: none;
+            contain: layout paint;
         }
 
         input[type="range"]#seek-bar::-webkit-slider-runnable-track {
