@@ -90,6 +90,7 @@
             flex-shrink: 0;
             padding-right: clamp(2px, 3px, 4px);
             box-sizing: border-box;
+            contain: layout;
         }
 
         .playlist-panel {
@@ -103,6 +104,7 @@
             flex-direction: column;
             overflow: hidden;
             position: relative;
+            contain: layout;
         }
         
 
@@ -409,6 +411,7 @@
             max-width: 700px;
             margin: 0 auto;
             box-sizing: border-box;
+            background-color: #000000;
             contain: layout;
         }
 
@@ -422,6 +425,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         #album-art-image {
@@ -563,6 +568,8 @@
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
+            background-color: #000000;
+            contain: layout paint;
             transition: background 0.2s, color 0.2s;
         }
 
@@ -616,6 +623,8 @@
             background-color: #000000;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeSpeed;
+            font-kerning: none;
             contain: layout paint;
         }
 
@@ -673,7 +682,7 @@
             cursor: pointer;
             z-index: 2;
             touch-action: none;
-            contain: layout paint;
+            contain: strict;
         }
 
         input[type="range"]#seek-bar::-webkit-slider-runnable-track {

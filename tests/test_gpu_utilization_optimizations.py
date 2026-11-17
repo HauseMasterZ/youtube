@@ -136,5 +136,48 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         tag = match.group(0)
         self.assertIn('step="1"', tag, "#seek-bar must use step='1'")
 
+    def test_seek_bar_strict_containment(self):
+        """style.css enforces contain: strict on input[type='range']#seek-bar to eliminate shadow DOM size recalculation"""
+        match = re.search(r'input\[type="range"\]#seek-bar\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(match, "input[type='range']#seek-bar block not found in style.css")
+        self.assertIn('contain: strict;', match.group(1))
+
+    def test_time_display_speed_optimized_font_shaping(self):
+        """style.css enforces text-rendering: optimizeSpeed and font-kerning: none on .time-display"""
+        match = re.search(r'\.time-display\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(match, ".time-display block not found in style.css")
+        self.assertIn('text-rendering: optimizeSpeed;', match.group(1))
+        self.assertIn('font-kerning: none;', match.group(1))
+
+    def test_album_art_and_lyrics_toggle_containment_and_opaque_background(self):
+        """style.css enforces contain: layout paint and opaque background-color: #000000 on album-art-container and lyrics-toggle-hint"""
+        art_match = re.search(r'#album-art-container\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(art_match, "#album-art-container block not found in style.css")
+        self.assertIn('contain: layout paint;', art_match.group(1))
+        self.assertIn('background-color: #000000;', art_match.group(1))
+
+        lyrics_match = re.search(r'#lyrics-toggle-hint\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(lyrics_match, "#lyrics-toggle-hint block not found in style.css")
+        self.assertIn('contain: layout paint;', lyrics_match.group(1))
+        self.assertIn('background-color: #000000;', lyrics_match.group(1))
+
+    def test_now_playing_opaque_background(self):
+        """style.css enforces background-color: #000000 on #now-playing while preserving contain: layout"""
+        match = re.search(r'#now-playing,\s*\.now-playing\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(match, "#now-playing rule not found in style.css")
+        block = match.group(1)
+        self.assertIn('background-color: #000000;', block)
+        self.assertIn('contain: layout;', block)
+
+    def test_player_container_and_playlist_panel_containment(self):
+        """style.css enforces contain: layout on .player-container and .playlist-panel"""
+        player_match = re.search(r'\.player-container\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(player_match, ".player-container rule not found in style.css")
+        self.assertIn('contain: layout;', player_match.group(1))
+
+        panel_match = re.search(r'\.playlist-panel\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(panel_match, ".playlist-panel rule not found in style.css")
+        self.assertIn('contain: layout;', panel_match.group(1))
+
 if __name__ == '__main__':
     unittest.main()
