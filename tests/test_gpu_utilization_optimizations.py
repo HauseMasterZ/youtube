@@ -109,5 +109,32 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         self.assertIn('flex-shrink: 0;', time_match.group(1))
         self.assertIn('text-align: center;', time_match.group(1))
 
+    def test_playback_controls_and_title_wrapper_containment_and_opaque_background(self):
+        """style.css enforces contain: layout paint and opaque background-color: #000000 on playback-controls and title-channel-wrapper"""
+        controls_match = re.search(r'\.playback-controls\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(controls_match, ".playback-controls block not found in style.css")
+        self.assertIn('contain: layout paint;', controls_match.group(1))
+        self.assertIn('background-color: #000000;', controls_match.group(1))
+
+        title_match = re.search(r'\.title-channel-wrapper\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(title_match, ".title-channel-wrapper block not found in style.css")
+        self.assertIn('contain: layout paint;', title_match.group(1))
+        self.assertIn('background-color: #000000;', title_match.group(1))
+
+    def test_time_display_font_smoothing_and_letter_spacing(self):
+        """style.css enforces grayscale font smoothing and letter-spacing: -0.2px on time-display"""
+        time_match = re.search(r'\.time-display\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(time_match, ".time-display block not found in style.css")
+        self.assertIn('-webkit-font-smoothing: antialiased;', time_match.group(1))
+        self.assertIn('-moz-osx-font-smoothing: grayscale;', time_match.group(1))
+        self.assertIn('letter-spacing: -0.2px;', time_match.group(1))
+
+    def test_seek_bar_integer_step_in_html(self):
+        """index.html enforces integer step='1' on seek-bar input"""
+        match = re.search(r'<input[^>]*id=[\'"]seek-bar[\'"][^>]*>', self.html_content)
+        self.assertIsNotNone(match, "#seek-bar not found in index.html")
+        tag = match.group(0)
+        self.assertIn('step="1"', tag, "#seek-bar must use step='1'")
+
 if __name__ == '__main__':
     unittest.main()

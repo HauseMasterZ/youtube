@@ -510,6 +510,8 @@
             max-width: var(--art-width, 500px);
             box-sizing: border-box;
             text-align: center;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         #current-title {
@@ -608,9 +610,12 @@
             width: 44px;
             flex-shrink: 0;
             text-align: center;
+            letter-spacing: -0.2px;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
             background-color: #000000;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
             contain: layout paint;
         }
 
@@ -714,6 +719,8 @@
             margin-bottom: 8px;
             box-sizing: border-box;
             position: relative;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         .control-btn {
