@@ -601,6 +601,7 @@
         .progress-container {
             width: var(--art-width, 100%);
             max-width: var(--art-width, 500px);
+            height: 20px;
             display: flex;
             align-items: center;
             gap: 12px;
@@ -661,7 +662,7 @@
             position: absolute;
             top: 0;
             bottom: 0;
-            background: rgba(255, 255, 255, 0.4);
+            background: #666666;
             border-radius: 2px;
             pointer-events: none;
         }

@@ -179,5 +179,15 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         self.assertIsNotNone(panel_match, ".playlist-panel rule not found in style.css")
         self.assertIn('contain: layout;', panel_match.group(1))
 
+    def test_buffer_segment_opaque_and_progress_container_height(self):
+        """style.css enforces opaque background: #666666 on .buffer-segment and fixed height: 20px on .progress-container"""
+        buffer_match = re.search(r'\.buffer-segment\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(buffer_match, ".buffer-segment rule not found in style.css")
+        self.assertIn('background: #666666;', buffer_match.group(1))
+
+        prog_match = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(prog_match, ".progress-container rule not found in style.css")
+        self.assertIn('height: 20px;', prog_match.group(1))
+
 if __name__ == '__main__':
     unittest.main()
