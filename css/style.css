@@ -597,15 +597,20 @@
             gap: 12px;
             margin-bottom: 16px;
             box-sizing: border-box;
+            background-color: #000000;
             contain: layout paint;
         }
 
         .time-display {
             font-size: 13px;
             color: var(--text-secondary);
-            min-width: 40px;
+            min-width: 44px;
+            width: 44px;
+            flex-shrink: 0;
+            text-align: center;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
+            background-color: #000000;
             contain: layout paint;
         }
 
@@ -617,6 +622,7 @@
             align-items: center;
             cursor: pointer;
             touch-action: none;
+            background-color: #000000;
             contain: layout paint;
         }
 
@@ -626,7 +632,6 @@
             right: 0;
             height: 4px;
             background: transparent;
-            border-radius: 2px;
             pointer-events: none;
         }
 
@@ -1383,7 +1388,10 @@
             }
             .now-playing:not(.expanded) .time-display {
                 font-size: 11px;
-                min-width: 30px;
+                min-width: 32px;
+                width: 32px;
+                flex-shrink: 0;
+                text-align: center;
             }
             .now-playing:not(.expanded) .playback-controls {
                 display: flex;

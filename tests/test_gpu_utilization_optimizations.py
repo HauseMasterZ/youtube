@@ -92,5 +92,22 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         self.assertIsNotNone(toast_match, "#mode-toast block not found in style.css")
         self.assertIn('display: none;', toast_match.group(1))
 
+    def test_progress_container_opaque_background_and_fixed_time_display(self):
+        """style.css enforces opaque background-color: #000000 on progress-container, seek-wrap, and time-display with fixed width"""
+        progress_match = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(progress_match, ".progress-container block not found in style.css")
+        self.assertIn('background-color: #000000;', progress_match.group(1))
+
+        seek_match = re.search(r'\.seek-wrap\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(seek_match, ".seek-wrap block not found in style.css")
+        self.assertIn('background-color: #000000;', seek_match.group(1))
+
+        time_match = re.search(r'\.time-display\s*\{([^}]+)\}', self.css_content)
+        self.assertIsNotNone(time_match, ".time-display block not found in style.css")
+        self.assertIn('background-color: #000000;', time_match.group(1))
+        self.assertIn('width: 44px;', time_match.group(1))
+        self.assertIn('flex-shrink: 0;', time_match.group(1))
+        self.assertIn('text-align: center;', time_match.group(1))
+
 if __name__ == '__main__':
     unittest.main()
