@@ -15,6 +15,8 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
             cls.css_content = f.read()
         with open(os.path.join(js_dir, 'main.js'), 'r', encoding='utf-8') as f:
             cls.main_content = f.read()
+        with open(os.path.join(js_dir, 'playback.js'), 'r', encoding='utf-8') as f:
+            cls.playback_content = f.read()
         with open(__file__, 'r', encoding='utf-8') as f:
             cls.test_content = f.read()
 
@@ -196,6 +198,25 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         self.assertIn('if (lastArtWidth !== w)', main_src, "main.js must guard against redundant style.setProperty updates")
         self.assertIn('let roRafId = null;', main_src, "main.js must coalesce ResizeObserver frames via RAF")
         self.assertIn('if (w === lastPlaylistWidth && h === lastPlaylistHeight) return;', main_src, "main.js playlistRo must guard against redundant dimensions")
+
+    def test_static_svg_spin_animation_eliminated_and_dynamically_managed(self):
+        """index.html eliminates static spin-animation class on hidden SVGs, managed dynamically in main.js and playback.js"""
+        # Ensure index.html does not hardcode spin-animation class on SVG elements
+        dl_match = re.search(r'<svg[^>]*id=["\']icon-download-active["\'][^>]*>', self.html_content)
+        self.assertIsNotNone(dl_match, "#icon-download-active not found in index.html")
+        self.assertNotIn('spin-animation', dl_match.group(0), "#icon-download-active must not have static spin-animation class")
+
+        search_match = re.search(r'<svg[^>]*id=["\']icon-search-spinner["\'][^>]*>', self.html_content)
+        self.assertIsNotNone(search_match, "#icon-search-spinner not found in index.html")
+        self.assertNotIn('spin-animation', search_match.group(0), "#icon-search-spinner must not have static spin-animation class")
+
+        # Verify playback.js dynamically adds and removes spin-animation on iconActive
+        self.assertIn('iconActive.classList.add("spin-animation")', self.playback_content)
+        self.assertIn('iconActive.classList.remove("spin-animation")', self.playback_content)
+
+        # Verify main.js dynamically adds and removes spin-animation on iconSearchSpinner
+        self.assertIn("iconSearchSpinner.classList.add('spin-animation')", self.main_content)
+        self.assertIn("iconSearchSpinner.classList.remove('spin-animation')", self.main_content)
 
 if __name__ == '__main__':
     unittest.main()

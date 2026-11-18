@@ -101,7 +101,10 @@ document.addEventListener("DOMContentLoaded", () => {
             remoteSearchAbortController = null;
         }
         if (iconSearchGlass) iconSearchGlass.style.display = 'block';
-        if (iconSearchSpinner) iconSearchSpinner.style.display = 'none';
+        if (iconSearchSpinner) {
+            iconSearchSpinner.classList.remove('spin-animation');
+            iconSearchSpinner.style.display = 'none';
+        }
         if (ephemeralSearchContainer) {
             ephemeralSearchContainer.style.display = 'none';
             ephemeralSearchContainer.innerHTML = '';
@@ -211,7 +214,10 @@ document.addEventListener("DOMContentLoaded", () => {
         trackList.style.display = 'none';
         playlistMessage.style.display = 'none';
         if (iconSearchGlass) iconSearchGlass.style.display = 'none';
-        if (iconSearchSpinner) iconSearchSpinner.style.display = 'block';
+        if (iconSearchSpinner) {
+            iconSearchSpinner.classList.add('spin-animation');
+            iconSearchSpinner.style.display = 'block';
+        }
 
         if (ephemeralSearchContainer) {
             ephemeralSearchContainer.style.display = 'block';
@@ -250,7 +256,10 @@ document.addEventListener("DOMContentLoaded", () => {
             if (signal.aborted) return;
 
             if (iconSearchGlass) iconSearchGlass.style.display = 'block';
-            if (iconSearchSpinner) iconSearchSpinner.style.display = 'none';
+            if (iconSearchSpinner) {
+                iconSearchSpinner.classList.remove('spin-animation');
+                iconSearchSpinner.style.display = 'none';
+            }
 
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
@@ -265,7 +274,10 @@ document.addEventListener("DOMContentLoaded", () => {
         } catch (err) {
             if (signal.aborted) return;
             if (iconSearchGlass) iconSearchGlass.style.display = 'block';
-            if (iconSearchSpinner) iconSearchSpinner.style.display = 'none';
+            if (iconSearchSpinner) {
+                iconSearchSpinner.classList.remove('spin-animation');
+                iconSearchSpinner.style.display = 'none';
+            }
             const isOffline = !navigator.onLine;
             const msg = isOffline ? 'You are offline. Reconnect to search YouTube.' : (err.message || 'Network error.');
             renderEphemeralError(query, msg);

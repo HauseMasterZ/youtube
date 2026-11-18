@@ -1368,7 +1368,10 @@
                 playlistDownloadController = null;
             }
             if (iconIdle) iconIdle.style.display = "block";
-            if (iconActive) iconActive.style.display = "none";
+            if (iconActive) {
+                iconActive.classList.remove("spin-animation");
+                iconActive.style.display = "none";
+            }
             if (iconDone) iconDone.style.display = "none";
             if (btn) btn.title = "Download playlist for offline playback";
             showDownloadToast("Download cancelled");
@@ -1385,7 +1388,10 @@
         const signal = playlistDownloadController.signal;
 
         if (iconIdle) iconIdle.style.display = "none";
-        if (iconActive) iconActive.style.display = "block";
+        if (iconActive) {
+            iconActive.classList.add("spin-animation");
+            iconActive.style.display = "block";
+        }
         if (iconDone) iconDone.style.display = "none";
 
         showDownloadToast(`${currentPl} - 0 / ${tracks.length}`);
@@ -1603,7 +1609,10 @@
                     }
                 }
 
-                if (iconActive) iconActive.style.display = "none";
+                if (iconActive) {
+                    iconActive.classList.remove("spin-animation");
+                    iconActive.style.display = "none";
+                }
                 if (iconDone) iconDone.style.display = "block";
                 if (btn) btn.title = "Playlist fully downloaded for offline playback!";
 
@@ -1623,6 +1632,9 @@
             hideDownloadToast();
         } finally {
             isDownloadingPlaylist = false;
+            if (iconActive) {
+                iconActive.classList.remove("spin-animation");
+            }
         }
     }
 
