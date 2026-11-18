@@ -143,12 +143,12 @@ class TestSteadyStateGpuElimination(unittest.TestCase):
         self.assertNotIn('will-change:', block, ".swipe-surface must not have will-change")
 
     def test_css_progress_container_layout_containment_and_layer_promotion(self):
-        """style.css .progress-container has contain: layout paint without forced layer promotion"""
+        """style.css .progress-container has contain: layout paint and isolated layer promotion"""
         match = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match, ".progress-container rule not found in style.css")
         block = match.group(1)
         self.assertIn('contain: layout paint;', block)
-        self.assertNotIn('transform: translateZ(0);', block)
+        self.assertIn('transform: translateZ(0);', block)
 
     def test_css_buffer_container_layout_containment(self):
         """style.css #buffer-container has contain: layout paint"""

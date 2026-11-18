@@ -82,11 +82,11 @@ class TestGpuSteadyStateMediaSessionDampening(unittest.TestCase):
             self.assertIn(phrase, self.yt_gemini, f"Missing phrase in youtube/GEMINI.md: {phrase}")
 
     def test_compositor_layer_allocation_audit_no_forced_translatez(self):
-        """Audit compositing layers: .progress-container and .seek-wrap enforce layout containment without forced translateZ(0)"""
+        """Audit compositing layers: .progress-container has isolated layer promotion and .seek-wrap enforces layout containment without forced translateZ(0)"""
         match_progress = re.search(r'\.progress-container\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match_progress, ".progress-container rule not found in style.css")
         self.assertIn('contain: layout paint;', match_progress.group(1))
-        self.assertNotIn('transform: translateZ(0);', match_progress.group(1))
+        self.assertIn('transform: translateZ(0);', match_progress.group(1))
 
         match_seek = re.search(r'\.seek-wrap\s*\{([^}]+)\}', self.css_src)
         self.assertIsNotNone(match_seek, ".seek-wrap rule not found in style.css")
