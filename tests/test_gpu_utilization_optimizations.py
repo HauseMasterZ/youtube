@@ -189,5 +189,13 @@ class TestGpuUtilizationOptimizations(unittest.TestCase):
         self.assertIsNotNone(prog_match, ".progress-container rule not found in style.css")
         self.assertIn('height: 20px;', prog_match.group(1))
 
+    def test_sync_art_width_and_resize_observers_memoized(self):
+        """main.js syncArtWidth and ResizeObservers prevent layout feedback loops via memoization and coalescing"""
+        main_src = self.main_content
+        self.assertIn('let lastArtWidth = null;', main_src, "main.js must memoize lastArtWidth")
+        self.assertIn('if (lastArtWidth !== w)', main_src, "main.js must guard against redundant style.setProperty updates")
+        self.assertIn('let roRafId = null;', main_src, "main.js must coalesce ResizeObserver frames via RAF")
+        self.assertIn('if (w === lastPlaylistWidth && h === lastPlaylistHeight) return;', main_src, "main.js playlistRo must guard against redundant dimensions")
+
 if __name__ == '__main__':
     unittest.main()

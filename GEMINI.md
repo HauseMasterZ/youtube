@@ -438,6 +438,7 @@
 - In `mediaSession.js`, `initLiveAudioAnchor` explicitly returns null when `!isMobileDevice`, ensuring desktop environments never instantiate `AudioContext`, `createMediaStreamDestination`, or oscillator nodes.
 - In `index.html`, `<audio id="focus-probe">` enforces `preload="none"`, preventing speculative audio codec pipeline initialization on desktop boot.
 - In `ui.js`, `updateTimeUI` nests `seekBar.value` assignment strictly inside the integer second `if (roundedSec !== lastRenderTime)` branch (`seekBar.value = roundedSec`), eliminating 4 Hz sub-second floating-point jitter repaints and step-sanitization churn on the range input slider thumb during active playback.
+- In `main.js`, `syncArtWidth` memoizes `lastArtWidth` to strictly eliminate redundant `setProperty('--art-width')` calls, and `ResizeObserver` callbacks on `albumArt` and `playlistContainer` enforce requestAnimationFrame coalescing and contentRect dimension-change guards (`w === lastPlaylistWidth && h === lastPlaylistHeight`), preventing recursive layout invalidation feedback loops.
 - In `style.css`, `.underlay-action` and `.swipe-legend` omit static `will-change: transform`, eliminating persistent compositor texture layer allocations for inactive swipe legends.
 
 ## 52. Mechanical Answer-First & Deployment Verification Invariant

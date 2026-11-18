@@ -2145,10 +2145,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    let lastArtWidth = null;
     function syncArtWidth() {
         if (!albumArt || !nowPlaying) return;
         if (window.innerWidth <= 750 && !nowPlaying.classList.contains('expanded')) {
-            nowPlaying.style.removeProperty('--art-width');
+            if (lastArtWidth !== null) {
+                lastArtWidth = null;
+                nowPlaying.style.removeProperty('--art-width');
+            }
             return;
         }
         if (albumArt.style.display !== 'none' && !albumArtContainer.classList.contains('no-art') && albumArt.src) {
@@ -2159,26 +2163,53 @@ document.addEventListener("DOMContentLoaded", () => {
                 w = Math.min(rect.width, rect.height * ratio);
             }
             w = Math.max(Math.round(w), 280);
-            nowPlaying.style.setProperty('--art-width', `${w}px`);
+            if (lastArtWidth !== w) {
+                lastArtWidth = w;
+                nowPlaying.style.setProperty('--art-width', `${w}px`);
+            }
             return;
         }
-        nowPlaying.style.removeProperty('--art-width');
+        if (lastArtWidth !== null) {
+            lastArtWidth = null;
+            nowPlaying.style.removeProperty('--art-width');
+        }
     }
 
     if (albumArt) {
         albumArt.addEventListener('load', () => requestAnimationFrame(syncArtWidth));
         if (window.ResizeObserver) {
-            const ro = new ResizeObserver(() => requestAnimationFrame(syncArtWidth));
+            let roRafId = null;
+            const ro = new ResizeObserver(() => {
+                if (roRafId) return;
+                roRafId = requestAnimationFrame(() => {
+                    roRafId = null;
+                    syncArtWidth();
+                });
+            });
             ro.observe(albumArt);
         }
     }
     if (window.ResizeObserver && playlistContainer) {
-        const playlistRo = new ResizeObserver(() => {
-            lastStartIndex = -1;
-            lastEndIndex = -1;
-            if (typeof renderVirtualTracks === 'function') {
-                renderVirtualTracks();
-            }
+        let playlistRoRafId = null;
+        let lastPlaylistWidth = 0;
+        let lastPlaylistHeight = 0;
+        const playlistRo = new ResizeObserver((entries) => {
+            const entry = entries && entries[0];
+            const cr = entry ? entry.contentRect : playlistContainer.getBoundingClientRect();
+            const w = Math.round(cr.width);
+            const h = Math.round(cr.height);
+            if (w === lastPlaylistWidth && h === lastPlaylistHeight) return;
+            lastPlaylistWidth = w;
+            lastPlaylistHeight = h;
+            if (playlistRoRafId) return;
+            playlistRoRafId = requestAnimationFrame(() => {
+                playlistRoRafId = null;
+                lastStartIndex = -1;
+                lastEndIndex = -1;
+                if (typeof renderVirtualTracks === 'function') {
+                    renderVirtualTracks();
+                }
+            });
         });
         playlistRo.observe(playlistContainer);
     }
