@@ -609,7 +609,6 @@
             box-sizing: border-box;
             background-color: #000000;
             contain: layout paint;
-            transform: translateZ(0);
         }
 
         .time-display {
