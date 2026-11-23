@@ -765,7 +765,7 @@
             const nextOfflineIdx = findNextPlayableOfflineIndex(1);
             if (nextOfflineIdx !== -1) {
                 queueIndex = nextOfflineIdx;
-                executePlayback();
+                executePlayback(false, false, true);
                 return;
             } else {
                 if (typeof window.stopPlaybackOnNetworkFailure === 'function') {
@@ -777,10 +777,10 @@
 
         if (queueIndex + 1 < playQueue.length) {
             queueIndex++;
-            executePlayback();
+            executePlayback(false, false, true);
         } else {
             queueIndex = 0;
-            executePlayback();
+            executePlayback(false, false, true);
         }
     }
 
@@ -815,17 +815,17 @@
             const prevOfflineIdx = findNextPlayableOfflineIndex(-1);
             if (prevOfflineIdx !== -1) {
                 queueIndex = prevOfflineIdx;
-                executePlayback();
+                executePlayback(false, false, true);
                 return;
             }
         }
 
         if (queueIndex > 0) {
             queueIndex--;
-            executePlayback();
+            executePlayback(false, false, true);
         } else if (repeatMode === 1) {
             queueIndex = playQueue.length - 1;
-            executePlayback();
+            executePlayback(false, false, true);
         } else {
             audioPlayer.currentTime = 0;
             updateTimeUI(0);

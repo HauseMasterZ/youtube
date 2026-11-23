@@ -446,6 +446,12 @@
 - When the user asks a question, requests an explanation, or instructs 'answer first', Antigravity is strictly forbidden from mutating source files (`edit_file`, `write_file`) or executing `git commit`. Deterministically enforced by workspace `PreToolUse` lifecycle hook (`.agents/scripts/safety_guard.py`), which hard-blocks write tools and git commits when `lastUserInput` is an inquiry without an explicit directive to modify files.
 - Direct or unverified `git push` commands are strictly forbidden and hard-blocked by `safety_guard.py`. All code pushes to `dev` must be executed via `python .agents/scripts/deploy_and_verify.py`, which validates JavaScript syntax across all source files, runs `pytest`, pushes to `origin dev`, and actively polls the GitHub Actions deployment workflow until `completed` / `success` is confirmed on `https://music.hausemaster.tech/dev/`.
 
+## 53. Programmatic Scroll Isolation & Shuffle Once Active Item Highlight Invariant
+- In `ui.js`, `scrollToTrack` sets `window.isProgrammaticPlaylistScroll = true` with a 150ms timeout during programmatic playlist viewport centering, preventing synthetic `scroll` events from corrupting user gesture detection.
+- In `main.js`, `playlistContainer.addEventListener("scroll")` checks `window.isProgrammaticPlaylistScroll` and returns early with `scheduleVirtualRender()`, preventing programmatic scrolls from updating `lastUserScrollTime = Date.now()` or asserting `isScrollingFast = true`.
+- In `playback.js`, `playNext()` and `playPrev()` call `executePlayback(false, false, true)` with `forceScroll = true`, ensuring track transitions in single-playlist Shuffle Once (`shuffleMode === 2`) always center and render the active playing item into the DOM viewport without dropping `.active` highlights every other track.
+
+
 
 
 

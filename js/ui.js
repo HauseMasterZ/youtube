@@ -299,6 +299,13 @@
             const scrollPos = virtualIndex * ITEM_HEIGHT;
             const containerHeight = playlistContainer.clientHeight || 400;
             const targetTop = Math.max(0, scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2));
+            if (typeof window !== 'undefined') {
+                window.isProgrammaticPlaylistScroll = true;
+                if (window._progScrollTimer) clearTimeout(window._progScrollTimer);
+                window._progScrollTimer = setTimeout(() => {
+                    window.isProgrammaticPlaylistScroll = false;
+                }, 150);
+            }
             playlistContainer.scrollTop = targetTop;
             if (typeof playlistContainer.scrollTo === 'function') {
                 playlistContainer.scrollTo({ 
@@ -310,6 +317,13 @@
                 requestAnimationFrame(() => {
                     const refreshedHeight = playlistContainer.clientHeight || containerHeight;
                     const refinedTop = Math.max(0, scrollPos - (refreshedHeight / 2) + (ITEM_HEIGHT / 2));
+                    if (typeof window !== 'undefined') {
+                        window.isProgrammaticPlaylistScroll = true;
+                        if (window._progScrollTimer) clearTimeout(window._progScrollTimer);
+                        window._progScrollTimer = setTimeout(() => {
+                            window.isProgrammaticPlaylistScroll = false;
+                        }, 150);
+                    }
                     playlistContainer.scrollTop = refinedTop;
                     if (typeof playlistContainer.scrollTo === 'function') {
                         playlistContainer.scrollTo({ top: refinedTop, behavior: "instant" });

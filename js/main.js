@@ -444,6 +444,10 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     playlistContainer.addEventListener("scroll", () => {
+        if (typeof window !== 'undefined' && window.isProgrammaticPlaylistScroll) {
+            scheduleVirtualRender();
+            return;
+        }
         lastUserScrollTime = Date.now();
         isScrollingFast = true;
         clearTimeout(scrollSettleTimer);
