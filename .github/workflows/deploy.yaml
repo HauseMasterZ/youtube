@@ -305,6 +305,7 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        continue-on-error: true
 
       - name: Wait 15s for GitHub Pages CDN Propagation
         if: steps.deployment.outputs.page_url != ''
