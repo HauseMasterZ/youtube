@@ -1714,6 +1714,8 @@
                 window.lastPlaybackModeTransitions.action = 'prev';
                 window.lastPlaybackModeTransitions.time = now;
             }
+            if (typeof window.consecutiveTrackErrors !== 'undefined') window.consecutiveTrackErrors = 0;
+            if (typeof window.consecutiveDeadTrackSkips !== 'undefined') window.consecutiveDeadTrackSkips = 0;
             playPrev();
         });
         } catch (e) {
@@ -1735,6 +1737,8 @@
                 window.lastPlaybackModeTransitions.action = 'next';
                 window.lastPlaybackModeTransitions.time = now;
             }
+            if (typeof window.consecutiveTrackErrors !== 'undefined') window.consecutiveTrackErrors = 0;
+            if (typeof window.consecutiveDeadTrackSkips !== 'undefined') window.consecutiveDeadTrackSkips = 0;
             playNext();
         });
         } catch (e) {

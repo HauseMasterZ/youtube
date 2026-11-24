@@ -453,10 +453,11 @@
 
 ## 54. Previous Track Navigation & History Stack Invariant
 - In `playback.js`, `playPrev()` enforces a 3-second elapsed rewind threshold: when `audioPlayer.currentTime > 3.0`, clicking Previous resets `audioPlayer.currentTime = 0`, updates time UI, and resumes playback without skipping backward.
+- In `playback.js`, `playPrev()` unifies track rewinding via `rewindCurrentTrack()`, ensuring that rewinding at the > 3.0s threshold, cross-shuffle deck start, and queue start synchronously resets `currentTime = 0`, updates time UI, resets lyrics to 0, updates MediaSession position with forced rate 1.0, primes Mode 2 live audio anchor, sets play UI, and persists `saveLastPlayedState(0)`.
 - In `playback.js`, `playFromPlaylist(playlist, trackIndex, isHistoryNav)` reconciles `queueIndex` in Shuffle Once mode (`shuffleMode === 2`) by searching `playQueue.findIndex(...)` for the target track (`queueIndex = (foundIdx !== -1) ? foundIdx : trackIndex;`), preventing `queueIndex` from desynchronizing from the randomized deck upon backward history navigation.
-- In `playback.js`, `playPrev()` passes `isHistoryNav = true` (`executePlayback(false, true, true);`) in queue backward fallbacks, preventing reverse navigation from being recorded as forward user choices in `playbackHistory` and eliminating ping-pong loop traps.
+- In `playback.js`, `playPrev()` passes `isHistoryNav = true` (`executePlayback(false, true, true);`) in queue backward fallbacks and unshifts the fallback track onto `playbackHistory` (`playbackHistory.unshift({ playlist, index }); playbackHistoryIndex = 0;`), preventing backward navigation from appending forward user choices to history while ensuring subsequent Next skips never leap over tracks or invert direction.
 - In `playback.js` (`restoreLastPlayedTrack`) and `main.js` (`audioPlayer.addEventListener("play")`), initial track playback seeds `playbackHistory` with `{ playlist, index }` and `playbackHistoryIndex = 0` when `playbackHistory.length === 0`, ensuring backward history navigation functions seamlessly after page reloads.
-- In `mediaSession.js`, `previoustrack` action handler guards `lastPlaybackModeTransitions` against non-object or array state before evaluating mobile mode-switch combos, ensuring clean delegation to `playPrev()` without corrupting playback mode.
+- In `mediaSession.js`, `previoustrack` action handler guards `lastPlaybackModeTransitions` against non-object or array state before evaluating mobile mode-switch combos, clears consecutive track error counters, and ensures clean delegation to `playPrev()` without corrupting playback mode.
 
 
 

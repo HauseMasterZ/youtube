@@ -239,5 +239,99 @@ class TestPreviousTrackBehavior(unittest.TestCase):
         self.assertEqual(queue_index, 1)
         self.assertEqual(shuffled_queue[queue_index], 1)
 
+    def test_simulation_queue_fallback_history_unshift_prevents_track_skip(self):
+        """Simulation: Queue fallback unshift to playbackHistory prevents skipping tracks on subsequent Next"""
+        # User plays T1 -> T2 -> T3
+        history = [
+            {'playlist': 'pl1', 'index': 1},
+            {'playlist': 'pl1', 'index': 2},
+            {'playlist': 'pl1', 'index': 3},
+        ]
+        history_index = 2
+        play_queue = [0, 1, 2, 3, 4]
+        queue_index = 3
+
+        # User clicks Prev at <= 3.0s: history moves back to T2
+        history_index -= 1
+        queue_index = history[history_index]['index']
+        self.assertEqual(history[history_index]['index'], 2)
+
+        # User clicks Prev at <= 3.0s: history moves back to T1
+        history_index -= 1
+        queue_index = history[history_index]['index']
+        self.assertEqual(history[history_index]['index'], 1)
+
+        # User clicks Prev at <= 3.0s: history_index is 0, so queue fallback runs to T0
+        self.assertEqual(history_index, 0)
+        queue_index -= 1
+        self.assertEqual(queue_index, 0)
+        fallback_track = play_queue[queue_index]
+        self.assertEqual(fallback_track, 0)
+
+        # Prepending fallback track to history:
+        history.insert(0, {'playlist': 'pl1', 'index': fallback_track})
+        history_index = 0
+        self.assertEqual([h['index'] for h in history], [0, 1, 2, 3])
+
+        # User clicks Next: MUST play T1, NOT skip to T2
+        if history_index >= 0 and history_index < len(history) - 1:
+            history_index += 1
+            next_track = history[history_index]['index']
+        else:
+            queue_index += 1
+            next_track = play_queue[queue_index]
+        self.assertEqual(next_track, 1, f"Expected Next from T0 to play T1, but got {next_track}")
+
+        # User clicks Next again: plays T2
+        history_index += 1
+        self.assertEqual(history[history_index]['index'], 2)
+
+        # User clicks Next again: plays T3
+        history_index += 1
+        self.assertEqual(history[history_index]['index'], 3)
+
+    def test_simulation_queue_fallback_forward_backward_continuity(self):
+        """Simulation: Staged track fallback followed by forward and backward navigation maintains continuity"""
+        # Starting with staged track T5
+        history = [{'playlist': 'pl1', 'index': 5}]
+        history_index = 0
+        play_queue = [0, 1, 2, 3, 4, 5]
+        queue_index = 5
+
+        # Prev 1: queue fallback to T4, unshifted
+        queue_index -= 1
+        history.insert(0, {'playlist': 'pl1', 'index': play_queue[queue_index]})
+        history_index = 0
+
+        # Prev 2: queue fallback to T3, unshifted
+        queue_index -= 1
+        history.insert(0, {'playlist': 'pl1', 'index': play_queue[queue_index]})
+        history_index = 0
+        self.assertEqual([h['index'] for h in history], [3, 4, 5])
+
+        # Next: advance forward in history to T4
+        history_index += 1
+        target_on_next = history[history_index]['index']
+        self.assertEqual(target_on_next, 4)
+
+        # Prev: navigate back from T4 -> MUST return to T3 (not jump to T5)
+        history_index -= 1
+        target_on_prev = history[history_index]['index']
+        self.assertEqual(target_on_prev, 3, f"Expected Prev from T4 to return to T3, but got {target_on_prev}")
+
+    def test_play_prev_rewind_helper_handles_unified_state(self):
+        """playPrev defines rewindCurrentTrack updating time UI, lyrics, anchor, and MediaSession"""
+        match = re.search(
+            r'function\s+playPrev\s*\(\s*\)\s*\{([\s\S]*?)\n\s*function\s+executePlayback',
+            self.playback_content
+        )
+        self.assertIsNotNone(match, "playPrev not found in playback.js")
+        body = match.group(1)
+        self.assertIn("function rewindCurrentTrack()", body)
+        self.assertIn("updateLyricsUI(0);", body)
+        self.assertIn("startLiveAudioAnchor();", body)
+        self.assertIn("saveLastPlayedState(0);", body)
+        self.assertIn("playbackHistory.unshift({ playlist: targetPl, index: targetIdx });", body)
+
 if __name__ == '__main__':
     unittest.main()
