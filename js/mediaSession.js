@@ -1695,7 +1695,7 @@
             // playpause action not supported in all browsers
         }
 
-        if (!window.lastPlaybackModeTransitions || typeof window.lastPlaybackModeTransitions !== 'object') {
+        if (!window.lastPlaybackModeTransitions || typeof window.lastPlaybackModeTransitions !== 'object' || Array.isArray(window.lastPlaybackModeTransitions)) {
             window.lastPlaybackModeTransitions = { time: 0, action: null };
         }
 
@@ -1703,6 +1703,9 @@
             navigator.mediaSession.setActionHandler('previoustrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (!window.lastPlaybackModeTransitions || typeof window.lastPlaybackModeTransitions !== 'object' || Array.isArray(window.lastPlaybackModeTransitions)) {
+                window.lastPlaybackModeTransitions = { time: 0, action: null };
+            }
             if (isMobile && window.lastPlaybackModeTransitions.action === 'next' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;
@@ -1721,6 +1724,9 @@
             navigator.mediaSession.setActionHandler('nexttrack', () => {
             const now = Date.now();
             const isMobile = (typeof isMobileDevice !== 'undefined' && isMobileDevice);
+            if (!window.lastPlaybackModeTransitions || typeof window.lastPlaybackModeTransitions !== 'object' || Array.isArray(window.lastPlaybackModeTransitions)) {
+                window.lastPlaybackModeTransitions = { time: 0, action: null };
+            }
             if (isMobile && window.lastPlaybackModeTransitions.action === 'prev' && (now - window.lastPlaybackModeTransitions.time) <= 2500) {
                 window.lastPlaybackModeTransitions.action = null;
                 window.lastPlaybackModeTransitions.time = 0;

@@ -451,6 +451,13 @@
 - In `main.js`, `playlistContainer.addEventListener("scroll")` checks `window.isProgrammaticPlaylistScroll` and returns early with `scheduleVirtualRender()`, preventing programmatic scrolls from updating `lastUserScrollTime = Date.now()` or asserting `isScrollingFast = true`.
 - In `playback.js`, `playNext()` and `playPrev()` call `executePlayback(false, false, true)` with `forceScroll = true`, ensuring track transitions in single-playlist Shuffle Once (`shuffleMode === 2`) always center and render the active playing item into the DOM viewport without dropping `.active` highlights every other track.
 
+## 54. Previous Track Navigation & History Stack Invariant
+- In `playback.js`, `playPrev()` enforces a 3-second elapsed rewind threshold: when `audioPlayer.currentTime > 3.0`, clicking Previous resets `audioPlayer.currentTime = 0`, updates time UI, and resumes playback without skipping backward.
+- In `playback.js`, `playFromPlaylist(playlist, trackIndex, isHistoryNav)` reconciles `queueIndex` in Shuffle Once mode (`shuffleMode === 2`) by searching `playQueue.findIndex(...)` for the target track (`queueIndex = (foundIdx !== -1) ? foundIdx : trackIndex;`), preventing `queueIndex` from desynchronizing from the randomized deck upon backward history navigation.
+- In `playback.js`, `playPrev()` passes `isHistoryNav = true` (`executePlayback(false, true, true);`) in queue backward fallbacks, preventing reverse navigation from being recorded as forward user choices in `playbackHistory` and eliminating ping-pong loop traps.
+- In `playback.js` (`restoreLastPlayedTrack`) and `main.js` (`audioPlayer.addEventListener("play")`), initial track playback seeds `playbackHistory` with `{ playlist, index }` and `playbackHistoryIndex = 0` when `playbackHistory.length === 0`, ensuring backward history navigation functions seamlessly after page reloads.
+- In `mediaSession.js`, `previoustrack` action handler guards `lastPlaybackModeTransitions` against non-object or array state before evaluating mobile mode-switch combos, ensuring clean delegation to `playPrev()` without corrupting playback mode.
+
 
 
 

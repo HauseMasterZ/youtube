@@ -86,7 +86,7 @@ class TestShuffleOnceHighlightAndProgrammaticScroll(unittest.TestCase):
         play_prev_match = re.search(r'function\s+playPrev\s*\(\s*\)\s*\{([\s\S]*?)\n\s*function\s+executePlayback', self.playback_content)
         self.assertIsNotNone(play_prev_match, "playPrev not found in playback.js")
         prev_body = play_prev_match.group(1)
-        self.assertIn("executePlayback(false, false, true);", prev_body)
+        self.assertIn("executePlayback(false, true, true);", prev_body)
         self.assertNotIn("executePlayback();", prev_body)
 
     def test_synthetic_consecutive_shuffle_track_highlights(self):

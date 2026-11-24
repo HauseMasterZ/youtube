@@ -1073,6 +1073,10 @@ document.addEventListener("DOMContentLoaded", () => {
         if (audioPlayer && typeof audioPlayer._preventAutoplay !== 'undefined') {
             audioPlayer._preventAutoplay = false;
         }
+        if (typeof playbackHistory !== 'undefined' && playbackHistory.length === 0 && globalActivePlaylist && globalActiveOriginalIndex >= 0) {
+            playbackHistory.push({ playlist: globalActivePlaylist, index: globalActiveOriginalIndex });
+            playbackHistoryIndex = 0;
+        }
         // Always-on anchor in Mode 2 (idempotent start); Mode 1 stops.
         if (window.playbackMode === 'mode2') {
             if (typeof startLiveAudioAnchor === 'function') {
