@@ -1432,12 +1432,48 @@
         if (toast) toast.style.display = "none";
     }
 
-    async function downloadActivePlaylist() {
+    const isSiteUpdating = () => typeof isUpdatingSite !== "undefined" && isUpdatingSite;
+
+    /**
+     * Synchronize #btn-download-playlist icons and spin state ('idle' | 'active' | 'done').
+     */
+    function setDownloadButtonState(state, titleText = null) {
         const btn = document.getElementById("btn-download-playlist");
         const iconIdle = document.getElementById("icon-download-idle");
         const iconActive = document.getElementById("icon-download-active");
         const iconDone = document.getElementById("icon-download-done");
 
+        if (state === "active") {
+            if (iconIdle) iconIdle.style.display = "none";
+            if (iconDone) iconDone.style.display = "none";
+            if (iconActive) {
+                iconActive.classList.add("spin-animation");
+                iconActive.style.display = "block";
+            }
+            if (btn) btn.title = titleText || "Cancel playlist download";
+        } else if (state === "done") {
+            if (iconIdle) iconIdle.style.display = "none";
+            if (iconActive) {
+                iconActive.classList.remove("spin-animation");
+                iconActive.style.display = "none";
+            }
+            if (iconDone) iconDone.style.display = "block";
+            if (btn) btn.title = titleText || "Playlist fully downloaded for offline playback!";
+        } else {
+            if (iconActive) {
+                iconActive.classList.remove("spin-animation");
+                iconActive.style.display = "none";
+            }
+            if (iconDone) iconDone.style.display = "none";
+            if (iconIdle) iconIdle.style.display = "block";
+            if (btn) btn.title = titleText || "Download playlist for offline playback";
+        }
+    }
+    if (typeof window !== "undefined") {
+        window.setDownloadButtonState = setDownloadButtonState;
+    }
+
+    async function downloadActivePlaylist() {
         // Cancel toggle
         if (isDownloadingPlaylist) {
             isDownloadingPlaylist = false;
@@ -1445,13 +1481,7 @@
                 playlistDownloadController.abort();
                 playlistDownloadController = null;
             }
-            if (iconIdle) iconIdle.style.display = "block";
-            if (iconActive) {
-                iconActive.classList.remove("spin-animation");
-                iconActive.style.display = "none";
-            }
-            if (iconDone) iconDone.style.display = "none";
-            if (btn) btn.title = "Download playlist for offline playback";
+            setDownloadButtonState("idle");
             showDownloadToast("Download cancelled");
             setTimeout(hideDownloadToast, 2000);
             return;
@@ -1465,12 +1495,7 @@
         playlistDownloadController = new AbortController();
         const signal = playlistDownloadController.signal;
 
-        if (iconIdle) iconIdle.style.display = "none";
-        if (iconActive) {
-            iconActive.classList.add("spin-animation");
-            iconActive.style.display = "block";
-        }
-        if (iconDone) iconDone.style.display = "none";
+        setDownloadButtonState("active");
 
         showDownloadToast(`${currentPl} - 0 / ${tracks.length}`);
 
@@ -1687,12 +1712,7 @@
                     }
                 }
 
-                if (iconActive) {
-                    iconActive.classList.remove("spin-animation");
-                    iconActive.style.display = "none";
-                }
-                if (iconDone) iconDone.style.display = "block";
-                if (btn) btn.title = "Playlist fully downloaded for offline playback!";
+                setDownloadButtonState("done");
 
                 showDownloadToast(`[OK] ${currentPl} verified (${verifiedCount}/${total} saved offline)`, true);
                 if (typeof refreshCachedAudioUrls === 'function') {
@@ -1700,18 +1720,18 @@
                 }
 
                 setTimeout(() => {
-                    if (iconDone) iconDone.style.display = "none";
-                    if (iconIdle) iconIdle.style.display = "block";
-                    if (btn) btn.title = "Download playlist for offline playback";
+                    if (!isSiteUpdating()) setDownloadButtonState("idle");
                     hideDownloadToast();
                 }, 3500);
             }
         } catch (e) {
             hideDownloadToast();
+            if (!isSiteUpdating()) setDownloadButtonState("idle");
         } finally {
             isDownloadingPlaylist = false;
-            if (iconActive) {
-                iconActive.classList.remove("spin-animation");
+            const iconActiveEl = document.getElementById("icon-download-active");
+            if (iconActiveEl && !isSiteUpdating()) {
+                iconActiveEl.classList.remove("spin-animation");
             }
         }
     }

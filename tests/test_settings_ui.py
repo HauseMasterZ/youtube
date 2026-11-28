@@ -574,5 +574,15 @@ class TestSettingsUI(unittest.TestCase):
         )
         self.assertIn("installingWorker.postMessage({ type: 'SKIP_WAITING' })", self.main_content)
 
+    def test_update_site_animates_download_button_spinner(self):
+        """updateSiteApp puts #btn-download-playlist into active spinning state and guards concurrent download clicks"""
+        self.assertIn("function setDownloadButtonState(", self.playback_content)
+        self.assertIn("setDownloadButtonState('active'", self.main_content)
+        self.assertIn("setDownloadButtonState('idle'", self.main_content)
+        self.assertRegex(
+            self.main_content,
+            r'btnDownloadPlaylist\.addEventListener\(\s*[\'"]click[\'"]\s*,\s*\(\s*\)\s*=>\s*\{[\s\S]*?if\s*\(\s*isUpdatingSite\s*\)\s*return;'
+        )
+
 if __name__ == '__main__':
     unittest.main()

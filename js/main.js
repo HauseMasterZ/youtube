@@ -2063,6 +2063,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const btnDownloadPlaylist = document.getElementById("btn-download-playlist");
     if (btnDownloadPlaylist) {
         btnDownloadPlaylist.addEventListener("click", () => {
+            if (isUpdatingSite) return;
             if (typeof downloadActivePlaylist === 'function') downloadActivePlaylist();
         });
     }
@@ -2601,7 +2602,21 @@ document.addEventListener("DOMContentLoaded", () => {
         const btnUpdate = document.getElementById("btn-modal-update");
         const textUpdate = document.getElementById("text-modal-update");
 
+        const syncUpdateDownloadCue = (active) => {
+            if (typeof setDownloadButtonState !== 'function') return;
+            if (active) {
+                setDownloadButtonState('active', "Updating site...");
+            } else if (typeof isDownloadingPlaylist === 'undefined' || !isDownloadingPlaylist) {
+                setDownloadButtonState('idle');
+            }
+        };
+
         const setButtonState = (state, message = "") => {
+            if (state === 'updating') {
+                syncUpdateDownloadCue(true);
+            } else if (state === 'idle' || state === 'error') {
+                syncUpdateDownloadCue(false);
+            }
             if (!btnUpdate) return;
             btnUpdate.classList.remove("updating", "success", "error");
 
