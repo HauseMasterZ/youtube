@@ -29,11 +29,11 @@
 - Reject formats 18, 599, 600, or low-bitrate fallbacks (<90 kbps).
 - Strictly stream from downloaded assets stored in remote asset storage; never stream directly from YouTube or third-party web scrapers during playback.
 
-## 5. Development & Staging Push Workflow (Dev-Only Default)
+## 5. Development & Staging Push Workflow (Dev-Only for `youtube`)
 - Always develop, commit, and test on the `dev` branch.
-- Always push strictly to `origin/dev` ONLY unless explicitly stated otherwise (for `youtube`, execute via `python ../.agents/scripts/deploy_and_verify.py` / `python .agents/scripts/deploy_and_verify.py`): GitHub Actions builds and deploys staging to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
+- For `youtube`, always push strictly to `origin/dev` ONLY unless explicitly stated otherwise via `python .agents/scripts/deploy_and_verify.py`: GitHub Actions builds and deploys staging to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
 - Verify the staged release live at `https://music.hausemaster.tech/dev/`.
-- Strictly FORBIDDEN to execute direct pushes to `main` or `master` unless explicitly stated otherwise.
+- Strictly FORBIDDEN to push directly to `youtube` `main` or `master` unless explicitly stated otherwise (`alwaysdata-pi-setup` maintains a single `main` branch paired with `pi_node/deploy_to_pi.py` for 100% Git-to-Pi sync).
 - Never commit broken code or skip tests.
 
 ## 6. Frontend Audio Engine & Dual Playback Modes
@@ -107,9 +107,9 @@
   3. The post-call resume branch explicitly calls `republishMediaMetadata(true)`, which resets `navigator.mediaSession.metadata = null` before re-publishing.
   4. This busts Chromium's dedup cache, forces `OnMediaSessionMetadataChanged` Mojo IPC, and reliably resurrects the MediaNotification card in Android SystemUI without causing continuous churn during normal playback.
 
-## 12. Dev-Only Git Push Authorization
-- Antigravity must always push strictly to `dev` (`origin dev`, executed via `.agents/scripts/deploy_and_verify.py` for `youtube`) ONLY unless the user explicitly states otherwise; direct pushes to `main`/`master` remain strictly forbidden unless explicitly instructed.
-- When deploying Pi updates in `alwaysdata-pi-setup`, `pi_node/deploy_to_pi.py` must keep the git repo and physical Raspberry Pi 100% in sync at all times.
+## 12. Scoped Git Push & Pi Sync Authorization
+- For `youtube`, Antigravity must always push strictly to `dev` (`origin dev` via `.agents/scripts/deploy_and_verify.py`) ONLY unless the user explicitly states otherwise; direct pushes to `youtube` `main`/`master` remain strictly forbidden unless explicitly instructed.
+- `alwaysdata-pi-setup` maintains a single `main` branch (`origin main`) paired with `pi_node/deploy_to_pi.py` so git repo and physical Raspberry Pi remain 100% in sync at all times.
 - Destructive history-rewriting operations against remote (`git push --force`, etc.) remain strictly forbidden.
 
 ## 13. Frontend Codebase Architectural Decoupling Invariant
@@ -443,9 +443,9 @@
 - In `style.css`, `.underlay-action` and `.swipe-legend` omit static `will-change: transform`, eliminating persistent compositor texture layer allocations for inactive swipe legends.
 - In `index.html`, `#icon-download-active` and `#icon-search-spinner` omit static `class="spin-animation"`, eliminating continuous `cc::AnimationHost` and `cc::LayerTreeHostImpl` 165 FPS Compositor thread draw passes during steady playback; `spin-animation` is added dynamically in `playback.js` and `main.js` only during active downloading or remote search operations.
 
-## 52. Mechanical Answer-First & Dev-Only Deployment Verification Invariant
+## 52. Mechanical Answer-First & Scoped Deployment Verification Invariant
 - When the user asks a question, requests an explanation, or instructs 'answer first', Antigravity is strictly forbidden from mutating source files (`edit_file`, `write_file`) or executing `git commit`. Deterministically enforced by workspace `PreToolUse` lifecycle hook (`.agents/scripts/safety_guard.py`), which hard-blocks write tools and git commits when `lastUserInput` is an inquiry without an explicit directive to modify files.
-- All pushes default strictly to `dev` only unless explicitly stated otherwise, and `youtube` pushes to `dev` must execute via `python .agents/scripts/deploy_and_verify.py` (validates JS syntax, runs `pytest`, pushes `origin dev`, and polls GitHub Actions until `completed` / `success` on `https://music.hausemaster.tech/dev/`). Direct pushes to `main`/`master` are strictly forbidden unless explicitly stated otherwise.
+- In `.agents/scripts/safety_guard.py`, `youtube` pushes default strictly to `dev` only unless explicitly stated otherwise via `python .agents/scripts/deploy_and_verify.py` (validates JS syntax, runs `pytest`, pushes `origin dev`, and polls GitHub Actions until `completed` / `success` on `https://music.hausemaster.tech/dev/`), with direct `youtube` `main`/`master` pushes blocked unless explicitly stated otherwise. `alwaysdata-pi-setup` maintains a single `main` branch paired with `pi_node/deploy_to_pi.py` for 100% Git-to-Pi parity.
 
 ## 53. Programmatic Scroll Isolation & Shuffle Once Active Item Highlight Invariant
 - In `ui.js`, `scrollToTrack` sets `window.isProgrammaticPlaylistScroll = true` with a 150ms timeout during programmatic playlist viewport centering, preventing synthetic `scroll` events from corrupting user gesture detection.
