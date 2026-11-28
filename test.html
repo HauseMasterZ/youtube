@@ -298,7 +298,7 @@
       let startX = 0;
       let currentX = 0;
       let isDragging = false;
-      const thresholdRatio = 0.05; // 5% drag width confirms action
+      const thresholdRatio = 0.20; // 20% drag width confirms action
       const iconWidth = 22;
       const gap = 0;
       const parkOffset = gap + iconWidth; // 72px total offset
@@ -324,7 +324,7 @@
           const enqX = Math.min(0, currentX - parkOffset);
           enqueueAction.style.transform = `translateX(${enqX}px)`;
           downloadAction.style.transform = `translateX(${parkOffset}px)`;
-          if (currentX >= (surface.offsetWidth * thresholdRatio)) {
+          if (currentX >= Math.max(64, surface.offsetWidth * thresholdRatio)) {
             enqueueAction.classList.add('legend-triggered');
           } else {
             enqueueAction.classList.remove('legend-triggered', 'enqueue-success');
@@ -347,7 +347,7 @@
         isDragging = false;
         surface.releasePointerCapture(e.pointerId);
 
-        const thresholdPx = surface.offsetWidth * thresholdRatio;
+        const thresholdPx = Math.max(64, surface.offsetWidth * thresholdRatio);
         const pastThreshold = Math.abs(currentX) > thresholdPx;
 
         if (pastThreshold) {

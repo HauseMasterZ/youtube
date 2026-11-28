@@ -90,6 +90,7 @@
             flex-shrink: 0;
             padding-right: clamp(2px, 3px, 4px);
             box-sizing: border-box;
+            contain: layout;
         }
 
         .playlist-panel {
@@ -103,6 +104,7 @@
             flex-direction: column;
             overflow: hidden;
             position: relative;
+            contain: layout;
         }
         
 
@@ -397,6 +399,7 @@
             font-size: 13px;
         }
 
+        #now-playing,
         .now-playing {
             padding: 0px 0px 0px 0px;
             text-align: center;
@@ -408,6 +411,8 @@
             max-width: 700px;
             margin: 0 auto;
             box-sizing: border-box;
+            background-color: #000000;
+            contain: layout;
         }
 
         #album-art-container {
@@ -420,6 +425,8 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         #album-art-image {
@@ -508,6 +515,8 @@
             max-width: var(--art-width, 500px);
             box-sizing: border-box;
             text-align: center;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         #current-title {
@@ -559,6 +568,8 @@
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
+            background-color: #000000;
+            contain: layout paint;
             transition: background 0.2s, color 0.2s;
         }
 
@@ -590,19 +601,33 @@
         .progress-container {
             width: var(--art-width, 100%);
             max-width: var(--art-width, 500px);
+            height: 20px;
             display: flex;
             align-items: center;
             gap: 12px;
             margin-bottom: 16px;
             box-sizing: border-box;
+            background-color: #000000;
+            contain: layout paint;
+            transform: translateZ(0);
         }
 
         .time-display {
             font-size: 13px;
             color: var(--text-secondary);
-            min-width: 40px;
+            min-width: 44px;
+            width: 44px;
+            flex-shrink: 0;
+            text-align: center;
+            letter-spacing: -0.2px;
             font-weight: 600;
             font-variant-numeric: tabular-nums;
+            background-color: #000000;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeSpeed;
+            font-kerning: none;
+            contain: layout paint;
         }
 
         .seek-wrap {
@@ -613,6 +638,8 @@
             align-items: center;
             cursor: pointer;
             touch-action: none;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         .seek-track {
@@ -621,22 +648,22 @@
             right: 0;
             height: 4px;
             background: transparent;
-            border-radius: 2px;
-            overflow: hidden;
             pointer-events: none;
         }
 
+        #buffer-container,
         .buffer-container {
             position: absolute;
             inset: 0;
             pointer-events: none;
+            contain: layout paint;
         }
 
         .buffer-segment {
             position: absolute;
             top: 0;
             bottom: 0;
-            background: rgba(255, 255, 255, 0.4);
+            background: #666666;
             border-radius: 2px;
             pointer-events: none;
         }
@@ -657,6 +684,7 @@
             cursor: pointer;
             z-index: 2;
             touch-action: none;
+            contain: strict;
         }
 
         input[type="range"]#seek-bar::-webkit-slider-runnable-track {
@@ -702,6 +730,8 @@
             margin-bottom: 8px;
             box-sizing: border-box;
             position: relative;
+            background-color: #000000;
+            contain: layout paint;
         }
 
         .control-btn {
@@ -919,12 +949,13 @@
             transform-origin: right center;
             transition: opacity 0.12s cubic-bezier(0.2, 0, 0, 1), transform 0.12s cubic-bezier(0.2, 0, 0, 1);
             z-index: 95;
-            display: flex;
+            display: none;
             flex-direction: column;
             gap: 3px;
         }
 
         .fast-scroll-bubble.active {
+            display: flex;
             opacity: 1;
             transform: translateY(-50%) scale(1);
         }
@@ -1003,7 +1034,6 @@
             position: absolute;
             top: 0;
             left: 0;
-            will-change: transform;
             contain: layout paint;
             width: 100%;
             height: 48px; /* Fixed height for virtual scrolling */
@@ -1142,7 +1172,6 @@
             border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             cursor: grab;
-            will-change: transform;
             transform: translateX(var(--swipe-x, 0px));
         }
 
@@ -1172,11 +1201,13 @@
             border: 1px solid rgba(255, 255, 255, 0.08) !important;
             border-radius: 8px !important;
             cursor: grabbing;
+            will-change: transform;
         }
 
         /* Underlay background matching test.html */
         .swipe-underlay,
         .swipe-backdrop {
+            display: none;
             position: absolute;
             top: 0;
             left: 0;
@@ -1203,7 +1234,6 @@
             justify-content: center;
             width: 22px;
             height: 22px;
-            will-change: transform;
             color: #ffffff;
         }
 
@@ -1376,7 +1406,10 @@
             }
             .now-playing:not(.expanded) .time-display {
                 font-size: 11px;
-                min-width: 30px;
+                min-width: 32px;
+                width: 32px;
+                flex-shrink: 0;
+                text-align: center;
             }
             .now-playing:not(.expanded) .playback-controls {
                 display: flex;
@@ -2218,6 +2251,7 @@ button:focus { outline: none !important; }
 /* Mode Toast */
 #mode-toast,
 .mode-toast {
+    display: none;
     position: fixed;
     bottom: 80px;
     left: 50%;

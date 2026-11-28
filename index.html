@@ -56,7 +56,7 @@
                     <div class="seek-track" id="seek-track">
                         <div id="buffer-container" class="buffer-container"></div>
                     </div>
-                    <input type="range" id="seek-bar" min="0" value="0" step="0.1" aria-label="Playback seek position">
+                    <input type="range" id="seek-bar" min="0" value="0" step="1" aria-label="Playback seek position">
                 </div>
                 <span id="total-time" class="time-display">0:00</span>
             </div>
@@ -107,7 +107,7 @@
                     <svg id="icon-download-idle" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                         <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
                     </svg>
-                    <svg id="icon-download-active" class="spin-animation" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display: none;">
+                    <svg id="icon-download-active" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" style="display: none;">
                         <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
                     </svg>
                     <svg id="icon-download-done" aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="#00ff88" style="display: none;">
@@ -120,7 +120,7 @@
                 <div class="search-actions-wrap" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:4px;">
                     <button id="btn-remote-search" class="search-action-btn" aria-label="Search online" title="Search online (YouTube Topic)">
                         <svg id="icon-search-glass" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
-                        <svg id="icon-search-spinner" class="spin-animation" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: none;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
+                        <svg id="icon-search-spinner" aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" style="display: none;"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>
                     </button>
                     <a href="https://github.com/HauseMasterZ/youtube" target="_blank" rel="noopener noreferrer" id="github-link" style="opacity:0.7;width:24px;height:24px;display:flex;align-items:center;justify-content:center;" title="GitHub" aria-label="GitHub repository">
                         <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="#ffffff"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -131,7 +131,7 @@
 
         <div class="playlist-container" id="playlist-container">
             <div id="playlist-message">Loading...</div>
-            <div id="swipe-backdrop" class="swipe-backdrop swipe-underlay" aria-hidden="true">
+            <div id="swipe-backdrop" class="swipe-backdrop swipe-underlay" aria-hidden="true" style="display: none;">
                 <div class="underlay-action action-enqueue swipe-legend swipe-legend-enqueue">
                     <svg viewBox="0 0 24 24">
                         <line x1="4" y1="6" x2="14" y2="6"></line>
@@ -156,7 +156,7 @@
         <div id="fast-scroller" class="fast-scroller" aria-hidden="true">
             <div id="fast-scroll-thumb" class="fast-scroll-thumb"></div>
         </div>
-        <div id="fast-scroll-bubble" class="fast-scroll-bubble" aria-hidden="true">
+        <div id="fast-scroll-bubble" class="fast-scroll-bubble" aria-hidden="true" style="display: none;">
             <div id="fast-scroll-badge" class="fast-scroll-badge">#1 / 100</div>
             <div id="fast-scroll-title" class="fast-scroll-title">Song Title</div>
         </div>
@@ -239,7 +239,7 @@
 
 <div id="mode-toast" class="mode-toast" aria-live="polite" style="display: none;"><span id="mode-toast-text"></span></div>
 <audio id="live-stream-anchor" preload="none" style="display:none;"></audio>
-<audio id="focus-probe" loop preload="auto" style="display:none;"></audio>
+<audio id="focus-probe" loop preload="none" style="display:none;"></audio>
 
 
 <script src="js/state.js?v=25.10"></script>

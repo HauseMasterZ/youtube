@@ -108,9 +108,9 @@ class TestMediaSessionEngine(unittest.TestCase):
         self.assertIn('mode-toast-text', self.ms_content)
 
     def test_no_micro_rate_spoof(self):
-        """0.00001 micro-rate freezes the card seekbar under buffering/switching and spoofed mode2 pause; absent from main/state"""
+        """0.00001 micro-rate freezes the card seekbar under buffering/switching and spoofed mode2 pause; absent from state"""
         self.assertIn("isMobileDevice", self.ms_content)
-        self.assertNotIn("0.00001", self.main_content)
+        self.assertIn("updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true)", self.main_content)
         self.assertNotIn("0.00001", self.state_content)
         with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'js', 'playback.js'), 'r', encoding='utf-8') as f:
             playback_content = f.read()
@@ -767,14 +767,12 @@ class TestMediaSessionEngine(unittest.TestCase):
         )
 
     def test_heartbeat_forced_pause_then_play_recycle(self):
-        """Heartbeat uses forced pause-then-play recycle with 200ms stop window to force genuine WebMediaPlayer focus request"""
+        """Heartbeat uses non-destructive play recycle without aborting in-flight play requests"""
+        heartbeat_body = self.ms_content.split("function startAnchorHeartbeat")[1].split("function stopAnchorHeartbeat")[0]
+        self.assertNotIn("try { anchorEl.pause(); }", heartbeat_body)
         self.assertRegex(
             self.ms_content,
-            r'_isInternalAnchorStop\s*=\s*true;\s*try\s*\{\s*anchorEl\.pause\(\);\s*\}\s*catch\s*\(e\)\s*\{\}\s*setTimeout\(\s*\(\)\s*=>\s*\{\s*_isInternalAnchorStop\s*=\s*false;\s*\},\s*200\s*\);'
-        )
-        self.assertRegex(
-            self.ms_content,
-            r'_isInternalAnchorStart\s*=\s*true;\s*anchorEl\.play\(\)\.then'
+            r'_isInternalAnchorStart\s*=\s*true;\s*const\s+currentGen\s*=\s*_anchorGeneration;\s*anchorEl\.play\(\)\.then'
         )
 
     def test_heartbeat_split_timer_handles_and_liveness_check(self):

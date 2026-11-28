@@ -149,7 +149,7 @@ class TestMode2MediaSessionPersistence(unittest.TestCase):
 
         self.assertRegex(
             content,
-            r"if\s*\(\s*window\.playbackMode\s*===\s*['\"]mode2['\"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*null\s*,\s*true\s*\);[\s\S]*?republishMediaMetadata\(\);"
+            r"if\s*\(\s*window\.playbackMode\s*===\s*['\"]mode2['\"]\s*&&\s*hasMediaSession\s*\)\s*\{[\s\S]*?updateMediaSessionPosition\(\s*audioPlayer\.currentTime\s*,\s*dur\s*,\s*(?:null|0\.00001)\s*,\s*true\s*\);[\s\S]*?republishMediaMetadata\(\);"
         )
         self.assertIn("startAnchorHeartbeat(0);", content)
         self.assertIn("reassertSpoofBurst();", content)

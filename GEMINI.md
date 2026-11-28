@@ -29,12 +29,12 @@
 - Reject formats 18, 599, 600, or low-bitrate fallbacks (<90 kbps).
 - Strictly stream from downloaded assets stored in remote asset storage; never stream directly from YouTube or third-party web scrapers during playback.
 
-## 5. Development & Deployment Workflow
-- Always develop, commit, and test on the `dev` branch first.
-- Push to `origin/dev`: GitHub Actions automatically builds and deploys the staging distribution directly to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
+## 5. Development & Staging Push Workflow (Dev-Only for `youtube`)
+- Always develop, commit, and test on the `dev` branch.
+- For `youtube`, always push strictly to `origin/dev` ONLY unless explicitly stated otherwise via `python .agents/scripts/deploy_and_verify.py`: GitHub Actions builds and deploys staging to `https://music.hausemaster.tech/dev/` and GitHub Pages `/dev/`.
 - Verify the staged release live at `https://music.hausemaster.tech/dev/`.
-- Merge to `main`, push to `origin/main`, and empirically verify live production deployment at `https://music.hausemaster.tech`.
-- Never commit broken code, skip tests, or merge to main without verification.
+- Strictly FORBIDDEN to push directly to `youtube` `main` or `master` unless explicitly stated otherwise (`alwaysdata-pi-setup` maintains a single `main` branch paired with `pi_node/deploy_to_pi.py` for 100% Git-to-Pi sync).
+- Never commit broken code or skip tests.
 
 ## 6. Frontend Audio Engine & Dual Playback Modes
 - Desktop: 0.0% GPU load. Native `<audio>.volume` exclusively. Never connect `<audio>` to `AudioContext.createMediaElementSource()`.
@@ -107,9 +107,10 @@
   3. The post-call resume branch explicitly calls `republishMediaMetadata(true)`, which resets `navigator.mediaSession.metadata = null` before re-publishing.
   4. This busts Chromium's dedup cache, forces `OnMediaSessionMetadataChanged` Mojo IPC, and reliably resurrects the MediaNotification card in Android SystemUI without causing continuous churn during normal playback.
 
-## 12. Absolute Prohibition of Git Write Operations
-- Under NO circumstances may Antigravity execute any Git write operation (including git commit, git push, git checkout -b, git branch, git merge, git rebase, git tag, or git reset against remote).
-- Git operations are strictly read-only (status, diff, log).
+## 12. Scoped Git Push & Pi Sync Authorization
+- For `youtube`, Antigravity must always push strictly to `dev` (`origin dev` via `.agents/scripts/deploy_and_verify.py`) ONLY unless the user explicitly states otherwise; direct pushes to `youtube` `main`/`master` remain strictly forbidden unless explicitly instructed.
+- `alwaysdata-pi-setup` maintains a single `main` branch (`origin main`) paired with `pi_node/deploy_to_pi.py` so git repo and physical Raspberry Pi remain 100% in sync at all times.
+- Destructive history-rewriting operations against remote (`git push --force`, etc.) remain strictly forbidden.
 
 ## 13. Frontend Codebase Architectural Decoupling Invariant
 - The entire codebase of the frontend repository must strictly NOT contain any architectural information, implementation details, credentials, or explicit naming regarding backend infrastructure, cloud servers, storage repositories, edge devices, or third-party backend instances anywhere.
@@ -355,6 +356,114 @@
 - In `main.js`, the global keydown listener for Spacebar (`e.key === ' ' || e.code === 'Space'`) unconditionally blurs active buttons, dispatches `e.preventDefault()`, and triggers `btnPlayPause.click()`.
 - Buttons never retain focus after pointer interaction, and Spacebar keypresses never repeat or activate the most recently clicked button (such as Next Track `#btn-next`).
 - Editable text inputs (`input[type!="range"]`, `textarea`, `select`, `isContentEditable`) and active modal dialogs (`#settings-modal`) remain isolated from global Spacebar playback interception.
+
+## 41. Playback Mode 1 Default Startup Invariant
+- Every page reload, browser refresh, or PWA restart strictly defaults to Mode 1 (`window.playbackMode = 'mode1'`) without restoring Mode 2 from persistent storage.
+
+## 42. Gesture Double-Swipe De-Performance Invariant
+- Swiping right to enqueue a track that is already in `playQueue` removes/unqueues it and clears enqueued visual cues without displaying an unqueue toast icon.
+- Swiping left to download a track that is already fully cached offline does nothing (no deletion, no cache removal, no toast).
+- Swiping left to download a track that is currently in-flight downloading cancels/aborts the in-flight download and displays a "Cancelled download" toast.
+
+## 43. Minimum Swipe Gesture Threshold Invariant
+- Track list horizontal swipe actions require at least a 0.20 drag width ratio with an absolute minimum floor of 64px (`Math.max(64, offsetWidth * thresholdRatio)`) before activating enqueue or download actions.
+
+## 44. Bluetooth AVRCP Playback Resume & Media Key Invariant
+- Bluetooth headset resume commands (`onPlay`, `onPause` while paused, or `MediaPlayPause` / `MediaPlay` key events) must resume audio playback unconditionally without being blocked by `wasPausedByUser`.
+- In `dom.js`, `DualAudioPingPong.play()` clears `this._preventAutoplay = false;` on authorized playback, ensuring genuine events propagate to audioPlayer listeners while preserving `forwardEvent` pre-staging event suppression (`this._preventAutoplay && (e.type === 'play' || e.type === 'playing')`), alongside the `if (window.wasPausedByUser) { return Promise.resolve(); }` authorization choke point in `play()`.
+- In `mediaSession.js`, `setActionHandler('pause')` when `isActuallyPaused` is true clears `window.wasPausedByUser = false;` and unconditionally invokes `audioPlayer.play()`, ensuring single-button and toggle Bluetooth headsets immediately resume playback across both Mode 1 and Mode 2 without skipping play on transitional unpaused states.
+- In `main.js`, `audioPlayer.addEventListener("play")` treats native and AVRCP play events as authorized user playback, clearing `window.wasPausedByUser = false;` and `audioPlayer._preventAutoplay = false;` without invoking `instantPause()` (blocking rogue play strictly on `isCallActive` or `isPostCallQuarantine`).
+- In `mediaSession.js`, `updateMediaSessionPosition` strictly prioritizes explicit `forcedRate > 0` over the `isPaused && window.playbackMode === 'mode2'` micro-rate throttle fallback, ensuring that resuming playback immediately updates Android SystemUI's `PlaybackState` with rate `1.0` (even while `audioPlayer.paused` is still `true` before async play start).
+- In `mediaSession.js`, `handlePlayAction`, `setActionHandler('pause')` resume branch, `setActionHandler('playpause')` resume branch, and `seekforward` / `seekbackward` Mode 2 resume paths explicitly clear `audioPlayer._preventAutoplay = false` before invoking `audioPlayer.play()`, invoke `republishMediaMetadata()` prior to `updateMediaSessionPosition(actualTime, dur, 1.0, true)` with forced rate 1.0 and `force = true` (preventing `syncAfterRepublish` from overwriting rate 1.0 back to micro-rate 0.00001), and reset `actualTime = 0` on near-track-end loop replay (`actualTime >= dur - 0.5`).
+- In `main.js`, `audioPlayer.addEventListener("pause")` in Mode 2 passes micro-rate `0.00001` with `force = true` (`updateMediaSessionPosition(audioPlayer.currentTime, dur, 0.00001, true)`), preventing rate flapping to `1.0` while paused, keeping the card pinned, and freezing the seekbar so Android SystemUI correctly accepts media card and AVRCP resume actions.
+- In `dom.js` (`DualAudioPingPong.prototype.play()`), `main.js` (`btnPlayPause` click, `play`, and `playing` listeners), and `mediaSession.js` (`handlePlayAction`, `pause`, `playpause`, `seekbackward`, `seekforward`, and `audioPlayer.addEventListener('play')`), `startLiveAudioAnchor()` in Mode 2 is strictly conditional on `(!_anchor || _anchor.paused)`, avoiding redundant re-invocation of `anchorEl.play()` when the anchor is already running and preventing audio focus arbitration conflicts against `audioPlayer.play()`.
+- On fresh site visits in Mode 2, the live audio anchor (`<audio id="live-stream-anchor">`) is initialized, primed, and running on the initial user play gesture prior to pause, ensuring active audio remains present when the main audio player pauses, preventing Chromium from reaching zero active audio elements and stripping the media notification card on first song pause.
+- Universal `keydown` listener intercepts `MediaPlayPause`, `MediaPlay`, `MediaPause`, `MediaTrackNext`, and `MediaTrackPrevious` to support physical headset and hardware media keys.
+
+## 45. CI/CD Automated Cache Invalidation Invariant
+- GitHub Actions (`.github/workflows/deploy.yaml`) automatically computes `buildVer` and replaces `const CACHE_NAME` in `sw.js` with `yt-player-cache-${branchPrefix}-${buildVer}`, inlining and cache-busting bundles (`bundle.min.js?v=${buildVer}`).
+- Manual bumping of `CACHE_NAME` in `sw.js` is completely redundant and strictly prohibited. Unit tests must use regex pattern matching (`yt-player-cache-.*`) instead of hardcoded version numbers.
+
+## 46. Mobile Screen Unlock Media Card Animation Resync Invariant
+- Direct device unlock or foregrounding must immediately restore active sound wave and seekbar animations on the media card.
+- In `mediaSession.js`, projection coercion in `updateMediaSessionPosition` honors `!forceBypass`, ensuring that waking or unlocking the mobile device forces rate `1.0` and uncoerced position timestamps directly into Android SystemUI `PlaybackState` without suppression.
+
+## 47. Mobile Lyrics (LRC) Multi-Candidate Resolution & Caching Invariant
+- In `utils.js`, `getLyricsCandidates(track)` generates normalized candidate paths across exact path, title variants, lowercase conversions, and track IDs.
+- In `lyrics.js`, the lyrics fetch pipeline sequentially evaluates candidate URLs with `priority: 'low'`, caching successful hits and preventing missing lyrics due to case sensitivity, backslash/slash discrepancies, or mobile path resolution differences.
+- In `sw.js`, `.lrc` file requests are routed through `yt-player-media` cache using `ignoreSearch: true`.
+
+## 48. Truncated Audio Cache Detection & Recovery Invariant
+- In `dom.js`, `isExplicitlyComplete` strictly validates that `cachedPartialBytes >= (this._expectedDuration * 4000)` before accepting `X-Partial-Cached: 'false'`. If cached bytes fall below expected duration bitrate or if `buffEnd < this._expectedDuration - 15`, `isExplicitlyPartial` and `isDurationIncomplete` treat the entry as partial, self-heal CacheStorage with `X-Partial-Cached: 'true'`, and trigger background Range ingestion without invoking `endOfStream()` or marking `this._streamDone = true`.
+- In `dom.js`, `timeupdate` only clamps `effectiveEnd = Math.min(dur, buffEnd)` when `buffEnd >= dur - 15` (or `dur <= 0`), preventing truncated buffers from prematurely firing `ended` and auto-skipping tracks.
+- In `sw.js` and `playback.js` (`preloadNextTrack`), fetched audio responses verify that `buf.byteLength >= reportedLen` before tagging responses with `'X-Partial-Cached': 'false'`. Truncated or aborted network streams are tagged with `'X-Partial-Cached': 'true'`.
+- In `dom.js`, Range fetch HTTP 416 responses occurring on premature buffers (`demuxedBuffEnd < this._expectedDuration - 15`) clear the invalid buffer and restart fetch from byte 0 instead of prematurely concluding the stream.
+
+## 49. Last Played Playlist Active Element Scroll & Position Invariant
+- In `playback.js`, `restoreLastPlayedTrack` parses `originalIndex` and `queueIndex` via `parseInt(..., 10)` and sets `window._stagedLastPlayedTrackScrolled = false;`.
+- In `playback.js`, `applyNormalizedDataInChunks` detects `targetIndexInRaw` in `validRawData` for the staged or active track ID, and expands `initialSlice` beyond `INITIAL_CHUNK` (60) up to `Math.min(totalCount, Math.max(INITIAL_CHUNK, targetIndexInRaw + 25))` so that the active track is immediately present in memory during initial 0ms render.
+- In `playback.js`, `applyPlaylistData` initializes `filteredIndices` with `totalCount` when `!filterText` and `totalCount > 0`, ensuring all tracks are indexed for lookup.
+- In `playback.js`, `shouldInitialScroll = !isRevalidation || (window._stagedLastPlayedTrack && !window._stagedLastPlayedTrackScrolled);` permits scrolling to the active track on initial load even if data arrives via network revalidation or cache resolution, marking `window._stagedLastPlayedTrackScrolled = true;`.
+- In `playback.js`, `processNextChunk` reconciles `globalActiveOriginalIndex = newIndex` before rendering virtual tracks and invokes `scrollToTrack(globalActiveOriginalIndex, true)` upon completing all chunks.
+- In `ui.js`, `scrollToTrack` uses loose equality `item.index == originalIndex`, clamps target offset to `Math.max(0, ...)`, sets `playlistContainer.scrollTop = targetTop`, calls `playlistContainer.scrollTo`, and schedules `requestAnimationFrame` when `forceScroll` is true for post-layout centering.
+- In `ui.js`, `renderVirtualTracks` sets both `li.dataset.index` and `li.dataset.originalIndex`, and applies `.active` when `item.playlist === globalActivePlaylist && item.index == globalActiveOriginalIndex`.
+- Rule 6 scroll retention on user clicks is strictly preserved (`allowScroll = false` in `scrollToTrack` returns early without modifying scroll position).
+
+## 50. Dead Internet & Offline Playback Failure Loop Prevention Invariant
+- In `main.js`, `stopPlaybackOnNetworkFailure(isOffline, isExplicitSelection)` clears any pending `errorSkipTimer`, pauses `audioPlayer`, enforces `window.wasPausedByUser = true`, sets `setPlayUI(false)`, and updates title and MediaSession to paused without scheduling auto-skips.
+- In `main.js`, `audioPlayer.addEventListener("error")` bypasses network recovery attempts when `navigator.onLine === false`, tracks `window.consecutiveTrackErrors`, and triggers `stopPlaybackOnNetworkFailure` when offline or after 3 consecutive failures if no cached offline tracks are available in `playQueue`.
+- In `playback.js`, `findNextPlayableOfflineIndex(direction)` checks `isTrackAudioCached(candidateTrack)` in `playQueue` (respecting `repeatMode === 1`), advancing directly to offline-ready tracks without cycling through uncached songs.
+- In `playback.js`, `playNext()` and `playPrev()` inspect `isOffline` and invoke `stopPlaybackOnNetworkFailure(true)` if all remaining tracks are uncached, preventing endless auto-skip loops across the playlist.
+- In `playback.js`, consecutive dead tracks (`track.is_dead`) are capped at 3 (`consecutiveDeadTrackSkips >= 3`) before halting auto-skips.
+- Manual track selection (`userInitiatedTrackSelection = true`) on an uncached track while offline immediately halts with "Track not available offline" rather than auto-skipping.
+- `window.consecutiveTrackErrors` and `window.consecutiveDeadTrackSkips` reset to 0 upon successful playback (`playing` event), connectivity restoration (`online` event), or manual user navigation (`btnNext`, `btnPrev`, `playFromPlaylist`).
+
+## 51. GPU Utilization Idle Playback Compositor Optimization Invariant
+- In `style.css`, `#track-list li` omits static `will-change: transform`, flattening idle virtual tracks into a single compositor layer with `contain: layout paint;`, while applying `will-change: transform` strictly during active swipe and snapping gestures (`#track-list li.is-swiping`, `#track-list li.snapping`).
+- In `index.html` and `style.css`, `#fast-scroll-bubble` defaults to `display: none;`, eliminating backdrop blur (`backdrop-filter: blur(16px)`) shader passes from the compositor when inactive. In `main.js`, `fastBubble.style.display` toggles to `'flex'` on fast-scroller `pointerdown` and returns to `'none'` on `stopFastScroll`.
+- In `index.html` and `style.css`, `#swipe-backdrop` defaults to `display: none;`, preventing idle allocation of composited GPU texture layers for swipe underlays and action SVGs. In `main.js`, `swipeBackdrop.style.display` is activated to `'block'` on touch gesture start and restored to `'none'` on swipe settle, touch cancel, or scroll disambiguation.
+- In `style.css`, `.seek-wrap` and `.time-display` enforce `contain: layout paint;`, isolating periodic slider thumb and timer text repaints from triggering ancestor container layout invalidations.
+- In `style.css`, `#mode-toast` and `.mode-toast` default to `display: none;`, preventing un-culled backdrop filter evaluation when inactive.
+- In `main.js`, `audioPlayer.addEventListener("timeupdate")` gates visual DOM mutations (`updateTimeUI`, `updateLyricsUI`, and `updateBufferProgress`) and steady-state `saveLastPlayedState` behind `!document.hidden`, while `updateMediaSessionPosition` continues unthrottled at 1Hz in the background with lock-gap recovery (`isStaleWake`) to sustain Android SystemUI and Windows SMTC seekbar and wave animation without PWA DOM mutations.
+- In `main.js`, `document.addEventListener("visibilitychange")` immediately executes catch-up resync (`lastRenderTime = -1; updateTimeUI(Math.floor(audioPlayer.currentTime)); updateBufferProgress();`) upon returning to foreground (`!document.hidden`), eliminating visual lag without redundant steady-state paints.
+- In `ui.js`, `updateBufferProgress` early-exits when `document.hidden` is true or when `audioPlayer._streamDone` with `lastBufferSignature === 'complete'` without executing DOM lookups or segment recalculations; `updateTimeUI` early-exits when `document.hidden` is true, memoizes `currentTimeDisplay.textContent` (and `totalTimeDisplay.textContent`), and only mutates `seekBar.value` when the numeric value changes.
+- In `style.css`, `.player-container` and `.playlist-panel` enforce `contain: layout;`, `.progress-container`, `#buffer-container`, and `.seek-wrap` enforce `contain: layout paint;`, `input[type="range"]#seek-bar` enforces `contain: strict;`, `#now-playing` enforces `contain: layout;` and `background-color: #000000;`, `#album-art-container` and `#lyrics-toggle-hint` enforce `contain: layout paint;` and `background-color: #000000;` to eliminate sibling damage rect propagation and SVG vector icon re-rasterization during 1Hz seekbar ticks, `.progress-container` enforces fixed `height: 20px; box-sizing: border-box;`, `.buffer-segment` enforces opaque `background: #666666;` eliminating Skia alpha blending passes over the black background, `.progress-container`, `.seek-wrap`, and `.time-display` enforce `background-color: #000000;` and `.time-display` enforces fixed `width: 44px; flex-shrink: 0; text-align: center;` to eliminate Skia alpha blending passes, offscreen destination readbacks, and flex redistribution reflows during 1Hz moving seekbar and timestamp updates, `.playback-controls` and `.title-channel-wrapper` enforce `contain: layout paint;` and `background-color: #000000;`, `.time-display` enforces `-webkit-font-smoothing: antialiased;`, `-moz-osx-font-smoothing: grayscale;`, `letter-spacing: -0.2px;`, `text-rendering: optimizeSpeed;`, and `font-kerning: none;` switching DirectWrite from multi-channel ClearType LCD blending to single-pass grayscale coverage rasterization and bypassing complex font shaping tables while accommodating 6-digit timestamps without edge clipping under `contain: paint`, `input[type="range"]#seek-bar` in `index.html` enforces integer `step="1"` eliminating floating-point step-sanitization overhead, `.seek-track` omits `overflow: hidden;` eliminating Skia analytic SkRRect clipping masks behind the moving thumb, forced layer allocations (`transform: translateZ(0);`) on `.seek-wrap` are eliminated where layout containment alone enables the compositor to sleep, `.progress-container` promotes to an isolated hardware layer via `transform: translateZ(0);` isolating the 1 Hz moving seek thumb and time displays into a dedicated Direct3D texture quad so root layer tiles spanning album art never invalidate or dirty, and dead `will-change: transform;` on `.swipe-surface` is eliminated.
+- In `main.js`, an activity-based idle detection system monitors user interaction events (`pointermove`, `pointerdown`, `touchstart`, `keydown`, `wheel`, and window `focus`) with a 2.5s debounce timer (`PLAYBACK_IDLE_TIMEOUT_MS = 2500`). When no user interaction occurs for >= 2.5s during foreground audio playback (`!document.hidden`), the player transitions to steady-state idle (`window.isPlaybackUiIdle = true`). Window blur/defocus (`window.addEventListener('blur')` or `!document.hasFocus()`) immediately engages idle presentation mode.
+- In `ui.js`, `updateTimeUI` advances `seekBar.value` and `currentTimeDisplay.textContent` continuously at 1 Hz on integer second boundaries (`if (roundedSec !== lastRenderTime)`) during active foreground audio playback without freezing or suspending, ensuring core playback indicators remain fully functional while sustaining 0.0% GPU utilization. In `ui.js` and `main.js`, `updateBufferProgress` early-exits when `window.isPlaybackUiIdle` or when complete, eliminating redundant DOM lookups and innerHTML regeneration during steady-state playback. Active foreground lyrics viewing (`window.lyricsActive` with `document.hasFocus()`) keeps lyrics updates active, while blurred windows suspend lyrics rendering.
+- In `main.js`, `updateMediaSessionPosition` continues executing unthrottled at 1 Hz during steady-state idle playback in both foreground and background, sustaining Windows SMTC and Android SystemUI timeline synchronization without causing web page damage rects or swap chain presents.
+- In `main.js`, user interaction events immediately clear idle state (`window.isPlaybackUiIdle = false;`) and synchronously resynchronize the UI (`lastRenderTime = -1; updateTimeUI(audioPlayer.currentTime); updateBufferProgress();`) with 0ms latency on the very first pixel of movement or initial touch before click or drag actions register.
+- In `playback.js`, `saveLastPlayedState` checks state signature before writing to `localStorage` or IndexedDB, eliminating invariant 2-second periodic storage writes during steady-state playback while deterministically preserving state on state transitions (track start, pause, seek, playlist change, mode toggle, beforeunload).
+- In `mediaSession.js`, `updateMediaSessionPosition` dampens `navigator.mediaSession.setPositionState` IPC calls during steady-state audio playback via monotonic drift-throttling (`drift = Math.abs(pos - projected) <= 1.5s`), suppressing high-frequency OS IPC calls and DWM wakeups while maintaining sub-second timeline extrapolation accuracy across Windows SMTC and Android SystemUI. State transitions (play, pause, seek, duration change, track change, device unlock) bypass dampening via `force = true` or `forceBypass`, immediately updating the OS media controller.
+- In `mediaSession.js`, `window.getLastPositionTimestamp()` tracks `Math.max(_lastSentTimestamp, _lastPositionCheckTimestamp)`, ensuring continuous 1Hz position evaluation prevents false `staleGap` triggers during steady playback while preserving genuine Doze and device sleep gap detection (> 3000ms).
+- In `main.js`, `markUserActive` filters out stationary pointer movements (`movementX === 0 && movementY === 0`), preventing synthetic mousemove and hover events from breaking steady-state idle presentation mode.
+- In `mediaSession.js`, `initLiveAudioAnchor` explicitly returns null when `!isMobileDevice`, ensuring desktop environments never instantiate `AudioContext`, `createMediaStreamDestination`, or oscillator nodes.
+- In `index.html`, `<audio id="focus-probe">` enforces `preload="none"`, preventing speculative audio codec pipeline initialization on desktop boot.
+- In `ui.js`, `updateTimeUI` nests `seekBar.value` assignment strictly inside the integer second `if (roundedSec !== lastRenderTime)` branch (`seekBar.value = roundedSec`), eliminating 4 Hz sub-second floating-point jitter repaints and step-sanitization churn on the range input slider thumb during active playback.
+- In `main.js`, `syncArtWidth` memoizes `lastArtWidth` to strictly eliminate redundant `setProperty('--art-width')` calls, and `ResizeObserver` callbacks on `albumArt` and `playlistContainer` enforce requestAnimationFrame coalescing and contentRect dimension-change guards (`w === lastPlaylistWidth && h === lastPlaylistHeight`), preventing recursive layout invalidation feedback loops.
+- In `style.css`, `.underlay-action` and `.swipe-legend` omit static `will-change: transform`, eliminating persistent compositor texture layer allocations for inactive swipe legends.
+- In `index.html`, `#icon-download-active` and `#icon-search-spinner` omit static `class="spin-animation"`, eliminating continuous `cc::AnimationHost` and `cc::LayerTreeHostImpl` 165 FPS Compositor thread draw passes during steady playback; `spin-animation` is added dynamically in `playback.js` and `main.js` only during active downloading or remote search operations.
+
+## 52. Mechanical Answer-First & Scoped Deployment Verification Invariant
+- When the user asks a question, requests an explanation, or instructs 'answer first', Antigravity is strictly forbidden from mutating source files (`edit_file`, `write_file`) or executing `git commit`. Deterministically enforced by workspace `PreToolUse` lifecycle hook (`.agents/scripts/safety_guard.py`), which hard-blocks write tools and git commits when `lastUserInput` is an inquiry without an explicit directive to modify files.
+- In `.agents/scripts/safety_guard.py`, `youtube` pushes default strictly to `dev` only unless explicitly stated otherwise via `python .agents/scripts/deploy_and_verify.py` (validates JS syntax, runs `pytest`, pushes `origin dev`, and polls GitHub Actions until `completed` / `success` on `https://music.hausemaster.tech/dev/`), with direct `youtube` `main`/`master` pushes blocked unless explicitly stated otherwise. `alwaysdata-pi-setup` maintains a single `main` branch paired with `pi_node/deploy_to_pi.py` for 100% Git-to-Pi parity.
+
+## 53. Programmatic Scroll Isolation & Shuffle Once Active Item Highlight Invariant
+- In `ui.js`, `scrollToTrack` sets `window.isProgrammaticPlaylistScroll = true` with a 150ms timeout during programmatic playlist viewport centering, preventing synthetic `scroll` events from corrupting user gesture detection.
+- In `main.js`, `playlistContainer.addEventListener("scroll")` checks `window.isProgrammaticPlaylistScroll` and returns early with `scheduleVirtualRender()`, preventing programmatic scrolls from updating `lastUserScrollTime = Date.now()` or asserting `isScrollingFast = true`.
+- In `playback.js`, `playNext()` and `playPrev()` call `executePlayback(false, false, true)` with `forceScroll = true`, ensuring track transitions in single-playlist Shuffle Once (`shuffleMode === 2`) always center and render the active playing item into the DOM viewport without dropping `.active` highlights every other track.
+
+## 54. Previous Track Navigation & History Stack Invariant
+- In `playback.js`, `playPrev()` enforces a 3-second elapsed rewind threshold: when `audioPlayer.currentTime > 3.0`, clicking Previous resets `audioPlayer.currentTime = 0`, updates time UI, and resumes playback without skipping backward.
+- In `playback.js`, `playPrev()` unifies track rewinding via `rewindCurrentTrack()`, ensuring that rewinding at the > 3.0s threshold, cross-shuffle deck start, and queue start synchronously resets `currentTime = 0`, updates time UI, resets lyrics to 0, updates MediaSession position with forced rate 1.0, primes Mode 2 live audio anchor, sets play UI, and persists `saveLastPlayedState(0)`.
+- In `playback.js`, `playFromPlaylist(playlist, trackIndex, isHistoryNav)` reconciles `queueIndex` in Shuffle Once mode (`shuffleMode === 2`) by searching `playQueue.findIndex(...)` for the target track (`queueIndex = (foundIdx !== -1) ? foundIdx : trackIndex;`), preventing `queueIndex` from desynchronizing from the randomized deck upon backward history navigation.
+- In `playback.js`, `playPrev()` passes `isHistoryNav = true` (`executePlayback(false, true, true);`) in queue backward fallbacks and unshifts the fallback track onto `playbackHistory` (`playbackHistory.unshift({ playlist, index }); playbackHistoryIndex = 0;`), preventing backward navigation from appending forward user choices to history while ensuring subsequent Next skips never leap over tracks or invert direction.
+- In `playback.js` (`restoreLastPlayedTrack`) and `main.js` (`audioPlayer.addEventListener("play")`), initial track playback seeds `playbackHistory` with `{ playlist, index }` and `playbackHistoryIndex = 0` when `playbackHistory.length === 0`, ensuring backward history navigation functions seamlessly after page reloads.
+- In `mediaSession.js`, `previoustrack` action handler guards `lastPlaybackModeTransitions` against non-object or array state before evaluating mobile mode-switch combos, clears consecutive track error counters, and ensures clean delegation to `playPrev()` without corrupting playback mode.
+
+
+
+
+
 
 
 

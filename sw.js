@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'yt-player-cache-v160';
+const CACHE_NAME = 'yt-player-cache-v162';
 
 const CORE_ASSETS = [
     './',
@@ -15,6 +15,8 @@ const CORE_ASSETS = [
     './css/style.css',
     './manifest.json',
     './assets/icon.svg',
+    './assets/icon-192.png',
+    './assets/icon-512.png',
     './assets/fonts/GoogleSansFlex-Latin.woff2'
 ];
 
@@ -163,6 +165,20 @@ self.addEventListener('fetch', (event) => {
                         const cloned = response.clone();
                         cloned.arrayBuffer().then(buf => {
                             const contentType = cloned.headers.get('Content-Type') || (cacheKeyUrl.href.includes('.opus') ? 'audio/ogg; codecs=opus' : 'audio/webm');
+                            const reportedLen = cloned.headers.get('Content-Length') ? parseInt(cloned.headers.get('Content-Length'), 10) : 0;
+                            const isComplete = reportedLen > 0 ? buf.byteLength >= reportedLen : buf.byteLength > 100000;
+                            if (!isComplete) {
+                                const partialRes = new Response(buf, {
+                                    status: 200,
+                                    headers: {
+                                        'Content-Type': contentType,
+                                        'Content-Length': buf.byteLength.toString(),
+                                        'X-Partial-Cached': 'true'
+                                    }
+                                });
+                                cache.put(cacheKeyUrl.href, partialRes);
+                                return;
+                            }
                             const fullRes = new Response(buf, {
                                 status: 200,
                                 headers: {
@@ -284,10 +300,10 @@ self.addEventListener('fetch', (event) => {
             fetch(event.request).then(response => {
                 if (response.ok && response.status !== 429) {
                     const clone = response.clone();
-                    caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    caches.open('yt-player-media').then(cache => cache.put(event.request, clone));
                 }
                 return response;
-            }).catch(() => caches.match(event.request))
+            }).catch(() => caches.open('yt-player-media').then(cache => cache.match(event.request, { ignoreSearch: true })).then(cached => cached || caches.match(event.request, { ignoreSearch: true })))
         );
         return;
     }

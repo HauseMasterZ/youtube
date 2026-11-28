@@ -217,6 +217,7 @@
             li.style.display = "flex";
             li.dataset.playlist = item.playlist;
             li.dataset.index = item.index;
+            li.dataset.originalIndex = item.index;
             li.classList.remove("active", "search-highlight", "snapping", "is-swiping", "slide-enqueue", "slide-download");
             li.style.transition = 'none';
             li.style.removeProperty('--swipe-x');
@@ -226,7 +227,7 @@
             const isSearching = (selectedSearchIndex >= 0 && typeof searchInput !== 'undefined' && searchInput && searchInput.value.trim() !== "");
             if (isSearching && i === selectedSearchIndex) {
                 li.classList.add("search-highlight");
-            } else if (item.playlist === globalActivePlaylist && item.index === globalActiveOriginalIndex) {
+            } else if (item.playlist === globalActivePlaylist && item.index == globalActiveOriginalIndex) {
                 li.classList.add('active');
             }
             
@@ -284,7 +285,7 @@
             return;
         }
         const currentPl = playlistSelect.value;
-        const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index === originalIndex);
+        const virtualIndex = filteredIndices.findIndex(item => item.playlist === currentPl && item.index == originalIndex);
         
         if (virtualIndex === -1) {
             // Track is currently filtered out of view, silently update active class state
@@ -297,10 +298,38 @@
         if (forceScroll || !isUserActiveScrolling) {
             const scrollPos = virtualIndex * ITEM_HEIGHT;
             const containerHeight = playlistContainer.clientHeight || 400;
-            playlistContainer.scrollTo({ 
-                top: scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2), 
-                behavior: "instant" 
-            });
+            const targetTop = Math.max(0, scrollPos - (containerHeight / 2) + (ITEM_HEIGHT / 2));
+            if (typeof window !== 'undefined') {
+                window.isProgrammaticPlaylistScroll = true;
+                if (window._progScrollTimer) clearTimeout(window._progScrollTimer);
+                window._progScrollTimer = setTimeout(() => {
+                    window.isProgrammaticPlaylistScroll = false;
+                }, 150);
+            }
+            playlistContainer.scrollTop = targetTop;
+            if (typeof playlistContainer.scrollTo === 'function') {
+                playlistContainer.scrollTo({ 
+                    top: targetTop, 
+                    behavior: "instant" 
+                });
+            }
+            if (typeof requestAnimationFrame === 'function' && forceScroll) {
+                requestAnimationFrame(() => {
+                    const refreshedHeight = playlistContainer.clientHeight || containerHeight;
+                    const refinedTop = Math.max(0, scrollPos - (refreshedHeight / 2) + (ITEM_HEIGHT / 2));
+                    if (typeof window !== 'undefined') {
+                        window.isProgrammaticPlaylistScroll = true;
+                        if (window._progScrollTimer) clearTimeout(window._progScrollTimer);
+                        window._progScrollTimer = setTimeout(() => {
+                            window.isProgrammaticPlaylistScroll = false;
+                        }, 150);
+                    }
+                    playlistContainer.scrollTop = refinedTop;
+                    if (typeof playlistContainer.scrollTo === 'function') {
+                        playlistContainer.scrollTo({ top: refinedTop, behavior: "instant" });
+                    }
+                });
+            }
         }
         
         // Force highlight update immediately even during scroll
@@ -320,6 +349,9 @@
     let lastBufferUrl = '';
     let lastBufferSignature = '';
     function updateBufferProgress() {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        if (typeof window !== 'undefined' && window.isPlaybackUiIdle) return;
+        if (audioPlayer && audioPlayer._streamDone && lastBufferSignature === 'complete') return;
         const container = document.getElementById("buffer-container") || document.getElementById("seek-track");
         if (!container) return;
 
@@ -389,18 +421,27 @@
     window.updateBufferProgress = updateBufferProgress;
 
     function updateTimeUI(seconds) {
+        if (typeof document !== 'undefined' && document.hidden) return;
         const max = parseFloat(seekBar.max) || 0;
         if (seconds > max && audioPlayer && audioPlayer.duration && !isNaN(audioPlayer.duration) && audioPlayer.duration !== Infinity) {
             const trueDur = Math.floor(audioPlayer.duration);
             if (trueDur > max) {
                 seekBar.max = trueDur;
-                totalTimeDisplay.textContent = formatTime(trueDur);
+                const formattedDur = formatTime(trueDur);
+                if (totalTimeDisplay.textContent !== formattedDur) {
+                    totalTimeDisplay.textContent = formattedDur;
+                }
             }
         }
-        seekBar.value = seconds;
         const roundedSec = Math.floor(seconds);
         if (roundedSec !== lastRenderTime) {
-            currentTimeDisplay.textContent = formatTime(roundedSec);
+            if (isFinite(seconds) && seekBar.value != roundedSec) {
+                seekBar.value = roundedSec;
+            }
+            const formatted = formatTime(roundedSec);
+            if (currentTimeDisplay.textContent !== formatted) {
+                currentTimeDisplay.textContent = formatted;
+            }
             lastRenderTime = roundedSec;
         }
     }

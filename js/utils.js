@@ -675,3 +675,56 @@
     window.saveLastPlayedToIDB = saveLastPlayedToIDB;
     window.getLastPlayedFromIDB = getLastPlayedFromIDB;
 
+    function getLyricsCandidates(track) {
+        if (!track) return [];
+        const candidates = [];
+        const seen = new Set();
+
+        function addCandidate(url) {
+            if (!url || typeof url !== 'string') return;
+            const trimmed = url.trim();
+            if (!trimmed || seen.has(trimmed)) return;
+            seen.add(trimmed);
+            candidates.push(trimmed);
+        }
+
+        const rawPath = (track.file_path || "").replace(/\\/g, '/');
+        const parts = rawPath.split('/').filter(Boolean);
+        const folder = parts.length > 0 ? parts[0] : "";
+        const folderPrefix = folder ? `${baseUrl}/${encodeURIComponent(folder)}/lyrics/` : `${baseUrl}/lyrics/`;
+
+        if (track.lyrics_path && typeof track.lyrics_path === 'string') {
+            const normLyr = track.lyrics_path.replace(/\\/g, '/').replace(/^\/+/, '');
+            if (normLyr.startsWith('http://') || normLyr.startsWith('https://')) {
+                addCandidate(normLyr);
+            } else {
+                const lyrParts = normLyr.split('/').filter(Boolean);
+                if (lyrParts.length > 1) {
+                    const encodedParts = lyrParts.map(p => encodeURIComponent(p));
+                    addCandidate(`${baseUrl}/${encodedParts.join('/')}`);
+                } else if (lyrParts.length === 1) {
+                    addCandidate(`${folderPrefix}${encodeURIComponent(lyrParts[0])}`);
+                }
+            }
+        }
+
+        if (track.id) {
+            addCandidate(`${folderPrefix}${encodeURIComponent(track.id)}.lrc`);
+            const lowerId = track.id.toLowerCase();
+            if (lowerId !== track.id) {
+                addCandidate(`${folderPrefix}${encodeURIComponent(lowerId)}.lrc`);
+            }
+        }
+
+        if (track.title) {
+            addCandidate(`${folderPrefix}${encodeURIComponent(track.title)}.lrc`);
+            const lowerTitle = track.title.toLowerCase();
+            if (lowerTitle !== track.title) {
+                addCandidate(`${folderPrefix}${encodeURIComponent(lowerTitle)}.lrc`);
+            }
+        }
+
+        return candidates;
+    }
+    window.getLyricsCandidates = getLyricsCandidates;
+
